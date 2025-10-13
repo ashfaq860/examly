@@ -24,7 +24,6 @@ export async function POST(request) {
     const body = await request.json();
     const { classId, subjectId, quizType, chapters, questionCount, difficulty } = body;
 
-    // Base query
     let query = supabase
       .from("questions")
       .select("*")
@@ -32,17 +31,14 @@ export async function POST(request) {
       .eq("class_subject_id", classId)
       .eq("question_type", "mcq");
 
-    // If quiz type is 'chapter', filter by selected chapters
     if (quizType === "chapter" && Array.isArray(chapters) && chapters.length > 0) {
       query = query.in("chapter_id", chapters);
     }
 
-    // Apply difficulty filter if needed
     if (difficulty && difficulty !== "all") {
       query = query.eq("difficulty", difficulty);
     }
 
-    // Apply limit if question count provided
     if (questionCount && Number(questionCount) > 0) {
       query = query.limit(Number(questionCount));
     }
@@ -51,7 +47,6 @@ export async function POST(request) {
 
     if (error) throw error;
 
-    // If no questions found
     if (!questions || questions.length === 0) {
       return NextResponse.json(
         { message: "No questions found for the selected criteria." },
