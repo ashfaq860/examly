@@ -7,11 +7,13 @@ export async function GET() {
     const { data: classes, error } = await supabase
       .from("classes")
       .select("*")
-      .order("name");
+      .order("name", { ascending: true });
 
     if (error) throw error;
-    return NextResponse.json(classes);
+
+    return NextResponse.json(classes, { status: 200 });
   } catch (error) {
+    console.error("Error fetching classes:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -22,6 +24,7 @@ export async function POST(request) {
     const body = await request.json();
     const { classId, subjectId, quizType, chapters, questionCount, difficulty } = body;
 
+    // Base query
     let query = supabase
       .from("questions")
       .select("*")
@@ -29,23 +32,36 @@ export async function POST(request) {
       .eq("class_subject_id", classId)
       .eq("question_type", "mcq");
 
-    if (quizType === "chapter" && chapters?.length > 0) {
+    // If quiz type is 'chapter', filter by selected chapters
+    if (quizType === "chapter" && Array.isArray(chapters) && chapters.length > 0) {
       query = query.in("chapter_id", chapters);
     }
 
+    // Apply difficulty filter if needed
     if (difficulty && difficulty !== "all") {
       query = query.eq("difficulty", difficulty);
     }
 
-    if (questionCount) {
-      query = query.limit(questionCount);
+    // Apply limit if question count provided
+    if (questionCount && Number(questionCount) > 0) {
+      query = query.limit(Number(questionCount));
     }
 
     const { data: questions, error } = await query;
 
     if (error) throw error;
-    return NextResponse.json(questions);
+
+    // If no questions found
+    if (!questions || questions.length === 0) {
+      return NextResponse.json(
+        { message: "No questions found for the selected criteria." },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(questions, { status: 200 });
   } catch (error) {
+    console.error("Error generating quiz:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
