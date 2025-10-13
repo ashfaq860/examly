@@ -23,7 +23,6 @@
     "bootstrap": "^5.3.7",
     "canvas": "^3.1.2",
     "chart.js": "^4.5.0",
-    "chrome-aws-lambda": "^1.20.1",
     "firebase": "^12.1.0",
     "fontkit": "^2.0.4",
     "framer-motion": "^12.23.12",
