@@ -1,0 +1,360 @@
+/* src/styles/globals.css */
+:root{
+  --primary-600: #0b63d4;
+  --primary-400: #2aa7ff;
+  --accent: #00c98a;
+  --muted: #6b7280;
+  --card-bg: rgba(255,255,255,0.85);
+  --glass: rgba(255,255,255,0.65);
+}
+
+* { box-sizing: border-box; }
+html,body,#root { height: 100%; }
+body{
+  font-family: "Times New Roman", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial !important;
+  background: linear-gradient(180deg,#f7fbff 0%, #ffffff 100%);
+  color: #0f172a;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Header 
+.header-nav {
+  background: linear-gradient(90deg, var(--primary-600), var(--primary-400));
+  padding: 0.5rem 0;
+  box-shadow: 0 6px 18px rgba(11,99,212,0.12);
+}
+.navbar-brand { font-weight: 700; color: black !important; letter-spacing: 0.2px; }
+
+/* Hero 
+.hero {
+  padding: 5.5rem 1rem;
+  background: linear-gradient(180deg, rgba(10,46,97,0.04), rgba(255,255,255,0));
+}
+.hero-card {
+  background: linear-gradient(180deg, #ffffffcc, #f8fbff);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 12px 40px rgba(8,40,80,0.06);
+}
+.hero-title {
+  font-size: clamp(1.6rem, 3.8vw, 2.6rem);
+  color: #07204a;
+  font-weight: 700;
+  line-height: 1.04;
+}
+.hero-sub {
+  color: var(--muted);
+  margin-top: 0.6rem;
+  margin-bottom: 1.4rem;
+}
+
+/* Feature cards 
+.feature-card {
+  border-radius: 12px;
+  padding: 1.6rem;
+  background: var(--card-bg);
+  box-shadow: 0 8px 30px rgba(12,40,80,0.04);
+  transition: transform .28s ease, box-shadow .28s ease;
+}
+.feature-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 18px 40px rgba(12,40,80,0.08);
+}
+.feature-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size: 28px;
+  color: white;
+  background: linear-gradient(135deg,var(--primary-600),var(--primary-400));
+  margin-bottom: 0.9rem;
+}
+
+/* How it works 
+.step {
+  background: linear-gradient(180deg, #fff, #fbfdff);
+  border-radius: 12px;
+  padding: 1rem;
+  border-left: 4px solid var(--primary-400);
+}
+
+/* CTA 
+.cta {
+  background: linear-gradient(90deg, rgba(11,99,212,0.08), rgba(0,201,138,0.04));
+  padding: 2rem;
+  border-radius: 12px;
+}
+
+ Footer
+ */ 
+.app-footer {
+  background: #07204a;
+  color: #dbeafe;
+  padding: 2rem 0;
+}
+.app-footer a { color: #dbeafe; text-decoration: none; }
+.small-muted { color: #9fb6e6; }
+
+/* Responsive tweaks 
+@media (min-width: 992px){
+  .hero { padding: 6rem 2rem; }
+}
+
+/* Add to your globals.css or similar 
+
+.label {
+  margin-bottom: 0.5rem;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tab {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: none;
+  margin-bottom: -1px;
+}
+
+.tab-active {
+  border-color: #e5e7eb;
+  border-bottom-color: white;
+  background-color: white;
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+
+/* Step Card wrapper */
+.step-card {
+  background: #fff;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+/* Option cards (class/subject/etc.) */
+.option-card {
+  cursor: pointer;
+  border: 2px solid #dee2e6;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  text-align: center;
+  background: #f8f9fa;
+  transition: all 0.3s ease;
+}
+.option-card:hover {
+  transform: translateY(-5px);
+  border-color: #0d6efd;
+  background: #e9f2ff;
+}
+.option-card.active {
+  border-color: #0d6efd;
+  background: #e9f2ff;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* Loading spinner block */
+.loading-state {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+/* Summary badges */
+.list-group-item strong {
+  color: #0d6efd;
+}
+
+/** step 4 form css */
+.option-card {
+  background: #fff;
+  border: 2px solid #dee2e6;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.option-card:hover {
+  border-color: #0d6efd;
+  background: #f0f8ff;
+  transform: translateY(-3px);
+}
+.option-card.active {
+  border-color: #0d6efd;
+  background: #e9f2ff;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.preview-card {
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.distribution-card {
+  border: 1px dashed #adb5bd;
+}
+
+/** Header css?*/
+ .header-nav {
+          background: white;
+          color: black;
+          padding: 15px 0;
+          position: fixed;
+          width: 100%;
+          top: 0;
+          z-index: 1000;
+          border-bottom: 3px solid transparent;
+          background-image: linear-gradient(white, white), 
+                            linear-gradient(90deg, #3b82f6, #1e40af, #3b82f6);
+          background-origin: border-box;
+          background-clip: padding-box, border-box;
+        }
+        
+        .dark .header-nav {
+          background-image: linear-gradient(#1e3a8a, #1e3a8a), 
+                            linear-gradient(90deg, #3b82f6, #1e40af, #3b82f6);
+          background-origin: border-box;
+          background-clip: padding-box, border-box;
+          color: white;
+        }
+
+        .navbar-nav .nav-item {
+          position: relative;
+        }
+
+        .navbar-nav .nav-item a.nav-link,
+        .navbar-nav .nav-item button.nav-link {
+          color: black !important;
+          padding: 8px 16px;
+          position: relative;
+          transition: color 0.3s ease;
+          text-decoration: none;
+          border: none;
+          background: transparent;
+        }
+
+        .dark .navbar-nav .nav-item a.nav-link,
+        .dark .navbar-nav .nav-item button.nav-link {
+          color: white !important;
+        }
+
+        /* Hover effects for all nav links */
+        .navbar-nav .nav-item a.nav-link:hover,
+        .navbar-nav .nav-item button.nav-link:hover,
+        /* Active state styles */
+        .navbar-nav .nav-item a.nav-link.active,
+        .navbar-nav .nav-item button.nav-link.active {
+          color: #2563eb !important;
+        }
+
+        /* Underline effect on hover AND active state */
+        .navbar-nav .nav-item a.nav-link:hover::before,
+        .navbar-nav .nav-item button.nav-link:hover::before,
+        .navbar-nav .nav-item a.nav-link.active::before,
+        .navbar-nav .nav-item button.nav-link.active::before {
+          content: '';
+          position: absolute;
+          top: -15px;
+          left: 0;
+          width: 100%;
+          height: 3px;
+          background: #2563eb;
+          border-radius: 2px 2px 0 0;
+        }
+
+        /* Active state for brand logo */
+        .navbar-brand.active {
+          color: #2563eb !important;
+        }
+
+        /* Active state for signup button */
+        .navbar-nav .nav-item a.btn.active {
+          background-color: #2563eb !important;
+          color: white !important;
+          border-color: #2563eb !important;
+        }
+
+        .dark .navbar-nav .nav-item a.btn.active {
+          background-color: #3b82f6 !important;
+          border-color: #3b82f6 !important;
+        }
+
+        .navbar-toggler-icon {
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(0, 0, 0, 0.7)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+        }
+        
+        .dark .navbar-toggler-icon {
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 1)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+        }
+
+        /* first section of the page css */
+   /* Default (light mode) */
+/* Professional Gradient Button */
+.btn-gradient {
+  background: linear-gradient(135deg, #2563eb, #06b6d4); /* modern blue-cyan */
+  color: #fff !important;
+  font-weight: 600;
+  padding: 0.8rem 1.5rem;
+  border: none;
+  border-radius: 12px;
+  letter-spacing: 0.6px;
+  transition: all 0.35s ease;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+  position: relative;
+  overflow: hidden;
+  display: inline-block;
+}
+
+/* Subtle hover effect */
+.btn-gradient:hover {
+  background: linear-gradient(135deg, #06b6d4, #2563eb);
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* Active state (click) */
+.btn-gradient:active {
+  transform: scale(0.97);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Focus (accessibility) */
+.btn-gradient:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.35);
+}
+
+/* Subtle animated shine */
+.btn-gradient::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    120deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  transform: skewX(-25deg);
+  transition: all 0.6s ease;
+}
+
+.btn-gradient:hover::after {
+  left: 120%;
+}
