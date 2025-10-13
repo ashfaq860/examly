@@ -154,9 +154,9 @@ export default function Header() {
             <ul className="navbar-nav ms-auto align-items-lg-center">
               <li className="nav-item">
                 <Link 
-                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/features') ? 'active' : ''}`} 
-                  href="#features"
-                  onClick={() => setActiveLink('#features')}
+                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/quiz') ? 'active' : ''}`} 
+                  href="/quiz"
+                 
                 >
                  Quizz
                 </Link>
