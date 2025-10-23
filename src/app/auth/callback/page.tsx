@@ -27,8 +27,7 @@ export default function AuthCallback() {
         console.log('✅ Auth callback user:', user);
 
         // Fetch role from your RPC
-        const { data: roleData, error: rpcError } = await supabase
-          .rpc('get_user_role', { user_id: user.id });
+        const { data: roleData, error: rpcError } = await supabase.rpc('get_user_role', { user_id: user.id });
 
         if (rpcError || !roleData) {
           console.error('❌ Error fetching role:', rpcError);

@@ -3,9 +3,7 @@
 import { useState, useEffect } from 'react';
 import AcademyLayout from '@/components/AcademyLayout';
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-
 const supabase = createClientComponentClient();
-
 interface Package {
   id: string;
   name: string;

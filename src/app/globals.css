@@ -20,68 +20,6 @@ body{
 }
 
 /* Header 
-.header-nav {
-  background: linear-gradient(90deg, var(--primary-600), var(--primary-400));
-  padding: 0.5rem 0;
-  box-shadow: 0 6px 18px rgba(11,99,212,0.12);
-}
-.navbar-brand { font-weight: 700; color: black !important; letter-spacing: 0.2px; }
-
-/* Hero 
-.hero {
-  padding: 5.5rem 1rem;
-  background: linear-gradient(180deg, rgba(10,46,97,0.04), rgba(255,255,255,0));
-}
-.hero-card {
-  background: linear-gradient(180deg, #ffffffcc, #f8fbff);
-  border-radius: 16px;
-  padding: 2rem;
-  box-shadow: 0 12px 40px rgba(8,40,80,0.06);
-}
-.hero-title {
-  font-size: clamp(1.6rem, 3.8vw, 2.6rem);
-  color: #07204a;
-  font-weight: 700;
-  line-height: 1.04;
-}
-.hero-sub {
-  color: var(--muted);
-  margin-top: 0.6rem;
-  margin-bottom: 1.4rem;
-}
-
-/* Feature cards 
-.feature-card {
-  border-radius: 12px;
-  padding: 1.6rem;
-  background: var(--card-bg);
-  box-shadow: 0 8px 30px rgba(12,40,80,0.04);
-  transition: transform .28s ease, box-shadow .28s ease;
-}
-.feature-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 18px 40px rgba(12,40,80,0.08);
-}
-.feature-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 14px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size: 28px;
-  color: white;
-  background: linear-gradient(135deg,var(--primary-600),var(--primary-400));
-  margin-bottom: 0.9rem;
-}
-
-/* How it works 
-.step {
-  background: linear-gradient(180deg, #fff, #fbfdff);
-  border-radius: 12px;
-  padding: 1rem;
-  border-left: 4px solid var(--primary-400);
-}
 
 /* CTA 
 .cta {
@@ -93,7 +31,7 @@ body{
  Footer
  */ 
 .app-footer {
-  background: #07204a;
+  background: #073E8C;
   color: #dbeafe;
   padding: 2rem 0;
 }
@@ -101,36 +39,6 @@ body{
 .small-muted { color: #9fb6e6; }
 
 /* Responsive tweaks 
-@media (min-width: 992px){
-  .hero { padding: 6rem 2rem; }
-}
-
-/* Add to your globals.css or similar 
-
-.label {
-  margin-bottom: 0.5rem;
-}
-
-.tabs {
-  display: flex;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.tab {
-  padding: 0.75rem 1rem;
-  cursor: pointer;
-  border: 1px solid transparent;
-  border-bottom: none;
-  margin-bottom: -1px;
-}
-
-.tab-active {
-  border-color: #e5e7eb;
-  border-bottom-color: white;
-  background-color: white;
-  color: #3b82f6;
-  font-weight: 500;
-}
 
 
 /* Step Card wrapper */
@@ -155,11 +63,11 @@ body{
 }
 .option-card:hover {
   transform: translateY(-5px);
-  border-color: #0d6efd;
+  border-color: #073E8C;
   background: #e9f2ff;
 }
 .option-card.active {
-  border-color: #0d6efd;
+  border-color: #073E8C;
   background: #e9f2ff;
   box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
@@ -172,7 +80,7 @@ body{
 
 /* Summary badges */
 .list-group-item strong {
-  color: #0d6efd;
+  color: #073E8C;
 }
 
 /** step 4 form css */
@@ -186,12 +94,12 @@ body{
   transition: all 0.3s ease;
 }
 .option-card:hover {
-  border-color: #0d6efd;
+  border-color: #073E8C;
   background: #f0f8ff;
   transform: translateY(-3px);
 }
 .option-card.active {
-  border-color: #0d6efd;
+  border-color: #073E8C;
   background: #e9f2ff;
   box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
@@ -211,17 +119,17 @@ body{
  .header-nav {
           background: white;
           color: black;
-          padding: 15px 0;
+          padding: 5px 0;
           position: fixed;
           width: 100%;
           top: 0;
           z-index: 1000;
           border-bottom: 3px solid transparent;
           background-image: linear-gradient(white, white), 
-                            linear-gradient(90deg, #3b82f6, #1e40af, #3b82f6);
+                            linear-gradient(90deg, #3b82f6, #073E8C, #3b82f6);
           background-origin: border-box;
           background-clip: padding-box, border-box;
-        }
+        } 
         
         .dark .header-nav {
           background-image: linear-gradient(#1e3a8a, #1e3a8a), 
@@ -257,10 +165,27 @@ body{
         /* Active state styles */
         .navbar-nav .nav-item a.nav-link.active,
         .navbar-nav .nav-item button.nav-link.active {
-          color: #2563eb !important;
+          color: #073E8C !important;
         }
 
-        /* Underline effect on hover AND active state */
+/* Underline effect on hover AND active state - Desktop only */
+@media (min-width: 992px) {
+  .navbar-nav .nav-item a.nav-link:hover::before,
+  .navbar-nav .nav-item button.nav-link:hover::before,
+  .navbar-nav .nav-item a.nav-link.active::before,
+  .navbar-nav .nav-item button.nav-link.active::before {
+    content: '';
+    position: absolute;
+    top: -15px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: #073E8C;
+    border-radius: 2px 2px 0 0;
+  }
+}
+
+        /* Underline effect on hover AND active state 
         .navbar-nav .nav-item a.nav-link:hover::before,
         .navbar-nav .nav-item button.nav-link:hover::before,
         .navbar-nav .nav-item a.nav-link.active::before,
@@ -271,25 +196,25 @@ body{
           left: 0;
           width: 100%;
           height: 3px;
-          background: #2563eb;
+          background: #073E8C;
           border-radius: 2px 2px 0 0;
         }
-
+*/
         /* Active state for brand logo */
         .navbar-brand.active {
-          color: #2563eb !important;
+          color: #073E8C !important;
         }
 
         /* Active state for signup button */
         .navbar-nav .nav-item a.btn.active {
-          background-color: #2563eb !important;
+          background-color: #073E8C !important;
           color: white !important;
-          border-color: #2563eb !important;
+          border-color: #073E8C !important;
         }
 
         .dark .navbar-nav .nav-item a.btn.active {
-          background-color: #3b82f6 !important;
-          border-color: #3b82f6 !important;
+          background-color: #073E8C !important;
+          border-color: #073E8C !important;
         }
 
         .navbar-toggler-icon {
@@ -304,7 +229,7 @@ body{
    /* Default (light mode) */
 /* Professional Gradient Button */
 .btn-gradient {
-  background: linear-gradient(135deg, #2563eb, #06b6d4); /* modern blue-cyan */
+  background: linear-gradient(135deg, #073E8C, #06b6d4); /* modern blue-cyan */
   color: #fff !important;
   font-weight: 600;
   padding: 0.8rem 1.5rem;
@@ -320,7 +245,7 @@ body{
 
 /* Subtle hover effect */
 .btn-gradient:hover {
-  background: linear-gradient(135deg, #06b6d4, #2563eb);
+  background: linear-gradient(135deg, #06b6d4, #073E8C);
   transform: translateY(-2px) scale(1.03);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
 }
@@ -357,4 +282,34 @@ body{
 
 .btn-gradient:hover::after {
   left: 120%;
+}
+
+
+/*Register password eye on off css */
+.password-input-container {
+  position: relative;
+}
+
+.password-input-container input {
+  width: 100%;
+  padding-right: 2.5rem; /* room for the icon */
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #6c757d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.password-toggle-btn:hover {
+  color: #0d6efd;
 }

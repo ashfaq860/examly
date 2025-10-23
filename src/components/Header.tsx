@@ -125,7 +125,7 @@ export default function Header() {
             className={`navbar-brand me-3 dark:text-white ${isLinkActive('/') ? 'active' : ''}`} 
             href="/"
           >
-            Examly
+          <img src='/examly.png' alt='Examly Logo' className='h-8 inline-block mr-2' height='50' width='160' />
           </Link>
 
           {/* Dark Mode Toggle */}
@@ -154,26 +154,35 @@ export default function Header() {
             <ul className="navbar-nav ms-auto align-items-lg-center">
               <li className="nav-item">
                 <Link 
-                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/features') ? 'active' : ''}`} 
-                  href="#features"
+                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/') ? 'active' : ''}`} 
+                  href="/"
                   onClick={() => setActiveLink('#features')}
                 >
-                 Quizz
+                 Home
                 </Link>
               </li>
-              <li className="nav-item">
+                <li className="nav-item">
                 <Link 
-                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/how') ? 'active' : ''}`} 
-                  href="#how"
-                  onClick={() => setActiveLink('#how')}
+                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/quiz') ? 'active' : ''}`} 
+                  href="/quiz"
+                  onClick={() => setActiveLink('#features')}
                 >
-                  How it works
+                 Quiz
                 </Link>
               </li>
               <li className="nav-item">
                 <Link 
-                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/pricing') ? 'active' : ''}`} 
-                  href="#pricing"
+                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/how-examly-works') ? 'active' : ''}`} 
+                  href="/how-examly-works"
+                  
+                >
+                  How examly works
+                </Link>
+              </li>
+              <li className="nav-item">
+                <Link 
+                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/packages') ? 'active' : ''}`} 
+                  href="/packages"
                   onClick={() => setActiveLink('#pricing')}
                 >
                   Packages

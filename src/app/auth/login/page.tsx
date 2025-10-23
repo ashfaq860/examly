@@ -111,7 +111,7 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthLayout title="Welcome back" subtitle="Admin & Teacher Login">
+    <AuthLayout title="Welcome back" subtitle="">
       <form onSubmit={submit}>
         {err && <div className="alert alert-danger">{err}</div>}
 

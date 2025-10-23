@@ -4,6 +4,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
 import CubeSlider from '@/components/CubeSlider';
+import toast from 'react-hot-toast';
 
 export default function Home() {
   const [darkMode, setDarkMode] = useState(false);
@@ -91,8 +92,8 @@ export default function Home() {
 >
   <div className="container">
     <div className="text-center mb-5">
-      <h2 className="display-5 fw-bold text-primary dark:text-primary-300">
-        ✨ Advanced Paper Maker
+      <h2 className="display-5 fw-bold " style ={{ color: '#198754' }}>
+        ✨ Advanced Paper Maker 
       </h2>
       <p className="lead text-muted dark:text-gray-300">
         Professionally Orgnized Questions Bank To Make Your Exam Papers
@@ -102,15 +103,15 @@ export default function Home() {
     <div className="row g-4">
       {/* Card 1 */}
 <div className="col-md-4">
-  <div className="card feature-card h-100 border-0 rounded-4 shadow-lg dark:bg-gray-800 dark:border-gray-700 bg-white/70 backdrop-blur-md transform transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:-translate-y-2">
+  <div className="card feature-card  border-0 rounded-4 shadow-lg dark:bg-gray-800 dark:border-gray-700 bg-white/70 backdrop-blur-md transform transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:-translate-y-2">
     <div className="position-relative overflow-hidden">
       <img
         src="/createProfessionalTest.png"
         alt="Online Test Generator for Classes 5 to 12"
         className="w-100 h-auto rounded-top object-cover"
-        style={{ maxHeight: '400px' }} // Optional: Control height for consistency
+        style={{ maxHeight: '300px' }} // Optional: Control height for consistency
       />
-      <div className="position-absolute top-0 start-0 w-100 h-100 bg-gradient-to-t from-primary/80 to-transparent"></div>
+      <div className="position-absolute top-0 start-0 w-100 bg-gradient-to-t from-primary/80 to-transparent"></div>
     </div>
     <div className="card-body p-4">
       <h3 className="fw-bold mb-1 dark:text-white">
@@ -125,7 +126,21 @@ export default function Home() {
         <li>Adjust difficulty levels easily.</li>
         <li>Auto Generate or Manual Questions Selection.</li>
       </ul>
-      <Link href="/auth/login" className="btn btn-gradient w-100">
+      <Link href="/auth/login" className="btn   w-100"
+       style={{ color:'white', fontWeight:'bold',
+                        borderRadius: "10px",
+                        background: "linear-gradient(135deg, #1BA699, #159380)",
+                        border: "none",
+                        transition: "all 0.3s",
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.opacity = "0.9")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.opacity = "1")
+                      }
+
+      >
         Start Now
       </Link>
     </div>
@@ -135,13 +150,13 @@ export default function Home() {
 
       {/* Card 2 */}
 <div className="col-md-4 d-flex justify-content-center">
-  <div className="card feature-card h-100 border-0 rounded-4 shadow-lg dark:bg-gray-800 dark:border-gray-700 bg-white/80 backdrop-blur-md transition-all duration-500 hover:shadow-2xl ring-1 ring-primary/30">
+  <div className="card feature-card  border-0 rounded-4 shadow-lg dark:bg-gray-800 dark:border-gray-700 bg-white/80 backdrop-blur-md transition-all duration-500 hover:shadow-2xl ring-1 ring-primary/30">
     <div className="position-relative overflow-hidden">
       <img
         src="/1monthfree.png"
         alt="Online Test Generator for Classes 5 to 12"
         className="w-100 h-auto rounded-top object-cover"
-        style={{ maxHeight: '400px' }}
+        style={{ maxHeight: '300px' }}
       />
       <div className="position-absolute top-0 start-0 w-100 h-100 bg-gradient-to-t from-primary/70 to-transparent"></div>
     </div>
@@ -158,7 +173,22 @@ export default function Home() {
         <li>Refer friends to extend your free plan.</li>
         <li>Make papers for 5 to 12 classes.</li>
       </ul>
-      <Link href="/auth/signup" className="btn btn-gradient w-100">Register Now</Link>
+      <Link href="/auth/signup" className="btn w-100"
+       style={{color:'white', fontWeight:'bold',
+                        borderRadius: "10px",
+                        background: "linear-gradient(135deg, #1BA699, #159380)",
+                        border: "none",
+                        transition: "all 0.3s",
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.opacity = "0.9")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.opacity = "1")
+                      }
+
+      
+      >Register Now</Link>
     </div>
   </div>
 </div>
@@ -172,7 +202,7 @@ export default function Home() {
         src="/boardPattern.png"
         alt="Online Test Generator for Classes 5 to 12"
         className="w-100 h-auto rounded-top object-cover"
-        style={{ maxHeight: '400px' }} // Optional: Control height for consistency
+        style={{ maxHeight: '300px' }} // Optional: Control height for consistency
       />
       <div className="position-absolute top-0 start-0 w-100 h-100 bg-gradient-to-t from-primary/80 to-transparent"></div>
     </div>
@@ -189,7 +219,21 @@ export default function Home() {
   <li>Auto Questions Selection From Questions Bank.</li>
    <li>Just Clicks To Generate Papers.</li>
 </ul>
-      <Link href="/auth/login" className="btn btn-gradient w-100">Try Now</Link>
+      <Link href="/auth/login" 
+      className="btn  w-100"
+       style={{color:'white', fontWeight:'bold',
+                        borderRadius: "10px",
+                        background: "linear-gradient(135deg, #1BA699, #159380)",
+                        border: "none",
+                        transition: "all 0.3s",
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.opacity = "0.9")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.opacity = "1")
+                      }
+      >Try Now</Link>
     </div>
   </div>
 </div>
@@ -265,12 +309,12 @@ export default function Home() {
             <p className="text-muted dark:text-gray-300 mb-4">
              Prepare yourself to get a job, English, Computer, General Science, Politics.
             </p>
-            <Link 
-              href="/quiz/mock-exams" 
+            <button 
               className="btn btn-success px-4 fw-semibold dark:bg-success-300 dark:text-gray-900"
+            onClick={()=>toast.success("we are working on it!")}
             >
               Try Mock Test
-            </Link>
+            </button>
           </div>
         </div>
       </div>
@@ -288,12 +332,13 @@ export default function Home() {
             <p className="text-muted dark:text-gray-300 mb-4">
               Get smart analytics that track progress, highlight strengths, and reveal improvement areas.
             </p>
-            <Link 
-              href="/quiz/analytics" 
+            <button 
+ 
               className="btn btn-success px-4 fw-semibold dark:bg-success-300 dark:text-gray-900"
-            >
+onClick={()=> toast.success("We are working on it!")}
+>
               View Analytics
-            </Link>
+            </button>
           </div>
         </div>
       </div>

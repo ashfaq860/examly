@@ -7,11 +7,13 @@ export async function GET() {
     const { data: classes, error } = await supabase
       .from("classes")
       .select("*")
-      .order("name");
+      .order("name", { ascending: true });
 
     if (error) throw error;
-    return NextResponse.json(classes);
+
+    return NextResponse.json(classes, { status: 200 });
   } catch (error) {
+    console.error("Error fetching classes:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -29,7 +31,7 @@ export async function POST(request) {
       .eq("class_subject_id", classId)
       .eq("question_type", "mcq");
 
-    if (quizType === "chapter" && chapters?.length > 0) {
+    if (quizType === "chapter" && Array.isArray(chapters) && chapters.length > 0) {
       query = query.in("chapter_id", chapters);
     }
 
@@ -37,15 +39,24 @@ export async function POST(request) {
       query = query.eq("difficulty", difficulty);
     }
 
-    if (questionCount) {
-      query = query.limit(questionCount);
+    if (questionCount && Number(questionCount) > 0) {
+      query = query.limit(Number(questionCount));
     }
 
     const { data: questions, error } = await query;
 
     if (error) throw error;
-    return NextResponse.json(questions);
+
+    if (!questions || questions.length === 0) {
+      return NextResponse.json(
+        { message: "No questions found for the selected criteria." },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(questions, { status: 200 });
   } catch (error) {
+    console.error("Error generating quiz:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

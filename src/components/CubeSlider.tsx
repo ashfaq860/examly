@@ -135,13 +135,19 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
     <div className="cube-slider-container position-relative overflow-hidden" ref={containerRef}>
       <div className={`cube-slider show-${activeSlide}`} ref={sliderRef}>
         {slides.map((slide, index) => (
-          <div key={index} className={`cube-face cube-face-${index} ${slide.bgClass}`}>
+          <div
+  key={index}
+  className={`cube-face cube-face-${index} ${slide.bgClass} ${
+    index === activeSlide ? "active" : ""
+  }`}
+>
+
             <div className="slide-overlay"></div>
-            <div className="cube-content">
+            <div className="cube-content" >
               <div className="container h-100 position-relative z-10">
                 <div className="row align-items-center h-100 min-h-96">
                   <div className="col-lg-6 text-white">
-                    <div className="slide-content">
+                    <div className="slide-content" style={{ position: 'relative', zIndex: 9999, pointerEvents: 'all' }}>
                       <div className="slide-icon mb-4">
                         <div className="icon-container">
                           <span className="icon-display">{slide.icon}</span>
@@ -155,7 +161,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
                       </div>
                       <h1 className="display-4 fw-bold mb-4 leading-tight">{slide.title}</h1>
                       <p className="lead mb-5 opacity-90 text-lg">{slide.description}</p>
-                      <div className="slide-actions">
+                      <div className="slide-actions" style={{zIndex:'10000'}}>
                         <Link href={slide.link} className="btn btn-light btn-lg px-5 py-3 rounded-lg font-semibold shadow-lg hover-lift">
                           {slide.cta} <i className="bi bi-arrow-right ms-2"></i>
                         </Link>
@@ -261,15 +267,17 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
 
         .cube-face-0 { 
           transform: rotateY(0deg) translateZ(300px); 
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-        }
+          //background: linear-gradient(135deg, #073E8C 0%, #2f5babff 100%); 
+        background: linear-gradient(135deg, #1BA69A 0%, #2f5babff 100%);
+          }
         .cube-face-1 { 
           transform: rotateY(120deg) translateZ(300px); 
-          background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-        }
+          //background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
+        background: linear-gradient(135deg, #1BA69A 0%, #2f5babff 100%);
+          }
         .cube-face-2 { 
           transform: rotateY(240deg) translateZ(300px); 
-          background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); 
+          background: linear-gradient(135deg, #073E8C 0%, #00f2fe 100%); 
         }
 
         /* Base Image Container */
@@ -561,6 +569,19 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           letter-spacing: 0.5px;
           backdrop-filter: blur(10px);
         }
+       .cube-slider {
+  pointer-events: none; /* cube itself won’t block clicks */
+}
+
+.cube-face {
+  pointer-events: none; /* hidden slides won't receive clicks */
+}
+
+.cube-face.active {
+  pointer-events: all; /* only visible face clickable */
+  z-index: 100;
+}
+
       `}</style>
     </div>
   );

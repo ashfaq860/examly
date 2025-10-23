@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "@foliojs-fork/fontkit": "^1.9.2",
     "@google-cloud/translate": "^9.2.0",
     "@hookform/resolvers": "^5.2.1",
@@ -30,6 +31,7 @@
     "js-cookie": "^3.0.5",
     "lucide-react": "^0.542.0",
     "next": "^15.5.2",
+    "nodemailer": "^7.0.9",
     "pdf-lib": "^1.17.1",
     "pdfmake": "^0.2.20",
     "puppeteer": "^24.16.2",
@@ -47,6 +49,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@types/node": "^20",
+    "@types/nodemailer": "^7.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

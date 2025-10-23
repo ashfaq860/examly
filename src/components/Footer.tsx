@@ -15,18 +15,19 @@ export default function Footer() {
           <div className="col-md-4">
             <h6>Product</h6>
             <ul className="list-unstyled">
-              <li><Link href="/features">Features</Link></li>
-              <li><Link href="/pricing">Pricing</Link></li>
-              <li><Link href="/blog">Blog</Link></li>
+              <li><Link href="/dashboard/generate-paper">Make Paper</Link></li>
+              <li><Link href="/packages">Packages</Link></li>
+               <li><Link href="/quiz">Quiz</Link></li>
+             
             </ul>
           </div>
 
           <div className="col-md-4">
             <h6>Company</h6>
             <ul className="list-unstyled">
-              <li><Link href="/about">About</Link></li>
-              <li><Link href="/contact">Contact</Link></li>
-              <li><Link href="/terms">Terms</Link></li>
+              <li><Link href="/about">About Us</Link></li>
+              <li><Link href="/contact">Contact Us</Link></li>
+              
             </ul>
           </div>
         </div>
