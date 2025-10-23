@@ -5,11 +5,8 @@ import AuthLayout from '@/components/AuthLayout';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-<<<<<<< HEAD
-import { Eye, EyeOff } from 'lucide-react';
-=======
 
->>>>>>> 5dbed70be6becb5c69bbd608588aab3eb562aa75
+import { Eye, EyeOff } from 'lucide-react';
 export default function SignupForm() {
   const search = useSearchParams();
   const preRole = search?.get('role') ?? 'student';
@@ -71,11 +68,8 @@ export default function SignupForm() {
   const togglePasswordVisibility = () => setShowPassword(!showPassword);
 
   return (
-<<<<<<< HEAD
-    <AuthLayout title="SignUp" subtitle="Only PTB Syllabus">
-=======
-    <AuthLayout title="Create account" subtitle="Start with a student or teacher account">
->>>>>>> 5dbed70be6becb5c69bbd608588aab3eb562aa75
+
+    <AuthLayout title="SignUp" subtitle="Only PTB Syllabus">  
       <form onSubmit={handleSignup}>
         {/* Role */}
         <div className="mb-3">
@@ -113,10 +107,7 @@ export default function SignupForm() {
         </div>
 
         {/* Password */}
-<<<<<<< HEAD
-      {/* Password */}
-{/* Password */}
-{/* Password */}
+
 <div className="mb-3">
   <label className="form-label">Password</label>
   <div className="password-input-container">
@@ -139,42 +130,16 @@ export default function SignupForm() {
     </button>
   </div>
 </div>
-=======
-        <div className="mb-3">
-          <label className="form-label">Password</label>
-          <div className="password-input-container">
-            <input
-              required
-              minLength={6}
-              type={showPassword ? 'text' : 'password'}
-              className="form-control"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
-            />
-            <button
-              type="button"
-              className="password-toggle-btn"
-              onClick={togglePasswordVisibility}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-            >
-              {showPassword ? '🙈' : '👁️'}
-            </button>
-          </div>
-        </div>
 
->>>>>>> 5dbed70be6becb5c69bbd608588aab3eb562aa75
+
         <button className="btn btn-primary w-100 mb-3" disabled={loading}>
           {loading ? 'Creating Account...' : 'Create Account'}
         </button>
 
         <div className="mt-3 text-center">
           <span className="text-muted">Already have an account? </span>
-<<<<<<< HEAD
           <Link href="/auth/login"  style={{'background':"#073E8C !important",'color':"white !important"}}>
-=======
-          <Link href="/auth/login" className="text-primary">
->>>>>>> 5dbed70be6becb5c69bbd608588aab3eb562aa75
+
             Sign in
           </Link>
         </div>
