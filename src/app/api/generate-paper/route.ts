@@ -123,6 +123,74 @@ function loadFontAsBase64(fontFileName: string): string {
 // 3. In-memory cache for translations to avoid network calls on every request.
 const translationCache = new Map<string, string>();
 
+// 🔥 CRITICAL: Function to sync user to users table (for foreign key constraint)
+async function ensureUserExists(supabase: any, userId: string) {
+  try {
+    // First check if user exists in auth.users
+    const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(userId);
+    
+    if (authError || !authUser) {
+      console.error('User not found in auth:', authError);
+      throw new Error('User not authenticated');
+    }
+
+    // Check if user exists in public.users table
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    if (checkError) {
+      if (checkError.code === 'PGRST116') { // No rows found - user doesn't exist
+        console.log(`🔄 OAuth user ${userId} not found in public.users, creating record...`);
+        
+        // Get user data from auth
+        const userEmail = authUser.user.email;
+        const userName = authUser.user.user_metadata?.full_name || 
+                        authUser.user.user_metadata?.name ||
+                        authUser.user.user_metadata?.user_name ||
+                        'User';
+        
+        // Create user in public.users table with required fields
+        const userData = {
+          id: userId,
+          name: userName,
+          email: userEmail,
+          role: 'teacher', // Default role
+          created_at: new Date().toISOString()
+        };
+
+        console.log(`📝 Creating user record in public.users for: ${userEmail}`);
+
+        // Insert the user
+        const { data: newUser, error: createError } = await supabase
+          .from('users')
+          .insert(userData)
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('❌ Error creating user in public.users:', createError);
+          throw createError;
+        }
+
+        console.log('✅ Created user in public.users:', newUser.id);
+        return newUser;
+      } else {
+        console.error('❌ Error checking users table:', checkError);
+        throw checkError;
+      }
+    }
+
+    console.log('✅ User exists in public.users:', existingUser.id);
+    return existingUser;
+  } catch (error) {
+    console.error('❌ Failed to ensure user exists:', error);
+    throw error;
+  }
+}
+
 // Function to map frontend source_type to database source_type
 function mapSourceType(sourceType: string): string {
   const sourceTypeMap: Record<string, string> = {
@@ -830,6 +898,20 @@ export async function POST(request: Request) {
   if (userError || !user) {
     console.error('Authentication error:', userError);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  console.log(`👤 Authenticated user: ${user.id} (${user.email})`);
+
+  // ✅ CRITICAL: Ensure user exists in public.users table (for foreign key constraint)
+  try {
+    await ensureUserExists(supabaseAdmin, user.id);
+    console.log(`✅ User synchronization completed for: ${user.id}`);
+  } catch (error) {
+    console.error('❌ Failed to ensure user exists in public.users:', error);
+    return NextResponse.json(
+      { error: 'User account setup failed. Please try again.' },
+      { status: 500 }
+    );
   }
 
   // Check if user is on trial
