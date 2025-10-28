@@ -7,7 +7,7 @@ const defaultSlides = [
     title: "Examly! A smart paper maker for Educators",
     description:
       "Make perfect exam papers in minutes with examly, Full Book, Half Book, Chapter-wise, Custom Chapters, and Randomized papers tailored to your curriculum",
-    image: "/smartPapermaker.png",
+    image: "/smartPaperMaker.png",
     cta: "Try Now",
     link: "/auth/login",
     bgClass: "bg-educator",

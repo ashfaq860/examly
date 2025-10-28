@@ -8,23 +8,22 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import type { PaperGenerationRequest } from '@/types/types';
 import { translate } from '@vitalets/google-translate-api';
-import type { Browser, Page } from 'puppeteer';
 
-// --- Optimizations ---
+// --- Playwright for PDF generation ---
+import { chromium } from 'playwright';
 
-// 1. Puppeteer browser instance singleton to avoid re-launching on every request.
-let browserPromise: Promise<Browser> | null = null;
+// 1. Playwright browser instance singleton
+let browserPromise: Promise<any> | null = null;
 
-async function getPuppeteerBrowser() {
+async function getPlaywrightBrowser() {
   if (browserPromise) {
     const browser = await browserPromise;
-    // Check if the browser is still connected.
+    // Check if the browser is still connected
     if (browser.isConnected()) return browser;
   }
 
   const launchBrowser = async () => {
     try {
-      const puppeteer = await import('puppeteer');
       const launchOptions: any = {
         args: [
           '--no-sandbox',
@@ -33,22 +32,20 @@ async function getPuppeteerBrowser() {
           '--disable-gpu',
           '--disable-software-rasterizer',
           '--disable-web-security',
-          '--disable-features=VizDisplayCompositor',
         ],
-        headless: 'new',
+        headless: true,
         timeout: 120000,
       };
-      const chromePath = getChromePath();
-      if (chromePath) {
-        launchOptions.executablePath = chromePath;
-      }
-      const browser = await puppeteer.launch(launchOptions);
+      
+      const browser = await chromium.launch(launchOptions);
+      
       browser.on('disconnected', () => {
         browserPromise = null;
       });
+      
       return browser;
     } catch (error) {
-      console.error('Failed to launch puppeteer:', error);
+      console.error('Failed to launch playwright:', error);
       browserPromise = null; // Reset promise on failure
       throw new Error('PDF generation is not available at this time');
     }
@@ -56,42 +53,6 @@ async function getPuppeteerBrowser() {
 
   browserPromise = launchBrowser();
   return browserPromise;
-}
-
-// Get Chrome executable path for different environments
-function getChromePath() {
-  const platform = process.platform;
-  let paths: string[] = [];
-
-  if (platform === 'win32') {
-    paths = [
-      process.env.PROGRAMFILES + '\\Google\\Chrome\\Application\\chrome.exe',
-      process.env['PROGRAMFILES(X86)'] + '\\Google\\Chrome\\Application\\chrome.exe',
-      process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
-      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
-    ];
-  } else if (platform === 'darwin') {
-    paths = [
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-      '/Applications/Chromium.app/Contents/MacOS/Chromium'
-    ];
-  } else {
-    paths = [
-      '/usr/bin/google-chrome',
-      '/usr/bin/google-chrome-stable',
-      '/usr/bin/chromium-browser',
-      '/usr/bin/chromium',
-      '/snap/bin/chromium'
-    ];
-  }
-
-  for (const p of paths) {
-    if (p && fs.existsSync(p)) return p;
-  }
-
-  return null;
 }
 
 // 2. In-memory cache for fonts to avoid disk I/O on every request.
@@ -116,12 +77,80 @@ function loadFontAsBase64(fontFileName: string): string {
     }
   } catch (error) {
     console.error('Error loading font:', error);
-      return '';
+    return '';
   }
 }
 
 // 3. In-memory cache for translations to avoid network calls on every request.
 const translationCache = new Map<string, string>();
+
+// 🔥 CRITICAL: Function to sync user to users table (for foreign key constraint)
+async function ensureUserExists(supabase: any, userId: string) {
+  try {
+    // First check if user exists in auth.users
+    const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(userId);
+    
+    if (authError || !authUser) {
+      console.error('User not found in auth:', authError);
+      throw new Error('User not authenticated');
+    }
+
+    // Check if user exists in public.users table
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    if (checkError) {
+      if (checkError.code === 'PGRST116') { // No rows found - user doesn't exist
+        console.log(`🔄 OAuth user ${userId} not found in public.users, creating record...`);
+        
+        // Get user data from auth
+        const userEmail = authUser.user.email;
+        const userName = authUser.user.user_metadata?.full_name || 
+                        authUser.user.user_metadata?.name ||
+                        authUser.user.user_metadata?.user_name ||
+                        'User';
+        
+        // Create user in public.users table with required fields
+        const userData = {
+          id: userId,
+          name: userName,
+          email: userEmail,
+          role: 'teacher', // Default role
+          created_at: new Date().toISOString()
+        };
+
+        console.log(`📝 Creating user record in public.users for: ${userEmail}`);
+
+        // Insert the user
+        const { data: newUser, error: createError } = await supabase
+          .from('users')
+          .insert(userData)
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('❌ Error creating user in public.users:', createError);
+          throw createError;
+        }
+
+        console.log('✅ Created user in public.users:', newUser.id);
+        return newUser;
+      } else {
+        console.error('❌ Error checking users table:', checkError);
+        throw checkError;
+      }
+    }
+
+    console.log('✅ User exists in public.users:', existingUser.id);
+    return existingUser;
+  } catch (error) {
+    console.error('❌ Failed to ensure user exists:', error);
+    throw error;
+  }
+}
 
 // Function to map frontend source_type to database source_type
 function mapSourceType(sourceType: string): string {
@@ -461,6 +490,37 @@ ${getWatermarkStyle()}
    </div>
 `;
 
+  // ... (rest of the HTML generation remains exactly the same)
+  // The HTML generation code is identical, just copy it from your original
+
+  htmlContent += `
+  ${!separateMCQ ?`
+    <div class="heade">
+  ${isUrdu || isBilingual ? ` <p class="urdu"><span>رولنمبر۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔</span> <span> (اُمیدوار خُود پٗر کرے) </span> <span> (تعلیمی سال  20025-2026) </span></p> ` : ''}
+  ${isEnglish || isBilingual ? `<p class="eng"> <span>Student Name#_______________________</span></p>` : ''}
+</div>
+
+  ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
+    ${isEnglish ? `<span class="eng">${subject}</span><span><strong>Class ${paperClass}</strong></span>` : ''}
+    ${isUrdu ? `<span class="urdu">${subject_ur}</span><span><strong>${paperClass} کلاس</strong></span>` : ''}
+    ${isBilingual ? `<span class="eng">${subject}</span><span><strong>${paperClass} کلاس</strong></span><span class="urdu">${subject_ur}</span>` : ''}
+  </div>
+
+  ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
+    ${isEnglish ? `<span class="eng">Time Allowed: ${convertMinutesToTimeFormat(subjectiveTimeMinutes || timeMinutes)} Minutes</span>` : ''}
+    ${isUrdu ? `<span class="urdu">وقت:${convertMinutesToTimeFormat(subjectiveTimeMinutes || timeMinutes)} منٹ</span>` : ''}
+    ${isBilingual ? `<span class="eng">Time Allowed: ${convertMinutesToTimeFormat(subjectiveTimeMinutes || timeMinutes)} Minutes</span><span class="urdu">وقت:${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} منٹ</span>` : ''}
+  </div>
+  ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
+    ${isEnglish ? `<span class="eng">Maximum Marks: ${subjectMarks}</span>` : ''}
+    ${isUrdu ? `<span class="urdu"><span>کل نمبر</span>:<span>${subjectMarks}</span> </span>` : ''}
+    ${isBilingual ? `<span class="eng">Maximum Marks: ${subjectMarks}</span><span class="urdu"><span>کل نمبر</span>:<span>${subjectMarks}</span> </span>` : ''}
+  </div>
+
+    `:``
+  }    
+  `;
+
   // Get MCQ questions
   const mcqQuestions = paperQuestions.filter((pq: any) => 
     pq.question_type === 'mcq' && pq.questions
@@ -556,8 +616,7 @@ ${getWatermarkStyle()}
       htmlContent += generateCatchyFooter(isTrialUser, 'mcq');
     }
 
-
- htmlContent += ` ${separateMCQ ? `
+    htmlContent += ` ${separateMCQ ? `
     <!-- Page break before subjective section -->
     <div style="page-break-before: always;"></div>` : ''}
 `;
@@ -575,7 +634,7 @@ ${getWatermarkStyle()}
   }
 
   htmlContent += `
-  ${!separateMCQ ?`
+  ${separateMCQ ?`
     <div class="heade">
   ${isUrdu || isBilingual ? ` <p class="urdu"><span>رولنمبر۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔</span> <span> (اُمیدوار خُود پٗر کرے) </span> <span> (تعلیمی سال  20025-2026) </span></p> ` : ''}
   ${isEnglish || isBilingual ? `<p class="eng"> <span>Student Name#_______________________</span></p>` : ''}
@@ -677,11 +736,6 @@ ${getWatermarkStyle()}
         });
 
         htmlContent += `</div>`;
-        
-        // Remove page breaks between short question groups to keep them on same page as long questions
-        // if (g < totalGroups - 1) {
-        //   htmlContent += `<div style="page-break-after: always;"></div>`;
-        // }
       }
     } else {
       // For custom papers: show all short questions sequentially without grouping
@@ -793,24 +847,19 @@ ${getWatermarkStyle()}
 `;
 
   // Footer
-  // Add MCQ footer for trial users
-    if ( isTrialUser) {
-      htmlContent += generateCatchyFooter(isTrialUser, 'subjective');
-    }
-
+  if ( isTrialUser) {
+    htmlContent += generateCatchyFooter(isTrialUser, 'subjective');
+  }
 
   htmlContent += `
 
 ${isTrialUser ? `<div class="watermark">
 <div class="watermark-text">
   www.examly.pk  
-
-  
 </div>
 </div>
 ` : ''}
 </body>
-
 </html>
 `;
 
@@ -830,6 +879,20 @@ export async function POST(request: Request) {
   if (userError || !user) {
     console.error('Authentication error:', userError);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  console.log(`👤 Authenticated user: ${user.id} (${user.email})`);
+
+  // ✅ CRITICAL: Ensure user exists in public.users table (for foreign key constraint)
+  try {
+    await ensureUserExists(supabaseAdmin, user.id);
+    console.log(`✅ User synchronization completed for: ${user.id}`);
+  } catch (error) {
+    console.error('❌ Failed to ensure user exists in public.users:', error);
+    return NextResponse.json(
+      { error: 'User account setup failed. Please try again.' },
+      { status: 500 }
+    );
   }
 
   // Check if user is on trial
@@ -871,7 +934,7 @@ export async function POST(request: Request) {
       mcqTimeMinutes,
       subjectiveTimeMinutes,
       shuffleQuestions = true,
-      randomSeed = Date.now() // 🔥 Get random seed from request
+      randomSeed = Date.now()
     } = requestData;
 
     // Validation
@@ -959,7 +1022,6 @@ export async function POST(request: Request) {
       short_to_attempt: shortToAttempt,
       long_to_attempt: longToAttempt,
       language: language
-      // Removed: shuffle_questions and random_seed columns since they don't exist
     };
 
     let paper;
@@ -1290,13 +1352,16 @@ export async function POST(request: Request) {
       longToAttempt: longToAttempt || longCount
     });
 
-    // Generate PDF
+    // Generate PDF with Playwright
     let browser = null;
-    let page: Page | null = null;
+    let page = null;
+    let context = null;
+    
     try {
       // Using singleton browser instance for performance
-      browser = await getPuppeteerBrowser();
-      page = await browser.newPage();
+      browser = await getPlaywrightBrowser();
+      context = await browser.newContext();
+      page = await context.newPage();
       
       // Set a longer timeout for page operations
       page.setDefaultTimeout(60000);
@@ -1317,7 +1382,7 @@ export async function POST(request: Request) {
       // Use file:// protocol to load the HTML
       const fileUrl = `file://${tempHtmlPath}`;
       await page.goto(fileUrl, { 
-        waitUntil: 'networkidle0',
+        waitUntil: 'networkidle',
         timeout: 60000
       });
       
@@ -1325,6 +1390,9 @@ export async function POST(request: Request) {
       await page.evaluate(() => {
         return document.fonts.ready;
       });
+
+      // Wait a bit more for all content to render
+      await page.waitForTimeout(1000);
       
       const pdfBuffer = await page.pdf({
         format: 'A4',
@@ -1333,15 +1401,16 @@ export async function POST(request: Request) {
         preferCSSPageSize: true
       });
 
-      // Close the page, but not the browser
+      // Clean up resources
       await page.close();
+      await context.close();
       
       // Clean up temporary file
       if (fs.existsSync(tempHtmlPath)) {
         fs.unlinkSync(tempHtmlPath);
       }
 
-      console.log('✅ PDF generated successfully');
+      console.log('✅ PDF generated successfully with Playwright');
       // Increment papers_generated count for the user
       await incrementPapersGenerated(supabaseAdmin, user.id);
       
@@ -1355,8 +1424,11 @@ export async function POST(request: Request) {
       });
 
     } catch (error) {
-      console.error('❌ Puppeteer error:', error);
-      if (page) await page.close();
+      console.error('❌ Playwright error:', error);
+      
+      // Clean up resources in case of error
+      if (page) await page.close().catch(() => {});
+      if (context) await context.close().catch(() => {});
       
       // Clean up temporary file if it exists
       const tempHtmlPath = path.join(process.cwd(), 'temp', `paper-${paper.id}.html`);
