@@ -47,7 +47,7 @@ async function getPlaywrightBrowser() {
     } catch (error) {
       console.error('Failed to launch playwright:', error);
       browserPromise = null; // Reset promise on failure
-      throw new Error('PDF generation is not available at this time usin playwright');
+      throw new Error('PDF generation is not available at this time using playwright');
     }
   };
 
