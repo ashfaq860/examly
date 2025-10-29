@@ -9,44 +9,53 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import type { PaperGenerationRequest } from '@/types/types';
 import { translate } from '@vitalets/google-translate-api';
 
-// --- Playwright for PDF generation ---
-import { chromium } from 'playwright';
+// --- Puppeteer for PDF generation ---
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
-// 1. Playwright browser instance singleton
+// 1. Puppeteer browser instance singleton
 let browserPromise: Promise<any> | null = null;
 
-async function getPlaywrightBrowser() {
+async function getPuppeteerBrowser() {
   if (browserPromise) {
-    const browser = await browserPromise;
-    // Check if the browser is still connected
-    if (browser.isConnected()) return browser;
+    try {
+      const browser = await browserPromise;
+      if (browser.connected) return browser;
+    } catch (error) {
+      console.warn('Existing browser promise rejected, creating new one');
+      browserPromise = null;
+    }
   }
 
   const launchBrowser = async () => {
     try {
-      const launchOptions: any = {
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--disable-software-rasterizer',
-          '--disable-web-security',
-        ],
-        headless: true,
-        timeout: 120000,
-      };
+      console.log('🚀 Launching browser with @sparticuz/chromium...');
       
-      const browser = await chromium.launch(launchOptions);
+      // ALWAYS use @sparticuz/chromium - never try to find system Chrome
+      const executablePath = await chromium.executablePath();
+      console.log('📁 Chromium executable path:', executablePath);
+
+      const launchOptions = {
+        args: chromium.args,
+        executablePath: executablePath,
+        headless: chromium.headless,
+        timeout: 30000,
+      };
+
+      console.log('🎯 Browser launch options ready');
+      
+      const browser = await puppeteer.launch(launchOptions);
+      console.log('✅ Browser launched successfully');
       
       browser.on('disconnected', () => {
+        console.log('🔌 Browser disconnected');
         browserPromise = null;
       });
       
       return browser;
     } catch (error) {
-      console.error('Failed to launch playwright:', error);
-      browserPromise = null; // Reset promise on failure
+      console.error('❌ Failed to launch browser:', error);
+      browserPromise = null;
       throw new Error('PDF generation is not available at this time');
     }
   };
@@ -490,9 +499,6 @@ ${getWatermarkStyle()}
    </div>
 `;
 
-  // ... (rest of the HTML generation remains exactly the same)
-  // The HTML generation code is identical, just copy it from your original
-
   htmlContent += `
   ${!separateMCQ ?`
     <div class="heade">
@@ -869,6 +875,60 @@ ${isTrialUser ? `<div class="watermark">
 export async function POST(request: Request) {
   console.log('📄 POST request received to generate paper');
   
+  // Development fallback - completely skip browser operations
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🛑 Development mode: PDF generation disabled');
+    
+    try {
+      const requestData: PaperGenerationRequest = await request.json();
+      const token = request.headers.get('Authorization')?.split(' ')[1];
+      
+      if (!token) {
+        return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
+      }
+
+      // Verify user
+      const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+      if (userError || !user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+
+      // Create a mock paper for development
+      const paperData = {
+        title: requestData.title,
+        subject_id: requestData.subjectId,
+        class_id: requestData.classId,
+        created_by: user.id,
+        total_marks: 100,
+        time_minutes: requestData.timeMinutes || 60,
+        language: requestData.language || 'bilingual'
+      };
+
+      const { data: paper, error: paperError } = await supabaseAdmin
+        .from('papers')
+        .insert(paperData)
+        .select()
+        .single();
+
+      if (paperError) throw paperError;
+
+      return NextResponse.json({
+        success: true,
+        paperId: paper.id,
+        message: 'Paper created successfully (Development Mode - No PDF)',
+        questionsCount: 0,
+        developmentMode: true
+      });
+
+    } catch (error) {
+      console.error('Development mode error:', error);
+      return NextResponse.json(
+        { error: 'Development: Failed to create paper' },
+        { status: 500 }
+      );
+    }
+  }
+
   const token = request.headers.get('Authorization')?.split(' ')[1];
   if (!token) {
     return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
@@ -1352,65 +1412,49 @@ export async function POST(request: Request) {
       longToAttempt: longToAttempt || longCount
     });
 
-    // Generate PDF with Playwright
+    // Generate PDF with Puppeteer
     let browser = null;
     let page = null;
-    let context = null;
     
     try {
+      console.log('🔄 Starting PDF generation with Puppeteer...');
+      
       // Using singleton browser instance for performance
-      browser = await getPlaywrightBrowser();
-      context = await browser.newContext();
-      page = await context.newPage();
+      browser = await getPuppeteerBrowser();
+      page = await browser.newPage();
       
       // Set a longer timeout for page operations
       page.setDefaultTimeout(60000);
       page.setDefaultNavigationTimeout(60000);
       
-      // Use a temporary HTML file instead of setContent for large documents
-      const tempHtmlPath = path.join(process.cwd(), 'temp', `paper-${paper.id}.html`);
-      const tempDir = path.dirname(tempHtmlPath);
+      console.log('📄 Setting page content...');
       
-      // Ensure temp directory exists
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-      }
-      
-      // Write HTML to a temporary file
-      fs.writeFileSync(tempHtmlPath, htmlContent, 'utf8');
-      
-      // Use file:// protocol to load the HTML
-      const fileUrl = `file://${tempHtmlPath}`;
-      await page.goto(fileUrl, { 
-        waitUntil: 'networkidle',
+      // Use setContent directly instead of file for better Vercel compatibility
+      await page.setContent(htmlContent, {
+        waitUntil: 'networkidle0',
         timeout: 60000
       });
       
       // Wait for fonts to load (especially important for Urdu fonts)
+      console.log('⏳ Waiting for fonts to load...');
       await page.evaluate(() => {
         return document.fonts.ready;
       });
 
       // Wait a bit more for all content to render
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(2000);
       
+      console.log('📊 Generating PDF buffer...');
       const pdfBuffer = await page.pdf({
         format: 'A4',
         printBackground: true,
         margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
-        preferCSSPageSize: true
+        displayHeaderFooter: false
       });
 
-      // Clean up resources
       await page.close();
-      await context.close();
+      console.log(`✅ PDF generated successfully: ${pdfBuffer.length} bytes`);
       
-      // Clean up temporary file
-      if (fs.existsSync(tempHtmlPath)) {
-        fs.unlinkSync(tempHtmlPath);
-      }
-
-      console.log('✅ PDF generated successfully with Playwright');
       // Increment papers_generated count for the user
       await incrementPapersGenerated(supabaseAdmin, user.id);
       
@@ -1424,17 +1468,10 @@ export async function POST(request: Request) {
       });
 
     } catch (error) {
-      console.error('❌ Playwright error:', error);
+      console.error('❌ PDF generation error:', error);
       
       // Clean up resources in case of error
       if (page) await page.close().catch(() => {});
-      if (context) await context.close().catch(() => {});
-      
-      // Clean up temporary file if it exists
-      const tempHtmlPath = path.join(process.cwd(), 'temp', `paper-${paper.id}.html`);
-      if (fs.existsSync(tempHtmlPath)) {
-        fs.unlinkSync(tempHtmlPath);
-      }
       
       // Return paper data even if PDF generation fails
       return NextResponse.json(
