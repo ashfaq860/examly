@@ -11,7 +11,6 @@
   "dependencies": {
     "@canvas-fonts/times-new-roman": "^1.0.4",
     "@emailjs/browser": "^4.4.1",
-    "@foliojs-fork/fontkit": "^1.9.2",
     "@google-cloud/translate": "^9.2.0",
     "@hookform/resolvers": "^5.2.1",
     "@sparticuz/chromium": "^121.0.0",
@@ -22,17 +21,15 @@
     "@vitalets/google-translate-api": "^9.2.1",
     "axios": "^1.11.0",
     "bootstrap": "^5.3.7",
-    "canvas": "^3.1.2",
     "chart.js": "^4.5.0",
     "firebase": "^12.1.0",
-    "fontkit": "^2.0.4",
     "framer-motion": "^12.23.12",
     "google-translate-api-browser": "^5.0.0",
     "js-cookie": "^3.0.5",
     "lucide-react": "^0.542.0",
     "next": "^15.5.2",
     "nodemailer": "^7.0.9",
-    "puppeteer-core": "^24.27.0",
+    "puppeteer-core": "^21.11.0",
     "react": "19.1.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "19.1.0",
@@ -52,7 +49,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.4.6",
-    "puppeteer": "^24.27.0",
+    "puppeteer": "^21.0.0",
     "typescript": "^5"
   }
 }
