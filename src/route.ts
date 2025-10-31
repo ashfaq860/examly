@@ -5,12 +5,11 @@ export const maxDuration = 300; // 5 minutes
 import fs from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
+//import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import type { PaperGenerationRequest } from '@/types/types';
 import { translate } from '@vitalets/google-translate-api';
-import type { Browser, Page } from 'puppeteer-core';
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+import type { Browser, Page } from 'puppeteer';
 
 // --- Optimizations ---
 
@@ -20,15 +19,13 @@ let browserPromise: Promise<Browser> | null = null;
 async function getPuppeteerBrowser() {
   if (browserPromise) {
     const browser = await browserPromise;
+    // Check if the browser is still connected.
     if (browser.isConnected()) return browser;
   }
 
   const launchBrowser = async () => {
     try {
-      // Configure Chromium for serverless environment
-      chromium.setHeadlessMode = true;
-      chromium.setGraphicsMode = false;
-
+      const puppeteer = await import('puppeteer');
       const launchOptions: any = {
         args: [
           '--no-sandbox',
@@ -37,31 +34,15 @@ async function getPuppeteerBrowser() {
           '--disable-gpu',
           '--disable-software-rasterizer',
           '--disable-web-security',
-          '--single-process',
-          '--no-zygote',
-          '--no-first-run',
-          '--disable-background-timer-throttling',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding',
-          '--max-old-space-size=4096',
+          '--disable-features=VizDisplayCompositor',
         ],
         headless: 'new',
-        timeout: 180000, // Increased to 3 minutes
-        ignoreHTTPSErrors: true,
+        timeout: 120000,
       };
-
-      // Use @sparticuz/chromium in production, system Chrome in development
-      if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
-        launchOptions.args = chromium.args;
-        launchOptions.executablePath = await chromium.executablePath();
-        launchOptions.defaultViewport = chromium.defaultViewport;
-      } else {
-        const chromePath = getChromePath();
-        if (chromePath) {
-          launchOptions.executablePath = chromePath;
-        }
+      const chromePath = getChromePath();
+      if (chromePath) {
+        launchOptions.executablePath = chromePath;
       }
-
       const browser = await puppeteer.launch(launchOptions);
       browser.on('disconnected', () => {
         browserPromise = null;
@@ -69,7 +50,7 @@ async function getPuppeteerBrowser() {
       return browser;
     } catch (error) {
       console.error('Failed to launch puppeteer:', error);
-      browserPromise = null;
+      browserPromise = null; // Reset promise on failure
       throw new Error('PDF generation is not available at this time');
     }
   };
@@ -80,11 +61,6 @@ async function getPuppeteerBrowser() {
 
 // Get Chrome executable path for different environments
 function getChromePath() {
-  // In production, use Chromium from @sparticuz/chromium
-  if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
-    return null;
-  }
-
   const platform = process.platform;
   let paths: string[] = [];
 
@@ -301,7 +277,6 @@ function hasActualUrduText(text: string | null): boolean {
   const urduRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
   return urduRegex.test(text);
 }
-
 // increment function if paper is generated
 // Function to increment papers_generated count for a user
 async function incrementPapersGenerated(supabase: any, userId: string) {
@@ -333,6 +308,7 @@ async function incrementPapersGenerated(supabase: any, userId: string) {
 }
 
 // function to check user subscription if any
+
 async function checkUserSubscription(supabaseAdmin: any, userId: string): Promise<boolean> {
   try {
     const { data: subscription, error } = await supabaseAdmin
@@ -388,29 +364,432 @@ function getWatermarkStyle(): string {
       font-family: Arial, sans-serif;
       white-space: pre-line; /* allows multi-line */
     }
+
+   
+    }
   `;
 }
 
-// Function to optimize HTML for Puppeteer
-function optimizeHtmlForPuppeteer(html: string): string {
-  return html
-    // Remove unnecessary whitespace
-    .replace(/\s+/g, ' ')
-    // Remove comments
-    .replace(/<!--.*?-->/gs, '')
-    // Remove empty styles
-    .replace(/<style>\s*<\/style>/g, '')
-    // Minify CSS in style tags
-    .replace(/<style>([\s\S]*?)<\/style>/g, (match, css) => {
-      const minifiedCSS = css
-        .replace(/\/\*[\s\S]*?\*\//g, '') // Remove comments
-        .replace(/\s+/g, ' ') // Collapse whitespace
-        .replace(/\s*([{};:,])\s*/g, '$1') // Remove spaces around braces/semicolons
-        .trim();
-      return `<style>${minifiedCSS}</style>`;
-    })
-    .trim();
+async function generatePaperHtml({
+  paper,
+  paperQuestions,
+  isUrdu,
+  isBilingual,
+  isEnglish,
+  separateMCQ,
+  englishTitle,
+  subject,
+  subject_ur,
+  paperClass,
+  timeToDisplay,
+  timeMinutes,
+  subjectiveTimeMinutes,
+  totalMarks,
+  objectiveMarks,
+  subjectMarks,
+  isTrialUser
+}: any) {
+  // Load fonts
+  const jameelNooriBase64 = loadFontAsBase64('JameelNooriNastaleeqKasheeda.ttf');
+  const notoNastaliqBase64 = loadFontAsBase64('NotoNastaliqUrdu-Regular.ttf');
+
+  /** CONVERT PAPER MINUTES INTO HOURS */
+  function convertMinutesToTimeFormat(minutes: number): string {
+    if (minutes <= 0) return '0:00';
+    
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    
+    // Format with leading zero for minutes
+    const formattedMinutes = remainingMinutes.toString().padStart(2, '0');
+    
+    return `${hours}:${formattedMinutes}`;
+  }
+
+  // Build HTML content
+  let htmlContent = `
+<!DOCTYPE html>
+<html lang="${isUrdu ? 'ur' : 'en'}">
+<head>
+<meta charset="UTF-8">
+<title>${isUrdu ? subject_ur : subject} </title>
+
+<style>
+${getWatermarkStyle()}
+ @font-face {
+    font-family: 'Jameel Noori Nastaleeq';
+    src: url('data:font/truetype;charset=utf-8;base64,${jameelNooriBase64}') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+  }
+  
+  @font-face {
+    font-family: 'Noto Nastaliq Urdu';
+    src: url('data:font/truetype;charset=utf-8;base64,${notoNastaliqBase64}') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; padding: 10px; }
+  .container { max-width: 900px; margin: 0 auto; background: white; padding: 0;  }
+
+  .header {text-align:center; font-size: 14px;  }
+  .header h1 { font-size: 20px; }
+  .header h2 { font-size: 16px; }
+  .urdu { font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif; direction: rtl; }
+  .eng { font-family: "Times New Roman", serif; direction: ltr; }
+   .options .urdu {
+  font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu";
+  direction: rtl;
 }
+.options .eng {
+  font-family: "Times New Roman", serif;
+  direction: ltr;
+}
+  .meta { display: flex; justify-content: space-between; margin: 0 0; font-size: 14px; font-weight:bold }
+  .note {  padding: 0px; margin:0 0; font-size: 13px; line-height: 1.5; }
+  
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; ${isEnglish? ' direction:ltr' : ' direction:rtl'}}
+  table, th, td { border: 1px solid #000; }
+  td { padding: 8px; vertical-align: top; }
+  .qnum { width: 40px; text-align: center; font-weight: bold; }
+  .question { display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0; 
+  }
+  .options { margin-top: 5px; display: flex; justify-content: space-between; font-size: 13px; }
+  .footer { text-align: left; margin-top: 20px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+<div class="header">
+    <h1 class="eng">${englishTitle}</h1>
+   </div>
+<div class="heade">
+  ${isUrdu || isBilingual ? ` <p class="urdu"><span>رولنمبر۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔</span> <span> (اُمیدوار خُود پٗر کرے) </span> <span> (تعلیمی سال  20025-2026) </span></p> ` : ''}
+  ${isEnglish || isBilingual ? `<p class="eng"> <span>Roll No#_______________________</span></p>` : ''}
+</div>
+
+  ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
+    ${isEnglish ? `<span class="eng">${subject}</span><span><strong>Class ${paperClass}</strong></span>` : ''}
+    ${isUrdu ? `<span class="urdu">${subject_ur}</span><span><strong>${paperClass} کلاس</strong></span>` : ''}
+    ${isBilingual ? `<span class="eng">${subject}</span><span><strong>${paperClass} کلاس</strong></span><span class="urdu">${subject_ur}</span>` : ''}
+  </div>
+
+  ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
+    ${isEnglish ? `<span class="eng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} Minutes</span>` : ''}
+    ${isUrdu ? `<span class="urdu">وقت:${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} منٹ</span>` : ''}
+    ${isBilingual ? `<span class="eng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} Minutes</span><span class="urdu">وقت:${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} منٹ</span>` : ''}
+  </div>
+  ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
+    ${isEnglish ? `<span class="eng">Maximum Marks: ${totalMarks}</span>` : ''}
+    ${isUrdu ? `<span class="urdu"><span>کل نمبر</span>:<span>${totalMarks}</span> </span>` : ''}
+    ${isBilingual ? `<span class="eng">Maximum Marks: ${separateMCQ? objectiveMarks : totalMarks}</span><span class="urdu"><span>کل نمبر</span>: <span>${separateMCQ? objectiveMarks : totalMarks}</span> </span>` : ''}
+  </div>
+`;
+
+  // Get MCQ questions
+  const mcqQuestions = paperQuestions.filter((pq: any) => 
+    pq.question_type === 'mcq' && pq.questions
+  );
+
+  // Add MCQ questions if they exist
+  if (mcqQuestions.length > 0) {
+    htmlContent += `<div class="note">`;
+    if (isUrdu || isBilingual) {
+      htmlContent += `<p class="urdu">نوٹ: ہر سوال کے چار ممکنہ جوابات A,B,C اور D دیئے گئے ہیں۔ درست جواب کے مطابق دائرہ پُر کریں۔ ایک سے زیادہ دائروں کو پُر کرنے کی صورت میں جواب غلط تصور ہوگا۔</p>`;
+    }
+    if (isEnglish || isBilingual) {
+      htmlContent += `<p class="eng">Note: Four possible answers A, B, C and D to each question are given. Fill the correct option’s circle. More than one filled circle will be treated wrong.</p>`;
+    }
+    htmlContent += `</div><table>`;
+
+    // Process MCQ questions
+    mcqQuestions.forEach((pq: any, index: number) => {
+      const q = pq.questions;
+      const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+      const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+      const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+      
+      let questionDisplayHtml = '<div class="question">';
+      if (isEnglish) {
+          questionDisplayHtml += `<span class="eng">${englishQuestion}</span>`;
+      } else if (isUrdu) {
+          questionDisplayHtml += `<span class="urdu">${urduQuestion || englishQuestion}</span>`;
+      } else { // bilingual
+          questionDisplayHtml += `<span class="urdu">${urduQuestion}</span><span class="eng">${englishQuestion}</span>`;
+      }
+      questionDisplayHtml += '</div>';
+
+      const options = [
+        { 
+          letter: 'A', 
+          english: q.option_a || '', 
+          urdu: hasActualUrduText(q.option_a_ur) ? q.option_a_ur : '',
+          hasUrdu: hasActualUrduText(q.option_a_ur)
+        },
+        { 
+          letter: 'B', 
+          english: q.option_b || '', 
+          urdu: hasActualUrduText(q.option_b_ur) ? q.option_b_ur : '',
+          hasUrdu: hasActualUrduText(q.option_b_ur)
+        },
+        { 
+          letter: 'C', 
+          english: q.option_c || '', 
+          urdu: hasActualUrduText(q.option_c_ur) ? q.option_c_ur : '',
+          hasUrdu: hasActualUrduText(q.option_c_ur)
+        },
+        { 
+          letter: 'D', 
+          english: q.option_d || '', 
+          urdu: hasActualUrduText(q.option_d_ur) ? q.option_d_ur : '',
+          hasUrdu: hasActualUrduText(q.option_d_ur)
+        }
+      ];
+
+      let optionsHtml = '';
+      options.forEach(option => {
+        if (option.english || option.urdu) {
+          let optionDisplayHtml = `<span>(${option.letter}) `;
+          if (isEnglish) {
+              optionDisplayHtml += `<span class="eng">${option.english}</span>`;
+          } else if (isUrdu) {
+              optionDisplayHtml += `<span class="urdu">${option.urdu || option.english}</span>`;
+          } else { // bilingual
+              optionDisplayHtml += `<span><span class="urdu">${option.urdu}</span> <span class="eng">${option.english}</span></span>`;
+          }
+          optionDisplayHtml += '</span>';
+          optionsHtml += optionDisplayHtml;
+        }
+      });
+
+      htmlContent += `
+   <tr>
+      <td class="qnum">${pq.order_number}</td>
+      <td>
+        ${questionDisplayHtml}
+        <div class="options">${optionsHtml}</div>
+      </td>
+    </tr>
+  `;
+    });
+
+    htmlContent += `
+       </table>
+${separateMCQ ? `<div class="footer">
+    <p>117-023-I (Objective Type) - 14500 (5833) (New Course)</p>
+  </div>` : ``}
+  
+</div>
+  ${separateMCQ ? `
+    <!-- Page break before subjective section -->
+    <div style="page-break-before: always;"></div>` : ''}
+`;
+  }
+
+  // Get subjective questions
+  const subjectiveQuestions = paperQuestions.filter((pq: any) => 
+    pq.question_type !== 'mcq' && pq.questions
+  );
+
+  // Helper: Convert number to roman style (i, ii, iii …)
+  function toRoman(num: number): string {
+    const romans = ['i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii','xiii','xiv','xv','xvi','xvii','xviii'];
+    return romans[num - 1] || num.toString();
+  }
+
+  htmlContent += `
+  ${separateMCQ ?`
+    <div class="heade">
+  ${isUrdu || isBilingual ? ` <p class="urdu"><span>رولنمبر۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔</span> <span> (اُمیدوار خُود پٗر کرے) </span> <span> (تعلیمی سال  20025-2026) </span></p> ` : ''}
+  ${isEnglish || isBilingual ? `<p class="eng"> <span>Roll No#_______________________</span></p>` : ''}
+</div>
+
+  ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
+    ${isEnglish ? `<span class="eng">${subject}</span><span><strong>Class ${paperClass}</strong></span>` : ''}
+    ${isUrdu ? `<span class="urdu">${subject_ur}</span><span><strong>${paperClass} کلاس</strong></span>` : ''}
+    ${isBilingual ? `<span class="eng">${subject}</span><span><strong>${paperClass} کلاس</strong></span><span class="urdu">${subject_ur}</span>` : ''}
+  </div>
+
+  ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
+    ${isEnglish ? `<span class="eng">Time Allowed: ${convertMinutesToTimeFormat(subjectiveTimeMinutes || timeMinutes)} Minutes</span>` : ''}
+    ${isUrdu ? `<span class="urdu">وقت:${convertMinutesToTimeFormat(subjectiveTimeMinutes || timeMinutes)} منٹ</span>` : ''}
+    ${isBilingual ? `<span class="eng">Time Allowed: ${convertMinutesToTimeFormat(subjectiveTimeMinutes || timeMinutes)} Minutes</span><span class="urdu">وقت:${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} منٹ</span>` : ''}
+  </div>
+  ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
+    ${isEnglish ? `<span class="eng">Maximum Marks: ${subjectMarks}</span>` : ''}
+    ${isUrdu ? `<span class="urdu"><span>کل نمبر</span>:<span>${subjectMarks}</span> </span>` : ''}
+    ${isBilingual ? `<span class="eng">Maximum Marks: ${subjectMarks}</span><span class="urdu"><span>کل نمبر</span>:<span>${subjectMarks}</span> </span>` : ''}
+  </div>
+
+    `:``
+  }    
+  `;
+
+  // Add subjective questions
+  if (subjectiveQuestions.length > 0) {
+    htmlContent += `
+  <!-- Short Questions Section -->
+  <div class="header">
+   
+    (<span class="english">${(isEnglish || isBilingual)? 'Part - I':''}<span><span class="urdu"> ${(isUrdu || isBilingual)? 'حصہ اول':''}  </span>)
+  </div>
+
+`;
+
+    // Separate short and long questions
+    const shortQuestions = subjectiveQuestions.filter((pq: any) => pq.question_type === 'short');
+
+    // Add short questions
+    // Grouping: 6 questions per group
+    const questionsPerGroup = 6;
+    const totalGroups = Math.ceil(shortQuestions.length / questionsPerGroup);
+
+    for (let g = 0; g < totalGroups; g++) {
+      const groupQuestions = shortQuestions.slice(
+        g * questionsPerGroup,
+        (g + 1) * questionsPerGroup
+      );
+
+      // Q. numbering starts from 2
+      const questionNumber = g + 2;
+
+        let instructionHtml = '<div style="display:flex; justify-content:space-between; margin-bottom:0px; font-weight:bold">';
+        if (isEnglish || isBilingual) {
+          instructionHtml += `<div class="eng"><strong>${questionNumber}.</strong>Write short answers to any four(4) questions.<span></span></div>`;
+        }
+        if (isUrdu || isBilingual) {
+          instructionHtml += `<div class="urdu" style="direction:rtl;"><strong><span>${questionNumber}.</span>کوئی سے چار سوالات کے مختصر جوابات لکھئے  </strong></div>`;
+        }
+        instructionHtml += '</div>';
+
+      htmlContent += `
+    
+    
+    <div class="short-questions ${isUrdu?'urdu':''}">
+      ${instructionHtml}
+  `;
+
+      groupQuestions.forEach((pq: any, idx: number) => {
+        const q = pq.questions;
+        const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+        const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+        const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+
+        let questionItemHtml = '<div class="short-question-item" style="display:flex; justify-content:space-between; margin-bottom:0px;">';
+        if (isEnglish) {
+            questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion}</div>`;
+        } else if (isUrdu) {
+            questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion || englishQuestion}</div>`;
+        } else { // bilingual
+            questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion}</div>`;
+            if (hasUrduQuestion) {
+                questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion}</div>`;
+            }
+        }
+        questionItemHtml += '</div>';
+
+        htmlContent += `
+       ${questionItemHtml}
+    `;
+      });
+
+      htmlContent += `
+     </div>
+  `;
+    }
+  }
+
+  const longQuestions = subjectiveQuestions.filter((pq: any) => pq.question_type === 'long');
+
+  // Add long questions
+  if (longQuestions.length > 0) {
+    htmlContent += `
+  <div class="header">
+      (<span class="english">${(isEnglish || isBilingual)? 'Part - II':''}<span> <span class="urdu"> ${(isUrdu || isBilingual)? 'حصہ دوم ':''}  </span>)
+  </div>
+  <div class="instructions" style="font-weight:bold">`;
+  if(isEnglish || isBilingual) {
+    htmlContent += `<div class="instruction-text eng">
+                      <span>Note:</span> Attempt any 2 questions.
+                    </div>`;
+  }
+  if(isUrdu || isBilingual) {
+    htmlContent += `<div class="instruction-text urdu" style="direction: rtl;">
+                      <span>نوٹ:</span> کوئی دو سوالات حل کریں۔
+                    </div>`;
+  }
+  htmlContent += `</div>
+`;
+
+    longQuestions.forEach((pq: any, idx: number) => {
+      const q = pq.questions;
+      const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+      const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+      const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+
+      // Sub-questions
+      const subQuestions = pq.sub_questions || [];
+      let subQsHTML = '';
+
+      if (subQuestions.length > 0) {
+        subQsHTML += `
+      <div style="display: flex; justify-content: space-between; margin-top:6px;">
+        ${isEnglish || isBilingual ? `<div class="eng" style="width: 48%;"><ol type="a">${subQuestions.map((sq: any) => `<li>${formatQuestionText(sq.question_text || '')}</li>`).join('')}</ol></div>` : ''}
+        ${isUrdu || isBilingual ? `<div class="urdu" style="width: 48%; direction: rtl; text-align: right;"><ol type="a">${subQuestions.map((sq: any) => `<li>${formatQuestionText(sq.question_text_ur || '')}</li>`).join('')}</ol></div>` : ''}
+      </div>
+    `;
+      }
+
+      let longQuestionDisplayHtml = '<div class="long-question" style="margin-bottom:12px;"><div style="display:flex; justify-content:space-between; align-items:flex-start;">';
+      if (isEnglish) {
+          longQuestionDisplayHtml += `<div class="eng" style="width:100%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion}</div>`;
+      } else if (isUrdu) {
+          longQuestionDisplayHtml += `<div class="urdu" style="width:100%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion || englishQuestion}</div>`;
+      } else { // bilingual
+          longQuestionDisplayHtml += `<div class="eng" style="width:48%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion}</div>`;
+          if (hasUrduQuestion) {
+              longQuestionDisplayHtml += `<div class="urdu" style="width:48%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion}</div>`;
+          }
+      }
+      longQuestionDisplayHtml += `</div>${subQsHTML}</div>`;
+
+      htmlContent += `
+    ${longQuestionDisplayHtml}
+  `;
+    });
+  }
+
+  htmlContent += `
+  </div>
+`;
+
+  // Footer
+  htmlContent += `
+  <div style="margin-top: 30px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">
+    <p class="english">Generated on ${new Date().toLocaleDateString()} | Paper ID: ${paper.id} | BISE Lahore Pattern</p>
+    <p class="english">Source Type: paper.source_type | Language: ${language}</p>
+  </div>
+</div>
+${isTrialUser ? `<div class="watermark">
+<div class="watermark-text">
+  www.examly.pk  
+  Generate perfect papers&Prepare exam with Examly  
+  
+</div>
+</div>
+` : ''}
+</body>
+
+</html>
+`;
+
+  return simplifyHtmlContent(htmlContent);
+}
+
 
 export async function POST(request: Request) {
   console.log('📄 POST request received to generate paper');
@@ -419,7 +798,13 @@ export async function POST(request: Request) {
   if (!token) {
     return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
   }
-
+/*
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { global: { headers: { Authorization: `Bearer ${token}` } } }
+  );
+*/
   // Verify user
   const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
   if (userError || !user) {
@@ -427,9 +812,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Check if user is on trial
+  
+// Check if user is on trial
   const isTrialUser = await checkUserSubscription(supabaseAdmin, user.id);
   console.log(`👤 User ${user.id} is ${isTrialUser ? 'on trial' : 'paid'}`);
+
 
   try {
     const requestData: PaperGenerationRequest = await request.json();
@@ -474,7 +861,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
     // Test database connection
     const { data: testQuestions, error: testError } = await supabaseAdmin
       .from('questions')
@@ -520,10 +906,9 @@ export async function POST(request: Request) {
     const totalMarks = (mcqToAttempt || mcqCount || 0) * mcqMarks + 
                       (shortToAttempt || shortCount || 0) * shortMarks + 
                       (longToAttempt || longCount || 0) * longMarks;
-    const objectiveMarks = (mcqToAttempt || mcqCount || 0) * mcqMarks ; 
+const objectiveMarks = (mcqToAttempt || mcqCount || 0) * mcqMarks ; 
     const subjectMarks = (shortToAttempt || shortCount || 0) * shortMarks + 
                       (longToAttempt || longCount || 0) * longMarks;
-
     // Create paper record - handle source_type column gracefully
     const paperData: any = {
       title: title,
@@ -722,7 +1107,6 @@ export async function POST(request: Request) {
     const isBilingual = language === 'bilingual';
     const isEnglish = language === 'english';
     const separateMCQ = mcqPlacement === 'separate';
-    
     // Handle title
     const englishTitle = `${paper.title}`;
     const urduTitle = paper.title;
@@ -814,12 +1198,12 @@ export async function POST(request: Request) {
       font-style: normal;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; padding: 0px; }
+    body { font-family: Arial, sans-serif; padding: 10px; }
     .container { max-width: 900px; margin: 0 auto; background: white; padding: 0;  }
 
     .header {text-align:center; font-size: 14px;  }
-    .header h1 { font-size: 16px; }
-    .header h2 { font-size: 12px; }
+    .header h1 { font-size: 20px; }
+    .header h2 { font-size: 16px; }
     .urdu { font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif; direction: rtl; }
     .eng { font-family: "Times New Roman", serif; direction: ltr; }
      .options .urdu {
@@ -830,20 +1214,20 @@ export async function POST(request: Request) {
     font-family: "Times New Roman", serif;
     direction: ltr;
   }
-    .meta { display: flex; justify-content: space-between; margin: 0 0; font-size: 12px; font-weight:bold }
-    .note {  padding: 0px; margin:0 0; font-size: 12px; line-height: 1.2; }
+    .meta { display: flex; justify-content: space-between; margin: 0 0; font-size: 14px; font-weight:bold }
+    .note {  padding: 0px; margin:0 0; font-size: 13px; line-height: 1.5; }
     
-    table { width: 100%; border-collapse: collapse; margin: 5px 0; font-size: 14px; ${isEnglish? ' direction:ltr' : ' direction:rtl'}}
+    table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; ${isEnglish? ' direction:ltr' : ' direction:rtl'}}
     table, th, td { border: 1px solid #000; }
-    td { padding: 3px; vertical-align: top; }
+    td { padding: 8px; vertical-align: top; }
     .qnum { width: 40px; text-align: center; font-weight: bold; }
     .question { display: flex;
     justify-content: space-between;
     align-items: center;
     margin: 0 0; 
     }
-    .options { margin-top: 3px; display: flex; justify-content: space-between; font-size: 11px; }
-    .footer { text-align: left; margin-top: 10px; font-size: 10px; }
+    .options { margin-top: 5px; display: flex; justify-content: space-between; font-size: 13px; }
+    .footer { text-align: left; margin-top: 20px; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -886,7 +1270,7 @@ export async function POST(request: Request) {
         htmlContent += `<p class="urdu">نوٹ: ہر سوال کے چار ممکنہ جوابات A,B,C اور D دیئے گئے ہیں۔ درست جواب کے مطابق دائرہ پُر کریں۔ ایک سے زیادہ دائروں کو پُر کرنے کی صورت میں جواب غلط تصور ہوگا۔</p>`;
       }
       if (isEnglish || isBilingual) {
-        htmlContent += `<p class="eng">Note: Four possible answers A, B, C and D to each question are given. Fill the correct option's circle. More than one filled circle will be treated wrong.</p>`;
+        htmlContent += `<p class="eng">Note: Four possible answers A, B, C and D to each question are given. Fill the correct option’s circle. More than one filled circle will be treated wrong.</p>`;
       }
       htmlContent += `</div><table>`;
 
@@ -1171,8 +1555,8 @@ ${separateMCQ ? `<div class="footer">
 </html>
 `;
 
-    // Simplify and optimize HTML content
-    htmlContent = optimizeHtmlForPuppeteer(simplifyHtmlContent(htmlContent));
+    // Simplify HTML content
+    htmlContent = simplifyHtmlContent(htmlContent);
 
     // Generate PDF
     let browser = null;
@@ -1182,54 +1566,52 @@ ${separateMCQ ? `<div class="footer">
       browser = await getPuppeteerBrowser();
       page = await browser.newPage();
       
-      // Set more reasonable timeouts
-      page.setDefaultTimeout(120000); // 2 minutes
-      page.setDefaultNavigationTimeout(120000); // 2 minutes
+      // Set a longer timeout for page operations
+      page.setDefaultTimeout(60000);
+      page.setDefaultNavigationTimeout(60000);
       
-      // Disable unnecessary resources for faster loading
-      await page.setRequestInterception(true);
-      page.on('request', (req) => {
-        if (req.resourceType() === 'image' || req.resourceType() === 'font') {
-          req.abort();
-        } else {
-          req.continue();
-        }
+      // Use a temporary HTML file instead of setContent for large documents
+      const tempHtmlPath = path.join(process.cwd(), 'temp', `paper-${paper.id}.html`);
+      const tempDir = path.dirname(tempHtmlPath);
+      
+      // Ensure temp directory exists
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      
+      // Write HTML to a temporary file
+      fs.writeFileSync(tempHtmlPath, htmlContent, 'utf8');
+      
+      // Use file:// protocol to load the HTML
+      const fileUrl = `file://${tempHtmlPath}`;
+      await page.goto(fileUrl, { 
+        waitUntil: 'networkidle0',
+        timeout: 60000
       });
-
-      console.log('🔄 Setting HTML content...');
       
-      // Use setContent with simpler wait conditions
-      await page.setContent(htmlContent, {
-        waitUntil: 'domcontentloaded', // Faster than 'networkidle0'
-        timeout: 120000
+      // Wait for fonts to load (especially important for Urdu fonts)
+      await page.evaluate(() => {
+        return document.fonts.ready;
       });
-
-      console.log('✅ HTML content set, waiting for fonts...');
-      
-      // Wait for fonts to load with timeout
-      await Promise.race([
-        page.evaluate(() => document.fonts.ready),
-        new Promise(resolve => setTimeout(resolve, 10000)) // 10 second timeout for fonts
-      ]);
-
-      console.log('📄 Generating PDF...');
       
       const pdfBuffer = await page.pdf({
         format: 'A4',
         printBackground: true,
         margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
-        preferCSSPageSize: true,
-        timeout: 120000 // 2 minute timeout for PDF generation
+        preferCSSPageSize: true
       });
 
       // Close the page, but not the browser
       await page.close();
       
+      // Clean up temporary file
+      if (fs.existsSync(tempHtmlPath)) {
+        fs.unlinkSync(tempHtmlPath);
+      }
+
       console.log('✅ PDF generated successfully');
-      
       // Increment papers_generated count for the user
-      await incrementPapersGenerated(supabaseAdmin, user.id);
-      
+    await incrementPapersGenerated(supabaseAdmin, user.id);
       return new NextResponse(pdfBuffer, {
         status: 200,
         headers: {
@@ -1242,6 +1624,12 @@ ${separateMCQ ? `<div class="footer">
     } catch (error) {
       console.error('❌ Puppeteer error:', error);
       if (page) await page.close();
+      
+      // Clean up temporary file if it exists
+      const tempHtmlPath = path.join(process.cwd(), 'temp', `paper-${paper.id}.html`);
+      if (fs.existsSync(tempHtmlPath)) {
+        fs.unlinkSync(tempHtmlPath);
+      }
       
       // Return paper data even if PDF generation fails
       return NextResponse.json(
