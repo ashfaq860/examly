@@ -987,7 +987,7 @@ ${separateMCQ ? `<div class="footer">
 
     htmlContent += `
     ${separateMCQ ?`
-      <div class="heade">
+      <div class="header">
     ${isUrdu || isBilingual ? ` <p class="urdu"><span>رولنمبر۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔</span> <span> (اُمیدوار خُود پٗر کرے) </span> <span> (تعلیمی سال  20025-2026) </span></p> ` : ''}
     ${isEnglish || isBilingual ? `<p class="eng"> <span>Roll No#_______________________</span></p>` : ''}
   </div>

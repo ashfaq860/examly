@@ -1,59 +1,49 @@
-// src/components/Header.tsx
 'use client';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter, usePathname } from 'next/navigation';
 
 export default function Header() {
   const [open, setOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [role, setRole] = useState<string | null>(null);
+  const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
   const [activeLink, setActiveLink] = useState('');
   const supabase = createClientComponentClient();
   const router = useRouter();
   const pathname = usePathname();
+  const menuRef = useRef(null);
 
-  // ✅ Set active link based on current path
-  useEffect(() => {
-    setActiveLink(pathname);
-  }, [pathname]);
+  useEffect(() => setActiveLink(pathname), [pathname]);
 
-  // ✅ Dark mode
+  // 🌙 Dark mode handling
   useEffect(() => {
     const storedMode = localStorage.getItem('darkMode');
-    if (storedMode !== null) {
-      setDarkMode(storedMode === 'true');
-    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    if (storedMode !== null) setDarkMode(storedMode === 'true');
+    else if (window.matchMedia('(prefers-color-scheme: dark)').matches)
       setDarkMode(true);
-    }
   }, []);
+
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('darkMode', 'true');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('darkMode', 'false');
-    }
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('darkMode', darkMode ? 'true' : 'false');
   }, [darkMode]);
+
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
-  // ✅ Fetch user + role
+  // 👤 User & role
   useEffect(() => {
     const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session?.user) {
         setUser(session.user);
-
-        // get role from RPC
-        const { data: roleData, error } = await supabase.rpc('get_user_role', {
+        const { data: roleData } = await supabase.rpc('get_user_role', {
           user_id: session.user.id,
         });
-        if (!error && roleData) {
-          setRole(roleData);
-        }
+        if (roleData) setRole(roleData);
       } else {
         setUser(null);
         setRole(null);
@@ -67,8 +57,8 @@ export default function Header() {
           setUser(session.user);
           supabase
             .rpc('get_user_role', { user_id: session.user.id })
-            .then(({ data, error }) => {
-              if (!error && data) setRole(data);
+            .then(({ data }) => {
+              if (data) setRole(data);
             });
         } else {
           setUser(null);
@@ -77,9 +67,7 @@ export default function Header() {
       }
     );
 
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
+    return () => authListener.subscription.unsubscribe();
   }, [supabase]);
 
   const handleLogout = async () => {
@@ -90,152 +78,214 @@ export default function Header() {
 
   const handleUserClick = () => {
     if (!role) return;
-    if (role === 'admin' || role === 'super_admin') {
-      router.push('/admin');
-    } else if (role === 'teacher' || role === 'academy') {
-      router.push('/dashboard');
-    }
+    if (role === 'admin' || role === 'super_admin') router.push('/admin');
+    else if (role === 'teacher' || role === 'academy') router.push('/dashboard');
   };
 
-  // Check if a link is active
-  const isLinkActive = (href: string) => {
-    if (href === '/') {
-      return activeLink === '/';
-    }
-    return activeLink.startsWith(href);
-  };
+  const isLinkActive = (href) =>
+    href === '/' ? activeLink === '/' : activeLink.startsWith(href);
 
-  // Check if user link is active (admin or dashboard)
   const isUserLinkActive = () => {
     if (!role) return false;
-    if ((role === 'admin' || role === 'super_admin') && activeLink.startsWith('/admin')) {
-      return true;
-    }
-    if ((role === 'teacher' || role === 'academy') && activeLink.startsWith('/dashboard')) {
-      return true;
-    }
+    if ((role === 'admin' || role === 'super_admin') && activeLink.startsWith('/admin')) return true;
+    if ((role === 'teacher' || role === 'academy') && activeLink.startsWith('/dashboard')) return true;
     return false;
   };
 
+  // 🎬 Smooth Curtain Animation (mobile only)
+  useEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+
+    if (window.innerWidth >= 992) {
+      // Desktop: menu always visible, reset animation
+      el.classList.remove('curtain-open', 'curtain-close');
+      el.style.height = 'auto';
+      el.style.opacity = '1';
+    } else {
+      // Mobile: apply curtain animation
+      if (open) {
+        el.classList.add('curtain-open');
+        el.classList.remove('curtain-close');
+      } else {
+        el.classList.add('curtain-close');
+        el.classList.remove('curtain-open');
+      }
+    }
+  }, [open]);
+
   return (
-    <header className="header-nav dark:bg-gray-900 transition-colors duration-300">
-      <div className="container">
-        <nav className="navbar navbar-expand-lg p-0">
-          <Link 
-            className={`navbar-brand me-3 dark:text-white ${isLinkActive('/') ? 'active' : ''}`} 
-            href="/"
-          >
-          <img src='/examly.png' alt='Examly Logo' className='h-8 inline-block mr-2' height='50' width='160' />
-          </Link>
+    <>
+      <style jsx>{`
+        /* Curtain Animation (mobile only) */
+        @media (max-width: 991px) {
+          .curtain-container {
+            overflow: hidden;
+            transition: height 1.3s cubic-bezier(0.25, 1, 0.3, 1), opacity 1s ease;
+            opacity: 0;
+            height: 0;
+          }
 
-          {/* Dark Mode Toggle */}
-          <button 
-            onClick={toggleDarkMode}
-            className="me-3 p-2 rounded-full focus:outline-none hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-200"
-            aria-label="Toggle dark mode"
-          >
-            {darkMode ? (
-              <i className="bi bi-sun-fill text-yellow-400"></i>
-            ) : (
-              <i className="bi bi-moon-fill text-gray-700"></i>
-            )}
-          </button>
+          .curtain-open {
+            animation: curtainDrop 1.3s ease forwards;
+          }
 
-          <button
-            className="navbar-toggler dark:text-white"
-            type="button"
-            onClick={() => setOpen(v => !v)}
-            aria-label="Toggle navigation"
-          >
-            <span className="navbar-toggler-icon"></span>
-          </button>
+          .curtain-close {
+            animation: curtainLift 0.9s ease forwards;
+          }
 
-          <div className={`collapse navbar-collapse ${open ? 'show' : ''}`}>
-            <ul className="navbar-nav ms-auto align-items-lg-center">
-              <li className="nav-item">
-                <Link 
-                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/') ? 'active' : ''}`} 
-                  href="/"
-                  onClick={() => setActiveLink('#features')}
+          @keyframes curtainDrop {
+            0% {
+              height: 0;
+              opacity: 0;
+              transform: translateY(-10px);
+            }
+            60% {
+              height: var(--menuHeight);
+              opacity: 0.7;
+              transform: translateY(3px);
+            }
+            100% {
+              height: var(--menuHeight);
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
 
-                >
-                 Home
-                </Link>
-              </li>
+          @keyframes curtainLift {
+            0% {
+              height: var(--menuHeight);
+              opacity: 1;
+            }
+            100% {
+              height: 0;
+              opacity: 0;
+            }
+          }
+        }
+      `}</style>
+
+      <header className="header-nav dark:bg-gray-900 transition-colors duration-300">
+        <div className="container">
+          <nav className="navbar navbar-expand-lg p-0">
+            <Link
+              className={`navbar-brand me-3 dark:text-white ${isLinkActive('/') ? 'active' : ''}`}
+              href="/"
+            >
+              <img
+                src="/examly.jpg"
+                alt="Examly Logo"
+                className="h-8 inline-block mr-2"
+                height="50"
+                width="160"
+              />
+            </Link>
+
+            {/* Mobile Toggler */}
+            <button
+              className="navbar-toggler dark:text-white"
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-label="Toggle navigation"
+            >
+              <span className="navbar-toggler-icon"></span>
+            </button>
+
+            {/* 🌈 Smooth Curtain Drop Menu */}
+            <div
+              ref={menuRef}
+              className="navbar-collapse curtain-container"
+              style={{
+                '--menuHeight': menuRef.current?.scrollHeight + 'px',
+              }}
+            >
+              <ul className="navbar-nav ms-auto align-items-lg-center">
                 <li className="nav-item">
-                <Link 
-                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/quiz') ? 'active' : ''}`} 
-                  href="/quiz"
-                  onClick={() => setActiveLink('#features')}
-                >
-                 Quiz
-                </Link>
-              </li>
-              <li className="nav-item">
-                <Link 
-                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/how-examly-works') ? 'active' : ''}`} 
-                  href="/how-examly-works"
-                  
-                >
-                  How examly works
-                </Link>
-              </li>
-              <li className="nav-item">
-                <Link 
-                  className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/packages') ? 'active' : ''}`} 
-                  href="/packages"
-                  onClick={() => setActiveLink('#pricing')}
-                >
-                  Packages
-                </Link>
-              </li>
+                  <Link
+                    className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/') ? 'active' : ''}`}
+                    href="/"
+                    onClick={() => setOpen(false)}
+                  >
+                    Home
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <Link
+                    className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/quiz') ? 'active' : ''}`}
+                    href="/quiz"
+                    onClick={() => setOpen(false)}
+                  >
+                    Quiz
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <Link
+                    className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/how-examly-works') ? 'active' : ''}`}
+                    href="/how-examly-works"
+                    onClick={() => setOpen(false)}
+                  >
+                    How Examly Works
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <Link
+                    className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/packages') ? 'active' : ''}`}
+                    href="/packages"
+                    onClick={() => setOpen(false)}
+                  >
+                    Packages
+                  </Link>
+                </li>
 
-              {/* ✅ Auth UI */}
-              {user ? (
-                <>
-                  <li className="nav-item">
-                    <button 
-                      onClick={handleUserClick}
-                      className={`nav-link btn btn-link dark:text-gray-300 pe-3 ${isUserLinkActive() ? 'active' : ''}`}
-                    >
-                      {user.email}
-                    </button>
-                  </li>
-                  <li className="nav-item ms-2">
-                    <button 
-                      onClick={handleLogout} 
-                      className="btn btn-danger btn-sm"
-                    >
-                      Logout
-                    </button>
-                  </li>
-                </>
-              ) : (
-                <>
-                  <li className="nav-item">
-                    <Link 
-                      className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/auth/login') ? 'active' : ''}`} 
-                      href="/auth/login"
-                    >
-                      Login
-                    </Link>
-                  </li>
-                  <li className="nav-item ms-2">
-                    <Link 
-                      className={`btn btn-light btn-sm dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 ${isLinkActive('/auth/signup') ? 'active' : ''}`} 
-                      href="/auth/signup"
-                    >
-                      Sign Up
-                    </Link>
-                  </li>
-                </>
-              )}
-            </ul>
-          </div>
-        </nav>
-      </div>
-
-      
-    </header>
+                {/* Auth UI */}
+                {user ? (
+                  <>
+                    <li className="nav-item">
+                      <button
+                        onClick={() => {
+                          handleUserClick();
+                          setOpen(false);
+                        }}
+                        className={`nav-link btn btn-link dark:text-gray-300 pe-3 ${isUserLinkActive() ? 'active' : ''}`}
+                      >
+                        {user.email}
+                      </button>
+                    </li>
+                    <li className="nav-item ms-2">
+                      <button onClick={handleLogout} className="btn btn-danger btn-sm">
+                        Logout
+                      </button>
+                    </li>
+                  </>
+                ) : (
+                  <>
+                    <li className="nav-item">
+                      <Link
+                        className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/auth/login') ? 'active' : ''}`}
+                        href="/auth/login"
+                        onClick={() => setOpen(false)}
+                      >
+                        Login
+                      </Link>
+                    </li>
+                    <li className="nav-item ms-2">
+                      <Link
+                        className={`btn btn-light btn-sm dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 ${
+                          isLinkActive('/auth/signup') ? 'active' : ''
+                        }`}
+                        href="/auth/signup"
+                        onClick={() => setOpen(false)}
+                      >
+                        Sign Up
+                      </Link>
+                    </li>
+                  </>
+                )}
+              </ul>
+            </div>
+          </nav>
+        </div>
+      </header>
+    </>
   );
 }

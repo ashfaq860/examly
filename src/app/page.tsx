@@ -106,7 +106,7 @@ export default function Home() {
   <div className="card feature-card  border-0 rounded-4 shadow-lg dark:bg-gray-800 dark:border-gray-700 bg-white/70 backdrop-blur-md transform transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:-translate-y-2">
     <div className="position-relative overflow-hidden">
       <img
-        src="/createProfessionalTest.png"
+        src="/createProfessionalTest.jpg"
         alt="Online Test Generator for Classes 5 to 12"
         className="w-100 h-auto rounded-top object-cover"
         style={{ maxHeight: '300px' }} // Optional: Control height for consistency
@@ -153,7 +153,7 @@ export default function Home() {
   <div className="card feature-card  border-0 rounded-4 shadow-lg dark:bg-gray-800 dark:border-gray-700 bg-white/80 backdrop-blur-md transition-all duration-500 hover:shadow-2xl ring-1 ring-primary/30">
     <div className="position-relative overflow-hidden">
       <img
-        src="/1monthfree.png"
+        src="/1monthfree.jpg"
         alt="Online Test Generator for Classes 5 to 12"
         className="w-100 h-auto rounded-top object-cover"
         style={{ maxHeight: '300px' }}
@@ -199,7 +199,7 @@ export default function Home() {
   <div className="card feature-card h-100 border-0 rounded-4 shadow-lg dark:bg-gray-800 dark:border-gray-700 bg-white/70 backdrop-blur-md transform transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:-translate-y-2">
     <div className="position-relative overflow-hidden">
       <img
-        src="/boardPattern.png"
+        src="/boardPattern.jpg"
         alt="Online Test Generator for Classes 5 to 12"
         className="w-100 h-auto rounded-top object-cover"
         style={{ maxHeight: '300px' }} // Optional: Control height for consistency
@@ -252,7 +252,7 @@ export default function Home() {
     <div className="text-center mb-5">
       {/* Banner Image */}
       <img 
-        src="/studentSection.png" 
+        src="/studentSection.jpg" 
         alt="Exam Preparation" 
         className="img-fluid mx-auto mb-4 d-block"
         style={{ maxHeight: "160px" }}
@@ -273,7 +273,7 @@ export default function Home() {
       <div className="col-md-4">
         <div className="card feature-card h-100 border-0 overflow-hidden shadow-sm dark:bg-gray-700 dark:border-gray-600 transform transition-transform duration-500 hover:scale-105">
           <div className="card-img-top feature-image-container">
-            <img src="/studentQuizz.png" alt="Chapter Quizzes" 
+            <img src="/studentQuizz.jpg" alt="Chapter Quizzes" 
              className="w-100 h-auto rounded-top object-cover"
         style={{ maxHeight: '400px' }}
             />
@@ -298,7 +298,7 @@ export default function Home() {
       <div className="col-md-4">
         <div className="card feature-card h-100 border-0 overflow-hidden shadow-sm dark:bg-gray-700 dark:border-gray-600 transform transition-transform duration-500 hover:scale-105">
           <div className="card-img-top feature-image-container">
-            <img src="/mockTest.png" alt="Mock Exams" 
+            <img src="/mockTest.jpg" alt="Mock Exams" 
              className="w-100 h-auto rounded-top object-cover"
         style={{ maxHeight: '400px' }}
             />
@@ -323,7 +323,7 @@ export default function Home() {
       <div className="col-md-4">
         <div className="card feature-card h-100 border-0 overflow-hidden shadow-sm dark:bg-gray-700 dark:border-gray-600 transform transition-transform duration-500 hover:scale-105">
           <div className="card-img-top feature-image-container">
-            <img src="/checkPerformance.png" alt="Performance Analytics"  className="w-100 h-auto rounded-top object-cover"
+            <img src="/checkPerformance.jpg" alt="Performance Analytics"  className="w-100 h-auto rounded-top object-cover"
         style={{ maxHeight: '400px' }} />
             <div className="image-overlay bg-success"></div>
           </div>

@@ -8,7 +8,7 @@ export default function Footer() {
         <div className="row gy-3">
           <div className="col-md-4">
             <h5>Examly</h5>
-            <p className="small-muted">Learn • Generate Papers • Quiz Online</p>
+            <p className="small-muted">Make Papers • Quiz Online</p>
             <p className="small">Contact: support@examly.pk</p>
           </div>
 

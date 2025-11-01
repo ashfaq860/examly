@@ -7,7 +7,7 @@ const defaultSlides = [
     title: "Examly! A smart paper maker for Educators",
     description:
       "Make perfect exam papers in minutes with examly, Full Book, Half Book, Chapter-wise, Custom Chapters, and Randomized papers tailored to your curriculum",
-    image: "/smartPaperMaker.png",
+    image: "/smartPaperMaker.jpg",
     cta: "Try Now",
     link: "/auth/login",
     bgClass: "bg-educator",
@@ -18,7 +18,7 @@ const defaultSlides = [
     title: "Register&Get 1 Month Free",
     description:
       "Enjoy unlimited paper generation for 1 month — comprehensive exam papers covering the entire syllabus with balanced difficulty.",
-    image: "/sliderFreeOffer.png",
+    image: "/sliderFreeOffer.jpg",
     cta: "Claim Offer",
     link: "/auth/signup",
     bgClass: "bg-fullbook",
@@ -29,7 +29,7 @@ const defaultSlides = [
     title: "Test Your MCQ Preparation Before the Exam with Examly",
     description:
       " Assess your knowledge and identify gaps to ensure you're fully prepared for the Final Exam",
-    image: "/student.png",
+    image: "/student.jpg",
     cta: "Try Full Book Quiz",
     link: "/auth/login",
     bgClass: "bg-halfbook",
