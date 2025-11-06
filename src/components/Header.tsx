@@ -163,6 +163,7 @@ export default function Header() {
             }
           }
         }
+          ul.TopMenus li a{ fontSize:16px;}
       `}</style>
 
       <header className="header-nav dark:bg-gray-900 transition-colors duration-300">
@@ -199,7 +200,7 @@ export default function Header() {
                 '--menuHeight': menuRef.current?.scrollHeight + 'px',
               }}
             >
-              <ul className="navbar-nav ms-auto align-items-lg-center">
+              <ul className="navbar-nav ms-auto align-items-lg-center TopMenus">
                 <li className="nav-item">
                   <Link
                     className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/') ? 'active' : ''}`}

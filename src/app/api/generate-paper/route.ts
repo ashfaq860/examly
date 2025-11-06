@@ -464,9 +464,23 @@ export async function POST(request: Request) {
       shortToAttempt,
       longToAttempt,
       mcqTimeMinutes,
-      subjectiveTimeMinutes
+      subjectiveTimeMinutes,
+        dateOfPaper // 🆕 ADD THIS LINE
     } = requestData;
-
+// Add this function near your other helper functions
+function formatPaperDate(dateString: string | undefined): string {
+  if (!dateString) {
+    return new Date().toLocaleDateString('en-GB'); // Default to today
+  }
+  
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB'); // DD/MM/YYYY format
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return new Date().toLocaleDateString('en-GB');
+  }
+}
     // Validation
     if (!title || !subjectId) {
       return NextResponse.json(
@@ -730,7 +744,7 @@ export async function POST(request: Request) {
     // Load fonts
     const jameelNooriBase64 = loadFontAsBase64('JameelNooriNastaleeqKasheeda.ttf');
     const notoNastaliqBase64 = loadFontAsBase64('NotoNastaliqUrdu-Regular.ttf');
-
+    const algerianBase64 = loadFontAsBase64('Algerian Regular.ttf');
     let paperClass = '';
     let subject = '';
     let subject_ur = '';
@@ -789,7 +803,27 @@ export async function POST(request: Request) {
 
     const timeToDisplay = separateMCQ ? mcqTimeMinutes : timeMinutes;
     const subjectiveTimeToDisplay = separateMCQ ? subjectiveTimeMinutes : timeMinutes;
+function loadImageAsBase64(imageFileName: string): string {
+  try {
+    const imagePath = path.join(process.cwd(), 'public', imageFileName);
+    if (fs.existsSync(imagePath)) {
+      const imageBuffer = fs.readFileSync(imagePath);
+      const base64Image = imageBuffer.toString('base64');
+      const extension = path.extname(imageFileName).toLowerCase();
+      const mimeType = extension === '.jpg' || extension === '.jpeg' 
+        ? 'jpeg' 
+        : extension.replace('.', '');
+      return `data:image/${mimeType};base64,${base64Image}`;
+    }
+    return '';
+  } catch (error) {
+    console.error('Error loading image:', error);
+    return '';
+  }
+}
 
+// In your POST function, load the image
+const examlyImageBase64 = loadImageAsBase64('examly.jpg');
     // Build HTML content
     let htmlContent = `
 <!DOCTYPE html>
@@ -813,13 +847,19 @@ export async function POST(request: Request) {
       font-weight: normal;
       font-style: normal;
     }
+       @font-face {
+      font-family: 'algerian';
+      src: url('data:font/truetype;charset=utf-8;base64,${algerianBase64}') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Arial, sans-serif; padding: 0px; }
     .container { max-width: 900px; margin: 0 auto; background: white; padding: 0;  }
-
     .header {text-align:center; font-size: 14px;  }
     .header h1 { font-size: 16px; }
     .header h2 { font-size: 12px; }
+    .institute{font-family:algerian; }
     .urdu { font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif; direction: rtl; }
     .eng { font-family: "Times New Roman", serif; direction: ltr; }
      .options .urdu {
@@ -830,49 +870,107 @@ export async function POST(request: Request) {
     font-family: "Times New Roman", serif;
     direction: ltr;
   }
-    .meta { display: flex; justify-content: space-between; margin: 0 0; font-size: 12px; font-weight:bold }
+    .meta { display: flex; justify-content: space-between; margin: 0 0; font-size: 12px; font-weight:bold;  }
+   .metaUrdu, .metaEng {
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1.8;
+  position: relative;
+  font-size: 12px;
+  
+}
+
+.metaUrdu {
+  top: -0.7px; /* fine-tuned Nastaliq baseline correction */
+  direction: rtl;
+  font-family: 'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif;
+}
+
+.metaEng {
+  top: 0;
+  direction: ltr;
+  font-family: 'Noto Sans',Arial,sans-serif;
+}
+
     .note {  padding: 0px; margin:0 0; font-size: 12px; line-height: 1.2; }
-    
     table { width: 100%; border-collapse: collapse; margin: 5px 0; font-size: 14px; ${isEnglish? ' direction:ltr' : ' direction:rtl'}}
     table, th, td { border: 1px solid #000; }
     td { padding: 3px; vertical-align: top; }
+    hr{color:black}
     .qnum { width: 40px; text-align: center; font-weight: bold; }
     .question { display: flex;
     justify-content: space-between;
     align-items: center;
     margin: 0 0; 
     }
+    
+    .student-info{ margin-top: 10px; margin-bottom:10px; display: flex; justify-content: space-between;  flex-direction: ${isEnglish ? 'row-reverse' : 'row'}; }
+  
     .options { margin-top: 3px; display: flex; justify-content: space-between; font-size: 11px; }
     .footer { text-align: left; margin-top: 10px; font-size: 10px; }
+
   </style>
 </head>
 <body>
   <div class="container">
   <div class="header">
-      <h1 class="eng">${englishTitle}</h1>
+     <h1 class="eng text-center">
+        ${examlyImageBase64 ? `<img src="${examlyImageBase64}" class="header-img"  height="40" width="100"/>` : ''} <br/>
+     <span class="institute">   ${englishTitle}</span>
+      </h1>
      </div>
-  <div class="heade">
-    ${isUrdu || isBilingual ? ` <p class="urdu"><span>رولنمبر۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔</span> <span> (اُمیدوار خُود پٗر کرے) </span> <span> (تعلیمی سال  20025-2026) </span></p> ` : ''}
-    ${isEnglish || isBilingual ? `<p class="eng"> <span>Roll No#_______________________</span></p>` : ''}
-  </div>
+  
+  <!-- Student Info Table -->
+ <table style="width:100%; border-collapse:collapse; border:none !important; font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Noto Sans',Arial,sans-serif;">
+  <!-- Row 1 -->
+  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Student Name:_________</span>` : ''}
+    </td>
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Roll No:_________</span>` : ''}
+    </td>
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">سیکشن:۔۔۔۔۔۔</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Section:_______</span>` : ''}
+    </td>
+  </tr>
 
-    ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
-      ${isEnglish ? `<span class="eng">${subject}</span><span><strong>Class ${paperClass}</strong></span>` : ''}
-      ${isUrdu ? `<span class="urdu">${subject_ur}</span><span><strong>${paperClass} کلاس</strong></span>` : ''}
-      ${isBilingual ? `<span class="eng">${subject}</span><span><strong>${paperClass} کلاس</strong></span><span class="urdu">${subject_ur}</span>` : ''}
-    </div>
+  <!-- Row 2 -->
+  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu"><strong>کلاس: ${paperClass}</strong></span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Class: ${paperClass}</span>` : ''}
+    </td>
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">مضمون: ${subject_ur}</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Subject: ${subject}</span>` : ''}
+    </td>
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">تاریخ:${formatPaperDate(dateOfPaper)}</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Date:${formatPaperDate(dateOfPaper)}</span>` : ''}
+    </td>
+  </tr>
 
-    ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
-      ${isEnglish ? `<span class="eng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} Minutes</span>` : ''}
-      ${isUrdu ? `<span class="urdu">وقت:${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} منٹ</span>` : ''}
-      ${isBilingual ? `<span class="eng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} Minutes</span><span class="urdu">وقت:${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} منٹ</span>` : ''}
-    </div>
-    ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
-      ${isEnglish ? `<span class="eng">Maximum Marks: ${totalMarks}</span>` : ''}
-      ${isUrdu ? `<span class="urdu"><span>کل نمبر</span>:<span>${totalMarks}</span> </span>` : ''}
-      ${isBilingual ? `<span class="eng">Maximum Marks: ${separateMCQ? objectiveMarks : totalMarks}</span><span class="urdu"><span>کل نمبر</span>: <span>${separateMCQ? objectiveMarks : totalMarks}</span> </span>` : ''}
-    </div>
-`;
+  <!-- Row 3 -->
+  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} منٹ</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} Minutes</span>` : ''}
+    </td>
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${totalMarks}</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${totalMarks}</span>` : ''}
+    </td>
+   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+     ${isUrdu || isBilingual ? `<span class="metaUrdu">حصہ انشائیہ</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Subjective Part</span>` : ''}
+    </td>
+  </tr>
+</table>
+<hr  style="color:black;"/> <br />`;
 
     // Get MCQ questions
     const mcqQuestions = paperQuestions.filter((pq: any) => 
@@ -987,29 +1085,63 @@ ${separateMCQ ? `<div class="footer">
 
     htmlContent += `
     ${separateMCQ ?`
-      <div class="header">
-    ${isUrdu || isBilingual ? ` <p class="urdu"><span>رولنمبر۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔۔</span> <span> (اُمیدوار خُود پٗر کرے) </span> <span> (تعلیمی سال  20025-2026) </span></p> ` : ''}
-    ${isEnglish || isBilingual ? `<p class="eng"> <span>Roll No#_______________________</span></p>` : ''}
-  </div>
+       <div class="header">
+     <h1 class="eng text-center">
+        ${examlyImageBase64 ? `<img src="${examlyImageBase64}" class="header-img"  height="40" width="100"/>` : ''} <br/>
+     <span class="institute">   ${englishTitle}</span>
+      </h1>
+     </div>
+      <!-- Student Info Table -->
+ <table style="width:100%; border-collapse:collapse; border:none !important; font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Noto Sans',Arial,sans-serif;">
+  <!-- Row 1 -->
+  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Student Name:_________</span>` : ''}
+    </td>
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Roll No:_________</span>` : ''}
+    </td>
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">سیکشن:۔۔۔۔۔۔</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Section:_______</span>` : ''}
+    </td>
+  </tr>
 
-    ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
-      ${isEnglish ? `<span class="eng">${subject}</span><span><strong>Class ${paperClass}</strong></span>` : ''}
-      ${isUrdu ? `<span class="urdu">${subject_ur}</span><span><strong>${paperClass} کلاس</strong></span>` : ''}
-      ${isBilingual ? `<span class="eng">${subject}</span><span><strong>${paperClass} کلاس</strong></span><span class="urdu">${subject_ur}</span>` : ''}
-    </div>
+  <!-- Row 2 -->
+  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu"><strong>کلاس: ${paperClass}</strong></span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Class: ${paperClass}</span>` : ''}
+    </td>
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">مضمون: ${subject_ur}</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Subject: ${subject}</span>` : ''}
+    </td>
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">تاریخ:${formatPaperDate(dateOfPaper)}</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Date:${formatPaperDate(dateOfPaper)}</span>` : ''}
+    </td>
+  </tr>
 
-    ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
-      ${isEnglish ? `<span class="eng">Time Allowed: ${convertMinutesToTimeFormat(subjectiveTimeMinutes || timeMinutes)} Minutes</span>` : ''}
-      ${isUrdu ? `<span class="urdu">وقت:${convertMinutesToTimeFormat(subjectiveTimeMinutes || timeMinutes)} منٹ</span>` : ''}
-      ${isBilingual ? `<span class="eng">Time Allowed: ${convertMinutesToTimeFormat(subjectiveTimeMinutes || timeMinutes)} Minutes</span><span class="urdu">وقت:${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} منٹ</span>` : ''}
-    </div>
-    ${isUrdu ? `<div class="meta urdu">` : `<div class="meta">`}
-      ${isEnglish ? `<span class="eng">Maximum Marks: ${subjectMarks}</span>` : ''}
-      ${isUrdu ? `<span class="urdu"><span>کل نمبر</span>:<span>${subjectMarks}</span> </span>` : ''}
-      ${isBilingual ? `<span class="eng">Maximum Marks: ${subjectMarks}</span><span class="urdu"><span>کل نمبر</span>:<span>${subjectMarks}</span> </span>` : ''}
-    </div>
-
-      `:``
+  <!-- Row 3 -->
+  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} منٹ</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} Minutes</span>` : ''}
+    </td>
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${totalMarks}</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${totalMarks}</span>` : ''}
+    </td>
+    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+     ${isUrdu || isBilingual ? `<span class="metaUrdu">حصہ انشائیہ</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Subjective Part</span>` : ''}
+    </td>
+  </tr>
+</table>
+<hr  style="color:black;"/> <br /> `:``
     }    
     `;
 

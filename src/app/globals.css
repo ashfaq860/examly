@@ -145,13 +145,15 @@ body{
 
         .navbar-nav .nav-item a.nav-link,
         .navbar-nav .nav-item button.nav-link {
-          color: black !important;
+          color: rgba(33, 27, 41, 0.75) !important;
           padding: 8px 16px;
           position: relative;
           transition: color 0.3s ease;
           text-decoration: none;
           border: none;
           background: transparent;
+          font-size: 16px;
+          font-weight: bold;
         }
 
         .dark .navbar-nav .nav-item a.nav-link,

@@ -43,6 +43,7 @@ const paperSchema = z.object({
   shortToAttempt: z.number().min(0).optional(),
   longToAttempt: z.number().min(0).optional(),
   shuffleQuestions: z.boolean().default(true),
+  dateOfPaper: z.string().optional(),
 }).refine((data) => {
   if (data.mcqPlacement === 'separate') {
     return data.mcqTimeMinutes !== undefined && data.subjectiveTimeMinutes !== undefined;
@@ -285,6 +286,7 @@ function ManualQuestionSelection({
     long: longCount
   });
   const [isShuffling, setIsShuffling] = useState(false);
+ 
 
   useEffect(() => {
     onQuestionsSelected(selected);
@@ -358,6 +360,26 @@ function ManualQuestionSelection({
     });
     
     setIsShuffling(false);
+  };
+
+  // Add font style for Urdu text
+  const getQuestionTextStyle = () => {
+    if (language === 'urdu') {
+      return {
+        fontFamily: "'Jameel Noori Nastaleeq', 'JameelNooriNastaleeqKasheeda', 'Times New Roman', serif",
+        fontSize: '18px',
+        lineHeight: '1.8',
+        direction: 'rtl',
+        textAlign: 'right'
+      };
+    } else if (language === 'bilingual') {
+      return {
+        fontFamily: "'Jameel Noori Nastaleeq', 'JameelNooriNastaleeqKasheeda', 'Times New Roman', serif",
+        fontSize: '16px',
+        lineHeight: '1.6'
+      };
+    }
+    return {};
   };
 
   const fetchQuestions = useCallback(async () => {
@@ -543,11 +565,39 @@ function ManualQuestionSelection({
       .map(chapter => `${chapter.chapterNo}. ${chapter.name}`)
       .join(", ");
   }, [getChapterIdsToUse, chapterOption, chapters, subjectId]);
-
+ 
   return (
     <div className="card mt-4">
       <div className="card-body">
         <h2 className="h4 card-title mb-3">Manual Question Selection</h2>
+        
+        {/* Add font preloading */}
+        <style jsx>{`
+          @font-face {
+            font-family: 'Jameel Noori Nastaleeq';
+            src: url('/fonts/JameelNooriNastaleeqKasheeda.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+          }
+          
+          .urdu-text {
+            font-family: 'Jameel Noori Nastaleeq', 'Times New Roman', serif !important;
+            font-size: 18px !important;
+            line-height: 1.8 !important;
+          }
+          
+          .bilingual-text {
+            font-family: 'Jameel Noori Nastaleeq', 'Times New Roman', serif !important;
+            font-size: 16px !important;
+            line-height: 1.6 !important;
+          }
+          
+          .urdu-rtl {
+            direction: rtl;
+            text-align: right;
+          }
+        `}</style>
         
         {/* Chapter selection info */}
         <div className="alert alert-info mb-3">
@@ -726,16 +776,52 @@ function ManualQuestionSelection({
                         disabled={selected[currentStep].length >= requiredCounts[currentStep] && 
                                   !selected[currentStep].includes(question.id)}
                       />
-                      <div>
-                        <p className="mb-1 fw-bold">{question.question_text}</p>
+                      <div className="flex-grow-1">
+                        {/* Apply Urdu font styles based on language */}
+                        <p 
+                          className={`mb-1 fw-bold ${
+                            language === 'urdu' ? 'urdu-text urdu-rtl' : 
+                            language === 'bilingual' ? 'bilingual-text' : ''
+                          }`}
+                        >
+                          {question.question_text}
+                        </p>
+                        
                         {currentStep === 'mcq' && (
-                          <div className="row mt-2">
-                            {question.option_a && <div className="col-md-6">A) {question.option_a}</div>}
-                            {question.option_b && <div className="col-md-6">B) {question.option_b}</div>}
-                            {question.option_c && <div className="col-md-6">C) {question.option_c}</div>}
-                            {question.option_d && <div className="col-md-6">D) {question.option_d}</div>}
+                          <div className={`mt-2 ${language === 'urdu' ? 'urdu-rtl' : ''}`}>
+                            <div className="row">
+                              {question.option_a && (
+                                <div className="col-md-6">
+                                  <span className={language === 'urdu' ? 'urdu-text' : language === 'bilingual' ? 'bilingual-text' : ''}>
+                                    A) {question.option_a}
+                                  </span>
+                                </div>
+                              )}
+                              {question.option_b && (
+                                <div className="col-md-6">
+                                  <span className={language === 'urdu' ? 'urdu-text' : language === 'bilingual' ? 'bilingual-text' : ''}>
+                                    B) {question.option_b}
+                                  </span>
+                                </div>
+                              )}
+                              {question.option_c && (
+                                <div className="col-md-6">
+                                  <span className={language === 'urdu' ? 'urdu-text' : language === 'bilingual' ? 'bilingual-text' : ''}>
+                                    C) {question.option_c}
+                                  </span>
+                                </div>
+                              )}
+                              {question.option_d && (
+                                <div className="col-md-6">
+                                  <span className={language === 'urdu' ? 'urdu-text' : language === 'bilingual' ? 'bilingual-text' : ''}>
+                                    D) {question.option_d}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
+                        
                         <div className="d-flex gap-2 mt-2">
                           <span className={`badge ${
                             question.difficulty === 'easy' ? 'bg-success' :
@@ -792,7 +878,7 @@ export default function GeneratePaperPage() {
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [isManualNavigation, setIsManualNavigation] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
+const [showDatePicker, setShowDatePicker] = useState(false);
   // Use the UserContext
   const { trialStatus, isLoading: trialLoading, refreshTrialStatus } = useUser();
 
@@ -833,6 +919,7 @@ export default function GeneratePaperPage() {
       longToAttempt: 0,
       title:'BISE LAHORE',
       shuffleQuestions: true,
+       dateOfPaper: new Date().toISOString().split('T')[0],
     },
   });
 
@@ -843,6 +930,25 @@ export default function GeneratePaperPage() {
   const watchedMcqCount = watch('mcqCount');
   const watchedShortCount = watch('shortCount');
   const watchedLongCount = watch('longCount');
+ const watchedPaperType = watch('paperType');
+
+
+   // 🆕 NEW: Function to handle date selection
+  const handleDateSelect = (date: string) => {
+    setValue('dateOfPaper', date);
+    setShowDatePicker(false);
+  };
+
+  // 🆕 NEW: Function to format date for display
+  const formatDateForDisplay = (dateString: string) => {
+    if (!dateString) return 'Select Date';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
   // Check authentication status
   useEffect(() => {
@@ -1509,6 +1615,7 @@ const user = session.user;
                         setValue("mediumPercent", 50);
                         setValue("hardPercent", 30);
                         setValue("shuffleQuestions", true);
+                        setValue("dateOfPaper", undefined);
                       }}
                     >
                       <span className="display-6">🏛️</span>
@@ -1536,6 +1643,7 @@ const user = session.user;
                         setValue("mediumPercent", 34);
                         setValue("hardPercent", 33);
                         setValue("shuffleQuestions", true);
+                        setValue("dateOfPaper", new Date().toISOString().split('T')[0]);
                       }}
                     >
                       <span className="display-6">⚙️</span>
@@ -1588,6 +1696,71 @@ const user = session.user;
                     {errors.title && <div className="invalid-feedback">{errors.title.message}</div>}
                   </div>
 
+  {/* 🆕 NEW: Date of Paper Field */}
+                  <div className="mb-3">
+                    <label className="form-label">Date of Paper</label>
+                    <div className="position-relative">
+                      <button
+                        type="button"
+                        className="form-control text-start bg-white"
+                        onClick={() => setShowDatePicker(!showDatePicker)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {formatDateForDisplay(watch('dateOfPaper') || '')}
+                        <i className="bi bi-calendar float-end"></i>
+                      </button>
+                      
+                      {/* Date Picker Dropdown */}
+                      {showDatePicker && (
+                        <div className="card position-absolute top-100 start-0 mt-1 shadow-lg z-3 w-100">
+                          <div className="card-body p-3">
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <h6 className="mb-0">Select Date</h6>
+                              <button 
+                                type="button" 
+                                className="btn-close"
+                                onClick={() => setShowDatePicker(false)}
+                              ></button>
+                            </div>
+                            <input
+                              type="date"
+                              className="form-control"
+                              value={watch('dateOfPaper') || ''}
+                              onChange={(e) => {
+                                setValue('dateOfPaper', e.target.value);
+                                setShowDatePicker(false);
+                              }}
+                            />
+                            <div className="mt-2 d-flex gap-2">
+                              <button
+                                type="button"
+                                className="btn btn-outline-primary btn-sm flex-fill"
+                                onClick={() => {
+                                  setValue('dateOfPaper', new Date().toISOString().split('T')[0]);
+                                  setShowDatePicker(false);
+                                }}
+                              >
+                                Today
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-outline-secondary btn-sm flex-fill"
+                                onClick={() => {
+                                  setValue('dateOfPaper', '');
+                                  setShowDatePicker(false);
+                                }}
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="form-text">
+                      Select the date for this paper (optional)
+                    </div>
+                  </div>
                   {/* Language + Source */}
                   <div className="row mb-3">
                     <div className="col-md-6">
