@@ -17,6 +17,14 @@ import chromium from '@sparticuz/chromium';
 // 1. Puppeteer browser instance singleton to avoid re-launching on every request.
 let browserPromise: Promise<Browser> | null = null;
 
+// Add mobile detection function
+function isMobileUserAgent(userAgent: string | null): boolean {
+  if (!userAgent) return false;
+  
+  const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+  return mobileRegex.test(userAgent);
+}
+
 async function getPuppeteerBrowser() {
   if (browserPromise) {
     const browser = await browserPromise;
@@ -195,7 +203,10 @@ async function findQuestionsWithFallback(
 ) {
   console.log(`\n🔍 Finding ${count} ${type} questions...`);
   console.log(`📋 Filters: subject=${subjectId}, class=${classId}, chapters=${chapterIds.length}, source_type=${source_type}, difficulty=${difficulty}`);
+<<<<<<< HEAD
   console.log(`🎯 Selected Chapter IDs:`, chapterIds);
+=======
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
   
   // Map source_type to database values
   const dbSourceType = source_type ? mapSourceType(source_type) : undefined;
@@ -204,16 +215,31 @@ async function findQuestionsWithFallback(
   const classSubjectId = await getClassSubjectId(classId, subjectId);
   console.log(`🎯 Class Subject ID: ${classSubjectId}`);
 
+<<<<<<< HEAD
   // Build query with proper filtering - ALWAYS start with subject and type
+=======
+  // Build query with proper filtering
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
   let query = supabaseAdmin
     .from('questions')
     .select('id, question_text, question_text_ur, option_a, option_b, option_c, option_d, option_a_ur, option_b_ur, option_c_ur, option_d_ur, correct_option, difficulty, chapter_id, source_type, class_subject_id, question_type')
     .eq('question_type', type)
     .eq('subject_id', subjectId);
 
+<<<<<<< HEAD
   // **CRITICAL FIX: Always apply chapter filtering FIRST if chapters are selected**
   if (chapterIds && chapterIds.length > 0) {
     console.log(`✅ Applying chapter filter: ${chapterIds.length} chapters`);
+=======
+  // Add class filtering using class_subject_id
+  if (classSubjectId) {
+    query = query.eq('class_subject_id', classSubjectId);
+  } else {
+    console.warn('⚠️ No class_subject_id found, falling back to subject-only filtering');
+  }
+
+  if (chapterIds.length > 0) {
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
     query = query.in('chapter_id', chapterIds);
   } else {
     console.log('ℹ️ No specific chapters selected, will use class-based filtering');
@@ -271,6 +297,7 @@ async function findQuestionsWithFallback(
     console.log(`✅ Filtering by difficulty: ${difficulty}`);
   }
 
+<<<<<<< HEAD
   console.log(`🎯 Final query filters applied:`);
   console.log(`   - Question Type: ${type}`);
   console.log(`   - Subject: ${subjectId}`);
@@ -279,6 +306,8 @@ async function findQuestionsWithFallback(
   console.log(`   - Source Type: ${dbSourceType || 'all'}`);
   console.log(`   - Difficulty: ${difficulty || 'any'}`);
 
+=======
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
   // Apply randomization using randomSeed
   if (randomSeed) {
     // Use random ordering for shuffling
@@ -296,6 +325,7 @@ async function findQuestionsWithFallback(
     return [];
   }
 
+<<<<<<< HEAD
   console.log(`📊 Found ${questions?.length || 0} questions after all filters`);
 
   if (!questions || questions.length === 0) {
@@ -315,6 +345,15 @@ async function findQuestionsWithFallback(
     return [];
   }
 
+=======
+  console.log(`📊 Found ${questions?.length || 0} potential questions`);
+
+  if (!questions || questions.length === 0) {
+    console.log('❌ No questions found with initial filters');
+    return [];
+  }
+
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
   // Apply randomization if seed is provided
   let finalQuestions = questions;
   if (randomSeed && questions.length > 0) {
@@ -323,12 +362,16 @@ async function findQuestionsWithFallback(
       const x = Math.sin(randomSeed++) * 10000;
       return x - Math.floor(x) - 0.5;
     });
+<<<<<<< HEAD
     console.log(`🔀 Applied randomization with seed: ${randomSeed}`);
+=======
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
   }
 
   // Take the required number of questions
   const selectedQuestions = finalQuestions.slice(0, count);
   
+<<<<<<< HEAD
   console.log(`✅ Final selection: ${selectedQuestions.length} ${type} questions`);
   
   // Log the chapters of selected questions for verification
@@ -336,6 +379,61 @@ async function findQuestionsWithFallback(
   console.log(`📖 Selected questions come from ${selectedChapters.length} chapters:`, selectedChapters);
   
   return selectedQuestions;
+=======
+  console.log(`✅ Selected ${selectedQuestions.length} ${type} questions`);
+  return selectedQuestions;
+}
+
+// Function to get questions for manual selection
+async function getQuestionsForManualSelection(
+  subjectId: string,
+  classId: string,
+  chapterIds: string[],
+  source_type: string | undefined,
+  difficulty: string | undefined
+) {
+  console.log(`\n🔍 Getting questions for manual selection...`);
+  console.log(`📋 Filters: subject=${subjectId}, class=${classId}, chapters=${chapterIds.length}, source_type=${source_type}, difficulty=${difficulty}`);
+  
+  const dbSourceType = source_type ? mapSourceType(source_type) : undefined;
+  const classSubjectId = await getClassSubjectId(classId, subjectId);
+
+  let query = supabaseAdmin
+    .from('questions')
+    .select('id, question_text, question_text_ur, option_a, option_b, option_c, option_d, option_a_ur, option_b_ur, option_c_ur, option_d_ur, correct_option, difficulty, chapter_id, source_type, question_type')
+    .eq('subject_id', subjectId);
+
+  // Add class filtering
+  if (classSubjectId) {
+    query = query.eq('class_subject_id', classSubjectId);
+  }
+
+  if (chapterIds.length > 0) {
+    query = query.in('chapter_id', chapterIds);
+  }
+  
+  if (dbSourceType && dbSourceType !== 'all') {
+    query = query.eq('source_type', dbSourceType);
+  }
+  
+  if (difficulty && difficulty !== 'any') {
+    query = query.eq('difficulty', difficulty);
+  }
+
+  query = query.order('question_type', { ascending: true })
+              .order('chapter_id', { ascending: true })
+              .order('id', { ascending: true });
+
+  const { data: questions, error } = await query;
+
+  if (error) {
+    console.error(`Error fetching questions:`, error);
+    return [];
+  }
+
+  console.log(`✅ Found ${questions?.length || 0} questions for manual selection`);
+  return questions || [];
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
 }
 
 // Function to format question text for better display
@@ -362,6 +460,7 @@ function hasActualUrduText(text: string | null): boolean {
   return urduRegex.test(text);
 }
 
+<<<<<<< HEAD
 // NEW helper: attempt to extract english and urdu parts when fields were pre-merged
 function extractEnglishAndUrdu(field: string | null | undefined, fieldUr?: string | null | undefined) {
   const raw = (field || '').toString();
@@ -390,6 +489,8 @@ function extractEnglishAndUrdu(field: string | null | undefined, fieldUr?: strin
   return { eng: raw.trim(), ur: '' };
 }
 
+=======
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
 // Function to increment papers_generated count for a user
 async function incrementPapersGenerated(userId: string) {
   try {
@@ -540,6 +641,7 @@ function loadImageAsBase64(imageFileName: string): string {
   } catch (error) {
     console.error('Error loading image:', error);
     return '';
+<<<<<<< HEAD
   }
 }
 
@@ -774,14 +876,155 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
 
     finalQuestions = paperQuestions || [];
     console.log(`✅ Using ${finalQuestions.length} questions from database order`);
+=======
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
   }
 
+<<<<<<< HEAD
   console.log(`📊 Final question order for PDF generation:`);
   finalQuestions.forEach((pq: any, index: number) => {
     console.log(`   ${index + 1}. Type: ${pq.question_type}, Order: ${pq.order_number}, ID: ${pq.question_id}, Marks: ${pq.custom_marks}`);
   });
 
   if (!finalQuestions || finalQuestions.length === 0) {
+=======
+// Function to create paper record
+async function createPaperRecord(requestData: PaperGenerationRequest, userId: string) {
+  const { 
+    title,
+    subjectId,
+    classId,
+    chapterOption = 'full_book',
+    selectedChapters = [],
+    source_type = 'all',
+    paperType = 'custom',
+    language = 'bilingual',
+    timeMinutes = 60,
+    mcqCount = 0,
+    shortCount = 0,
+    longCount = 0,
+    mcqToAttempt,
+    shortToAttempt,
+    longToAttempt,
+    mcqMarks = 1,
+    shortMarks = 2,
+    longMarks = 5
+  } = requestData;
+
+  // Calculate total marks
+  const totalMarks = (mcqToAttempt || mcqCount || 0) * mcqMarks + 
+                    (shortToAttempt || shortCount || 0) * shortMarks + 
+                    (longToAttempt || longCount || 0) * longMarks;
+
+  // Determine chapters to include
+  let chapterIds: string[] = [];
+  if (chapterOption === 'full_book') {
+    const { data: chapters, error: chaptersError } = await supabaseAdmin
+      .from('chapters')
+      .select('id')
+      .eq('subject_id', subjectId)
+      .eq('class_id', classId);
+    
+    if (chaptersError) {
+      console.error('Error fetching chapters:', chaptersError);
+      throw new Error('Failed to fetch chapters');
+    }
+    
+    chapterIds = chapters?.map(c => c.id) || [];
+    console.log(`📚 Full book chapters found: ${chapterIds.length}`);
+  } else if (chapterOption === 'custom' && selectedChapters && selectedChapters.length > 0) {
+    chapterIds = selectedChapters;
+    console.log(`🎯 Custom chapters selected: ${chapterIds.length}`);
+  }
+
+  // Create paper record
+  const paperData: any = {
+    title: title,
+    subject_id: subjectId,
+    class_id: classId,
+    created_by: userId,
+    paper_type: paperType,
+    chapter_ids: chapterOption === 'custom' && selectedChapters.length > 0 ? selectedChapters : null,
+    difficulty: 'medium',
+    total_marks: totalMarks,
+    time_minutes: timeMinutes,
+    mcq_to_attempt: mcqToAttempt || mcqCount,
+    short_to_attempt: shortToAttempt || shortCount,
+    long_to_attempt: longToAttempt || longCount,
+    language: language,
+    source_type: source_type
+  };
+
+  try {
+    const { data: paper, error: paperError } = await supabaseAdmin
+      .from('papers')
+      .insert(paperData)
+      .select()
+      .single();
+
+    if (paperError) {
+      console.error('Error creating paper:', paperError);
+      throw paperError;
+    }
+
+    console.log(`✅ Paper created with ID: ${paper.id}`);
+    return paper;
+  } catch (error) {
+    console.error('Error creating paper:', error);
+    throw error;
+  }
+}
+
+// Function to generate paper HTML
+async function generatePaperHTML(paper: any, userId: string, requestData: PaperGenerationRequest) {
+  const {
+    language = 'bilingual',
+    mcqMarks = 1,
+    shortMarks = 2,
+    longMarks = 5,
+    mcqPlacement = 'separate',
+    dateOfPaper
+  } = requestData;
+
+  // Fetch paper questions with full question data
+  console.log('📋 Fetching paper questions with details...');
+  const { data: paperQuestions, error: pqError } = await supabaseAdmin
+    .from('paper_questions')
+    .select(`
+      order_number, 
+      question_type, 
+      question_id, 
+      questions (
+        question_text, 
+        question_text_ur,
+        option_a, 
+        option_a_ur,
+        option_b, 
+        option_b_ur,
+        option_c, 
+        option_c_ur,
+        option_d, 
+        option_d_ur,
+        answer_text,
+        answer_text_ur,
+        difficulty,
+        chapter_id,
+        correct_option,
+        source_type
+      )
+    `)
+    .eq('paper_id', paper.id)
+    .order('order_number', { ascending: true });
+
+  if (pqError) {
+    console.error('Error fetching paper questions:', pqError);
+    throw pqError;
+  }
+
+  console.log(`✅ Found ${paperQuestions?.length || 0} paper questions`);
+
+  if (!paperQuestions || paperQuestions.length === 0) {
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
     throw new Error('No questions found for the generated paper');
   }
 
@@ -867,6 +1110,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   // Load the image
   const examlyImageBase64 = loadImageAsBase64('examly.jpg');
 
+<<<<<<< HEAD
   // Get questions by type from the final ordered list
   const mcqQuestions = finalQuestions.filter((pq: any) => 
     pq.question_type === 'mcq' && pq.questions
@@ -884,6 +1128,8 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     pq.question_type === 'long'
   );
 
+=======
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
   // Build HTML content
   let htmlContent = `
 <!DOCTYPE html>
@@ -1061,6 +1307,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
 </table>
 <hr  style="color:black;"/> <br />`;
 
+<<<<<<< HEAD
   // Add MCQ questions if they exist
   if (mcqQuestions.length > 0) {
     htmlContent += `<div class="note">`;
@@ -1095,6 +1342,41 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
       
       questionDisplayHtml += '</div>';
 
+=======
+  // Get MCQ questions
+  const mcqQuestions = paperQuestions.filter((pq: any) => 
+    pq.question_type === 'mcq' && pq.questions
+  );
+
+  // Add MCQ questions if they exist
+  if (mcqQuestions.length > 0) {
+    htmlContent += `<div class="note">`;
+    if (isUrdu || isBilingual) {
+      htmlContent += `<p class="urdu">نوٹ: ہر سوال کے چار ممکنہ جوابات A,B,C اور D دیئے گئے ہیں۔ درست جواب کے مطابق دائرہ پُر کریں۔ ایک سے زیادہ دائروں کو پُر کرنے کی صورت میں جواب غلط تصور ہوگا۔</p>`;
+    }
+    if (isEnglish || isBilingual) {
+      htmlContent += `<p class="eng">Note: Four possible answers A, B, C and D to each question are given. Fill the correct option's circle. More than one filled circle will be treated wrong.</p>`;
+    }
+    htmlContent += `</div><table>`;
+
+    // Process MCQ questions
+    mcqQuestions.forEach((pq: any, index: number) => {
+      const q = pq.questions;
+      const englishQuestion = formatQuestionText(q.question_text?.trim() || 'No question text available');
+      const hasUrduQuestion = hasActualUrduText(q.question_text_ur?.trim());
+      const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur?.trim() || '') : '';
+      
+      let questionDisplayHtml = '<div class="question">';
+      if (isEnglish) {
+          questionDisplayHtml += `<span class="eng">${englishQuestion.trim()}</span>`;
+      } else if (isUrdu) {
+          questionDisplayHtml += `<span class="urdu">${urduQuestion.trim() || englishQuestion.trim()}</span>`;
+      } else { // bilingual
+          questionDisplayHtml += `<span class="urdu">${urduQuestion.trim()}</span><span class="eng">${englishQuestion.trim()}</span>`;
+      }
+      questionDisplayHtml += '</div>';
+
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
       const options = [
         { 
           letter: 'A', 
@@ -1141,7 +1423,11 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
       // Use the display index (1-based) for numbering - this respects the reordering
       htmlContent += `
    <tr>
+<<<<<<< HEAD
       <td class="qnum">${index + 1}</td>
+=======
+      <td class="qnum">${pq.order_number}</td>
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
       <td>
         ${questionDisplayHtml}
         <div class="options">${optionsHtml}</div>
@@ -1163,6 +1449,7 @@ ${separateMCQ ? `<div class="footer">
 `;
   }
 
+<<<<<<< HEAD
   // Determine attempt counts once (available to both short and long sections)
   const shortToAttempt = Number(paper.short_to_attempt ?? requestData.shortToAttempt ?? requestData.shortCount ?? 0);
   const longToAttempt = Number(paper.long_to_attempt ?? requestData.longToAttempt ?? requestData.longCount ?? 0);
@@ -1215,6 +1502,61 @@ ${separateMCQ ? `<div class="footer">
     </td>
 </tr>
 
+=======
+  // Get subjective questions
+  const subjectiveQuestions = paperQuestions.filter((pq: any) => 
+    pq.question_type !== 'mcq' && pq.questions
+  );
+
+  // Helper: Convert number to roman style (i, ii, iii …)
+  function toRoman(num: number): string {
+    const romans = ['i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii','xiii','xiv','xv','xvi','xvii','xviii'];
+    return romans[num - 1] || num.toString();
+  }
+
+  htmlContent += `
+  ${separateMCQ ?`
+     <div class="header">
+   <h1 class="eng text-center">
+      ${examlyImageBase64 ? `<img src="${examlyImageBase64}" class="header-img"  height="40" width="100"/>` : ''} <br/>
+   <span class="institute">   ${englishTitle}</span>
+    </h1>
+   </div>
+    <!-- Student Info Table -->
+<table style="width:100%; border-collapse:collapse; border:none !important; font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Noto Sans',Arial,sans-serif;">
+<!-- Row 1 -->
+<tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Student Name:_________</span>` : ''}
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Roll No:_________</span>` : ''}
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">سیکشن:۔۔۔۔۔۔</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Section:_______</span>` : ''}
+  </td>
+</tr>
+
+<!-- Row 2 -->
+<tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu"><strong>کلاس: ${paperClass}</strong></span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Class: ${paperClass}</span>` : ''}
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">مضمون: ${subject_ur}</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Subject: ${subject}</span>` : ''}
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">تاریخ:${formatPaperDate(dateOfPaper)}</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Date:${formatPaperDate(dateOfPaper)}</span>` : ''}
+  </td>
+</tr>
+
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
 <!-- Row 3 -->
 <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
@@ -1222,6 +1564,7 @@ ${separateMCQ ? `<div class="footer">
     ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || paper.time_minutes)} Minutes</span>` : ''}
   </td>
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+<<<<<<< HEAD
       ${isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : ''}
       ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : ''}
     </td>
@@ -1229,6 +1572,15 @@ ${separateMCQ ? `<div class="footer">
      ${isUrdu || isBilingual ? `<span class="metaUrdu">حصہ معروضی/انشائیہ</span>` : ''}
       ${isEnglish || isBilingual ? `<span class="metaEng">Subjective/Objective Part</span>` : ''}
     </td>
+=======
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : ''}
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+   ${isUrdu || isBilingual ? `<span class="metaUrdu">حصہ انشائیہ</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Subjective Part</span>` : ''}
+  </td>
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
 </tr>
 </table>
 <hr  style="color:black;"/> <br /> `:``
@@ -1240,11 +1592,17 @@ ${separateMCQ ? `<div class="footer">
     htmlContent += `
   <!-- Short Questions Section -->
   <div class="header">
+<<<<<<< HEAD
    (<span class="english">${(isEnglish || isBilingual)? 'Part - I':''}<span><span class="urdu"> ${(isUrdu || isBilingual)? 'حصہ اول':''}  </span>)
+=======
+   
+    (<span class="english">${(isEnglish || isBilingual)? 'Part - I':''}<span><span class="urdu"> ${(isUrdu || isBilingual)? 'حصہ اول':''}  </span>)
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
   </div>
 
 `;
 
+<<<<<<< HEAD
     const isBoardPaper = (paper.paper_type === 'model' || requestData.paperType === 'model');
 
     if (shortQuestions.length > 0) {
@@ -1411,12 +1769,145 @@ ${separateMCQ ? `<div class="footer">
 
   htmlContent += `
   </div>
+=======
+    // Separate short and long questions
+    const shortQuestions = subjectiveQuestions.filter((pq: any) => pq.question_type === 'short');
+
+    // Add short questions
+    // Grouping: 6 questions per group
+    const questionsPerGroup = 6;
+    const totalGroups = Math.ceil(shortQuestions.length / questionsPerGroup);
+
+    for (let g = 0; g < totalGroups; g++) {
+      const groupQuestions = shortQuestions.slice(
+        g * questionsPerGroup,
+        (g + 1) * questionsPerGroup
+      );
+
+      // Q. numbering starts from 2
+      const questionNumber = g + 2;
+
+        let instructionHtml = '<div style="display:flex; justify-content:space-between; margin-bottom:0px; font-weight:bold">';
+        if (isEnglish || isBilingual) {
+          instructionHtml += `<div class="eng"><strong>${questionNumber}.</strong>Write short answers to any four(4) questions.<span></span></div>`;
+        }
+        if (isUrdu || isBilingual) {
+          instructionHtml += `<div class="urdu" style="direction:rtl;"><strong><span>${questionNumber}.</span>کوئی سے چار سوالات کے مختصر جوابات لکھئے  </strong></div>`;
+        }
+        instructionHtml += '</div>';
+
+      htmlContent += `
+    
+    
+    <div class="short-questions ${isUrdu?'urdu':''}">
+      ${instructionHtml}
+  `;
+
+      groupQuestions.forEach((pq: any, idx: number) => {
+        const q = pq.questions;
+        const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+        const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+        const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+
+        let questionItemHtml = '<div class="short-question-item" style="display:flex; justify-content:space-between; margin-bottom:0px;">';
+        if (isEnglish) {
+            questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion}</div>`;
+        } else if (isUrdu) {
+            questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion || englishQuestion}</div>`;
+        } else { // bilingual
+            questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion}</div>`;
+            if (hasUrduQuestion) {
+                questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion}</div>`;
+            }
+        }
+        questionItemHtml += '</div>';
+
+        htmlContent += `
+       ${questionItemHtml}
+    `;
+      });
+
+      htmlContent += `
+     </div>
+  `;
+    }
+  }
+
+  const longQuestions = subjectiveQuestions.filter((pq: any) => pq.question_type === 'long');
+
+  // Add long questions
+  if (longQuestions.length > 0) {
+    htmlContent += `
+  <div class="header">
+      (<span class="english">${(isEnglish || isBilingual)? 'Part - II':''}<span> <span class="urdu"> ${(isUrdu || isBilingual)? 'حصہ دوم ':''}  </span>)
+  </div>
+  <div class="instructions" style="font-weight:bold">`;
+  if(isEnglish || isBilingual) {
+    htmlContent += `<div class="instruction-text eng">
+                      <span>Note:</span> Attempt any 2 questions.
+                    </div>`;
+  }
+  if(isUrdu || isBilingual) {
+    htmlContent += `<div class="instruction-text urdu" style="direction: rtl;">
+                      <span>نوٹ:</span> کوئی دو سوالات حل کریں۔
+                    </div>`;
+  }
+  htmlContent += `</div>
+`;
+
+    longQuestions.forEach((pq: any, idx: number) => {
+      const q = pq.questions;
+      const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+      const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+      const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+
+      // Sub-questions (not implemented in current schema, but keeping for future)
+      const subQuestions: any[] = [];
+      let subQsHTML = '';
+
+      if (subQuestions.length > 0) {
+        subQsHTML += `
+      <div style="display: flex; justify-content: space-between; margin-top:6px;">
+        ${isEnglish || isBilingual ? `<div class="eng" style="width: 48%;"><ol type="a">${subQuestions.map((sq: any) => `<li>${formatQuestionText(sq.question_text || '')}</li>`).join('')}</ol></div>` : ''}
+        ${isUrdu || isBilingual ? `<div class="urdu" style="width: 48%; direction: rtl; text-align: right;"><ol type="a">${subQuestions.map((sq: any) => `<li>${formatQuestionText(sq.question_text_ur || '')}</li>`).join('')}</ol></div>` : ''}
+      </div>
+    `;
+      }
+
+      let longQuestionDisplayHtml = '<div class="long-question" style="margin-bottom:12px;"><div style="display:flex; justify-content:space-between; align-items:flex-start;">';
+      if (isEnglish) {
+          longQuestionDisplayHtml += `<div class="eng" style="width:100%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion}</div>`;
+      } else if (isUrdu) {
+          longQuestionDisplayHtml += `<div class="urdu" style="width:100%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion || englishQuestion}</div>`;
+      } else { // bilingual
+          longQuestionDisplayHtml += `<div class="eng" style="width:48%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion}</div>`;
+          if (hasUrduQuestion) {
+              longQuestionDisplayHtml += `<div class="urdu" style="width:48%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion}</div>`;
+          }
+      }
+      longQuestionDisplayHtml += `</div>${subQsHTML}</div>`;
+
+      htmlContent += `
+    ${longQuestionDisplayHtml}
+  `;
+    });
+  }
+
+  htmlContent += `
+  </div>
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
 `;
 
   // Footer
   htmlContent += `
+<<<<<<< HEAD
   <div class="footer no-break" style="margin-top: 30px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">
     <p class="english">Generated on ${new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time</p>
+=======
+  <div style="margin-top: 30px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">
+    <p class="english">Generated on ${new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time</p>
+    
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
   </div>
 </div>
 `;
@@ -1466,6 +1957,7 @@ async function generatePDFFromHTML(htmlContent: string) {
         req.continue();
       }
     });
+<<<<<<< HEAD
 
     console.log('🔄 Setting HTML content...');
     
@@ -1640,6 +2132,47 @@ async function tryRpcRandomQuestions(
   }
 }
 
+=======
+
+    console.log('🔄 Setting HTML content...');
+    
+    // Use setContent with simpler wait conditions
+    await page.setContent(htmlContent, {
+      waitUntil: 'domcontentloaded',
+      timeout: 120000
+    });
+
+    console.log('✅ HTML content set, waiting for fonts...');
+    
+    // Wait for fonts to load with timeout
+    await Promise.race([
+      page.evaluate(() => document.fonts.ready),
+      new Promise(resolve => setTimeout(resolve, 10000))
+    ]);
+
+    console.log('📄 Generating PDF...');
+    
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
+      preferCSSPageSize: true,
+      timeout: 120000
+    });
+
+    await page.close();
+    
+    console.log('✅ PDF generated successfully');
+    return pdfBuffer;
+    
+  } catch (error) {
+    if (page) await page.close();
+    console.error('❌ PDF generation error:', error);
+    throw error;
+  }
+}
+
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
 // Main POST function
 export async function POST(request: Request) {
   console.log('📄 POST request received to generate paper');
@@ -1660,8 +2193,11 @@ export async function POST(request: Request) {
   const isTrialUser = await checkUserSubscription(user.id);
   console.log(`👤 User ${user.id} is ${isTrialUser ? 'on trial' : 'paid'}`);
 
+<<<<<<< HEAD
   let paper: any;
 
+=======
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
   try {
     const requestData: PaperGenerationRequest = await request.json();
     console.log('📋 Request data received:', {
@@ -1670,9 +2206,13 @@ export async function POST(request: Request) {
       classId: requestData.classId,
       chapterOption: requestData.chapterOption,
       selectionMethod: requestData.selectionMethod,
+<<<<<<< HEAD
       randomSeed: requestData.randomSeed,
       hasReorderedQuestions: !!requestData.reorderedQuestions,
       hasCustomMarksData: !!requestData.customMarksData
+=======
+      randomSeed: requestData.randomSeed
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
     });
 
     const { 
@@ -1690,7 +2230,11 @@ export async function POST(request: Request) {
     }
 
     // Create paper record
+<<<<<<< HEAD
     paper = await createPaperRecord(requestData, user.id);
+=======
+    const paper = await createPaperRecord(requestData, user.id);
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
     
     // Process question types
     const questionInserts = [];
@@ -1704,9 +2248,14 @@ export async function POST(request: Request) {
       source_type = 'all',
       chapterOption = 'full_book',
       selectedChapters = [],
+<<<<<<< HEAD
       selectionMethod = 'manual',
       selectedQuestions,
       reorderedQuestions,
+=======
+      selectionMethod = 'auto',
+      selectedQuestions,
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
       randomSeed = Date.now(),
       shuffleQuestions = true
     } = requestData;
@@ -1721,14 +2270,21 @@ export async function POST(request: Request) {
         .eq('class_id', classId);
       chapterIds = chapters?.map(c => c.id) || [];
       console.log(`📚 Full book chapters found: ${chapterIds.length}`);
+<<<<<<< HEAD
     } else if ((chapterOption === 'custom' || chapterOption === 'single_chapter') && selectedChapters && selectedChapters.length > 0) {
       // Handle both custom (multi) and single_chapter (single id in array)
       chapterIds = selectedChapters;
       console.log(`🎯 Chapters selected (${chapterOption}): ${chapterIds.length}`);
+=======
+    } else if (chapterOption === 'custom' && selectedChapters && selectedChapters.length > 0) {
+      chapterIds = selectedChapters;
+      console.log(`🎯 Custom chapters selected: ${chapterIds.length}`);
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
     }
 
     console.log(`🎯 Final chapter IDs to use: ${chapterIds.length}`);
 
+<<<<<<< HEAD
     // FIXED: Manual selection with proper question verification AND reordering
     if (selectionMethod === 'manual' && selectedQuestions) {
       console.log('🔧 Using manual question selection');
@@ -1817,6 +2373,34 @@ export async function POST(request: Request) {
     } else {
       // Auto selection logic
       console.log('🤖 Using auto question selection');
+=======
+    if (selectionMethod === 'manual' && selectedQuestions) {
+      // Manual selection - use the pre-selected questions
+      console.log('🔧 Using manual question selection');
+      
+      const questionTypes = [
+        { type: 'mcq' as const, questions: selectedQuestions.mcq || [] },
+        { type: 'short' as const, questions: selectedQuestions.short || [] },
+        { type: 'long' as const, questions: selectedQuestions.long || [] }
+      ];
+
+      for (const qType of questionTypes) {
+        if (qType.questions.length > 0) {
+          qType.questions.forEach((questionId, index) => {
+            questionInserts.push({
+              paper_id: paper.id,
+              question_id: questionId,
+              order_number: questionInserts.length + 1,
+              question_type: qType.type
+            });
+          });
+          console.log(`✅ Added ${qType.questions.length} manually selected ${qType.type} questions`);
+        }
+      }
+    } else {
+      // Auto selection - find questions based on criteria
+      console.log('🤖 Using auto question selection with random seed:', randomSeed);
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
       
       const questionTypes = [
         { type: 'mcq' as const, count: mcqCount, difficulty: mcqDifficulty },
@@ -1824,12 +2408,17 @@ export async function POST(request: Request) {
         { type: 'long' as const, count: longCount, difficulty: longDifficulty }
       ];
 
+<<<<<<< HEAD
       let orderNumber = 1;
 
       for (const qType of questionTypes) {
         if (qType.count > 0) {
           console.log(`🔍 Finding ${qType.count} ${qType.type} questions...`);
           
+=======
+      for (const qType of questionTypes) {
+        if (qType.count > 0) {
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
           const questions = await findQuestionsWithFallback(
             qType.type,
             subjectId,
@@ -1838,6 +2427,7 @@ export async function POST(request: Request) {
             source_type,
             qType.difficulty,
             qType.count,
+<<<<<<< HEAD
             randomSeed
           );
 
@@ -1850,6 +2440,20 @@ export async function POST(request: Request) {
                 question_type: qType.type
               });
             }
+=======
+            shuffleQuestions ? randomSeed : undefined
+          );
+
+          if (questions.length > 0) {
+            questions.forEach((q) => {
+              questionInserts.push({
+                paper_id: paper.id,
+                question_id: q.id,
+                order_number: questionInserts.length + 1,
+                question_type: qType.type
+              });
+            });
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
             console.log(`✅ Added ${questions.length} ${qType.type} questions`);
           } else {
             console.warn(`⚠️ No ${qType.type} questions found`);
@@ -1873,7 +2477,10 @@ export async function POST(request: Request) {
       }
     } else {
       await supabaseAdmin.from('papers').delete().eq('id', paper.id);
+<<<<<<< HEAD
      
+=======
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
       return NextResponse.json(
         { 
           error: 'No questions found matching your criteria. Please try different filters.'
@@ -1884,6 +2491,7 @@ export async function POST(request: Request) {
 
     // Generate PDF
     const htmlContent = await generatePaperHTML(paper, user.id, requestData);
+<<<<<<< HEAD
 
     // Create PDF buffer from HTML
     const pdfBuffer = await generatePDFFromHTML(htmlContent);
@@ -1896,12 +2504,33 @@ export async function POST(request: Request) {
     }
 
     // Return PDF as response
+=======
+    const pdfBuffer = await generatePDFFromHTML(htmlContent);
+
+    // Increment papers count
+    await incrementPapersGenerated(user.id);
+    
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
+<<<<<<< HEAD
         'Content-Length': String(pdfBuffer.length),
         'Content-Disposition': `attachment; filename="${(paper.title || 'paper').replace(/[^a-z0-9_\-\.]/gi, '_')}.pdf"`,
+=======
+        'Content-Disposition': `attachment; filename="${paper.title.replace(/\s+/g, '_')}.pdf"`,
+        'Content-Length': pdfBuffer.length.toString(),
+      },
+    });
+
+  } catch (error) {
+    console.error('❌ Paper generation error:', error);
+    return NextResponse.json(
+      { 
+        error: 'Failed to generate paper', 
+        details: error instanceof Error ? error.message : 'Unknown error'
+>>>>>>> 87174fa121ed125c7ab8c49fbf71bc17922ecb65
       },
     });
   } catch (error) {
@@ -1920,5 +2549,34 @@ export async function POST(request: Request) {
       { error: 'Failed to generate paper. Please try again later.' },
       { status: 500 }
     );
+  }
+}
+
+// GET endpoint for manual question selection
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const subjectId = searchParams.get('subjectId');
+  const classId = searchParams.get('classId');
+  const chapterIds = searchParams.get('chapterIds')?.split(',') || [];
+  const sourceType = searchParams.get('sourceType');
+  const difficulty = searchParams.get('difficulty');
+
+  if (!subjectId || !classId) {
+    return NextResponse.json({ error: 'Subject ID and Class ID are required' }, { status: 400 });
+  }
+
+  try {
+    const questions = await getQuestionsForManualSelection(
+      subjectId,
+      classId,
+      chapterIds,
+      sourceType || undefined,
+      difficulty || undefined
+    );
+
+    return NextResponse.json(questions);
+  } catch (error) {
+    console.error('Error fetching questions for manual selection:', error);
+    return NextResponse.json({ error: 'Failed to fetch questions' }, { status: 500 });
   }
 }
