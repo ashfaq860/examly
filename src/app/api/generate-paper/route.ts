@@ -1,4 +1,4 @@
-// app/api/generate-paper/route.ts
+/** app/api/generate-paper/route.ts */
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes
@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import type { PaperGenerationRequest } from '@/types/types';
+import type { PaperGenerationRequest, QuestionType, Question } from '@/types/types';
 import { translate } from '@vitalets/google-translate-api';
 import type { Browser, Page } from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
@@ -43,10 +43,12 @@ async function getPuppeteerBrowser() {
           '--disable-background-timer-throttling',
           '--disable-backgrounding-occluded-windows',
           '--disable-renderer-backgrounding',
-          '--max-old-space-size=4096',
+          '--max-old-space-size=2048',
+          '--memory-pressure-off',
+          '--max_old_space_size=2048',
         ],
         headless: 'new',
-        timeout: 180000, // Increased to 3 minutes
+        timeout: 120000,
         ignoreHTTPSErrors: true,
       };
 
@@ -80,7 +82,6 @@ async function getPuppeteerBrowser() {
 
 // Get Chrome executable path for different environments
 function getChromePath() {
-  // In production, use Chromium from @sparticuz/chromium
   if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
     return null;
   }
@@ -119,7 +120,7 @@ function getChromePath() {
   return null;
 }
 
-// 2. In-memory cache for fonts to avoid disk I/O on every request.
+// 2. In-memory cache for fonts
 const fontCache = new Map<string, string>();
 
 // Function to load font as base64
@@ -129,7 +130,6 @@ function loadFontAsBase64(fontFileName: string): string {
   }
   try {
     const fontPath = path.join(process.cwd(), 'public', 'fonts', fontFileName);
-    console.log(fontPath);
     if (fs.existsSync(fontPath)) {
       const fontBuffer = fs.readFileSync(fontPath);
       const base64Font = fontBuffer.toString('base64');
@@ -145,7 +145,7 @@ function loadFontAsBase64(fontFileName: string): string {
   }
 }
 
-// 3. In-memory cache for translations to avoid network calls on every request.
+// 3. In-memory cache for translations
 const translationCache = new Map<string, string>();
 
 // Function to map frontend source_type to database source_type
@@ -160,133 +160,195 @@ function mapSourceType(sourceType: string): string {
   return sourceTypeMap[sourceType] || sourceType;
 }
 
-// Fallback function to find questions with relaxed filters
+// Function to get class_subject_id for filtering
+async function getClassSubjectId(classId: string, subjectId: string): Promise<string | null> {
+  try {
+    const { data: classSubject, error } = await supabaseAdmin
+      .from('class_subjects')
+      .select('id')
+      .eq('class_id', classId)
+      .eq('subject_id', subjectId)
+      .single();
+
+    if (error) {
+      console.warn('Error fetching class_subject_id:', error);
+      return null;
+    }
+
+    return classSubject?.id || null;
+  } catch (error) {
+    console.warn('Error getting class_subject_id:', error);
+    return null;
+  }
+}
+
+// Enhanced fallback function to find questions with proper filtering
 async function findQuestionsWithFallback(
-  supabase: any,
   type: string,
   subjectId: string,
+  classId: string,
   chapterIds: string[],
   source_type: string | undefined,
   difficulty: string | undefined,
-  count: number
+  count: number,
+  randomSeed?: number
 ) {
-  console.log(`\n🔍 Finding ${count} ${type} questions with fallback...`);
-  console.log(`📋 Filters: source_type=${source_type}, difficulty=${difficulty}`);
+  console.log(`\n🔍 Finding ${count} ${type} questions...`);
+  console.log(`📋 Filters: subject=${subjectId}, class=${classId}, chapters=${chapterIds.length}, source_type=${source_type}, difficulty=${difficulty}`);
+  console.log(`🎯 Selected Chapter IDs:`, chapterIds);
   
   // Map source_type to database values
   const dbSourceType = source_type ? mapSourceType(source_type) : undefined;
   
-  // Try with all filters first
+  // Get class_subject_id for filtering
+  const classSubjectId = await getClassSubjectId(classId, subjectId);
+  console.log(`🎯 Class Subject ID: ${classSubjectId}`);
+
+  // Build query with proper filtering - ALWAYS start with subject and type
   let query = supabaseAdmin
     .from('questions')
-    .select('id')
+    .select('id, question_text, question_text_ur, option_a, option_b, option_c, option_d, option_a_ur, option_b_ur, option_c_ur, option_d_ur, correct_option, difficulty, chapter_id, source_type, class_subject_id, question_type')
     .eq('question_type', type)
     .eq('subject_id', subjectId);
 
-  if (chapterIds.length > 0) {
+  // **CRITICAL FIX: Always apply chapter filtering FIRST if chapters are selected**
+  if (chapterIds && chapterIds.length > 0) {
+    console.log(`✅ Applying chapter filter: ${chapterIds.length} chapters`);
     query = query.in('chapter_id', chapterIds);
+  } else {
+    console.log('ℹ️ No specific chapters selected, will use class-based filtering');
+  }
+
+  // **FIX: Apply class filtering through class_subject_id**
+  if (classSubjectId) {
+    query = query.eq('class_subject_id', classSubjectId);
+    console.log(`✅ Filtering by class_subject_id: ${classSubjectId}`);
+  } else {
+    console.warn('⚠️ No class_subject_id found, applying alternative class filtering');
+    
+    // Alternative: Get chapters that belong to this class AND subject
+    const { data: relevantChapters, error: chaptersError } = await supabaseAdmin
+      .from('chapters')
+      .select('id')
+      .eq('subject_id', subjectId)
+      .eq('class_id', classId);
+
+    if (!chaptersError && relevantChapters && relevantChapters.length > 0) {
+      const relevantChapterIds = relevantChapters.map(c => c.id);
+      console.log(`📚 Found ${relevantChapterIds.length} chapters for class ${classId} and subject ${subjectId}`);
+      
+      // If no specific chapters were selected by user, use all relevant chapters
+      if (!chapterIds || chapterIds.length === 0) {
+        console.log(`✅ Using ${relevantChapterIds.length} relevant chapters for class filtering`);
+        query = query.in('chapter_id', relevantChapterIds);
+      } else {
+        // If user selected specific chapters, ensure they belong to the right class
+        const validChapterIds = chapterIds.filter(id => 
+          relevantChapters.some(c => c.id === id)
+        );
+        if (validChapterIds.length > 0) {
+          console.log(`✅ Using ${validChapterIds.length} valid chapters after class validation`);
+          query = query.in('chapter_id', validChapterIds);
+        } else {
+          console.warn('⚠️ No valid chapters after class validation, using relevant chapters');
+          query = query.in('chapter_id', relevantChapterIds);
+        }
+      }
+    } else {
+      console.error('❌ No chapters found for class and subject combination');
+      return [];
+    }
   }
   
   // Filter by source type if specified and not 'all'
   if (dbSourceType && dbSourceType !== 'all') {
     query = query.eq('source_type', dbSourceType);
+    console.log(`✅ Filtering by source type: ${dbSourceType}`);
   }
   
   if (difficulty && difficulty !== 'any') {
     query = query.eq('difficulty', difficulty);
+    console.log(`✅ Filtering by difficulty: ${difficulty}`);
   }
 
-  query = query.order('id', { ascending: false }).limit(count);
+  console.log(`🎯 Final query filters applied:`);
+  console.log(`   - Question Type: ${type}`);
+  console.log(`   - Subject: ${subjectId}`);
+  console.log(`   - Chapters: ${chapterIds?.length || 'all'}`);
+  console.log(`   - Class Subject ID: ${classSubjectId || 'none'}`);
+  console.log(`   - Source Type: ${dbSourceType || 'all'}`);
+  console.log(`   - Difficulty: ${difficulty || 'any'}`);
+
+  // Apply randomization using randomSeed
+  if (randomSeed) {
+    // Use random ordering for shuffling
+    query = query.order('id', { ascending: true }); // Base order for consistency
+  } else {
+    query = query.order('id', { ascending: false });
+  }
+
+  query = query.limit(count * 3); // Get more questions for randomization
+
   const { data: questions, error } = await query;
 
   if (error) {
-    console.error(`Error in initial query:`, error);
+    console.error(`Error in query:`, error);
     return [];
   }
 
-  if (questions && questions.length >= count) {
-    console.log(`✅ Found ${questions.length} questions with all filters`);
-    return questions;
-  }
+  console.log(`📊 Found ${questions?.length || 0} questions after all filters`);
 
-  // Fallback 1: Remove difficulty filter
-  console.log(`🔄 Fallback 1: Removing difficulty filter for ${type}`);
-  let fallbackQuery = supabaseAdmin
-    .from('questions')
-    .select('id')
-    .eq('question_type', type)
-    .eq('subject_id', subjectId);
-
-  if (chapterIds.length > 0) {
-    fallbackQuery = fallbackQuery.in('chapter_id', chapterIds);
-  }
-  
-  // Keep source type filter if specified
-  if (dbSourceType && dbSourceType !== 'all') {
-    fallbackQuery = fallbackQuery.eq('source_type', dbSourceType);
-  }
-
-  fallbackQuery = fallbackQuery.order('id', { ascending: false }).limit(count);
-  const { data: fallbackQuestions1 } = await fallbackQuery;
-
-  if (fallbackQuestions1 && fallbackQuestions1.length >= count) {
-    console.log(`✅ Found ${fallbackQuestions1.length} questions without difficulty filter`);
-    return fallbackQuestions1;
-  }
-
-  // Fallback 2: Remove source type filter (only if it was specified)
-  if (dbSourceType && dbSourceType !== 'all') {
-    console.log(`🔄 Fallback 2: Removing source type filter for ${type}`);
-    let fallbackQuery2 = supabaseAdmin
+  if (!questions || questions.length === 0) {
+    console.log('❌ No questions found with the applied filters');
+    
+    // Debug: Let's see what's available without filters
+    const debugQuery = supabaseAdmin
       .from('questions')
-      .select('id')
+      .select('id, chapter_id, subject_id, question_type, class_subject_id')
       .eq('question_type', type)
-      .eq('subject_id', subjectId);
-
-    if (chapterIds.length > 0) {
-      fallbackQuery2 = fallbackQuery2.in('chapter_id', chapterIds);
-    }
-
-    fallbackQuery2 = fallbackQuery2.order('id', { ascending: false }).limit(count);
-    const { data: fallbackQuestions2 } = await fallbackQuery2;
-
-    if (fallbackQuestions2 && fallbackQuestions2.length >= count) {
-      console.log(`✅ Found ${fallbackQuestions2.length} questions without source type filter`);
-      return fallbackQuestions2;
-    }
+      .eq('subject_id', subjectId)
+      .limit(10);
+    
+    const { data: debugQuestions } = await debugQuery;
+    console.log('🐛 Debug - Questions available without chapter filter:', debugQuestions);
+    
+    return [];
   }
 
-  // Fallback 3: Only subject and type filter
-  console.log(`🔄 Fallback 3: Using only subject and type filter for ${type}`);
-  const { data: fallbackQuestions3 } = await supabaseAdmin
-    .from('questions')
-    .select('id')
-    .eq('question_type', type)
-    .eq('subject_id', subjectId)
-    .order('id', { ascending: false })
-    .limit(count);
-
-  if (fallbackQuestions3 && fallbackQuestions3.length > 0) {
-    console.log(`✅ Found ${fallbackQuestions3.length} questions with basic filters`);
-    return fallbackQuestions3;
+  // Apply randomization if seed is provided
+  let finalQuestions = questions;
+  if (randomSeed && questions.length > 0) {
+    // Simple pseudo-random shuffle based on seed
+    finalQuestions = [...questions].sort(() => {
+      const x = Math.sin(randomSeed++) * 10000;
+      return x - Math.floor(x) - 0.5;
+    });
+    console.log(`🔀 Applied randomization with seed: ${randomSeed}`);
   }
 
-  console.log(`❌ No ${type} questions found even with fallbacks`);
-  return [];
+  // Take the required number of questions
+  const selectedQuestions = finalQuestions.slice(0, count);
+  
+  console.log(`✅ Final selection: ${selectedQuestions.length} ${type} questions`);
+  
+  // Log the chapters of selected questions for verification
+  const selectedChapters = [...new Set(selectedQuestions.map(q => q.chapter_id))];
+  console.log(`📖 Selected questions come from ${selectedChapters.length} chapters:`, selectedChapters);
+  
+  return selectedQuestions;
 }
 
 // Function to format question text for better display
 function formatQuestionText(text: string): string {
   if (!text) return '';
   return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold text
-    .replace(/\*(.*?)\*/g, '<em>$1</em>') // Italic text
-    .replace(/\n/g, '<br>'); // Line breaks
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
 }
 
 // Function to simplify HTML content
 function simplifyHtmlContent(html: string): string {
-  // Remove unnecessary whitespace and comments
   return html
     .replace(/\s+/g, ' ')
     .replace(/<!--.*?-->/g, '')
@@ -296,71 +358,111 @@ function simplifyHtmlContent(html: string): string {
 // Function to check if Urdu text exists and is not just English
 function hasActualUrduText(text: string | null): boolean {
   if (!text) return false;
-  
-  // Check if text contains Urdu characters (Unicode range for Urdu/Arabic)
   const urduRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
   return urduRegex.test(text);
 }
 
-// increment function if paper is generated
+// NEW helper: attempt to extract english and urdu parts when fields were pre-merged
+function extractEnglishAndUrdu(field: string | null | undefined, fieldUr?: string | null | undefined) {
+  const raw = (field || '').toString();
+  const urFromSeparate = (fieldUr || '').toString().trim();
+  const hasUrInRaw = hasActualUrduText(raw);
+  const hasUrInSeparate = hasActualUrduText(urFromSeparate);
+
+  // If separate urdu exists, prefer explicit separation
+  if (hasUrInSeparate) {
+    return { eng: raw.trim(), ur: urFromSeparate.trim() };
+  }
+
+  // If raw contains Urdu (frontend already merged), attempt to split.
+  if (hasUrInRaw) {
+    // Try patterns like:
+    // "English\n(اردو)" or "English\nاردو" or "English (اردو)"
+    const parenMatch = raw.match(/^(.*?)[\r\n]*\(?\s*([\u0600-\u06FF\0-\uFFFF].+?)\)?\s*$/s);
+    if (parenMatch && parenMatch[1] && parenMatch[2]) {
+      return { eng: parenMatch[1].trim(), ur: parenMatch[2].trim() };
+    }
+    // If we couldn't split, treat raw as urdu-only to avoid duplicating urdu later
+    return { eng: '', ur: raw.trim() };
+  }
+
+  // No Urdu detected anywhere -> english only
+  return { eng: raw.trim(), ur: '' };
+}
+
 // Function to increment papers_generated count for a user
-async function incrementPapersGenerated(supabase: any, userId: string) {
+async function incrementPapersGenerated(userId: string) {
   try {
-    const { error } = await supabase.rpc('increment_papers_generated', {
-      user_id: userId
-    });
+    // Get current count
+    const { data: profile, error: fetchError } = await supabaseAdmin
+      .from('profiles')
+      .select('papers_generated')
+      .eq('id', userId)
+      .single();
 
-    if (error) {
-      console.error('Error incrementing papers generated:', error);
-      // Fallback: use update query if RPC fails
-      const { data: profile } = await supabaseAdmin
-        .from('profiles')
-        .select('papers_generated')
-        .eq('id', userId)
-        .single();
+    if (fetchError) {
+      console.error('Error fetching profile:', fetchError);
+      return;
+    }
 
-      if (profile) {
-        const newCount = (profile.papers_generated || 0) + 1;
-        await supabase
-          .from('profiles')
-          .update({ papers_generated: newCount })
-          .eq('id', userId);
-      }
+    const newCount = (profile?.papers_generated || 0) + 1;
+    
+    // Update count
+    const { error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update({ papers_generated: newCount })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('Error updating papers_generated:', updateError);
+    } else {
+      console.log(`✅ Incremented papers_generated to ${newCount} for user ${userId}`);
     }
   } catch (error) {
     console.error('Failed to update papers_generated:', error);
   }
 }
 
-// function to check user subscription if any
-async function checkUserSubscription(supabaseAdmin: any, userId: string): Promise<boolean> {
+// Function to check user subscription
+async function checkUserSubscription(userId: string): Promise<boolean> {
   try {
     const { data: subscription, error } = await supabaseAdmin
-      .from('user_subscriptions')
-      .select('status, plan_type')
+      .from('user_packages')
+      .select('is_active, is_trial, expires_at')
       .eq('user_id', userId)
-      .in('status', ['active', 'trialing'])
+      .eq('is_active', true)
+      .gte('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
 
     if (error) {
       console.warn('Error fetching subscription:', error);
-      // Assume trial if no subscription found
-      return true;
+      // Check if user has trial in profile
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('trial_ends_at, trial_given')
+        .eq('id', userId)
+        .single();
+      
+      if (profile?.trial_ends_at && new Date(profile.trial_ends_at) > new Date()) {
+        return true;
+      }
+      
+      if (profile?.trial_given === false) {
+        return true;
+      }
+      
+      return false;
     }
 
-    // Return true if user is on trial or has no active paid subscription
-    return subscription?.status === 'trialing' || 
-           subscription?.plan_type === 'free' || 
-           !subscription;
+    return subscription?.is_active === true || subscription?.is_trial === true;
   } catch (error) {
     console.warn('Error checking subscription:', error);
-    return true; // Assume trial on error
+    return false;
   }
 }
 
-// Add this function to generate watermark CSS
 // Watermark CSS
 function getWatermarkStyle(): string {
   return `
@@ -386,7 +488,7 @@ function getWatermarkStyle(): string {
       color: rgba(200, 0, 0, 0.08);
       font-weight: bold;
       font-family: Arial, sans-serif;
-      white-space: pre-line; /* allows multi-line */
+      white-space: pre-line;
     }
   `;
 }
@@ -394,295 +496,249 @@ function getWatermarkStyle(): string {
 // Function to optimize HTML for Puppeteer
 function optimizeHtmlForPuppeteer(html: string): string {
   return html
-    // Remove unnecessary whitespace
     .replace(/\s+/g, ' ')
-    // Remove comments
     .replace(/<!--.*?-->/gs, '')
-    // Remove empty styles
     .replace(/<style>\s*<\/style>/g, '')
-    // Minify CSS in style tags
     .replace(/<style>([\s\S]*?)<\/style>/g, (match, css) => {
       const minifiedCSS = css
-        .replace(/\/\*[\s\S]*?\*\//g, '') // Remove comments
-        .replace(/\s+/g, ' ') // Collapse whitespace
-        .replace(/\s*([{};:,])\s*/g, '$1') // Remove spaces around braces/semicolons
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\s+/g, ' ')
+        .replace(/\s*([{};:,])\s*/g, '$1')
         .trim();
       return `<style>${minifiedCSS}</style>`;
     })
     .trim();
 }
 
-export async function POST(request: Request) {
-  console.log('📄 POST request received to generate paper');
-  
-  const token = request.headers.get('Authorization')?.split(' ')[1];
-  if (!token) {
-    return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
-  }
-
-  // Verify user
-  const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-  if (userError || !user) {
-    console.error('Authentication error:', userError);
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // Check if user is on trial
-  const isTrialUser = await checkUserSubscription(supabaseAdmin, user.id);
-  console.log(`👤 User ${user.id} is ${isTrialUser ? 'on trial' : 'paid'}`);
-
-  try {
-    const requestData: PaperGenerationRequest = await request.json();
-    console.log('📋 Request data received');
-
-    const { 
-      language = 'bilingual', 
-      mcqMarks = 1, 
-      shortMarks = 2, 
-      longMarks = 5, 
-      mcqPlacement = 'separate',
-      selectionMethod,
-      selectedQuestions,
-      paperType = 'all',
-      title,
-      subjectId,
-      classId,
-      chapterOption = 'full_book',
-      selectedChapters = [],
-      source_type = 'all',
-      mcqCount = 0,
-      shortCount = 0,
-      longCount = 0,
-      mcqDifficulty = 'any',
-      shortDifficulty = 'any',
-      longDifficulty = 'any',
-      easyPercent,
-      mediumPercent,
-      hardPercent,
-      timeMinutes = 60,
-      mcqToAttempt,
-      shortToAttempt,
-      longToAttempt,
-      mcqTimeMinutes,
-      subjectiveTimeMinutes,
-        dateOfPaper // 🆕 ADD THIS LINE
-    } = requestData;
-// Add this function near your other helper functions
+// Function to format paper date
 function formatPaperDate(dateString: string | undefined): string {
   if (!dateString) {
-    return new Date().toLocaleDateString('en-GB'); // Default to today
+    return new Date().toLocaleDateString('en-GB');
   }
   
   try {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB'); // DD/MM/YYYY format
+    return date.toLocaleDateString('en-GB');
   } catch (error) {
     console.error('Error formatting date:', error);
     return new Date().toLocaleDateString('en-GB');
   }
 }
-    // Validation
-    if (!title || !subjectId) {
-      return NextResponse.json(
-        { error: 'Title and subject ID are required' },
-        { status: 400 }
-      );
-    }
 
-    // Test database connection
-    const { data: testQuestions, error: testError } = await supabaseAdmin
-      .from('questions')
+// Function to load image as base64
+function loadImageAsBase64(imageFileName: string): string {
+  try {
+    const imagePath = path.join(process.cwd(), 'public', imageFileName);
+    if (fs.existsSync(imagePath)) {
+      const imageBuffer = fs.readFileSync(imagePath);
+      const base64Image = imageBuffer.toString('base64');
+      const extension = path.extname(imageFileName).toLowerCase();
+      const mimeType = extension === '.jpg' || extension === '.jpeg' ? 'jpeg' : extension.replace('.', '');
+      return `data:image/${mimeType};base64,${base64Image}`;
+    }
+    return '';
+  } catch (error) {
+    console.error('Error loading image:', error);
+    return '';
+  }
+}
+
+// Function to create paper record
+async function createPaperRecord(requestData: PaperGenerationRequest, userId: string) {
+  const { 
+    title,
+    subjectId,
+    classId,
+    chapterOption = 'full_book',
+    selectedChapters = [],
+    source_type = 'all',
+    paperType = 'custom',
+    language = 'bilingual',
+    timeMinutes = 60,
+    mcqCount = 0,
+    shortCount = 0,
+    longCount = 0,
+    mcqToAttempt,
+    shortToAttempt,
+    longToAttempt,
+    mcqMarks = 1,
+    shortMarks = 2,
+    longMarks = 5,
+    reorderedQuestions, // Add this
+    customMarksData // Add this
+  } = requestData;
+
+  // Calculate total marks considering custom marks
+  let totalMarks = 0;
+  
+  if (reorderedQuestions && customMarksData) {
+    // Use custom marks if available
+    const mcqTotal = reorderedQuestions.mcq.reduce((sum, q) => {
+      const customMark = customMarksData.mcq.find((cm: any) => cm.questionId === q.id)?.marks;
+      return sum + (customMark || mcqMarks);
+    }, 0);
+    
+    const shortTotal = reorderedQuestions.short.reduce((sum, q) => {
+      const customMark = customMarksData.short.find((cm: any) => cm.questionId === q.id)?.marks;
+      return sum + (customMark || shortMarks);
+    }, 0);
+    
+    const longTotal = reorderedQuestions.long.reduce((sum, q) => {
+      const customMark = customMarksData.long.find((cm: any) => cm.questionId === q.id)?.marks;
+      return sum + (customMark || longMarks);
+    }, 0);
+    
+    totalMarks = mcqTotal + shortTotal + longTotal;
+    console.log(`📊 Total marks calculated with custom marks: ${totalMarks}`);
+  } else {
+    // Fallback to default calculation
+    totalMarks = (mcqToAttempt || mcqCount || 0) * mcqMarks + 
+                (shortToAttempt || shortCount || 0) * shortMarks + 
+                (longToAttempt || longCount || 0) * longMarks;
+    console.log(`📊 Total marks calculated with default marks: ${totalMarks}`);
+  }
+
+  // Determine chapters to include
+  let chapterIds: string[] = [];
+  if (chapterOption === 'full_book') {
+    const { data: chapters } = await supabaseAdmin
+      .from('chapters')
       .select('id')
-      .limit(1);
+      .eq('subject_id', subjectId)
+      .eq('class_id', classId);
+    chapterIds = chapters?.map(c => c.id) || [];
+    console.log(`📚 Full book chapters found: ${chapterIds.length}`);
+  } else if ((chapterOption === 'custom' || chapterOption === 'single_chapter') && selectedChapters && selectedChapters.length > 0) {
+    // Handle both custom (multi) and single_chapter (single id in array)
+    chapterIds = selectedChapters;
+    console.log(`🎯 Chapters selected (${chapterOption}): ${chapterIds.length}`);
+  }
 
-    if (testError) {
-      console.error('Database test failed:', testError);
-      return NextResponse.json(
-        { error: 'Database connection failed', details: testError.message },
-        { status: 500 }
-      );
+  // Create paper record
+  const paperData: any = {
+    title: title,
+    subject_id: subjectId,
+    class_id: classId,
+    created_by: userId,
+    paper_type: paperType,
+    chapter_ids: chapterOption === 'custom' && selectedChapters.length > 0 ? selectedChapters : null,
+    difficulty: 'medium',
+    total_marks: totalMarks,
+    time_minutes: timeMinutes,
+    mcq_to_attempt: mcqToAttempt || mcqCount,
+    short_to_attempt: shortToAttempt || shortCount,
+    long_to_attempt: longToAttempt || longCount,
+    language: language,
+    source_type: source_type
+  };
+
+  try {
+    const { data: paper, error: paperError } = await supabaseAdmin
+      .from('papers')
+      .insert(paperData)
+      .select()
+      .single();
+
+    if (paperError) {
+      console.error('Error creating paper:', paperError);
+      throw paperError;
     }
 
-    console.log('✅ Database connection successful');
-    console.log(`📋 Source type: ${source_type}`);
-    console.log(`🌐 Language: ${language}`);
+    console.log(`✅ Paper created with ID: ${paper.id}`);
+    return paper;
+  } catch (error) {
+    console.error('Error creating paper:', error);
+    throw error;
+  }
+}
 
-    // Determine chapters to include
-    let chapterIds: string[] = [];
-    if (chapterOption === 'full_book') {
-      const { data: chapters, error: chaptersError } = await supabaseAdmin
-        .from('chapters')
-        .select('id')
-        .eq('subject_id', subjectId);
-      
-      if (chaptersError) {
-        console.error('Error fetching chapters:', chaptersError);
-        return NextResponse.json(
-          { error: 'Failed to fetch chapters' },
-          { status: 500 }
-        );
-      }
-      
-      chapterIds = chapters?.map(c => c.id) || [];
-      console.log(`📚 Full book chapters found: ${chapterIds.length}`);
-    } else if (chapterOption === 'custom' && selectedChapters && selectedChapters.length > 0) {
-      chapterIds = selectedChapters;
-      console.log(`🎯 Custom chapters selected: ${chapterIds.length}`);
-    }
+// Function to generate paper HTML
+async function generatePaperHTML(paper: any, userId: string, requestData: PaperGenerationRequest) {
+  const {
+    language = 'bilingual',
+    mcqMarks = 1,
+    shortMarks = 2,
+    longMarks = 5,
+    mcqPlacement = 'separate',
+    dateOfPaper,
+    reorderedQuestions,
+    customMarksData // Add this to extract custom marks
+  } = requestData;
 
-    // Calculate total marks
-    const totalMarks = (mcqToAttempt || mcqCount || 0) * mcqMarks + 
-                      (shortToAttempt || shortCount || 0) * shortMarks + 
-                      (longToAttempt || longCount || 0) * longMarks;
-    const objectiveMarks = (mcqToAttempt || mcqCount || 0) * mcqMarks ; 
-    const subjectMarks = (shortToAttempt || shortCount || 0) * shortMarks + 
-                      (longToAttempt || longCount || 0) * longMarks;
+  // Create a map for quick custom marks lookup
+  const customMarksMap = new Map();
+  if (customMarksData) {
+    Object.entries(customMarksData).forEach(([type, questions]) => {
+      (questions as any[]).forEach((q: any) => {
+        customMarksMap.set(q.questionId, q.marks);
+      });
+    });
+  }
 
-    // Create paper record - handle source_type column gracefully
-    const paperData: any = {
-      title: title,
-      subject_id: subjectId,
-      class_id: classId,
-      created_by: user.id,
-      paper_type: paperType,
-      chapter_ids: chapterOption === 'custom' ? selectedChapters : null,
-      difficulty: 'medium',
-      total_marks: totalMarks,
-      time_minutes: timeMinutes,
-      mcq_to_attempt: mcqToAttempt,
-      short_to_attempt: shortToAttempt,
-      long_to_attempt: longToAttempt,
-      language: language
-    };
+  // Fetch paper questions with full question data OR use reordered questions from frontend
+  console.log('📋 Fetching paper questions with details...');
+  
+  let finalQuestions: any[] = [];
 
-    let paper;
-    try {
-      // Try to include source_type if the column exists
-      const { data: paperWithSource, error: paperErrorWithSource } = await supabaseAdmin
-        .from('papers')
-        .insert({
-          ...paperData,
-          source_type: source_type
-        })
-        .select()
-        .single();
-
-      if (paperErrorWithSource) {
-        // If error is about missing source_type column, try without it
-        if (paperErrorWithSource.message.includes('source_type') && 
-            paperErrorWithSource.message.includes('column')) {
-          console.log('⚠️ source_type column not found in papers table, inserting without it');
-          
-          const { data: paperWithoutSource, error: paperErrorWithoutSource } = await supabaseAdmin
-            .from('papers')
-            .insert(paperData)
-            .select()
-            .single();
-          
-          if (paperErrorWithoutSource) {
-            console.error('Error creating paper:', paperErrorWithoutSource);
-            throw paperErrorWithoutSource;
-          }
-          
-          paper = paperWithoutSource;
-        } else {
-          console.error('Error creating paper:', paperErrorWithSource);
-          throw paperErrorWithSource;
-        }
-      } else {
-        paper = paperWithSource;
-      }
-
-      console.log(`✅ Paper created with ID: ${paper.id}`);
-    } catch (error) {
-      console.error('Error creating paper:', error);
-      throw error;
-    }
-
-    // Process question types with fallback
-    const questionInserts = [];
-    const questionTypes = [
-      { type: 'mcq', count: mcqCount, difficulty: mcqDifficulty },
-      { type: 'short', count: shortCount, difficulty: shortDifficulty },
-      { type: 'long', count: longCount, difficulty: longDifficulty }
-    ];
-
-    for (const qType of questionTypes) {
-      if (qType.count > 0) {
-        const questions = await findQuestionsWithFallback(
-          supabaseAdmin,
-          qType.type,
-          subjectId,
-          chapterIds,
-          source_type,
-          qType.difficulty,
-          qType.count
-        );
-
-        if (questions.length > 0) {
-          questions.forEach((q) => {
-            questionInserts.push({
-              paper_id: paper.id,
-              question_id: q.id,
-              order_number: questionInserts.length + 1,
-              question_type: qType.type
-            });
-          });
-          console.log(`✅ Added ${questions.length} ${qType.type} questions`);
-        } else {
-          console.warn(`⚠️ No ${qType.type} questions found`);
-        }
-      }
-    }
-
-    // Insert paper questions
-    if (questionInserts.length > 0) {
-      console.log(`📝 Inserting ${questionInserts.length} questions into paper_questions`);
-      
-      const { error: insertError } = await supabaseAdmin
-        .from('paper_questions')
-        .insert(questionInserts);
-
-      if (insertError) {
-        console.error('Error inserting paper questions:', insertError);
-        
-        // Delete the paper since questions couldn't be added
-        await supabaseAdmin
-          .from('papers')
-          .delete()
-          .eq('id', paper.id);
-        
-        throw insertError;
-      }
-
-      console.log(`✅ Successfully inserted ${questionInserts.length} questions`);
-    } else {
-      console.warn('⚠️ No questions to insert');
-      
-      // Delete the empty paper
-      await supabaseAdmin
-        .from('papers')
-        .delete()
-        .eq('id', paper.id);
-      
-      return NextResponse.json(
-        { 
-          error: 'No questions found matching your criteria. Please try different filters.',
-          details: {
-            subjectId,
-            chapterIds,
-            source_type,
-            mcqCount,
-            shortCount,
-            longCount
-          }
+  // Check if we have reordered questions from frontend
+  if (reorderedQuestions) {
+    console.log('🔄 Using reordered questions from frontend preview');
+    
+    // Use the reordered questions from frontend instead of database order
+    const { mcq = [], short = [], long = [] } = reorderedQuestions;
+    
+    // Combine all questions in the correct order
+    let orderNumber = 1;
+    
+    // Process MCQs in reordered sequence WITH CUSTOM MARKS
+    mcq.forEach((question: any) => {
+      const customMark = customMarksMap.get(question.id) || question.marks || mcqMarks;
+      finalQuestions.push({
+        order_number: orderNumber++,
+        question_type: 'mcq',
+        question_id: question.id,
+        questions: {
+          ...question,
+          // Ensure marks are included
+          marks: customMark
         },
-        { status: 400 }
-      );
-    }
-
-    // Fetch paper questions with full question data
-    console.log('📋 Fetching paper questions with details...');
+        custom_marks: customMark
+      });
+    });
+    
+    // Process Short questions in reordered sequence WITH CUSTOM MARKS
+    short.forEach((question: any) => {
+      const customMark = customMarksMap.get(question.id) || question.marks || shortMarks;
+      finalQuestions.push({
+        order_number: orderNumber++,
+        question_type: 'short',
+        question_id: question.id,
+        questions: {
+          ...question,
+          marks: customMark
+        },
+        custom_marks: customMark
+      });
+    });
+    
+    // Process Long questions in reordered sequence WITH CUSTOM MARKS
+    long.forEach((question: any) => {
+      const customMark = customMarksMap.get(question.id) || question.marks || longMarks;
+      finalQuestions.push({
+        order_number: orderNumber++,
+        question_type: 'long',
+        question_id: question.id,
+        questions: {
+          ...question,
+          marks: customMark
+        },
+        custom_marks: customMark
+      });
+    });
+    
+    console.log(`✅ Using ${finalQuestions.length} reordered questions from frontend with custom marks`);
+  } else {
+    // Fallback to database order (existing code)
     const { data: paperQuestions, error: pqError } = await supabaseAdmin
       .from('paper_questions')
       .select(`
@@ -716,116 +772,120 @@ function formatPaperDate(dateString: string | undefined): string {
       throw pqError;
     }
 
-    console.log(`✅ Found ${paperQuestions?.length || 0} paper questions`);
-
-    if (!paperQuestions || paperQuestions.length === 0) {
-      // Delete the paper if no questions were found
-      await supabaseAdmin
-        .from('papers')
-        .delete()
-        .eq('id', paper.id);
-      
-      return NextResponse.json(
-        { error: 'No questions found for the generated paper' },
-        { status: 404 }
-      );
-    }
-
-    // Generate HTML content for PDF
-    const isUrdu = language === 'urdu';
-    const isBilingual = language === 'bilingual';
-    const isEnglish = language === 'english';
-    const separateMCQ = mcqPlacement === 'separate';
-    
-    // Handle title
-    const englishTitle = `${paper.title}`;
-    const urduTitle = paper.title;
-
-    // Load fonts
-    const jameelNooriBase64 = loadFontAsBase64('JameelNooriNastaleeqKasheeda.ttf');
-    const notoNastaliqBase64 = loadFontAsBase64('NotoNastaliqUrdu-Regular.ttf');
-    const algerianBase64 = loadFontAsBase64('Algerian Regular.ttf');
-    let paperClass = '';
-    let subject = '';
-    let subject_ur = '';
-    
-    try {
-      // Fetch subject details
-      const { data: subjectData, error: subjectError } = await supabaseAdmin
-        .from('subjects')
-        .select('name')
-        .eq('id', subjectId)
-        .single();
-
-      if (!subjectError && subjectData) {
-        subject = subjectData.name;
-        const cachedTranslation = translationCache.get(subject);
-        if (cachedTranslation) {
-          subject_ur = cachedTranslation;
-        } else {
-          const translatedSubject = await translate(subject, { to: 'ur' });
-          subject_ur = translatedSubject.text;
-          translationCache.set(subject, subject_ur);
-        }
-      } else {
-        console.warn('Using fallback subject data due to error:', subjectError);
-      }
-
-      // Fetch class details
-      const { data: classData, error: classError } = await supabaseAdmin
-        .from('classes')
-        .select('name')
-        .eq('id', classId)
-        .single();
-
-      if (!classError && classData) {
-        paperClass = classData.name;
-      } else {
-        console.warn('Using fallback class data due to error:', classError);
-      }
-    } catch (error) {
-      console.error('Error fetching subject/class details:', error);
-      // Continue with fallback values
-    }
-
-    /** CONVERT PAPER MINUTES INTO HOURS */
-    function convertMinutesToTimeFormat(minutes: number): string {
-      if (minutes <= 0) return '0:00';
-      
-      const hours = Math.floor(minutes / 60);
-      const remainingMinutes = minutes % 60;
-      
-      // Format with leading zero for minutes
-      const formattedMinutes = remainingMinutes.toString().padStart(2, '0');
-      
-      return `${hours}:${formattedMinutes}`;
-    }
-
-    const timeToDisplay = separateMCQ ? mcqTimeMinutes : timeMinutes;
-    const subjectiveTimeToDisplay = separateMCQ ? subjectiveTimeMinutes : timeMinutes;
-function loadImageAsBase64(imageFileName: string): string {
-  try {
-    const imagePath = path.join(process.cwd(), 'public', imageFileName);
-    if (fs.existsSync(imagePath)) {
-      const imageBuffer = fs.readFileSync(imagePath);
-      const base64Image = imageBuffer.toString('base64');
-      const extension = path.extname(imageFileName).toLowerCase();
-      const mimeType = extension === '.jpg' || extension === '.jpeg' 
-        ? 'jpeg' 
-        : extension.replace('.', '');
-      return `data:image/${mimeType};base64,${base64Image}`;
-    }
-    return '';
-  } catch (error) {
-    console.error('Error loading image:', error);
-    return '';
+    finalQuestions = paperQuestions || [];
+    console.log(`✅ Using ${finalQuestions.length} questions from database order`);
   }
-}
 
-// In your POST function, load the image
-const examlyImageBase64 = loadImageAsBase64('examly.jpg');
-    // Build HTML content
-    let htmlContent = `
+  console.log(`📊 Final question order for PDF generation:`);
+  finalQuestions.forEach((pq: any, index: number) => {
+    console.log(`   ${index + 1}. Type: ${pq.question_type}, Order: ${pq.order_number}, ID: ${pq.question_id}, Marks: ${pq.custom_marks}`);
+  });
+
+  if (!finalQuestions || finalQuestions.length === 0) {
+    throw new Error('No questions found for the generated paper');
+  }
+
+  // Generate HTML content for PDF
+  const isUrdu = language === 'urdu';
+  const isBilingual = language === 'bilingual';
+  const isEnglish = language === 'english';
+  const separateMCQ = mcqPlacement === 'separate';
+  
+  // Handle title
+  const englishTitle = `${paper.title}`;
+  const urduTitle = paper.title;
+
+  // Load fonts
+  const jameelNooriBase64 = loadFontAsBase64('JameelNooriNastaleeqKasheeda.ttf');
+  const notoNastaliqBase64 = loadFontAsBase64('NotoNastaliqUrdu-Regular.ttf');
+  const algerianBase64 = loadFontAsBase64('Algerian Regular.ttf');
+  let paperClass = '';
+  let subject = '';
+  let subject_ur = '';
+  
+  try {
+    // Fetch subject details
+    const { data: subjectData, error: subjectError } = await supabaseAdmin
+      .from('subjects')
+      .select('name')
+      .eq('id', paper.subject_id)
+      .single();
+
+    if (!subjectError && subjectData) {
+      subject = subjectData.name;
+      const cachedTranslation = translationCache.get(subject);
+      if (cachedTranslation) {
+        subject_ur = cachedTranslation;
+      } else {
+        const translatedSubject = await translate(subject, { to: 'ur' });
+        subject_ur = translatedSubject.text;
+        translationCache.set(subject, subject_ur);
+      }
+    } else {
+      console.warn('Using fallback subject data due to error:', subjectError);
+      subject = 'Subject';
+      subject_ur = 'مضمون';
+    }
+
+    // Fetch class details
+    const { data: classData, error: classError } = await supabaseAdmin
+      .from('classes')
+      .select('name')
+      .eq('id', paper.class_id)
+      .single();
+
+    if (!classError && classData) {
+      paperClass = classData.name.toString();
+    } else {
+      console.warn('Using fallback class data due to error:', classError);
+      paperClass = 'Class';
+    }
+  } catch (error) {
+    console.error('Error fetching subject/class details:', error);
+    // Continue with fallback values
+    subject = 'Subject';
+    subject_ur = 'مضمون';
+    paperClass = 'Class';
+  }
+
+  /** CONVERT PAPER MINUTES INTO HOURS */
+  function convertMinutesToTimeFormat(minutes: number): string {
+    if (minutes <= 0) return '0:00';
+    
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    
+    // Format with leading zero for minutes
+    const formattedMinutes = remainingMinutes.toString().padStart(2, '0');
+    
+    return `${hours}:${formattedMinutes}`;
+  }
+
+  const timeToDisplay = separateMCQ ? requestData.mcqTimeMinutes : paper.time_minutes;
+  const subjectiveTimeToDisplay = separateMCQ ? requestData.subjectiveTimeMinutes : paper.time_minutes;
+
+  // Load the image
+  const examlyImageBase64 = loadImageAsBase64('examly.jpg');
+
+  // Get questions by type from the final ordered list
+  const mcqQuestions = finalQuestions.filter((pq: any) => 
+    pq.question_type === 'mcq' && pq.questions
+  );
+
+  const subjectiveQuestions = finalQuestions.filter((pq: any) => 
+    pq.question_type !== 'mcq' && pq.questions
+  );
+
+  const shortQuestions = subjectiveQuestions.filter((pq: any) => 
+    pq.question_type === 'short'
+  );
+
+  const longQuestions = subjectiveQuestions.filter((pq: any) => 
+    pq.question_type === 'long'
+  );
+
+  // Build HTML content
+  let htmlContent = `
 <!DOCTYPE html>
 <html lang="${isUrdu ? 'ur' : 'en'}">
 <head>
@@ -856,8 +916,8 @@ const examlyImageBase64 = loadImageAsBase64('examly.jpg');
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Arial, sans-serif; padding: 0px; }
     .container { max-width: 900px; margin: 0 auto; background: white; padding: 0;  }
-    .header {text-align:center; font-size: 14px;  }
-    .header h1 { font-size: 16px; }
+    .header {text-align:center; font-size: 13px;  }
+    .header h1 { font-size: 14px; }
     .header h2 { font-size: 12px; }
     .institute{font-family:algerian; }
     .urdu { font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif; direction: rtl; }
@@ -874,7 +934,7 @@ const examlyImageBase64 = loadImageAsBase64('examly.jpg');
    .metaUrdu, .metaEng {
   display: inline-block;
   vertical-align: middle;
-  line-height: 1.8;
+  line-height: 1.5;
   position: relative;
   font-size: 12px;
   
@@ -893,7 +953,7 @@ const examlyImageBase64 = loadImageAsBase64('examly.jpg');
 }
 
     .note {  padding: 0px; margin:0 0; font-size: 12px; line-height: 1.2; }
-    table { width: 100%; border-collapse: collapse; margin: 5px 0; font-size: 14px; ${isEnglish? ' direction:ltr' : ' direction:rtl'}}
+    table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 14px; ${isEnglish? ' direction:ltr' : ' direction:rtl'}}
     table, th, td { border: 1px solid #000; }
     td { padding: 3px; vertical-align: top; }
     hr{color:black}
@@ -903,12 +963,41 @@ const examlyImageBase64 = loadImageAsBase64('examly.jpg');
     align-items: center;
     margin: 0 0; 
     }
-    
+    ol li{ font-size:10px; }
     .student-info{ margin-top: 10px; margin-bottom:10px; display: flex; justify-content: space-between;  flex-direction: ${isEnglish ? 'row-reverse' : 'row'}; }
   
-    .options { margin-top: 3px; display: flex; justify-content: space-between; font-size: 11px; }
-    .footer { text-align: left; margin-top: 10px; font-size: 10px; }
+    .options { margin-top: 2px; display: flex; justify-content: space-between; font-size: 11px; }
+    .footer { 
+      text-align: left; 
+      margin-top: 10px; 
+      font-size: 10px; 
 
+      /* Prevent footer being pushed to a new page */
+      page-break-inside: avoid;
+      break-inside: avoid;
+      -webkit-column-break-inside: avoid;
+      -webkit-region-break-inside: avoid;
+    }
+
+    /* Utility class to keep any block together on a single page */
+    .no-break {
+      page-break-inside: avoid;
+      break-inside: avoid;
+      -webkit-column-break-inside: avoid;
+      -webkit-region-break-inside: avoid;
+    }
+
+    /* Marks styling */
+    .marks-display {
+      color: #2c5aa0;
+      font-weight: bold;
+      margin-left: 8px;
+      font-size: 12px;
+    }
+    .urdu .marks-display {
+      margin-left: 0;
+      margin-right: 8px;
+    }
   </style>
 </head>
 <body>
@@ -957,12 +1046,12 @@ const examlyImageBase64 = loadImageAsBase64('examly.jpg');
   <!-- Row 3 -->
   <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
     <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} منٹ</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} Minutes</span>` : ''}
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${convertMinutesToTimeFormat(timeToDisplay || paper.time_minutes)} منٹ</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || paper.time_minutes)} Minutes</span>` : ''}
     </td>
     <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${totalMarks}</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${totalMarks}</span>` : ''}
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : ''}
     </td>
    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
      ${isUrdu || isBilingual ? `<span class="metaUrdu">حصہ انشائیہ</span>` : ''}
@@ -972,429 +1061,863 @@ const examlyImageBase64 = loadImageAsBase64('examly.jpg');
 </table>
 <hr  style="color:black;"/> <br />`;
 
-    // Get MCQ questions
-    const mcqQuestions = paperQuestions.filter((pq: any) => 
-      pq.question_type === 'mcq' && pq.questions
-    );
+  // Add MCQ questions if they exist
+  if (mcqQuestions.length > 0) {
+    htmlContent += `<div class="note">`;
+    if (isUrdu || isBilingual) {
+      htmlContent += `<p class="urdu">نوٹ: ہر سوال کے چار ممکنہ جوابات A,B,C اور D دیئے گئے ہیں۔ درست جواب کے مطابق دائرہ پُر کریں۔ ایک سے زیادہ دائروں کو پُر کرنے کی صورت میں جواب غلط تصور ہوگا۔</p>`;
+    }
+    if (isEnglish || isBilingual) {
+      htmlContent += `<p class="eng">Note: Four possible answers A, B, C and D to each question are given. Fill the correct option's circle. More than one filled circle will be treated wrong.</p>`;
+    }
+    htmlContent += `</div><table>`;
 
-    // Add MCQ questions if they exist
-    if (mcqQuestions.length > 0) {
-      htmlContent += `<div class="note">`;
-      if (isUrdu || isBilingual) {
-        htmlContent += `<p class="urdu">نوٹ: ہر سوال کے چار ممکنہ جوابات A,B,C اور D دیئے گئے ہیں۔ درست جواب کے مطابق دائرہ پُر کریں۔ ایک سے زیادہ دائروں کو پُر کرنے کی صورت میں جواب غلط تصور ہوگا۔</p>`;
+    // Process MCQ questions in the final ordered sequence
+    mcqQuestions.forEach((pq: any, index: number) => {
+      const q = pq.questions;
+      const questionMarks = pq.custom_marks || mcqMarks;
+      
+      const { eng: englishQuestionRaw, ur: urduQuestionRaw } = extractEnglishAndUrdu(q.question_text, q.question_text_ur);
+      const englishQuestion = formatQuestionText(englishQuestionRaw || '');
+      const urduQuestion = formatQuestionText(urduQuestionRaw || '');
+      
+      let questionDisplayHtml = '<div class="question">';
+      if (isEnglish) {
+          questionDisplayHtml += `<span class="eng">${englishQuestion.trim()}</span>`;
+      } else if (isUrdu) {
+          questionDisplayHtml += `<span class="urdu">${urduQuestion.trim() || englishQuestion.trim()}</span>`;
+      } else { // bilingual
+          questionDisplayHtml += `<span class="urdu">${urduQuestion.trim()}</span><span class="eng">${englishQuestion.trim()}</span>`;
       }
-      if (isEnglish || isBilingual) {
-        htmlContent += `<p class="eng">Note: Four possible answers A, B, C and D to each question are given. Fill the correct option's circle. More than one filled circle will be treated wrong.</p>`;
-      }
-      htmlContent += `</div><table>`;
+      
+      // ADD MARKS DISPLAY FOR MCQ
+      //questionDisplayHtml += `<span class="marks-display">[${questionMarks} mark${questionMarks !== 1 ? 's' : ''}]</span>`;
+      
+      questionDisplayHtml += '</div>';
 
-      // Process MCQ questions
-      mcqQuestions.forEach((pq: any, index: number) => {
-        const q = pq.questions;
-        const englishQuestion = formatQuestionText(q.question_text.trim() || 'No question text available');
-        const hasUrduQuestion = hasActualUrduText(q.question_text_ur.trim());
-        const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur.trim()) : '';
-        
-        let questionDisplayHtml = '<div class="question">';
-        if (isEnglish) {
-            questionDisplayHtml += `<span class="eng">${englishQuestion.trim()}</span>`;
-        } else if (isUrdu) {
-            questionDisplayHtml += `<span class="urdu">${urduQuestion.trim() || englishQuestion.trim()}</span>`;
-        } else { // bilingual
-            questionDisplayHtml += `<span class="urdu">${urduQuestion.trim()}</span><span class="eng">${englishQuestion.trim()}</span>`;
+      const options = [
+        { 
+          letter: 'A', 
+          english: q.option_a || '', 
+          urdu: hasActualUrduText(q.option_a_ur) ? q.option_a_ur : '',
+          hasUrdu: hasActualUrduText(q.option_a_ur)
+        },
+        { 
+          letter: 'B', 
+          english: q.option_b || '', 
+          urdu: hasActualUrduText(q.option_b_ur) ? q.option_b_ur : '',
+          hasUrdu: hasActualUrduText(q.option_b_ur)
+        },
+        { 
+          letter: 'C', 
+          english: q.option_c || '', 
+          urdu: hasActualUrduText(q.option_c_ur) ? q.option_c_ur : '',
+          hasUrdu: hasActualUrduText(q.option_c_ur)
+        },
+        { 
+          letter: 'D', 
+          english: q.option_d || '', 
+          urdu: hasActualUrduText(q.option_d_ur) ? q.option_d_ur : '',
+          hasUrdu: hasActualUrduText(q.option_d_ur)
         }
-        questionDisplayHtml += '</div>';
+      ];
 
-        const options = [
-          { 
-            letter: 'A', 
-            english: q.option_a || '', 
-            urdu: hasActualUrduText(q.option_a_ur) ? q.option_a_ur : '',
-            hasUrdu: hasActualUrduText(q.option_a_ur)
-          },
-          { 
-            letter: 'B', 
-            english: q.option_b || '', 
-            urdu: hasActualUrduText(q.option_b_ur) ? q.option_b_ur : '',
-            hasUrdu: hasActualUrduText(q.option_b_ur)
-          },
-          { 
-            letter: 'C', 
-            english: q.option_c || '', 
-            urdu: hasActualUrduText(q.option_c_ur) ? q.option_c_ur : '',
-            hasUrdu: hasActualUrduText(q.option_c_ur)
-          },
-          { 
-            letter: 'D', 
-            english: q.option_d || '', 
-            urdu: hasActualUrduText(q.option_d_ur) ? q.option_d_ur : '',
-            hasUrdu: hasActualUrduText(q.option_d_ur)
+      let optionsHtml = '';
+      options.forEach(option => {
+        if (option.english || option.urdu) {
+          let optionDisplayHtml = `<span>(${option.letter}) `;
+          if (isEnglish) {
+              optionDisplayHtml += `<span class="eng">${option.english}</span>`;
+          } else if (isUrdu) {
+              optionDisplayHtml += `<span class="urdu">${option.urdu || option.english}</span>`;
+          } else { // bilingual
+              optionDisplayHtml += `<span><span class="urdu">${option.urdu}</span> <span class="eng">${option.english}</span></span>`;
           }
-        ];
-
-        let optionsHtml = '';
-        options.forEach(option => {
-          if (option.english || option.urdu) {
-            let optionDisplayHtml = `<span>(${option.letter}) `;
-            if (isEnglish) {
-                optionDisplayHtml += `<span class="eng">${option.english}</span>`;
-            } else if (isUrdu) {
-                optionDisplayHtml += `<span class="urdu">${option.urdu || option.english}</span>`;
-            } else { // bilingual
-                optionDisplayHtml += `<span><span class="urdu">${option.urdu}</span> <span class="eng">${option.english}</span></span>`;
-            }
-            optionDisplayHtml += '</span>';
-            optionsHtml += optionDisplayHtml;
-          }
-        });
-
-        htmlContent += `
-     <tr>
-        <td class="qnum">${pq.order_number}</td>
-        <td>
-          ${questionDisplayHtml}
-          <div class="options">${optionsHtml}</div>
-        </td>
-      </tr>
-    `;
+          optionDisplayHtml += '</span>';
+          optionsHtml += optionDisplayHtml;
+        }
       });
 
+      // Use the display index (1-based) for numbering - this respects the reordering
       htmlContent += `
-         </table>
-${separateMCQ ? `<div class="footer">
-      <p>117-023-I (Objective Type) - 14500 (5833) (New Course)</p>
-    </div>` : ``}
-    
-  </div>
-    ${separateMCQ ? `
-      <!-- Page break before subjective section -->
-      <div style="page-break-before: always;"></div>` : ''}
+   <tr>
+      <td class="qnum">${index + 1}</td>
+      <td>
+        ${questionDisplayHtml}
+        <div class="options">${optionsHtml}</div>
+      </td>
+    </tr>
   `;
-    }
-
-    // Get subjective questions
-    const subjectiveQuestions = paperQuestions.filter((pq: any) => 
-      pq.question_type !== 'mcq' && pq.questions
-    );
-
-    // Helper: Convert number to roman style (i, ii, iii …)
-    function toRoman(num: number): string {
-      const romans = ['i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii','xiii','xiv','xv','xvi','xvii','xviii'];
-      return romans[num - 1] || num.toString();
-    }
+    });
 
     htmlContent += `
-    ${separateMCQ ?`
-       <div class="header">
-     <h1 class="eng text-center">
-        ${examlyImageBase64 ? `<img src="${examlyImageBase64}" class="header-img"  height="40" width="100"/>` : ''} <br/>
-     <span class="institute">   ${englishTitle}</span>
-      </h1>
-     </div>
-      <!-- Student Info Table -->
- <table style="width:100%; border-collapse:collapse; border:none !important; font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Noto Sans',Arial,sans-serif;">
-  <!-- Row 1 -->
-  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Student Name:_________</span>` : ''}
-    </td>
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Roll No:_________</span>` : ''}
-    </td>
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">سیکشن:۔۔۔۔۔۔</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Section:_______</span>` : ''}
-    </td>
-  </tr>
+       </table>
+${separateMCQ ? `<div class="footer">
+    <p>117-023-I (Objective Type) - 14500 (5833) (New Course)</p>
+  </div>` : ``}
+  
+</div>
+  ${separateMCQ ? `
+    <!-- Page break before subjective section -->
+    <div style="page-break-before: always;"></div>` : ''}
+`;
+  }
 
-  <!-- Row 2 -->
-  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu"><strong>کلاس: ${paperClass}</strong></span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Class: ${paperClass}</span>` : ''}
-    </td>
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">مضمون: ${subject_ur}</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Subject: ${subject}</span>` : ''}
-    </td>
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+  // Determine attempt counts once (available to both short and long sections)
+  const shortToAttempt = Number(paper.short_to_attempt ?? requestData.shortToAttempt ?? requestData.shortCount ?? 0);
+  const longToAttempt = Number(paper.long_to_attempt ?? requestData.longToAttempt ?? requestData.longCount ?? 0);
+ 
+  // Helper: Convert number to roman style (i, ii, iii …)
+  function toRoman(num: number): string {
+    const romans = ['i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii','xiii','xiv','xv','xvi','xvii','xviii'];
+    return romans[num - 1] || num.toString();
+  }
+
+  htmlContent += `
+  ${separateMCQ ?`
+     <div class="header">
+   <h1 class="eng text-center">
+      ${examlyImageBase64 ? `<img src="${examlyImageBase64}" class="header-img"  height="40" width="100"/>` : ''} <br/>
+   <span class="institute">   ${englishTitle}</span>
+    </h1>
+   </div>
+    <!-- Student Info Table -->
+<table style="width:100%; border-collapse:collapse; border:none !important; font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Noto Sans',Arial,sans-serif;">
+<!-- Row 1 -->
+<tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Student Name:_________</span>` : ''}
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Roll No:_________</span>` : ''}
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">سیکشن:۔۔۔۔۔۔</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Section:_______</span>` : ''}
+  </td>
+</tr>
+
+<!-- Row 2 -->
+<tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu"><strong>کلاس: ${paperClass}</strong></span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Class: ${paperClass}</span>` : ''}
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">مضمون: ${subject_ur}</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Subject: ${subject}</span>` : ''}
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
       ${isUrdu || isBilingual ? `<span class="metaUrdu">تاریخ:${formatPaperDate(dateOfPaper)}</span>` : ''}
       ${isEnglish || isBilingual ? `<span class="metaEng">Date:${formatPaperDate(dateOfPaper)}</span>` : ''}
     </td>
-  </tr>
+</tr>
 
-  <!-- Row 3 -->
-  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} منٹ</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || timeMinutes)} Minutes</span>` : ''}
+<!-- Row 3 -->
+<tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${convertMinutesToTimeFormat(timeToDisplay || paper.time_minutes)} منٹ</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || paper.time_minutes)} Minutes</span>` : ''}
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+      ${isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : ''}
     </td>
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${totalMarks}</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${totalMarks}</span>` : ''}
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+     ${isUrdu || isBilingual ? `<span class="metaUrdu">حصہ معروضی/انشائیہ</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Subjective/Objective Part</span>` : ''}
     </td>
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-     ${isUrdu || isBilingual ? `<span class="metaUrdu">حصہ انشائیہ</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Subjective Part</span>` : ''}
-    </td>
-  </tr>
+</tr>
 </table>
 <hr  style="color:black;"/> <br /> `:``
-    }    
-    `;
-
-    // Add subjective questions
-    if (subjectiveQuestions.length > 0) {
-      htmlContent += `
-    <!-- Short Questions Section -->
-    <div class="header">
-     
-      (<span class="english">${(isEnglish || isBilingual)? 'Part - I':''}<span><span class="urdu"> ${(isUrdu || isBilingual)? 'حصہ اول':''}  </span>)
-    </div>
-  
+  }    
   `;
 
-      // Separate short and long questions
-      const shortQuestions = subjectiveQuestions.filter((pq: any) => pq.question_type === 'short');
+  // Add subjective questions
+  if (subjectiveQuestions.length > 0) {
+    htmlContent += `
+  <!-- Short Questions Section -->
+  <div class="header">
+   (<span class="english">${(isEnglish || isBilingual)? 'Part - I':''}<span><span class="urdu"> ${(isUrdu || isBilingual)? 'حصہ اول':''}  </span>)
+  </div>
 
-      // Add short questions
-      // Grouping: 6 questions per group
-      const questionsPerGroup = 6;
-      const totalGroups = Math.ceil(shortQuestions.length / questionsPerGroup);
+`;
 
-      for (let g = 0; g < totalGroups; g++) {
-        const groupQuestions = shortQuestions.slice(
-          g * questionsPerGroup,
-          (g + 1) * questionsPerGroup
-        );
+    const isBoardPaper = (paper.paper_type === 'model' || requestData.paperType === 'model');
 
-        // Q. numbering starts from 2
-        const questionNumber = g + 2;
+    if (shortQuestions.length > 0) {
+      if (isBoardPaper) {
+        // Board Paper: group short questions (e.g. 6 per group) and show per-group instruction with attempt count
+        const questionsPerGroup = 6;
+        const totalGroups = Math.ceil(shortQuestions.length / questionsPerGroup);
+
+        for (let g = 0; g < totalGroups; g++) {
+          const groupQuestions = shortQuestions.slice(
+            g * questionsPerGroup,
+            (g + 1) * questionsPerGroup
+          );
+
+          // Q. numbering starts from 2 for Part I in board layout, keep group index as displayed number
+          const questionNumber = g + 2;
 
           let instructionHtml = '<div style="display:flex; justify-content:space-between; margin-bottom:0px; font-weight:bold">';
           if (isEnglish || isBilingual) {
-            instructionHtml += `<div class="eng"><strong>${questionNumber}.</strong>Write short answers to any four(4) questions.<span></span></div>`;
+            instructionHtml += `<div class="eng"><strong>${questionNumber}.</strong> Write short answers to any ${shortToAttempt} question(s).</div>`;
           }
           if (isUrdu || isBilingual) {
-            instructionHtml += `<div class="urdu" style="direction:rtl;"><strong><span>${questionNumber}.</span>کوئی سے چار سوالات کے مختصر جوابات لکھئے  </strong></div>`;
+            instructionHtml += `<div class="urdu" style="direction:rtl;"><strong><span>${questionNumber}.</span> جوابات میں سے ${shortToAttempt} سوالات کے مختصر جوابات لکھیں۔ </strong></div>`;
           }
           instructionHtml += '</div>';
 
-        htmlContent += `
-      
-      
-      <div class="short-questions ${isUrdu?'urdu':''}">
-        ${instructionHtml}
+          htmlContent += `
+    
+    <div class="short-questions ${isUrdu ? 'urdu' : ''}">
+      ${instructionHtml}
+  `;
+
+          groupQuestions.forEach((pq: any, idx: number) => {
+            const q = pq.questions;
+            const questionMarks = pq.custom_marks || shortMarks;
+            
+            const { eng: englishQuestionRaw, ur: urduQuestionRaw } = extractEnglishAndUrdu(q.question_text, q.question_text_ur);
+            const englishQuestion = formatQuestionText(englishQuestionRaw || '');
+            const urduQuestion = formatQuestionText(urduQuestionRaw || '');
+
+            let questionItemHtml = '<div class="short-question-item" style="display:flex; justify-content:space-between; margin-bottom:0px;">';
+            if (isEnglish) {
+                questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion} <span class="marks-display">[${questionMarks} marks]</span></div>`;
+            } else if (isUrdu) {
+                questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion || englishQuestion} <span class="marks-display">[${questionMarks} نمبر]</span></div>`;
+            } else { // bilingual
+                questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion} <span class="marks-display">[${questionMarks} marks]</span></div>`;
+                if (hasActualUrduText(urduQuestion)) {
+                    questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion} <span class="marks-display">[${questionMarks} نمبر]</span></div>`;
+                }
+            }
+            questionItemHtml += '</div>';
+
+            htmlContent += `
+       ${questionItemHtml}
     `;
+          });
 
-        groupQuestions.forEach((pq: any, idx: number) => {
+          htmlContent += `
+     </div>
+  `;
+        }
+      } else {
+        // Custom Paper: single heading + flat list of all short questions
+        let instructionHtml = '<div style="display:flex; justify-content:space-between; margin-bottom:6px; font-weight:bold">';
+        if (isEnglish || isBilingual) {
+          instructionHtml += `<div class="eng"><strong>Part I.</strong> Write short answers. Attempt any ${shortToAttempt} question(s).</div>`;
+        }
+        if (isUrdu || isBilingual) {
+          instructionHtml += `<div class="urdu" style="direction:rtl;"><strong>حصہ اول:</strong> مختصر جوابات لکھیں۔ کوئی ${shortToAttempt} سوالات حل کریں۔</div>`;
+        }
+        instructionHtml += '</div>';
+
+        htmlContent += `<div class="short-questions ${isUrdu ? 'urdu' : ''}"> ${instructionHtml}`;
+
+        shortQuestions.forEach((pq: any, idx: number) => {
           const q = pq.questions;
-          const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
-          const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
-          const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+          const questionMarks = pq.custom_marks || shortMarks;
+          
+          const { eng: englishQuestionRaw, ur: urduQuestionRaw } = extractEnglishAndUrdu(q.question_text, q.question_text_ur);
+          const englishQuestion = formatQuestionText(englishQuestionRaw || '');
+          const urduQuestion = formatQuestionText(urduQuestionRaw || '');
 
-          let questionItemHtml = '<div class="short-question-item" style="display:flex; justify-content:space-between; margin-bottom:0px;">';
+          let questionItemHtml = '<div class="short-question-item" style="display:flex; justify-content:space-between; margin-bottom:6px;">';
           if (isEnglish) {
-              questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion}</div>`;
+              questionItemHtml += `<div class="eng">(${idx + 1}) ${englishQuestion} <span class="marks-display">[${questionMarks} marks]</span></div>`;
           } else if (isUrdu) {
-              questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion || englishQuestion}</div>`;
+              questionItemHtml += `<div class="urdu" style="direction:rtl;">(${idx + 1}) ${urduQuestion || englishQuestion} <span class="marks-display">[${questionMarks} نمبر]</span></div>`;
           } else { // bilingual
-              questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion}</div>`;
-              if (hasUrduQuestion) {
-                  questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion}</div>`;
+              questionItemHtml += `<div class="eng">(${idx + 1}) ${englishQuestion} <span class="marks-display">[${questionMarks} marks]</span></div>`;
+              if (hasActualUrduText(urduQuestion)) {
+                  questionItemHtml += `<div class="urdu" style="direction:rtl;">(${idx + 1}) ${urduQuestion} <span class="marks-display">[${questionMarks} نمبر]</span></div>`;
               }
           }
           questionItemHtml += '</div>';
 
           htmlContent += `
-         ${questionItemHtml}
-      `;
+          ${questionItemHtml}
+        `;
         });
 
-        htmlContent += `
-       </div>
-    `;
+        htmlContent += `</div>`;
       }
     }
+  }
 
-    const longQuestions = subjectiveQuestions.filter((pq: any) => pq.question_type === 'long');
+  // Add long questions
+  if (longQuestions.length > 0) {
+    htmlContent += `
+  <div class="header">
+      (<span class="english">${(isEnglish || isBilingual)? 'Part - II':''}<span> <span class="urdu"> ${(isUrdu || isBilingual)? 'حصہ دوم ':''}  </span>)
+  </div>
+  <div class="instructions" style="font-weight:bold">`;
 
-    // Add long questions
-    if (longQuestions.length > 0) {
-      htmlContent += `
-    <div class="header">
-        (<span class="english">${(isEnglish || isBilingual)? 'Part - II':''}<span> <span class="urdu"> ${(isUrdu || isBilingual)? 'حصہ دوم ':''}  </span>)
-    </div>
-    <div class="instructions" style="font-weight:bold">`;
-    if(isEnglish || isBilingual) {
-      htmlContent += `<div class="instruction-text eng">
-                        <span>Note:</span> Attempt any 2 questions.
-                      </div>`;
+    // use computed longToAttempt above (fallbacks already applied)
+    if (isEnglish || isBilingual) {
+      htmlContent += `<div class="instruction-text eng"><span>Note:</span> Attempt any ${longToAttempt} question(s).</div>`;
     }
-    if(isUrdu || isBilingual) {
-      htmlContent += `<div class="instruction-text urdu" style="direction: rtl;">
-                        <span>نوٹ:</span> کوئی دو سوالات حل کریں۔
-                      </div>`;
+    if (isUrdu || isBilingual) {
+      htmlContent += `<div class="instruction-text urdu" style="direction: rtl;"><span>نوٹ:</span> کوئی ${longToAttempt} سوالات حل کریں۔</div>`;
     }
     htmlContent += `</div>
-  `;
+`;
 
-      longQuestions.forEach((pq: any, idx: number) => {
-        const q = pq.questions;
-        const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
-        const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
-        const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
-
-        // Sub-questions
-        const subQuestions = pq.sub_questions || [];
-        let subQsHTML = '';
-
-        if (subQuestions.length > 0) {
-          subQsHTML += `
-        <div style="display: flex; justify-content: space-between; margin-top:6px;">
-          ${isEnglish || isBilingual ? `<div class="eng" style="width: 48%;"><ol type="a">${subQuestions.map((sq: any) => `<li>${formatQuestionText(sq.question_text || '')}</li>`).join('')}</ol></div>` : ''}
-          ${isUrdu || isBilingual ? `<div class="urdu" style="width: 48%; direction: rtl; text-align: right;"><ol type="a">${subQuestions.map((sq: any) => `<li>${formatQuestionText(sq.question_text_ur || '')}</li>`).join('')}</ol></div>` : ''}
-        </div>
-      `;
-        }
-
-        let longQuestionDisplayHtml = '<div class="long-question" style="margin-bottom:12px;"><div style="display:flex; justify-content:space-between; align-items:flex-start;">';
-        if (isEnglish) {
-            longQuestionDisplayHtml += `<div class="eng" style="width:100%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion}</div>`;
-        } else if (isUrdu) {
-            longQuestionDisplayHtml += `<div class="urdu" style="width:100%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion || englishQuestion}</div>`;
-        } else { // bilingual
-            longQuestionDisplayHtml += `<div class="eng" style="width:48%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion}</div>`;
-            if (hasUrduQuestion) {
-                longQuestionDisplayHtml += `<div class="urdu" style="width:48%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion}</div>`;
-            }
-        }
-        longQuestionDisplayHtml += `</div>${subQsHTML}</div>`;
-
-        htmlContent += `
-      ${longQuestionDisplayHtml}
-    `;
-      });
-    }
-
-    htmlContent += `
-    </div>
-  `;
-
-    // Footer
-    htmlContent += `
-    <div style="margin-top: 30px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">
-      <p class="english">Generated on ${new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time</p>
+    longQuestions.forEach((pq: any, idx: number) => {
+      const q = pq.questions;
+      const questionMarks = pq.custom_marks || longMarks;
       
-    </div>
+      const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+      const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+      const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+
+      // Sub-questions (not implemented in current schema, but keeping for future)
+      const subQuestions: any[] = [];
+      let subQsHTML = '';
+
+      if (subQuestions.length > 0) {
+        subQsHTML += `
+      <div style="display: flex; justify-content: space-between; margin-top:5px;">
+        ${isEnglish || isBilingual ? `<div class="eng" style="width: 48%;"><ol type="a">${subQuestions.map((sq: any) => `<li>${formatQuestionText(sq.question_text || '')}</li>`).join('')}</ol></div>` : ''}
+        ${isUrdu || isBilingual ? `<div class="urdu" style="width: 48%; direction: rtl; text-align: right;"><ol type="a">${subQuestions.map((sq: any) => `<li>${formatQuestionText(sq.question_text_ur || '')}</li>`).join('')}</ol></div>` : ''}
+      </div>
+    `;
+      }
+
+      let longQuestionDisplayHtml = '<div class="long-question" style="margin-bottom:12px;"><div style="display:flex; justify-content:space-between; align-items:flex-start;">';
+      if (isEnglish) {
+          longQuestionDisplayHtml += `<div class="eng" style="width:100%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion} <span class="marks-display">[${questionMarks} marks]</span></div>`;
+      } else if (isUrdu) {
+          longQuestionDisplayHtml += `<div class="urdu" style="width:100%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion} <span class="marks-display">[${questionMarks} نمبر]</span></div>`;
+      } else { // bilingual
+          longQuestionDisplayHtml += `<div class="eng" style="width:48%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion} <span class="marks-display">[${questionMarks} marks]</span></div>`;
+          if (hasUrduQuestion) {
+              longQuestionDisplayHtml += `<div class="urdu" style="width:48%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion} <span class="marks-display">[${questionMarks} نمبر]</span></div>`;
+          }
+      }
+      longQuestionDisplayHtml += `</div>${subQsHTML}</div>`;
+
+      htmlContent += `
+    ${longQuestionDisplayHtml}
+  `;
+    });
+  }
+
+  htmlContent += `
   </div>
- ${isTrialUser ? `<div class="watermark">
+`;
+
+  // Footer
+  htmlContent += `
+  <div class="footer no-break" style="margin-top: 30px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">
+    <p class="english">Generated on ${new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time</p>
+  </div>
+</div>
+`;
+
+  // Check if user is on trial for watermark
+  const isTrialUser = await checkUserSubscription(userId);
+  if (isTrialUser) {
+    htmlContent += `
+<div class="watermark">
   <div class="watermark-text">
     www.examly.pk  
     Generate perfect papers&Prepare exam with Examly  
     
   </div>
 </div>
-` : ''}
-  </body>
+`;
+  }
 
+  htmlContent += `
+</body>
 </html>
 `;
 
-    // Simplify and optimize HTML content
-    htmlContent = optimizeHtmlForPuppeteer(simplifyHtmlContent(htmlContent));
+  // Simplify and optimize HTML content
+  return optimizeHtmlForPuppeteer(simplifyHtmlContent(htmlContent));
+}
 
-    // Generate PDF
-    let browser = null;
-    let page: Page | null = null;
+// Function to generate PDF from HTML
+async function generatePDFFromHTML(htmlContent: string) {
+  let browser = null;
+  let page: Page | null = null;
+  
+  try {
+    browser = await getPuppeteerBrowser();
+    page = await browser.newPage();
+    
+    // Set reasonable timeouts
+    page.setDefaultTimeout(120000);
+    page.setDefaultNavigationTimeout(120000);
+    
+    // Disable unnecessary resources for faster loading
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      if (req.resourceType() === 'image' || req.resourceType() === 'font') {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
+
+    console.log('🔄 Setting HTML content...');
+    
+    // Use setContent with simpler wait conditions
+    await page.setContent(htmlContent, {
+      waitUntil: 'domcontentloaded',
+      timeout: 120000
+    });
+
+    console.log('✅ HTML content set, waiting for fonts...');
+    
+    // Wait for fonts to load with timeout
+    await Promise.race([
+      page.evaluate(() => document.fonts.ready),
+      new Promise(resolve => setTimeout(resolve, 10000))
+    ]);
+
+    // --- NEW: Auto-scale font if content exceeds a single A4 printable page ---
     try {
-      // Using singleton browser instance for performance
-      browser = await getPuppeteerBrowser();
-      page = await browser.newPage();
+      // A4 size in inches: 8.27 x 11.69. Use 96 DPI -> pixels
+      const pxPerInch = 96;
+      const a4HeightPx = 11.69 * pxPerInch; // ~1122 px
+      // margins used in page.pdf call (top + bottom)
+      const marginTopBottom = 40; // matches margin: { top: '20px', bottom: '20px' } => 40px total
+      const printableHeight = Math.max(400, Math.floor(a4HeightPx - marginTopBottom)); // safe floor
       
-      // Set more reasonable timeouts
-      page.setDefaultTimeout(120000); // 2 minutes
-      page.setDefaultNavigationTimeout(120000); // 2 minutes
+      // Default root font-size (px)
+      let fontSizePx = 16;
+      const minFontSizePx = 9;
+      let iterations = 0;
+      const maxIterations = 20;
       
-      // Disable unnecessary resources for faster loading
-      await page.setRequestInterception(true);
-      page.on('request', (req) => {
-        if (req.resourceType() === 'image' || req.resourceType() === 'font') {
-          req.abort();
-        } else {
-          req.continue();
-        }
-      });
+      // Inject initial root font-size (to be able to scale)
+      await page.evaluate((fs) => {
+        (document.documentElement.style as any).fontSize = `${fs}px`;
+      }, fontSizePx);
+      
+      // Measure and reduce until fits in one page or reach minimum font size
+      let contentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+      console.log(`📏 initial contentHeight=${contentHeight}px, printableHeight=${printableHeight}px`);
+      
+      while (contentHeight > printableHeight && fontSizePx > minFontSizePx && iterations < maxIterations) {
+        iterations++;
+        // Reduce font-size by 10% each iteration for faster convergence
+        fontSizePx = Math.max(minFontSizePx, Math.floor(fontSizePx * 0.9));
+        await page.evaluate((fs) => {
+          (document.documentElement.style as any).fontSize = `${fs}px`;
+        }, fontSizePx);
+        // allow reflow
+        await page.waitForTimeout(120);
+        contentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+        console.log(`🔽 iteration ${iterations} -> fontSize=${fontSizePx}px, contentHeight=${contentHeight}px`);
+      }
+      
+      if (contentHeight > printableHeight) {
+        console.warn('⚠️ Content still exceeds one printable page after scaling. Proceeding with current scale.');
+      } else {
+        console.log(`✅ Content fits single A4 page with font-size ${fontSizePx}px`);
+      }
+    } catch (scaleErr) {
+      console.warn('Scaling check failed, continuing without scaling:', scaleErr);
+    }
+    // --- END NEW ---
 
-      console.log('🔄 Setting HTML content...');
-      
-      // Use setContent with simpler wait conditions
-      await page.setContent(htmlContent, {
-        waitUntil: 'domcontentloaded', // Faster than 'networkidle0'
-        timeout: 120000
-      });
+    console.log('📄 Generating PDF...');
+    
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
+      preferCSSPageSize: true,
+      timeout: 120000
+    });
 
-      console.log('✅ HTML content set, waiting for fonts...');
-      
-      // Wait for fonts to load with timeout
-      await Promise.race([
-        page.evaluate(() => document.fonts.ready),
-        new Promise(resolve => setTimeout(resolve, 10000)) // 10 second timeout for fonts
-      ]);
+    await page.close();
+    
+    console.log('✅ PDF generated successfully');
+    return pdfBuffer;
+    
+  } catch (error) {
+    if (page) await page.close();
+    console.error('❌ PDF generation error:', error);
+    throw error;
+  }
+}
 
-      console.log('📄 Generating PDF...');
-      
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
-        preferCSSPageSize: true,
-        timeout: 120000 // 2 minute timeout for PDF generation
-      });
+// FAST RPC helper - prefer server-side random sampling
+async function tryRpcRandomQuestions(
+  qtype: string,
+  subjectId: string,
+  classId: string,
+  chapterIds: string[] | undefined,
+  source_type: string | undefined,
+  difficulty: string | undefined,
+  count: number
+) {
+  try {
+    // Prepare RPC params
+    const params: any = {
+      p_subject: subjectId,
+      p_class_id: classId || null,
+      p_chapter_ids: (chapterIds && chapterIds.length > 0) ? chapterIds : null,
+      p_qtype: qtype,
+      p_difficulty: (difficulty && difficulty !== 'any') ? difficulty : null,
+      p_source_type: (source_type && source_type !== 'all') ? source_type : null,
+      p_limit: count
+    };
 
-      // Close the page, but not the browser
-      await page.close();
-      
-      console.log('✅ PDF generated successfully');
-      
-      // Increment papers_generated count for the user
-      await incrementPapersGenerated(supabaseAdmin, user.id);
-      
-      return new NextResponse(pdfBuffer, {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="${paper.title.replace(/\s+/g, '_')}.pdf"`,
-          'Content-Length': pdfBuffer.length.toString(),
-        },
-      });
+    // Try server side RPC first (fast random sampling)
+    const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('get_random_questions', params);
+    if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+      console.log(`✅ RPC returned ${rpcData.length} ${qtype} questions`);
+      return rpcData;
+    }
+    if (rpcError) {
+      console.warn('RPC get_random_questions returned error:', rpcError);
+    } else {
+      console.log('RPC returned no rows, falling back to DB query');
+    }
 
-    } catch (error) {
-      console.error('❌ Puppeteer error:', error);
-      if (page) await page.close();
-      
-      // Return paper data even if PDF generation fails
+    // Fallback: query DB directly with same filters (non-random ordering here; caller may shuffle)
+    const dbSourceType = source_type ? mapSourceType(source_type) : undefined;
+    const classSubjectId = await getClassSubjectId(classId, subjectId);
+
+    let query = supabaseAdmin
+      .from('questions')
+      .select('id, question_text, question_text_ur, option_a, option_b, option_c, option_d, option_a_ur, option_b_ur, option_c_ur, option_d_ur, correct_option, difficulty, chapter_id, source_type, class_subject_id, question_type')
+      .eq('question_type', qtype)
+      .eq('subject_id', subjectId);
+
+    if (chapterIds && chapterIds.length > 0) {
+      query = query.in('chapter_id', chapterIds);
+    } else if (classSubjectId) {
+      query = query.eq('class_subject_id', classSubjectId);
+    } else if (classId) {
+      // try to restrict to chapters belonging to class
+      const { data: relevantChapters, error: chaptersError } = await supabaseAdmin
+        .from('chapters')
+        .select('id')
+        .eq('subject_id', subjectId)
+        .eq('class_id', classId);
+      if (!chaptersError && relevantChapters && relevantChapters.length > 0) {
+        const relevantChapterIds = relevantChapters.map((c: any) => c.id);
+        query = query.in('chapter_id', relevantChapterIds);
+      }
+    }
+
+    if (dbSourceType && dbSourceType !== 'all') {
+      query = query.eq('source_type', dbSourceType);
+    }
+    if (difficulty && difficulty !== 'any') {
+      query = query.eq('difficulty', difficulty);
+    }
+
+    query = query.limit(count);
+
+    const { data: rows, error: dbError } = await query;
+    if (dbError) {
+      console.warn('Fallback DB query error in tryRpcRandomQuestions:', dbError);
+      return null;
+    }
+    if (!rows || rows.length === 0) {
+      console.log('Fallback DB query returned no rows');
+      return null;
+    }
+
+    console.log(`✅ Fallback DB returned ${rows.length} ${qtype} questions`);
+    return rows;
+  } catch (err) {
+    console.warn('tryRpcRandomQuestions failed:', err);
+    return null;
+  }
+}
+
+// Main POST function
+export async function POST(request: Request) {
+  console.log('📄 POST request received to generate paper');
+  
+  const token = request.headers.get('Authorization')?.split(' ')[1];
+  if (!token) {
+    return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
+  }
+
+  // Verify user
+  const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+  if (userError || !user) {
+    console.error('Authentication error:', userError);
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Check if user is on trial
+  const isTrialUser = await checkUserSubscription(user.id);
+  console.log(`👤 User ${user.id} is ${isTrialUser ? 'on trial' : 'paid'}`);
+
+  let paper: any;
+
+  try {
+    const requestData: PaperGenerationRequest = await request.json();
+    console.log('📋 Request data received:', {
+      title: requestData.title,
+      subjectId: requestData.subjectId,
+      classId: requestData.classId,
+      chapterOption: requestData.chapterOption,
+      selectionMethod: requestData.selectionMethod,
+      randomSeed: requestData.randomSeed,
+      hasReorderedQuestions: !!requestData.reorderedQuestions,
+      hasCustomMarksData: !!requestData.customMarksData
+    });
+
+    const { 
+      title,
+      subjectId,
+      classId
+    } = requestData;
+
+    // Validation
+    if (!title || !subjectId || !classId) {
       return NextResponse.json(
-        { 
-          success: true, 
-          paperId: paper.id, 
-          message: 'Paper created but PDF generation failed',
-          questionsCount: paperQuestions.length,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        },
-        { status: 200 }
+        { error: 'Title, subject ID, and class ID are required' },
+        { status: 400 }
       );
     }
 
-  } catch (error) {
-    console.error('❌ Paper generation error:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to generate paper', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
+    // Create paper record
+    paper = await createPaperRecord(requestData, user.id);
+    
+    // Process question types
+    const questionInserts = [];
+    const { 
+      mcqCount = 0, 
+      shortCount = 0, 
+      longCount = 0,
+      mcqDifficulty = 'any',
+      shortDifficulty = 'any', 
+      longDifficulty = 'any',
+      source_type = 'all',
+      chapterOption = 'full_book',
+      selectedChapters = [],
+      selectionMethod = 'manual',
+      selectedQuestions,
+      reorderedQuestions,
+      randomSeed = Date.now(),
+      shuffleQuestions = true
+    } = requestData;
+
+    // Determine chapters to include
+    let chapterIds: string[] = [];
+    if (chapterOption === 'full_book') {
+      const { data: chapters } = await supabaseAdmin
+        .from('chapters')
+        .select('id')
+        .eq('subject_id', subjectId)
+        .eq('class_id', classId);
+      chapterIds = chapters?.map(c => c.id) || [];
+      console.log(`📚 Full book chapters found: ${chapterIds.length}`);
+    } else if ((chapterOption === 'custom' || chapterOption === 'single_chapter') && selectedChapters && selectedChapters.length > 0) {
+      // Handle both custom (multi) and single_chapter (single id in array)
+      chapterIds = selectedChapters;
+      console.log(`🎯 Chapters selected (${chapterOption}): ${chapterIds.length}`);
+    }
+
+    console.log(`🎯 Final chapter IDs to use: ${chapterIds.length}`);
+
+    // FIXED: Manual selection with proper question verification AND reordering
+    if (selectionMethod === 'manual' && selectedQuestions) {
+      console.log('🔧 Using manual question selection');
+
+      // NEW: Check if we have reordered questions from the frontend
+      if (reorderedQuestions) {
+        console.log('🔄 Using reordered questions from preview');
+        
+        let orderNumber = 1;
+        
+        // Process questions in the exact order from preview
+        const questionTypes = ['mcq', 'short', 'long'] as QuestionType[];
+        
+        for (const qType of questionTypes) {
+          const questions = reorderedQuestions[qType] || [];
+          if (questions.length > 0) {
+            console.log(`🔍 Processing ${questions.length} reordered ${qType} questions`);
+            
+            for (const question of questions) {
+              questionInserts.push({
+                paper_id: paper.id,
+                question_id: question.id,
+                order_number: orderNumber++,
+                question_type: qType
+              });
+            }
+            
+            console.log(`✅ Added ${questions.length} reordered ${qType} questions`);
+          }
+        }
+      } else {
+        // Fallback to original manual selection logic
+        console.log('📝 Using original manual selection (no reordering data)');
+        
+        const questionTypes = [
+          { type: 'mcq' as const, questions: selectedQuestions.mcq || [] },
+          { type: 'short' as const, questions: selectedQuestions.short || [] },
+          { type: 'long' as const, questions: selectedQuestions.long || [] }
+        ];
+
+        let orderNumber = 1;
+        
+        for (const qType of questionTypes) {
+          const qList = Array.isArray(qType.questions) ? qType.questions : [];
+          
+          if (qList.length > 0) {
+            console.log(`🔍 Verifying ${qList.length} manually selected ${qType.type} questions`);
+            
+            // Verify these questions exist and belong to the correct subject/class
+           
+            const { data: existingQuestions, error: verifyError } = await supabaseAdmin
+              .from('questions')
+              .select('id, subject_id, chapter_id')
+              .in('id', qList)
+              .eq('subject_id', subjectId);
+
+            if (verifyError) {
+              console.error('Error verifying questions:', verifyError);
+              continue;
+            }
+
+            if (!existingQuestions || existingQuestions.length === 0) {
+              console.warn(`⚠️ No valid ${qType.type} questions found for manual selection`);
+              continue;
+            }
+
+            console.log(`✅ Found ${existingQuestions.length} valid ${qType.type} questions`);
+
+            // Insert the valid questions in the order they were selected
+            for (const questionId of qList) {
+              const questionExists = existingQuestions.find(q => q.id === questionId);
+              if (questionExists) {
+                questionInserts.push({
+                  paper_id: paper.id,
+                  question_id: questionId,
+                  order_number: orderNumber++,
+                  question_type: qType.type
+                });
+              }
+            }
+
+            console.log(`✅ Added ${existingQuestions.length} manually selected ${qType.type} questions`);
+          }
+        }
+      }
+    } else {
+      // Auto selection logic
+      console.log('🤖 Using auto question selection');
+      
+      const questionTypes = [
+        { type: 'mcq' as const, count: mcqCount, difficulty: mcqDifficulty },
+        { type: 'short' as const, count: shortCount, difficulty: shortDifficulty },
+        { type: 'long' as const, count: longCount, difficulty: longDifficulty }
+      ];
+
+      let orderNumber = 1;
+
+      for (const qType of questionTypes) {
+        if (qType.count > 0) {
+          console.log(`🔍 Finding ${qType.count} ${qType.type} questions...`);
+          
+          const questions = await findQuestionsWithFallback(
+            qType.type,
+            subjectId,
+            classId,
+            chapterIds,
+            source_type,
+            qType.difficulty,
+            qType.count,
+            randomSeed
+          );
+
+          if (questions && questions.length > 0) {
+            for (const question of questions) {
+              questionInserts.push({
+                paper_id: paper.id,
+                question_id: question.id,
+                order_number: orderNumber++,
+                question_type: qType.type
+              });
+            }
+            console.log(`✅ Added ${questions.length} ${qType.type} questions`);
+          } else {
+            console.warn(`⚠️ No ${qType.type} questions found`);
+          }
+        }
+      }
+    }
+
+    // Insert paper questions
+    if (questionInserts.length > 0) {
+      console.log(`📝 Inserting ${questionInserts.length} questions into paper_questions`);
+      
+      const { error: insertError } = await supabaseAdmin
+        .from('paper_questions')
+        .insert(questionInserts);
+
+      if (insertError) {
+        console.error('Error inserting paper questions:', insertError);
+        await supabaseAdmin.from('papers').delete().eq('id', paper.id);
+        throw insertError;
+      }
+    } else {
+      await supabaseAdmin.from('papers').delete().eq('id', paper.id);
+     
+      return NextResponse.json(
+        { 
+          error: 'No questions found matching your criteria. Please try different filters.'
+        },
+        { status: 400 }
+      );
+    }
+
+    // Generate PDF
+    const htmlContent = await generatePaperHTML(paper, user.id, requestData);
+
+    // Create PDF buffer from HTML
+    const pdfBuffer = await generatePDFFromHTML(htmlContent);
+
+    // Increment user's papers_generated counter (best-effort)
+    try {
+      await incrementPapersGenerated(user.id);
+    } catch (incErr) {
+      console.warn('Failed to increment papers generated count:', incErr);
+    }
+
+    // Return PDF as response
+    return new NextResponse(pdfBuffer, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Length': String(pdfBuffer.length),
+        'Content-Disposition': `attachment; filename="${(paper.title || 'paper').replace(/[^a-z0-9_\-\.]/gi, '_')}.pdf"`,
       },
+    });
+  } catch (error) {
+    console.error('❌ Error generating paper:', error);
+
+    // Clean up created paper if it exists (best-effort)
+    try {
+      if (typeof paper !== 'undefined' && paper?.id) {
+        await supabaseAdmin.from('papers').delete().eq('id', paper.id);
+      }
+    } catch (cleanupErr) {
+      console.warn('Failed to cleanup paper record after error:', cleanupErr);
+    }
+
+    return NextResponse.json(
+      { error: 'Failed to generate paper. Please try again later.' },
       { status: 500 }
     );
   }

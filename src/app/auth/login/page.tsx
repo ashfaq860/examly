@@ -140,9 +140,12 @@ export default function LoginPage() {
         <button className="btn btn-primary w-100" disabled={loading}>
           {loading ? 'Signing in…' : 'Sign In'}
         </button>
-
+ <div className="mt-3 d-flex justify-content-between small">
+          <Link href="/auth/forgot-password">Forgot password?</Link>
+          <Link href="/auth/signup">Create account</Link>
+        </div>
         {/* 🌟 NEW: Google Login Button */}
-        <div className="text-center my-3 text-muted">or</div>
+        <div className="text-center my-3 text-muted">OR</div>
         <button
           type="button"
           className="btn btn-outline-danger w-100"
@@ -159,10 +162,7 @@ export default function LoginPage() {
           Continue with Google
         </button>
 
-        <div className="mt-3 d-flex justify-content-between small">
-          <Link href="/auth/forgot-password">Forgot password?</Link>
-          <Link href="/auth/signup">Create account</Link>
-        </div>
+       
       </form>
     </AuthLayout>
   );

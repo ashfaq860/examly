@@ -10,6 +10,7 @@ import * as XLSX from 'xlsx';
 import QuestionForm from '@/components/QuestionForm';
 import { useRouter } from "next/navigation";
 import { isUserAdmin } from "@/lib/auth-utils";
+
 interface Question {
   id: string;
   question_text: string;
@@ -48,10 +49,9 @@ interface Question {
 }
 
 interface Subject { id: string; name: string; grade?: string | null; }
-interface Chapter { id: string; name: string; subject_id: string; }
+interface Chapter { id: string; name: string; subject_id: string; class_subject_id?: string; }
 interface Topic { id: string; name: string; chapter_id: string; }
 interface Class { id: string; name: string; description?: string | null; }
-//interface ClassSubject { id: string; class_id: string; subject_id: string; subject?: Subject; }
 interface ClassSubject { 
   id: string; 
   class_id: string; 
@@ -63,13 +63,14 @@ interface ClassSubject {
     description?: string;
   };
 } 
+
 interface Filters {
+  class?: string;
   subject?: string;
   chapter?: string;
   topic?: string;
   difficulty?: string;
   question_type?: string;
-  class?: string;
   source_type?: string;
 }
 
@@ -88,22 +89,21 @@ export default function QuestionBank() {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'mcq' | 'short' | 'long'>('all');
-const router= useRouter();
+  const router = useRouter();
 
-    // ✅ Check admin
-    useEffect(() => {
-      async function init() {
-        setLoading(true);
-        const admin = await isUserAdmin();
-        if (!admin) {
-          router.replace("/unauthorized");
-          return;
-        }
-        setLoading(false);
+  // ✅ Check admin
+  useEffect(() => {
+    async function init() {
+      setLoading(true);
+      const admin = await isUserAdmin();
+      if (!admin) {
+        router.replace("/unauthorized");
+        return;
       }
-      init();
-    }, [router]);
-
+      setLoading(false);
+    }
+    init();
+  }, [router]);
 
   // Fetch Functions
   const fetchClasses = async () => {
@@ -151,160 +151,185 @@ const router= useRouter();
   };
 
   const fetchClassSubjects = async () => {
-  try {
-    console.log('Fetching class subjects...');
-    const { data, error } = await supabase
-      .from('class_subjects')
-      .select(`
-        id, 
-        class_id, 
-        subject_id, 
-        subject:subjects(id, name),
-        class:classes(id, name, description)
-      `)
-      .order('class_id');
-    
-    if (error) {
-      console.error('Error fetching class subjects:', error);
-      throw error;
-    }
-    
-    console.log('Class subjects fetched:', data);
-    setClassSubjects(data as ClassSubject[]);
-    
-  } catch (error) {
-    console.error('Error in fetchClassSubjects:', error);
-    toast.error('Failed to load subjects for classes');
-  }
-};
- 
-const fetchQuestions = async () => {
-  setLoading(true);
-  try {
-    console.log('Fetching questions with filters:', filters);
-    
-    // Build the base query with explicit relationship specification
-    let query = supabase
-      .from('questions')
-      .select(`
-        id,
-        question_text,
-        question_text_ur,
-        option_a,
-        option_b,
-        option_c,
-        option_d,
-        option_a_ur,
-        option_b_ur,
-        option_c_ur,
-        option_d_ur,
-        correct_option,
-        difficulty,
-        question_type,
-        source_type,
-        source_year,
-        answer_text,
-        answer_text_ur,
-        created_at,
-        subject_id,
-        chapter_id,
-        topic_id,
-        class_subject_id,
-        subject:subjects(name),
-        chapter:chapters(name),
-        topic:topics(name),
-        class_subject:class_subjects!fk_questions_class_subjects(
-          class_id,
-          class:classes(name, description)
-        )
-      `)
-      .order('created_at', { ascending: false });
-
-    // Debug: Log available class subjects
-    console.log('Available class subjects:', classSubjects);
-
-    // Filter by class via class_subject_id
-    if (filters.class) {
-      const classSubjectIds = classSubjects
-        .filter(cs => cs.class_id === filters.class)
-        .map(cs => cs.id);
-       if (classSubjectIds.length > 0) {
-        query = query.in('class_subject_id', classSubjectIds);
-      } else {
-        setQuestions([]);
-        setLoading(false);
-        return;
+    try {
+      console.log('Fetching class subjects...');
+      const { data, error } = await supabase
+        .from('class_subjects')
+        .select(`
+          id, 
+          class_id, 
+          subject_id, 
+          subject:subjects(id, name),
+          class:classes(id, name, description)
+        `)
+        .order('class_id');
+      
+      if (error) {
+        console.error('Error fetching class subjects:', error);
+        throw error;
       }
+      
+      console.log('Class subjects fetched:', data);
+      setClassSubjects(data as ClassSubject[]);
+      
+    } catch (error) {
+      console.error('Error in fetchClassSubjects:', error);
+      toast.error('Failed to load subjects for classes');
     }
-    // Filter by subject via class_subject_id
-    if (filters.subject) {
-      const classSubjectIds = classSubjects
-        .filter(cs => cs.subject_id === filters.subject)
-        .map(cs => cs.id);
-      if (classSubjectIds.length > 0) {
-        query = query.in('class_subject_id', classSubjectIds);
-      } else {
-       
-        setQuestions([]);
-        setLoading(false);
-        return;
+  };
+
+  // Get filtered data based on hierarchy
+  const getFilteredSubjects = () => {
+    if (!filters.class) return [];
+    return classSubjects
+      .filter(cs => cs.class_id === filters.class)
+      .map(cs => ({
+        id: cs.subject_id,
+        name: cs.subject?.name || 'Unknown Subject'
+      }));
+  };
+
+  const getFilteredChapters = () => {
+    if (!filters.class || !filters.subject) return [];
+    
+    // Find the class_subject_id for the selected class and subject
+    const classSubject = classSubjects.find(
+      cs => cs.class_id === filters.class && cs.subject_id === filters.subject
+    );
+    
+    if (!classSubject) return [];
+    
+    // Filter chapters by class_subject_id
+    return chapters.filter(chapter => chapter.class_subject_id === classSubject.id);
+  };
+
+  const getFilteredTopics = () => {
+    if (!filters.chapter) return [];
+    return topics.filter(topic => topic.chapter_id === filters.chapter);
+  };
+
+  const fetchQuestions = async () => {
+    setLoading(true);
+    try {
+      console.log('Fetching questions with filters:', filters);
+      
+      // Build the base query
+      let query = supabase
+        .from('questions')
+        .select(`
+          id,
+          question_text,
+          question_text_ur,
+          option_a,
+          option_b,
+          option_c,
+          option_d,
+          option_a_ur,
+          option_b_ur,
+          option_c_ur,
+          option_d_ur,
+          correct_option,
+          difficulty,
+          question_type,
+          source_type,
+          source_year,
+          answer_text,
+          answer_text_ur,
+          created_at,
+          subject_id,
+          chapter_id,
+          topic_id,
+          class_subject_id,
+          subject:subjects(name),
+          chapter:chapters(name),
+          topic:topics(name),
+          class_subject:class_subjects!fk_questions_class_subjects(
+            class_id,
+            class:classes(name, description)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      // Filter by class via class_subject_id
+      if (filters.class) {
+        const classSubjectIds = classSubjects
+          .filter(cs => cs.class_id === filters.class)
+          .map(cs => cs.id);
+        if (classSubjectIds.length > 0) {
+          query = query.in('class_subject_id', classSubjectIds);
+        } else {
+          // No class subjects found for this class
+          setQuestions([]);
+          setLoading(false);
+          return;
+        }
       }
-    }
 
-    // Apply other filters
-    if (filters.chapter) {
-     
-      query = query.eq('chapter_id', filters.chapter);
-    }
-    if (filters.topic) {
-    
-      query = query.eq('topic_id', filters.topic);
-    }
-    if (filters.difficulty) {
-     
-      query = query.eq('difficulty', filters.difficulty);
-    }
-    if (filters.question_type) {
-     
-      query = query.eq('question_type', filters.question_type);
-    }
-    if (filters.source_type) {
-     
-      query = query.eq('source_type', filters.source_type);
-    }
+      // Filter by subject via class_subject_id
+      if (filters.subject) {
+        const classSubjectIds = classSubjects
+          .filter(cs => cs.subject_id === filters.subject)
+          .map(cs => cs.id);
+        if (classSubjectIds.length > 0) {
+          query = query.in('class_subject_id', classSubjectIds);
+        } else {
+          // No class subjects found for this subject
+          setQuestions([]);
+          setLoading(false);
+          return;
+        }
+      }
 
-   
-    const { data, error } = await query;
+      // Apply other filters
+      if (filters.chapter) {
+        query = query.eq('chapter_id', filters.chapter);
+      }
+      if (filters.topic) {
+        query = query.eq('topic_id', filters.topic);
+      }
+      if (filters.difficulty) {
+        query = query.eq('difficulty', filters.difficulty);
+      }
+      if (filters.question_type) {
+        query = query.eq('question_type', filters.question_type);
+      }
+      if (filters.source_type) {
+        query = query.eq('source_type', filters.source_type);
+      }
 
-    if (error) {
-      console.error('Supabase query error details:', error);
-      throw error;
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Supabase query error details:', error);
+        throw error;
+      }
+
+      console.log('Raw data from Supabase:', data);
+      
+      const processedData = (data as any[]).map(q => ({
+        ...q,
+        class: q.class_subject?.class?.name ? String(q.class_subject.class.name) : '-',
+        class_description: q.class_subject?.class?.description ? String(q.class_subject.class.description) : '-',
+        subject: q.subject || { name: '-' }
+      })) as Question[];
+
+      console.log('Processed data:', processedData);
+      setQuestions(processedData);
+
+    } catch (error: any) {
+      console.error('Error fetching questions:', error);
+      
+      if (error?.message) console.error('Message:', error.message);
+      if (error?.code) console.error('Code:', error.code);
+      if (error?.details) console.error('Details:', error.details);
+      
+      toast.error('Failed to load questions');
+    } finally {
+      setLoading(false);
     }
+  };
 
-    console.log('Raw data from Supabase:', data);
-    
-    const processedData = (data as any[]).map(q => ({
-      ...q,
-      class: q.class_subject?.class?.name ? String(q.class_subject.class.name) : '-',
-      class_description: q.class_subject?.class?.description ? String(q.class_subject.class.description) : '-',
-      subject: q.subject || { name: '-' }
-    })) as Question[];
-
-    console.log('Processed data:', processedData);
-    setQuestions(processedData);
-
-  } catch (error: any) {
-    console.error('Error fetching questions:', error);
-    
-    if (error?.message) console.error('Message:', error.message);
-    if (error?.code) console.error('Code:', error.code);
-    if (error?.details) console.error('Details:', error.details);
-    
-    toast.error('Failed to load questions');
-  } finally {
-    setLoading(false);
-  }
-};  // Initial load
+  // Initial load
   useEffect(() => {
     const initializeData = async () => {
       await Promise.all([
@@ -319,27 +344,39 @@ const fetchQuestions = async () => {
     initializeData();
   }, []);
 
-  // Reset dependent filters
+  // Reset dependent filters when parent filter changes
   useEffect(() => {
     setFilters(prev => ({
-      ...prev,
+      class: prev.class,
       subject: undefined,
       chapter: undefined,
-      topic: undefined
+      topic: undefined,
+      difficulty: prev.difficulty,
+      question_type: prev.question_type,
+      source_type: prev.source_type
     }));
   }, [filters.class]);
 
   useEffect(() => {
-    setFilters(prev => ({ ...prev, chapter: undefined, topic: undefined }));
+    setFilters(prev => ({
+      ...prev,
+      chapter: undefined,
+      topic: undefined
+    }));
   }, [filters.subject]);
 
   useEffect(() => {
-    setFilters(prev => ({ ...prev, topic: undefined }));
+    setFilters(prev => ({
+      ...prev,
+      topic: undefined
+    }));
   }, [filters.chapter]);
 
   // Refetch questions when filters change
   useEffect(() => {
-    fetchQuestions();
+    if (classSubjects.length > 0) {
+      fetchQuestions();
+    }
   }, [filters, classSubjects]);
 
   const handleDelete = async (id: string) => {
@@ -420,6 +457,15 @@ const fetchQuestions = async () => {
         const topicId =
           topics.find(t => t.name === row.Topic)?.id || null;
 
+        // Find class_subject_id based on class and subject
+        let classSubjectId = null;
+        if (row['Class ID'] && subjectId) {
+          const classSubject = classSubjects.find(
+            cs => cs.class_id === row['Class ID'] && cs.subject_id === subjectId
+          );
+          classSubjectId = classSubject?.id || null;
+        }
+
         return {
           question_text: row.Question,
           question_text_ur: row['Question (Urdu)'],
@@ -435,6 +481,7 @@ const fetchQuestions = async () => {
           subject_id: subjectId,
           chapter_id: chapterId,
           topic_id: topicId,
+          class_subject_id: classSubjectId,
           difficulty: row.Difficulty,
           question_type: row['Question Type'],
           source_type: row['Source Type'],
@@ -468,68 +515,62 @@ const fetchQuestions = async () => {
       (q.topic?.name && q.topic.name.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
-  // Client-side filtered lists for filter controls
-  const subjectsForSelectedClass = filters.class
-    ? classSubjects.filter(cs => cs.class_id === filters.class)
-    : [];
-  const chaptersForSelectedSubject = filters.subject
-    ? chapters.filter(c => c.subject_id === filters.subject)
-    : [];
-  const topicsForSelectedChapter = filters.chapter
-    ? topics.filter(t => t.chapter_id === filters.chapter)
-    : [];
+  const clearAllFilters = () => {
+    setFilters({});
+    setSearchTerm('');
+  };
+
+  // Helper function to get nav link class
+  const getNavLinkClass = (tab: string) => {
+    return `nav-link ${activeTab === tab ? 'active' : ''}`;
+  };
 
   return (
     <AdminLayout activeTab="questions">
       <div className="container py-4">
-<div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 mb-md-4">
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 mb-md-4">
+          {/* Left side (Heading) */}
+          <h2 className="mb-2 mb-md-0 text-center text-md-start fs-4 fs-md-2">
+            Question Bank Management
+          </h2>
 
-  {/* Left side (Heading) */}
-  <h2 className="mb-2 mb-md-0 text-center text-md-start fs-4 fs-md-2">
-    Question Bank Management
-  </h2>
+          {/* Right side (Buttons) */}
+          <div className="d-flex flex-wrap gap-2 justify-content-center justify-content-md-end">
+            <button 
+              className="btn btn-primary"
+              onClick={() => { setSelectedQuestion(null); setShowModal(true); }}
+            >
+              <FiPlus className="me-1" /> Add Question
+            </button>
 
-  {/* Right side (Buttons) */}
-  <div className="d-flex flex-wrap gap-2 justify-content-center justify-content-md-end">
+            <label className="btn btn-secondary mb-0">
+              <FiUpload className="me-1" /> 
+              {isImporting ? 'Importing...' : 'Import'}
+              <input 
+                type="file" 
+                className="d-none" 
+                onChange={handleImport}
+                accept=".xlsx,.xls"
+                disabled={isImporting}
+              />
+            </label>
 
-    <button 
-      className="btn btn-primary"
-      onClick={() => { setSelectedQuestion(null); setShowModal(true); }}
-    >
-      <FiPlus className="me-1" /> Add Question
-    </button>
-
-    <label className="btn btn-secondary mb-0">
-      <FiUpload className="me-1" /> 
-      {isImporting ? 'Importing...' : 'Import'}
-      <input 
-        type="file" 
-        className="d-none" 
-        onChange={handleImport}
-        accept=".xlsx,.xls"
-        disabled={isImporting}
-      />
-    </label>
-
-    <button 
-      className="btn btn-success" 
-      onClick={handleExport}
-      disabled={isExporting || questions.length === 0}
-    >
-      <FiDownload className="me-1" /> 
-      {isExporting ? 'Exporting...' : 'Export'}
-    </button>
-
-  </div>
-</div>
-
-
+            <button 
+              className="btn btn-success" 
+              onClick={handleExport}
+              disabled={isExporting || questions.length === 0}
+            >
+              <FiDownload className="me-1" /> 
+              {isExporting ? 'Exporting...' : 'Export'}
+            </button>
+          </div>
+        </div>
 
         {/* Tabs for question types */}
         <ul className="nav nav-tabs mb-4">
           <li className="nav-item">
             <button 
-              className={`nav-link ${activeTab === 'all' ? 'active' : ''}`}
+              className={getNavLinkClass('all')}
               onClick={() => setActiveTab('all')}
             >
               All Questions
@@ -537,7 +578,7 @@ const fetchQuestions = async () => {
           </li>
           <li className="nav-item">
             <button 
-              className={`nav-link ${activeTab === 'mcq' ? 'active' : ''}`}
+              className={getNavLinkClass('mcq')}
               onClick={() => setActiveTab('mcq')}
             >
               MCQ
@@ -545,7 +586,7 @@ const fetchQuestions = async () => {
           </li>
           <li className="nav-item">
             <button 
-              className={`nav-link ${activeTab === 'short' ? 'active' : ''}`}
+              className={getNavLinkClass('short')}
               onClick={() => setActiveTab('short')}
             >
               Short Questions
@@ -553,7 +594,7 @@ const fetchQuestions = async () => {
           </li>
           <li className="nav-item">
             <button 
-              className={`nav-link ${activeTab === 'long' ? 'active' : ''}`}
+              className={getNavLinkClass('long')}
               onClick={() => setActiveTab('long')}
             >
               Long Questions
@@ -573,13 +614,15 @@ const fetchQuestions = async () => {
                     placeholder="Search questions..."
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
-                    style={{'marginBottom':'0px'}}
+                    style={{marginBottom: '0px'}}
                   />
-                  <button className="btn btn-outline-secondary"  style={{'paddingBottom':'8px', 'borderColor':'#ccc'}} type="button">
+                  <button className="btn btn-outline-secondary" style={{paddingBottom: '8px', borderColor: '#ccc'}} type="button">
                     <FiSearch />
                   </button>
                 </div>
               </div>
+              
+              {/* Class Filter */}
               <div className="col-md-2">
                 <select
                   className="form-select"
@@ -592,6 +635,8 @@ const fetchQuestions = async () => {
                   ))}
                 </select>
               </div>
+
+              {/* Subject Filter (dependent on Class) */}
               <div className="col-md-2">
                 <select
                   className="form-select"
@@ -600,26 +645,30 @@ const fetchQuestions = async () => {
                   disabled={!filters.class}
                 >
                   <option value="">All Subjects</option>
-                  {subjectsForSelectedClass.map(cs => (
-                    <option key={`${cs.class_id}-${cs.subject_id}`} value={cs.subject_id}>
-                      {cs.subject?.name}
+                  {getFilteredSubjects().map(subject => (
+                    <option key={subject.id} value={subject.id}>
+                      {subject.name}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {/* Chapter Filter (dependent on Class and Subject) */}
               <div className="col-md-2">
                 <select
                   className="form-select"
                   value={filters.chapter || ''}
                   onChange={e => setFilters({...filters, chapter: e.target.value || undefined})}
-                  disabled={!filters.subject}
+                  disabled={!filters.class || !filters.subject}
                 >
                   <option value="">All Chapters</option>
-                  {chaptersForSelectedSubject.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                  {getFilteredChapters().map(chapter => (
+                    <option key={chapter.id} value={chapter.id}>{chapter.name}</option>
                   ))}
                 </select>
               </div>
+
+              {/* Topic Filter (dependent on Chapter) */}
               <div className="col-md-2">
                 <select
                   className="form-select"
@@ -628,19 +677,63 @@ const fetchQuestions = async () => {
                   disabled={!filters.chapter}
                 >
                   <option value="">All Topics</option>
-                  {topicsForSelectedChapter.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
+                  {getFilteredTopics().map(topic => (
+                    <option key={topic.id} value={topic.id}>{topic.name}</option>
                   ))}
                 </select>
               </div>
+
               <div className="col-md-1">
                 <button 
                   className="btn btn-outline-danger w-100"
-                  onClick={() => setFilters({})}
+                  onClick={clearAllFilters}
                   title="Clear all filters"
                 >
                   <FiX />
                 </button>
+              </div>
+            </div>
+
+            {/* Additional Filters Row */}
+            <div className="row g-3 mt-2">
+              <div className="col-md-2">
+                <select
+                  className="form-select"
+                  value={filters.difficulty || ''}
+                  onChange={e => setFilters({...filters, difficulty: e.target.value || undefined})}
+                >
+                  <option value="">All Difficulty</option>
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </div>
+
+              <div className="col-md-2">
+                <select
+                  className="form-select"
+                  value={filters.question_type || ''}
+                  onChange={e => setFilters({...filters, question_type: e.target.value || undefined})}
+                >
+                  <option value="">All Types</option>
+                  <option value="mcq">MCQ</option>
+                  <option value="short">Short</option>
+                  <option value="long">Long</option>
+                </select>
+              </div>
+
+              <div className="col-md-2">
+                <select
+                  className="form-select"
+                  value={filters.source_type || ''}
+                  onChange={e => setFilters({...filters, source_type: e.target.value || undefined})}
+                >
+                  <option value="">All Sources</option>
+                  <option value="book">Book</option>
+                  <option value="past_paper">Past Paper</option>
+                  <option value="model_paper">Model Paper</option>
+                  <option value="custom">Custom</option>
+                </select>
               </div>
             </div>
           </div>
@@ -672,9 +765,9 @@ const fetchQuestions = async () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredQuestions.length > 0 ? filteredQuestions.map((q,i )=> (
+                  {filteredQuestions.length > 0 ? filteredQuestions.map((q, i) => (
                     <tr key={q.id}>
-                      <td>{i+1}</td>
+                      <td>{i + 1}</td>
                       <td className="text-truncate" style={{maxWidth: '300px'}} title={q.question_text}>
                         {q.question_text}
                         {q.question_text_ur && (

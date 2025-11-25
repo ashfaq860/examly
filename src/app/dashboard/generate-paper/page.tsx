@@ -1,6 +1,6 @@
 /** app/dashboard/generate-paper/page.tsx */
 'use client';
-import { useState, useEffect, useCallback, useMemo, useContext } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -55,6 +55,7 @@ const paperSchema = z.object({
 });
 
 type PaperFormData = z.infer<typeof paperSchema>;
+
 // Trial status interface
 interface TrialStatus {
   isTrial: boolean;
@@ -66,15 +67,13 @@ interface TrialStatus {
   subscriptionName?: string;
   subscriptionType?: "paper_pack" | "subscription";
   subscriptionEndDate?: Date;
-  message?: string; // 🚨 NEW: backend may send a warning message
+  message?: string;
 }
 
 // 🎨 Modern TrialStatusBanner
 const TrialStatusBanner = ({ trialStatus }: { trialStatus: TrialStatus | null }) => {
   if (!trialStatus) return null;
 
-  // 🚨 If backend sends a message, show warning card
-  // 🚨 Action required case (no cellno)
   if (trialStatus.message) {
     return (
       <div className="card border-0 shadow-sm mb-4 bg-warning bg-opacity-10">
@@ -96,7 +95,6 @@ const TrialStatusBanner = ({ trialStatus }: { trialStatus: TrialStatus | null })
       </div>
     );
   }
-
 
   if (trialStatus.hasActiveSubscription) {
     return (
@@ -181,7 +179,6 @@ const SubscriptionModal = ({
         <div className="modal-body text-center">
           <i className="bi bi-stars text-primary display-3 mb-3"></i>
 
-          {/* 🚨 If message exists, show profile warning */}
           {trialStatus?.message ? (
             <p className="fs-5">{trialStatus.message}</p>
           ) : trialStatus?.isTrial ? (
@@ -286,38 +283,48 @@ function ManualQuestionSelection({
     long: longCount
   });
   const [isShuffling, setIsShuffling] = useState(false);
- 
 
   useEffect(() => {
     onQuestionsSelected(selected);
   }, [selected, onQuestionsSelected]);
 
-  // Filter chapters by subject
   const subjectChapters = useMemo(() => {
     return chapters.filter(chapter => chapter.subject_id === subjectId);
   }, [chapters, subjectId]);
 
-  // Determine which chapters to use based on chapterOption
   const getChapterIdsToUse = useCallback(() => {
-    if (!subjectChapters || subjectChapters.length === 0) return [];
+    if (!subjectChapters || subjectChapters.length === 0) {
+      return [];
+    }
+    
+    const filteredChapters = subjectChapters.filter(chapter => 
+      chapter.subject_id === subjectId && chapter.class_id === classId
+    );
+    
+    if (filteredChapters.length === 0) {
+      return [];
+    }
+    
+    let selectedChapterIds: string[] = [];
     
     if (chapterOption === 'full_book') {
-      return subjectChapters.map(c => c.id);
+      selectedChapterIds = filteredChapters.map(c => c.id);
     } else if (chapterOption === 'half_book') {
-      // Get first half of chapters
-      const halfIndex = Math.ceil(subjectChapters.length / 2);
-      return subjectChapters.slice(0, halfIndex).map(c => c.id);
-    } else if (chapterOption === 'single_chapter' || chapterOption === 'custom') {
-      return selectedChapters || [];
+      const halfIndex = Math.ceil(filteredChapters.length / 2);
+      selectedChapterIds = filteredChapters.slice(0, halfIndex).map(c => c.id);
+    } else if (chapterOption === 'single_chapter' && selectedChapters && selectedChapters.length > 0) {
+      selectedChapterIds = selectedChapters;
+    } else if (chapterOption === 'custom' && selectedChapters && selectedChapters.length > 0) {
+      selectedChapterIds = selectedChapters;
+    } else {
+      return [];
     }
-    return [];
-  }, [chapterOption, subjectChapters, selectedChapters]);
+    
+    return selectedChapterIds;
+  }, [chapterOption, selectedChapters, chapters, subjectId, classId]);
 
-  // Shuffle functions
   const shuffleQuestions = async (type: QuestionType) => {
     setIsShuffling(true);
-    
-    // Add a small delay for visual effect
     await new Promise(resolve => setTimeout(resolve, 300));
     
     setSelected(prev => {
@@ -326,10 +333,7 @@ function ManualQuestionSelection({
         .filter(q => !newSelected[type].includes(q.id))
         .map(q => q.id);
       
-      // Shuffle the available questions
       const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5);
-      
-      // Take the number we need to complete the selection
       const needed = requiredCounts[type] - newSelected[type].length;
       const toAdd = shuffled.slice(0, needed);
       
@@ -342,44 +346,62 @@ function ManualQuestionSelection({
 
   const shuffleAll = async () => {
     setIsShuffling(true);
-    
-    // Add a small delay for visual effect
     await new Promise(resolve => setTimeout(resolve, 300));
     
     setSelected(prev => {
       const newSelected = { ...prev };
-      
-      // Shuffle each question type
       (['mcq', 'short', 'long'] as QuestionType[]).forEach(type => {
         const availableQuestions = questions[type].map(q => q.id);
         const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5);
         newSelected[type] = shuffled.slice(0, requiredCounts[type]);
       });
-      
       return newSelected;
     });
     
     setIsShuffling(false);
   };
 
-  // Add font style for Urdu text
-  const getQuestionTextStyle = () => {
-    if (language === 'urdu') {
-      return {
-        fontFamily: "'Jameel Noori Nastaleeq', 'JameelNooriNastaleeqKasheeda', 'Times New Roman', serif",
-        fontSize: '18px',
-        lineHeight: '1.8',
-        direction: 'rtl',
-        textAlign: 'right'
-      };
-    } else if (language === 'bilingual') {
-      return {
-        fontFamily: "'Jameel Noori Nastaleeq', 'JameelNooriNastaleeqKasheeda', 'Times New Roman', serif",
-        fontSize: '16px',
-        lineHeight: '1.6'
-      };
-    }
-    return {};
+  // Fixed language translation function
+  const handleLanguageTranslation = (questions: Question[], language: string) => {
+    return questions.map(question => {
+      const translatedQuestion = { ...question };
+      
+      if (language !== 'english') {
+        const isBi = language === 'bilingual';
+        
+        // Handle question text
+        if (question.question_text_ur) {
+          if (isBi) {
+            // For bilingual, keep original English and add Urdu as separate property
+            translatedQuestion.question_text_english = question.question_text;
+            translatedQuestion.question_text_urdu = question.question_text_ur;
+          } else {
+            // For Urdu only, replace with Urdu text
+            translatedQuestion.question_text = question.question_text_ur;
+          }
+        }
+        
+        // Handle MCQ options
+        if (question.question_type === 'mcq') {
+          const options = ['option_a', 'option_b', 'option_c', 'option_d'];
+          options.forEach(opt => {
+            const urduField = `${opt}_ur`;
+            if (question[urduField]) {
+              if (isBi) {
+                // For bilingual, keep both versions as separate properties
+                translatedQuestion[`${opt}_english`] = question[opt];
+                translatedQuestion[`${opt}_urdu`] = question[urduField];
+              } else {
+                // For Urdu only, replace with Urdu text
+                translatedQuestion[opt] = question[urduField];
+              }
+            }
+          });
+        }
+      }
+      
+      return translatedQuestion;
+    });
   };
 
   const fetchQuestions = useCallback(async () => {
@@ -389,9 +411,6 @@ function ManualQuestionSelection({
       
       const chapterIds = getChapterIdsToUse();
       
-      console.log('Fetching questions for subject:', subjectId, 'chapters:', chapterIds);
-      
-      // Only fetch questions if we have valid chapter IDs
       if (chapterIds.length === 0) {
         setQuestions({ mcq: [], short: [], long: [] });
         return;
@@ -433,47 +452,14 @@ function ManualQuestionSelection({
         }),
       ]);
 
+      // Use the fixed translation function
       const result = {
-        mcq: mcqResponse.data,
-        short: shortResponse.data,
-        long: longResponse.data,
+        mcq: handleLanguageTranslation(mcqResponse.data, language),
+        short: handleLanguageTranslation(shortResponse.data, language),
+        long: handleLanguageTranslation(longResponse.data, language),
       };
 
-      console.log('Questions fetched:', {
-        mcq: result.mcq.length,
-        short: result.short.length,
-        long: result.long.length
-      });
-
-      // Use pre-translated content instead of Google Translate
-      if (language !== 'english') {
-        const isBi = language === 'bilingual';
-        
-        for (const type of ['mcq','short','long'] as QuestionType[]) {
-          for (const q of result[type]) {
-            if (q.question_text_ur) {
-              q.question_text = isBi ? 
-                `${q.question_text}\n(${q.question_text_ur})` : 
-                q.question_text_ur;
-            }
-            
-            if (type === 'mcq') {
-              const options = ['option_a', 'option_b', 'option_c', 'option_d'];
-              options.forEach(opt => {
-                const urduField = `${opt}_ur`;
-                if (q[urduField]) {
-                  q[opt] = isBi ? 
-                    `${q[opt]}\n(${q[urduField]})` : 
-                    q[urduField];
-                }
-              });
-            }
-          }
-        }
-      }
-
       setQuestions(result);
-
     } catch (err) {
       console.error('Error fetching questions:', err);
       setError('Failed to load questions. Please try again.');
@@ -484,7 +470,6 @@ function ManualQuestionSelection({
   
   useEffect(() => {
     if (subjectId && subjectChapters && subjectChapters.length > 0) {
-      console.log('Subject chapters available:', subjectChapters);
       fetchQuestions();
       setRequiredCounts({
         mcq: mcqCount,
@@ -493,17 +478,6 @@ function ManualQuestionSelection({
       });
     }
   }, [subjectId, fetchQuestions, mcqCount, shortCount, longCount, subjectChapters]);
-
-  useEffect(() => {
-    console.log('ManualQuestionSelection props:', {
-      subjectId,
-      chapterOption,
-      selectedChapters,
-      chapters: chapters.length,
-      subjectChapters: subjectChapters.length,
-      chapterIdsToUse: getChapterIdsToUse()
-    });
-  }, [subjectId, chapterOption, selectedChapters, chapters, subjectChapters, getChapterIdsToUse]);
 
   const toggleQuestionSelection = useCallback((questionId: string, type: QuestionType) => {
     setSelected(prev => {
@@ -551,7 +525,6 @@ function ManualQuestionSelection({
     }
   };
 
-  // Get the actual chapter names for display
   const getSelectedChapterNames = useCallback(() => {
     const chapterIds = getChapterIdsToUse();
     const subjectChapters = chapters.filter(c => c.subject_id === subjectId);
@@ -567,11 +540,10 @@ function ManualQuestionSelection({
   }, [getChapterIdsToUse, chapterOption, chapters, subjectId]);
  
   return (
-    <div className="card mt-4">
+    <div className="card mt-4 step-transition">
       <div className="card-body">
         <h2 className="h4 card-title mb-3">Manual Question Selection</h2>
         
-        {/* Add font preloading */}
         <style jsx>{`
           @font-face {
             font-family: 'Jameel Noori Nastaleeq';
@@ -597,9 +569,15 @@ function ManualQuestionSelection({
             direction: rtl;
             text-align: right;
           }
+          .bi-shuffle.spinning {
+            animation: spin 0.5s linear infinite;
+          }
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
         `}</style>
         
-        {/* Chapter selection info */}
         <div className="alert alert-info mb-3">
           <strong>Selected Chapters:</strong> {getChapterIdsToUse().length} chapters
           {chapterOption === 'full_book' && ' (Full Book)'}
@@ -610,7 +588,6 @@ function ManualQuestionSelection({
           <small>{getSelectedChapterNames()}</small>
         </div>
         
-        {/* Selection Summary at the top */}
         <div className="card bg-light mb-4">
           <div className="card-body">
             <div className="d-flex justify-content-between align-items-center mb-3">
@@ -697,14 +674,12 @@ function ManualQuestionSelection({
           </div>
         )}
 
-        {/* Current step indicator */}
         <div className="alert alert-info mb-4">
           {currentStep === 'mcq' && `Select ${requiredCounts.mcq} MCQs`}
           {currentStep === 'short' && `Select ${requiredCounts.short} Short Questions`}
           {currentStep === 'long' && `Select ${requiredCounts.long} Long Questions`}
         </div>
         
-        {/* Filters */}
         <div className="row mb-4">
           <div className="col-md-6">
             <label className="form-label">Difficulty</label>
@@ -777,14 +752,25 @@ function ManualQuestionSelection({
                                   !selected[currentStep].includes(question.id)}
                       />
                       <div className="flex-grow-1">
-                        {/* Apply Urdu font styles based on language */}
+                        {/* Fixed question text display */}
                         <p 
                           className={`mb-1 fw-bold ${
                             language === 'urdu' ? 'urdu-text urdu-rtl' : 
                             language === 'bilingual' ? 'bilingual-text' : ''
                           }`}
                         >
-                          {question.question_text}
+                          {language === 'english' && question.question_text}
+                          {language === 'urdu' && (question.question_text_urdu || question.question_text)}
+                          {language === 'bilingual' && (
+                            <>
+                              <div style={{ direction: 'ltr', textAlign: 'left' }}>
+                                {question.question_text_english || question.question_text}
+                              </div>
+                              <div style={{ direction: 'rtl', textAlign: 'right' }}>
+                                {question.question_text_urdu}
+                              </div>
+                            </>
+                          )}
                         </p>
                         
                         {currentStep === 'mcq' && (
@@ -793,28 +779,80 @@ function ManualQuestionSelection({
                               {question.option_a && (
                                 <div className="col-md-6">
                                   <span className={language === 'urdu' ? 'urdu-text' : language === 'bilingual' ? 'bilingual-text' : ''}>
-                                    A) {question.option_a}
+                                    A) {
+                                      language === 'english' && question.option_a
+                                    }
+                                    {language === 'urdu' && (question.option_a_urdu || question.option_a)}
+                                    {language === 'bilingual' && (
+                                      <>
+                                        <div style={{ direction: 'ltr', textAlign: 'left' }}>
+                                          {question.option_a_english || question.option_a}
+                                        </div>
+                                        <div style={{ direction: 'rtl', textAlign: 'right' }}>
+                                          {question.option_a_urdu}
+                                        </div>
+                                      </>
+                                    )}
                                   </span>
                                 </div>
                               )}
                               {question.option_b && (
                                 <div className="col-md-6">
                                   <span className={language === 'urdu' ? 'urdu-text' : language === 'bilingual' ? 'bilingual-text' : ''}>
-                                    B) {question.option_b}
+                                    B) {
+                                      language === 'english' && question.option_b
+                                    }
+                                    {language === 'urdu' && (question.option_b_urdu || question.option_b)}
+                                    {language === 'bilingual' && (
+                                      <>
+                                        <div style={{ direction: 'ltr', textAlign: 'left' }}>
+                                          {question.option_b_english || question.option_b}
+                                        </div>
+                                        <div style={{ direction: 'rtl', textAlign: 'right' }}>
+                                          {question.option_b_urdu}
+                                        </div>
+                                      </>
+                                    )}
                                   </span>
                                 </div>
                               )}
                               {question.option_c && (
                                 <div className="col-md-6">
                                   <span className={language === 'urdu' ? 'urdu-text' : language === 'bilingual' ? 'bilingual-text' : ''}>
-                                    C) {question.option_c}
+                                    C) {
+                                      language === 'english' && question.option_c
+                                    }
+                                    {language === 'urdu' && (question.option_c_urdu || question.option_c)}
+                                    {language === 'bilingual' && (
+                                      <>
+                                        <div style={{ direction: 'ltr', textAlign: 'left' }}>
+                                          {question.option_c_english || question.option_c}
+                                        </div>
+                                        <div style={{ direction: 'rtl', textAlign: 'right' }}>
+                                          {question.option_c_urdu}
+                                        </div>
+                                      </>
+                                    )}
                                   </span>
                                 </div>
                               )}
                               {question.option_d && (
                                 <div className="col-md-6">
                                   <span className={language === 'urdu' ? 'urdu-text' : language === 'bilingual' ? 'bilingual-text' : ''}>
-                                    D) {question.option_d}
+                                    D) {
+                                      language === 'english' && question.option_d
+                                    }
+                                    {language === 'urdu' && (question.option_d_urdu || question.option_d)}
+                                    {language === 'bilingual' && (
+                                      <>
+                                        <div style={{ direction: 'ltr', textAlign: 'left' }}>
+                                          {question.option_d_english || question.option_d}
+                                        </div>
+                                        <div style={{ direction: 'rtl', textAlign: 'right' }}>
+                                          {question.option_d_urdu}
+                                        </div>
+                                      </>
+                                    )}
                                   </span>
                                 </div>
                               )}
@@ -863,6 +901,23 @@ function ManualQuestionSelection({
   );
 }
 
+// Custom debounce hook
+const useDebounce = (value: any, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
+
 export default function GeneratePaperPage() {
   const [step, setStep] = useState(1);
   const [classes, setClasses] = useState<Class[]>([]);
@@ -878,8 +933,29 @@ export default function GeneratePaperPage() {
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [isManualNavigation, setIsManualNavigation] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-const [showDatePicker, setShowDatePicker] = useState(false);
-  // Use the UserContext
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // New states for paper preview and drag & drop
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [previewQuestions, setPreviewQuestions] = useState<Record<QuestionType, Question[]>>({
+    mcq: [],
+    short: [],
+    long: [],
+  });
+  const [draggedQuestion, setDraggedQuestion] = useState<{ id: string; type: QuestionType } | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  
+  // Cache and optimization states
+  const [questionsCache, setQuestionsCache] = useState<Record<string, Record<QuestionType, Question[]>>>({});
+  const [lastPreviewLoad, setLastPreviewLoad] = useState<{
+    subjectId: string;
+    classId: string;
+    chapterIds: string[];
+    selectionMethod: string;
+    language: string;
+    source_type: string;
+  } | null>(null);
+  
   const { trialStatus, isLoading: trialLoading, refreshTrialStatus } = useUser();
 
   const {
@@ -919,7 +995,7 @@ const [showDatePicker, setShowDatePicker] = useState(false);
       longToAttempt: 0,
       title:'BISE LAHORE',
       shuffleQuestions: true,
-       dateOfPaper: new Date().toISOString().split('T')[0],
+      dateOfPaper: new Date().toISOString().split('T')[0],
     },
   });
 
@@ -930,16 +1006,12 @@ const [showDatePicker, setShowDatePicker] = useState(false);
   const watchedMcqCount = watch('mcqCount');
   const watchedShortCount = watch('shortCount');
   const watchedLongCount = watch('longCount');
- const watchedPaperType = watch('paperType');
+  const watchedPaperType = watch('paperType');
 
+  // Use debounced values to prevent rapid reloading
+  const debouncedSubjectId = useDebounce(watchedSubjectId, 500);
+  const debouncedClassId = useDebounce(watchedClassId, 500);
 
-   // 🆕 NEW: Function to handle date selection
-  const handleDateSelect = (date: string) => {
-    setValue('dateOfPaper', date);
-    setShowDatePicker(false);
-  };
-
-  // 🆕 NEW: Function to format date for display
   const formatDateForDisplay = (dateString: string) => {
     if (!dateString) return 'Select Date';
     const date = new Date(dateString);
@@ -963,11 +1035,8 @@ const [showDatePicker, setShowDatePicker] = useState(false);
   const canGeneratePaper = () => {
     if (!trialStatus) return false;
     
-    // Active subscription always allows generation
     if (trialStatus.hasActiveSubscription) return true;
     
-    // Trial period: must have valid trial end date
-    // Papers are unlimited during trial, so we don't check papersRemaining
     if (trialStatus.isTrial && 
         trialStatus.trialEndsAt &&
         trialStatus.trialEndsAt.getTime() > Date.now()) {
@@ -1015,9 +1084,7 @@ const [showDatePicker, setShowDatePicker] = useState(false);
         return;
       }
       try {
-        console.log('Fetching chapters for subject:', watchedSubjectId, 'and class:', watchedClassId);
         const response = await axios.get(`/api/chapters?subjectId=${watchedSubjectId}&classId=${watchedClassId}`);
-        console.log('Chapters response:', response.data);
         setChapters(response.data);
       } catch (error) {
         console.error('Error fetching chapters:', error);
@@ -1026,21 +1093,441 @@ const [showDatePicker, setShowDatePicker] = useState(false);
     fetchChapters();
   }, [watchedSubjectId, watchedClassId]);
 
+  // Get chapter IDs to use
+  const getChapterIdsToUse = useCallback(() => {
+    if (!chapters || chapters.length === 0) {
+      return [];
+    }
+    
+    const subjectChapters = chapters.filter(chapter => 
+      chapter.subject_id === watchedSubjectId && chapter.class_id === watchedClassId
+    );
+    
+    if (subjectChapters.length === 0) {
+      return [];
+    }
+    
+    let selectedChapterIds: string[] = [];
+    
+    if (watchedChapterOption === 'full_book') {
+      selectedChapterIds = subjectChapters.map(c => c.id);
+    } else if (watchedChapterOption === 'half_book') {
+      const halfIndex = Math.ceil(subjectChapters.length / 2);
+      selectedChapterIds = subjectChapters.slice(0, halfIndex).map(c => c.id);
+    } else if (watchedChapterOption === 'single_chapter' && watch('selectedChapters') && watch('selectedChapters')!.length > 0) {
+      selectedChapterIds = watch('selectedChapters')!;
+    } else if (watchedChapterOption === 'custom' && watch('selectedChapters') && watch('selectedChapters')!.length > 0) {
+      selectedChapterIds = watch('selectedChapters')!;
+    } else {
+      return [];
+    }
+    
+    return selectedChapterIds;
+  }, [chapters, watchedSubjectId, watchedClassId, watchedChapterOption, watch]);
+
+  // Fixed language translation function
+  const handleLanguageTranslation = (questions: Question[], language: string) => {
+    return questions.map(question => {
+      const translatedQuestion = { ...question };
+      
+      if (language !== 'english') {
+        const isBi = language === 'bilingual';
+        
+        // Handle question text
+        if (question.question_text_ur) {
+          if (isBi) {
+            // For bilingual, keep original English and add Urdu as separate property
+            translatedQuestion.question_text_english = question.question_text;
+            translatedQuestion.question_text_urdu = question.question_text_ur;
+          } else {
+            // For Urdu only, replace with Urdu text
+            translatedQuestion.question_text = question.question_text_ur;
+          }
+        }
+        
+        // Handle MCQ options
+        if (question.question_type === 'mcq') {
+          const options = ['option_a', 'option_b', 'option_c', 'option_d'];
+          options.forEach(opt => {
+            const urduField = `${opt}_ur`;
+            if (question[urduField]) {
+              if (isBi) {
+                // For bilingual, keep both versions as separate properties
+                translatedQuestion[`${opt}_english`] = question[opt];
+                translatedQuestion[`${opt}_urdu`] = question[urduField];
+              } else {
+                // For Urdu only, replace with Urdu text
+                translatedQuestion[opt] = question[urduField];
+              }
+            }
+          });
+        }
+      }
+      
+      return translatedQuestion;
+    });
+  };
+
+  // Load manual selected questions
+  const loadManualSelectedQuestions = async () => {
+    try {
+      // Fetch details for each selected question
+      const mcqPromises = selectedQuestions.mcq.map(questionId => 
+        axios.get(`/api/questions/${questionId}`)
+      );
+      const shortPromises = selectedQuestions.short.map(questionId => 
+        axios.get(`/api/questions/${questionId}`)
+      );
+      const longPromises = selectedQuestions.long.map(questionId => 
+        axios.get(`/api/questions/${questionId}`)
+      );
+
+      const [mcqResponses, shortResponses, longResponses] = await Promise.all([
+        Promise.all(mcqPromises),
+        Promise.all(shortPromises),
+        Promise.all(longPromises)
+      ]);
+
+      const language = watch('language');
+      
+      // Use the fixed translation function
+      const result = {
+        mcq: handleLanguageTranslation(mcqResponses.map(response => response.data), language),
+        short: handleLanguageTranslation(shortResponses.map(response => response.data), language),
+        long: handleLanguageTranslation(longResponses.map(response => response.data), language),
+      };
+
+      return result;
+    } catch (error) {
+      console.error('Error loading manual questions:', error);
+      throw error;
+    }
+  };
+
+  // Load auto selected questions
+// Load auto selected questions - IMPROVED VERSION
+const loadAutoSelectedQuestions = async (chapterIds: string[], formValues: PaperFormData) => {
+  try {
+    const language = formValues.language;
+    const sourceType = formValues.source_type;
+    
+    console.log('🔍 Loading auto questions with:', {
+      mcqCount: formValues.mcqCount,
+      shortCount: formValues.shortCount, 
+      longCount: formValues.longCount,
+      chapterIds: chapterIds.length,
+      subjectId: watchedSubjectId,
+      classId: watchedClassId
+    });
+
+    // Fetch questions for each type with better handling
+    const fetchQuestionsByType = async (
+      questionType: QuestionType, 
+      count: number,
+      chapterIds: string[]
+    ) => {
+      if (count <= 0) return [];
+      
+      try {
+        console.log(`📥 Fetching ${count} ${questionType} questions`);
+        
+        const response = await axios.get(`/api/questions`, {
+          params: {
+            subjectId: watchedSubjectId,
+            classId: watchedClassId,
+            questionType,
+            chapterIds: chapterIds.join(','),
+            language,
+            includeUrdu: language !== 'english',
+            sourceType: sourceType !== 'all' ? sourceType : undefined,
+            limit: count * 2, // Fetch more to ensure we have enough
+            random: true
+          },
+        });
+        
+        const questions = response.data || [];
+        console.log(`✅ Got ${questions.length} ${questionType} questions, need ${count}`);
+        
+        // If we don't have enough questions, try without source type filter
+        if (questions.length < count && sourceType !== 'all') {
+          console.log(`🔄 Not enough ${questionType} questions, trying without source filter`);
+          const fallbackResponse = await axios.get(`/api/questions`, {
+            params: {
+              subjectId: watchedSubjectId,
+              classId: watchedClassId,
+              questionType,
+              chapterIds: chapterIds.join(','),
+              language,
+              includeUrdu: language !== 'english',
+              limit: count * 2,
+              random: true
+            },
+          });
+          
+          const fallbackQuestions = fallbackResponse.data || [];
+          console.log(`🔄 Got ${fallbackQuestions.length} ${questionType} questions from fallback`);
+          
+          // Combine and deduplicate
+          const combinedQuestions = [...questions, ...fallbackQuestions];
+          const uniqueQuestions = combinedQuestions.filter((q, index, self) => 
+            index === self.findIndex(q2 => q2.id === q.id)
+          );
+          
+          return uniqueQuestions.slice(0, count);
+        }
+        
+        return questions.slice(0, count);
+      } catch (error) {
+        console.error(`❌ Error fetching ${questionType} questions:`, error);
+        return [];
+      }
+    };
+
+    // Fetch all question types in parallel
+    const [mcqQuestions, shortQuestions, longQuestions] = await Promise.all([
+      fetchQuestionsByType('mcq', formValues.mcqCount, chapterIds),
+      fetchQuestionsByType('short', formValues.shortCount, chapterIds),
+      fetchQuestionsByType('long', formValues.longCount, chapterIds),
+    ]);
+
+    console.log('🎯 Final question counts:', {
+      mcq: mcqQuestions.length,
+      short: shortQuestions.length,
+      long: longQuestions.length,
+      expected: {
+        mcq: formValues.mcqCount,
+        short: formValues.shortCount,
+        long: formValues.longCount
+      }
+    });
+
+    // Use the fixed translation function
+    const result = {
+      mcq: handleLanguageTranslation(mcqQuestions, language),
+      short: handleLanguageTranslation(shortQuestions, language),
+      long: handleLanguageTranslation(longQuestions, language),
+    };
+
+    return result;
+  } catch (error) {
+    console.error('❌ Error loading auto questions:', error);
+    throw error;
+  }
+};
+  // Optimized load preview questions when reaching step 7
+// Optimized load preview questions when reaching step 7 - FIXED VERSION
+const loadPreviewQuestions = async () => {
+  try {
+    setIsLoadingPreview(true);
+    
+    // Get selected chapter IDs
+    const chapterIds = getChapterIdsToUse();
+    
+    console.log('🔄 Loading preview questions...', {
+      chapterIds: chapterIds.length,
+      subjectId: watchedSubjectId,
+      classId: watchedClassId,
+      selectionMethod: watch('selectionMethod'),
+      paperType: watch('paperType')
+    });
+
+    if (chapterIds.length === 0) {
+      console.error('❌ No chapters selected');
+      setPreviewQuestions({ mcq: [], short: [], long: [] });
+      return;
+    }
+
+    const formValues = getValues();
+    
+    console.log('📋 Form values for preview:', {
+      mcqCount: formValues.mcqCount,
+      shortCount: formValues.shortCount,
+      longCount: formValues.longCount,
+      mcqMarks: formValues.mcqMarks,
+      shortMarks: formValues.shortMarks,
+      longMarks: formValues.longMarks,
+      selectionMethod: formValues.selectionMethod
+    });
+
+    // Fetch real questions based on selection method
+    let result: Record<QuestionType, Question[]>;
+    
+    if (formValues.selectionMethod === 'manual' && Object.keys(selectedQuestions).some(type => selectedQuestions[type as QuestionType].length > 0)) {
+      console.log('🔧 Using manual selection');
+      // For manual selection, fetch the specific selected questions
+      result = await loadManualSelectedQuestions();
+    } else {
+      console.log('🤖 Using auto selection');
+      // For auto selection, fetch questions based on criteria
+      result = await loadAutoSelectedQuestions(chapterIds, formValues);
+    }
+    
+    console.log('✅ Preview questions loaded:', {
+      mcq: result.mcq.length,
+      short: result.short.length,
+      long: result.long.length
+    });
+
+    setPreviewQuestions(result);
+    
+  } catch (error) {
+    console.error('❌ Error loading preview questions:', error);
+    alert('Failed to load questions for preview. Please try again.');
+  } finally {
+    setIsLoadingPreview(false);
+  }
+};
+
+// Force refresh preview when paper type changes
+useEffect(() => {
+  if (step === 7 && watchedPaperType) {
+    // Clear cache and reload when paper type changes
+    setQuestionsCache({});
+    setLastPreviewLoad(null);
+    loadPreviewQuestions();
+  }
+}, [watchedPaperType]);
+  // Optimized useEffect for step 7 loading
+// Optimized useEffect for step 7 loading// Fixed useEffect for step 7 loading
+// Fixed useEffect for step 7 loading - FORCE RELOAD
+useEffect(() => {
+  if (step === 7 && watchedSubjectId && watchedClassId) {
+    console.log('🎯 Step 7 activated - FORCE loading preview');
+    
+    // Clear any cached data to force fresh load
+    setQuestionsCache({});
+    setLastPreviewLoad(null);
+    
+    const chapterIds = getChapterIdsToUse();
+    
+    if (chapterIds.length > 0) {
+      // Small delay to ensure form values are updated
+      setTimeout(() => {
+        loadPreviewQuestions();
+      }, 100);
+    } else {
+      console.warn('⚠️ No chapters selected, skipping preview load');
+      setPreviewQuestions({ mcq: [], short: [], long: [] });
+    }
+  }
+}, [step, watchedSubjectId, watchedClassId]);
+
+// Listen for form value changes and reload preview
+useEffect(() => {
+  if (step === 7) {
+    console.log('📊 Form values changed in step 7:', {
+      mcqCount: watchedMcqCount,
+      shortCount: watchedShortCount,
+      longCount: watchedLongCount,
+      paperType: watchedPaperType
+    });
+    
+    const timer = setTimeout(() => {
+      loadPreviewQuestions();
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }
+}, [watchedMcqCount, watchedShortCount, watchedLongCount, watchedPaperType, step]);
+// Additional effect to reload when question counts change while on step 7
+useEffect(() => {
+  if (step === 7) {
+    console.log('🔄 Question counts changed, reloading preview', {
+      mcq: watchedMcqCount,
+      short: watchedShortCount,
+      long: watchedLongCount
+    });
+    
+    // Debounce the reload to prevent too many requests
+    const timer = setTimeout(() => {
+      loadPreviewQuestions();
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }
+}, [watchedMcqCount, watchedShortCount, watchedLongCount, step]);
   // Auto-advance steps when selections are made
   useEffect(() => {
     if (step === 1 && watchedClassId) {
-      setStep(2);
+      setTimeout(() => setStep(2), 300);
     }
   }, [watchedClassId, step]);
 
-  // Modify your auto-advance useEffect
   useEffect(() => {
     if (step === 2 && watchedSubjectId && !isManualNavigation) {
-      setStep(3);
+      setTimeout(() => setStep(3), 300);
     }
   }, [watchedSubjectId, step, isManualNavigation]);
 
-  // Enhanced back button functionality
+  // Drag and Drop Handlers
+  const handleDragStart = (e: React.DragEvent, questionId: string, questionType: QuestionType) => {
+    setDraggedQuestion({ id: questionId, type: questionType });
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+ const handleDrop = (e: React.DragEvent, targetType: QuestionType) => {
+  e.preventDefault();
+  
+  if (!draggedQuestion) return;
+
+  // Only allow reordering within the same section
+  if (draggedQuestion.type === targetType) {
+    const questions = [...previewQuestions[targetType]];
+    const draggedIndex = questions.findIndex(q => q.id === draggedQuestion.id);
+    
+    if (draggedIndex !== -1) {
+      // Get drop position
+      const dropIndex = getDropIndex(e.currentTarget as HTMLElement, e.clientY, questions);
+      
+      if (dropIndex !== -1) {
+        // Remove dragged item from current position
+        const [draggedItem] = questions.splice(draggedIndex, 1);
+        
+        // Insert at new position (below the target)
+        let newIndex = dropIndex;
+        if (draggedIndex < dropIndex) {
+          newIndex = dropIndex - 1; // Adjust index since we removed an item before this position
+        }
+        
+        questions.splice(newIndex, 0, draggedItem);
+        
+        setPreviewQuestions(prev => ({
+          ...prev,
+          [targetType]: questions
+        }));
+      }
+    }
+  }
+  
+  setDraggedQuestion(null);
+};
+
+const getDropIndex = (container: HTMLElement, y: number, questions: Question[]): number => {
+  const questionElements = container.querySelectorAll('.question-item');
+  if (questionElements.length === 0) return questions.length; // Add to end
+
+  for (let i = 0; i < questionElements.length; i++) {
+    const element = questionElements[i];
+    const rect = element.getBoundingClientRect();
+    const middle = rect.top + rect.height / 2;
+    
+    if (y < middle) {
+      return i; // Drop above this element
+    }
+  }
+  
+  return questions.length; // Drop at the end
+};
+
+  const handleDragEnd = () => {
+    setDraggedQuestion(null);
+  };
+
   const prevStep = () => {
     if (step === 2) {
       setValue('classId', '');
@@ -1053,11 +1540,7 @@ const [showDatePicker, setShowDatePicker] = useState(false);
       setValue('chapterOption', 'full_book');
       setValue('selectedChapters', []);
       setStep(2);
-      
-      // Reset the flag after a short delay
-      setTimeout(() => {
-        setIsManualNavigation(false);
-      }, 1000);
+      setTimeout(() => setIsManualNavigation(false), 1000);
     } else if (step === 4) {
       setStep(3);
     } else if (step === 5) {
@@ -1073,107 +1556,179 @@ const [showDatePicker, setShowDatePicker] = useState(false);
     }
   };
 
-  // Final submit handler with trial check
-  const onSubmit = async (formData: PaperFormData) => {
-    // Check trial status before proceeding
-    if (!canGeneratePaper()) {
-      setShowSubscriptionModal(true);
-      return;
-    }
+ const onSubmit = async (formData: PaperFormData) => {
+  if (!canGeneratePaper()) {
+    setShowSubscriptionModal(true);
+    return;
+  }
 
-    // Check authentication
-    if (!isAuthenticated) {
-      alert('Please login to generate papers');
-      return;
-    }
+  if (!isAuthenticated) {
+    alert('Please login to generate papers');
+    return;
+  }
 
-    // Remove the trial papers check since papers are unlimited during trial
-    setIsLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
+  setIsLoading(true);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
 
-      if (!session) {
-        alert('You must be logged in to generate a paper.');
-        setIsLoading(false);
-        return;
-      }
-const user = session.user;
-      const accessToken = session.access_token;
-      // 🔥 ADD RANDOM SEED TO PREVENT CACHING AND ENSURE RANDOMIZATION
-      const randomSeed = Date.now();
-      const payload = {
-        ...formData,
-        userId: user.id,
-        randomSeed, // This ensures different results each time
-        mcqToAttempt: formData.mcqToAttempt || formData.mcqCount,
-        shortToAttempt: formData.shortToAttempt || formData.shortCount,
-        longToAttempt: formData.longToAttempt || formData.longCount,
-        ...(formData.selectionMethod === 'manual' ? { selectedQuestions } : {}),
-        language: formData.language,
-        shuffleQuestions: formData.shuffleQuestions,
-      };
-      
-      console.log('Submitting payload with random seed:', randomSeed);
-      
-      const response = await fetch("/api/generate-paper", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const contentType = response.headers.get("content-type") || "";
-
-      console.log('Response status:', response.status);
-      console.log('Content-Type:', contentType);
-      
-      // Update papers count after successful generation
-      if (response.ok) {
-        const { count: newPapersCount } = await supabase
-          .from('papers')
-          .select('*', { count: 'exact', head: true })
-          .eq('created_by', user.id);
-
-        // Refresh trial status to update the papers count
-        await refreshTrialStatus();
-      }
-      
-      if (response.ok && contentType.includes("application/pdf")) {
-        console.log('Received PDF response, creating blob...');
-        const blob = await response.blob();
-        console.log('Blob created, size:', blob.size, 'bytes');
-        const url = window.URL.createObjectURL(blob);
-        console.log('Created object URL:', url);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "paper.pdf";
-        document.body.appendChild(a);
-        console.log('Triggering download...');
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-        console.log('Download triggered');
-      } else if (contentType.includes("application/json")) {
-        console.log('Received JSON response');
-        const result = await response.json();
-        console.error('Error from server:', result.error);
-        alert(result.error || "Paper generated, but no PDF was returned.");
-      } else {
-        console.log('Received unknown response type');
-        const text = await response.text();
-        console.error('Error text:', text);
-        alert(text || "Failed to generate paper (unknown error)");
-      }
-    } catch (error) {
-      console.error('Error generating paper:', error);
-      alert("Failed to generate paper (client error)");
-    } finally {
+    if (!session) {
+      alert('You must be logged in to generate a paper.');
       setIsLoading(false);
+      return;
     }
-  };
 
+    const user = session.user;
+    const accessToken = session.access_token;
+    const randomSeed = Date.now();
+    
+    // Get chapter IDs for validation
+    const chapterIds = getChapterIdsToUse();
+    
+    // Validate we have chapters
+    if (chapterIds.length === 0) {
+      alert('No chapters found for the selected subject and class. Please check your selection.');
+      setIsLoading(false);
+      return;
+    }
+
+    // Validate we're requesting questions
+    if (formData.mcqCount === 0 && formData.shortCount === 0 && formData.longCount === 0) {
+      alert('Please select at least one question type with count greater than 0.');
+      setIsLoading(false);
+      return;
+    }
+
+    console.log('🎯 Sending request to API with data:', {
+      subjectId: formData.subjectId,
+      classId: formData.classId,
+      chapterIds: chapterIds,
+      mcqCount: formData.mcqCount,
+      shortCount: formData.shortCount,
+      longCount: formData.longCount,
+      source_type: formData.source_type,
+      selectionMethod: formData.selectionMethod
+    });
+    
+    // Prepare selected questions based on current preview order
+    const selectedQuestionsFromPreview = {
+      mcq: previewQuestions.mcq.map(q => q.id),
+      short: previewQuestions.short.map(q => q.id),
+      long: previewQuestions.long.map(q => q.id)
+    };
+
+    // CRITICAL FIX: Prepare questions with custom marks for PDF generation
+    const questionsWithCustomMarks = {
+      mcq: previewQuestions.mcq.map(q => ({
+        ...q,
+        // Include the custom marks in the question object itself
+        marks: q.customMarks || formData.mcqMarks,
+        // Ensure the default marks are also available
+        defaultMarks: formData.mcqMarks
+      })),
+      short: previewQuestions.short.map(q => ({
+        ...q,
+        marks: q.customMarks || formData.shortMarks,
+        defaultMarks: formData.shortMarks
+      })),
+      long: previewQuestions.long.map(q => ({
+        ...q,
+        marks: q.customMarks || formData.longMarks,
+        defaultMarks: formData.longMarks
+      }))
+    };
+
+    const payload = {
+      ...formData,
+      userId: user.id,
+      randomSeed,
+      mcqToAttempt: formData.mcqToAttempt || formData.mcqCount,
+      shortToAttempt: formData.shortToAttempt || formData.shortCount,
+      longToAttempt: formData.longToAttempt || formData.longCount,
+      selectedQuestions: selectedQuestionsFromPreview,
+      language: formData.language,
+      shuffleQuestions: formData.shuffleQuestions,
+      // CRITICAL: Pass questions WITH CUSTOM MARKS embedded in each question
+      reorderedQuestions: questionsWithCustomMarks,
+      // Add explicit ordering information with marks
+      questionOrder: {
+        mcq: previewQuestions.mcq.map((q, index) => ({ 
+          id: q.id, 
+          order: index + 1,
+          marks: q.customMarks || formData.mcqMarks 
+        })),
+        short: previewQuestions.short.map((q, index) => ({ 
+          id: q.id, 
+          order: index + 1,
+          marks: q.customMarks || formData.shortMarks 
+        })),
+        long: previewQuestions.long.map((q, index) => ({ 
+          id: q.id, 
+          order: index + 1,
+          marks: q.customMarks || formData.longMarks 
+        }))
+      },
+      // Add custom marks as a separate object for backup
+      customMarksData: {
+        mcq: previewQuestions.mcq.map(q => ({
+          questionId: q.id,
+          marks: q.customMarks || formData.mcqMarks
+        })),
+        short: previewQuestions.short.map(q => ({
+          questionId: q.id,
+          marks: q.customMarks || formData.shortMarks
+        })),
+        long: previewQuestions.long.map(q => ({
+          questionId: q.id,
+          marks: q.customMarks || formData.longMarks
+        }))
+      }
+    };
+    
+    console.log('📦 Payload with custom marks:', {
+      mcqMarks: payload.reorderedQuestions.mcq.map(q => ({ id: q.id, marks: q.marks })),
+      shortMarks: payload.reorderedQuestions.short.map(q => ({ id: q.id, marks: q.marks })),
+      longMarks: payload.reorderedQuestions.long.map(q => ({ id: q.id, marks: q.marks }))
+    });
+
+    const response = await fetch("/api/generate-paper", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const contentType = response.headers.get("content-type") || "";
+    
+    if (response.ok) {
+      await refreshTrialStatus();
+    }
+    
+    if (response.ok && contentType.includes("application/pdf")) {
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "paper.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } else if (contentType.includes("application/json")) {
+      const result = await response.json();
+      alert(result.error || "Paper generated, but no PDF was returned.");
+    } else {
+      const text = await response.text();
+      alert(text || "Failed to generate paper (unknown error)");
+    }
+  } catch (error) {
+    console.error('Error generating paper:', error);
+    alert("Failed to generate paper (client error)");
+  } finally {
+    setIsLoading(false);
+  }
+};
   const resetForm = () => {
     setStep(1);
     reset({
@@ -1200,12 +1755,20 @@ const user = session.user;
       short: [],
       long: [],
     });
+    setPreviewQuestions({
+      mcq: [],
+      short: [],
+      long: [],
+    });
+    setIsEditMode(false);
+    setQuestionsCache({});
+    setLastPreviewLoad(null);
   };
 
   const handleChapterSelection = (chapterId: string) => {
     if (watchedChapterOption === 'single_chapter') {
       setValue('selectedChapters', [chapterId]);
-      setStep(4);
+      setTimeout(() => setStep(4), 300);
     } else if (watchedChapterOption === 'custom') {
       const currentSelected = watch('selectedChapters') || [];
       if (currentSelected.includes(chapterId)) {
@@ -1214,14 +1777,85 @@ const user = session.user;
         setValue('selectedChapters', [...currentSelected, chapterId]);
       }
     } else if (watchedChapterOption === 'full_book' || watchedChapterOption === 'half_book') {
-      setStep(4);
+      setTimeout(() => setStep(4), 300);
     }
+  };
+
+  const getSubjectIcon = (subjectName: string) => {
+    const name = subjectName.toLowerCase();
+    if (name.includes('computer') || name.includes('it')) return '💻';
+    else if (name.includes('math')) return '📊';
+    else if (name.includes('physics')) return '⚛️';
+    else if (name.includes('chemistry')) return '🧪';
+    else if (name.includes('biology')) return '🧬';
+    else if (name.includes('english')) return '📖';
+    else if (name.includes('urdu')) return '📜';
+    else if (name.includes('islamiyat')) return '☪️';
+    else if (name.includes('pakistan')) return '🇵🇰';
+    else return '📘';
   };
 
   return (
     <AcademyLayout>
       <div className="container mx-auto px-4 py-4">
-        {/* Show loading state while trial status is being fetched */}
+        <style jsx>{`
+          .step-transition {
+            transition: all 0.3s ease-in-out;
+          }
+          .option-card {
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+          }
+          .option-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          }
+          .option-card.active {
+            border-color: #0d6efd;
+            background-color: rgba(13, 110, 253, 0.05);
+          }
+          .bi-shuffle.spinning {
+            animation: spin 0.5s linear infinite;
+          }
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .cursor-grab {
+            cursor: grab;
+          }
+          .cursor-grab:active {
+            cursor: grabbing;
+          }
+          .drag-handle {
+            cursor: grab;
+          }
+          .drag-handle:active {
+            cursor: grabbing;
+          }
+          .question-item {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+          }
+          .question-item.dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+          }
+          .questions-list {
+            min-height: 100px;
+          }
+          .answer-space {
+            border: 1px dashed #dee2e6;
+            background: repeating-linear-gradient(
+              0deg,
+              transparent,
+              transparent 20px,
+              #f8f9fa 20px,
+              #f8f9fa 21px
+            );
+          }
+        `}</style>
+
         {trialLoading && (
           <div className="alert alert-info mb-4">
             <div className="spinner-border spinner-border-sm me-2" role="status">
@@ -1231,10 +1865,8 @@ const user = session.user;
           </div>
         )}
 
-        {/* Add Trial Status Banner */}
         <TrialStatusBanner trialStatus={trialStatus} />
         
-        {/* Add Subscription Modal */}
         {showSubscriptionModal && (
           <>
             <div className="modal-backdrop fade show"></div>
@@ -1246,7 +1878,6 @@ const user = session.user;
           </>
         )}
 
-        {/* Login prompt for unauthenticated users */}
         {!isAuthenticated && (
           <div className="alert alert-warning mb-4">
             <i className="bi bi-exclamation-triangle me-2"></i>
@@ -1254,7 +1885,6 @@ const user = session.user;
           </div>
         )}
 
-        {/* Disable form if trial expired and no subscription or not authenticated */}
         <div style={{ 
           opacity: canGeneratePaper() && isAuthenticated ? 1 : 0.6,
           pointerEvents: canGeneratePaper() && isAuthenticated ? 'auto' : 'none'
@@ -1262,427 +1892,507 @@ const user = session.user;
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h1 className="h2 mb-0">Generate New Paper</h1>
             {step > 1 && (
-              <button className="btn btn-outline-secondary" onClick={prevStep}>
+              <button className="btn btn-outline-primary btn-lg" onClick={prevStep}>
                 <i className="bi bi-arrow-left me-2"></i>
                 {step === 2 && 'Back to Class Selection'}
                 {step === 3 && 'Back to Subject Selection'}
                 {step === 4 && 'Back to Chapter Selection'}
-                {step === 5 && 'Back to Paper Details'}
+                {step === 5 && 'Back to Paper Type'}
                 {step === 6 && 'Back to Selection Method'}
-                {step === 7 && 'Back'}
+                {step === 7 && 'Back to Previous Step'}
               </button>
             )}
           </div>
 
-          {/* Step Progress Indicator */}
-          <div className="mb-4">
-            <div className="progress" style={{ height: "8px" }}>
-              <div
-                className="progress-bar bg-primary"
-                style={{ width: `${(step / 7) * 100}%` }}
-              ></div>
+          {/* Enhanced Step Progress Indicator */}
+          <div className="mb-5">
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              {[
+                { step: 1, label: 'Class', icon: '🎓' },
+                { step: 2, label: 'Subject', icon: '📚' },
+                { step: 3, label: 'Chapters', icon: '📖' },
+                { step: 4, label: 'Paper Type', icon: '📝' },
+                { step: 5, label: 'Method', icon: '🤖' },
+                { step: 6, label: 'Selection', icon: '✍️' },
+                { step: 7, label: 'Review', icon: '👁️' }
+              ].map((item, index) => (
+                <div key={item.step} className="d-flex flex-column align-items-center position-relative">
+                  {index > 0 && (
+                    <div 
+                      className={`position-absolute top-50 start-0 w-100 h-2 ${
+                        step > item.step ? 'bg-primary' : 'bg-light'
+                      }`}
+                      style={{ zIndex: 1, transform: 'translateY(-50%)' }}
+                    ></div>
+                  )}
+                  
+                  <div 
+                    className={`rounded-circle d-flex align-items-center justify-content-center position-relative ${
+                      step >= item.step ? 'bg-primary text-white' : 'bg-light text-muted'
+                    }`}
+                    style={{ 
+                      width: '50px', 
+                      height: '50px', 
+                      zIndex: 2,
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    {step > item.step ? (
+                      <i className="bi bi-check-lg fs-6"></i>
+                    ) : (
+                      <span className="fs-5">{item.icon}</span>
+                    )}
+                  </div>
+                  
+                  <small className={`mt-2 fw-semibold ${step >= item.step ? 'text-primary' : 'text-muted'}`}>
+                    {item.label}
+                  </small>
+                </div>
+              ))}
             </div>
-            <p className="text-muted small mt-2">Step {step} of 7</p>
+            
+            <div className="text-center">
+              <small className="text-muted">
+                Step {step} of 7 - {
+                  step === 1 ? 'Selecting Class' :
+                  step === 2 ? 'Choosing Subject' :
+                  step === 3 ? 'Setting Chapter Coverage' :
+                  step === 4 ? 'Configuring Paper Type' :
+                  step === 5 ? 'Selection Method' :
+                  step === 6 ? 'Manual Question Selection' :
+                  'Final Review & Generation'
+                }
+              </small>
+            </div>
           </div>
 
           {/* Step 1: Class selection */}
           {step === 1 && (
-            <div className="step-card">
-              <h5 className="fw-bold mb-3">🎓 Select Your Class</h5>
+            <div className="step-card step-transition">
+              <div className="text-center mb-5">
+                <h5 className="fw-bold mb-3">🎓 Select Your Class</h5>
+                <p className="text-muted">Choose the class for which you want to generate the paper</p>
+              </div>
+              
               {classes.length === 0 ? (
-                <div className="loading-state">
-                  <div className="spinner-border text-primary" role="status"></div>
-                  <p className="mt-2">Loading classes...</p>
+                <div className="loading-state text-center py-5">
+                  <div className="spinner-border text-primary mb-3" role="status" style={{width: '3rem', height: '3rem'}}>
+                    <span className="visually-hidden">Loading...</span>
+                  </div>
+                  <p className="fs-5 text-muted">Loading classes...</p>
                 </div>
               ) : (
                 <div className="row row-cols-2 row-cols-md-4 g-4">
                   {classes.map((cls) => (
                     <div key={cls.id} className="col">
                       <div
-                        className={`option-card ${
-                          watchedClassId === cls.id ? "active" : ""
+                        className={`option-card card h-100 text-center p-4 cursor-pointer ${
+                          watchedClassId === cls.id ? "active border-primary" : "border-light"
                         }`}
                         onClick={() => setValue("classId", cls.id)}
+                        style={{ cursor: 'pointer' }}
                       >
-                        <span className="display-6 mb-2">🎓</span>
-                        <h6 className="fw-semibold">Class {cls.name}</h6>
+                        <div className="card-body d-flex flex-column justify-content-center">
+                          <span className="display-6 mb-3">🎓</span>
+                          <h6 className="fw-semibold mb-2">Class {cls.name}</h6>
+                          <small className="text-muted">Select to continue</small>
+                          
+                          {watchedClassId === cls.id && (
+                            <div className="mt-3">
+                              <span className="badge bg-primary rounded-pill">
+                                <i className="bi bi-check-circle me-1"></i>
+                                Selected
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
               {errors.classId && (
-                <div className="text-danger small mt-2">{errors.classId.message}</div>
+                <div className="alert alert-danger mt-3" role="alert">
+                  <i className="bi bi-exclamation-triangle me-2"></i>
+                  {errors.classId.message}
+                </div>
               )}
             </div>
           )}
 
           {/* Step 2: Subject selection */}
-       {step === 2 && (
-  <div className="step-card">
-    <h5 className="fw-bold mb-3">📚 Select Subject</h5>
-    {watchedClassId && subjects.length === 0 ? (
-      <div className="loading-state">
-        <div className="spinner-border text-primary" role="status"></div>
-        <p className="mt-2">Loading subjects...</p>
-      </div>
-    ) : (
-      <div className="row row-cols-2 row-cols-md-4 g-4">
-        {subjects.map((subject) => {
-          // Enhanced function to get appropriate icon based on subject name
-          const getSubjectIcon = (subjectName: string) => {
-            const name = subjectName.toLowerCase();
-            
-            // Computer & IT Subjects
-            if (name.includes('computer') || name.includes('programming') || name.includes('coding') || 
-                name.includes('it') || name.includes('software') || name.includes('technology')) {
-              return '💻';
-            }
-            
-            // Mathematics
-            else if (name.includes('math') || name.includes('calculus') || name.includes('algebra') || 
-                     name.includes('geometry') || name.includes('statistics') || name.includes('trigonometry')) {
-              return '📊';
-            }
-            
-            // Sciences
-            else if (name.includes('physics')) {
-              return '⚛️';
-            } else if (name.includes('chemistry')) {
-              return '🧪';
-            } else if (name.includes('biology')) {
-              return '🧬';
-            } else if (name.includes('science') || name.includes('general science')) {
-              return '🔬';
-            }
-            
-            // Languages
-            else if (name.includes('english') || name.includes('literature')) {
-              return '📖';
-            } else if (name.includes('urdu')) {
-              return '📜';
-            } else if (name.includes('arabic')) {
-              return '🕌';
-            } else if (name.includes('language')) {
-              return '🗣️';
-            }
-            
-            // Islamic Studies
-            else if (name.includes('islamiyat') || name.includes('islamic') || name.includes('quran') || 
-                     name.includes('islam') || name.includes('religious')) {
-              return '☪️';
-            }
-            
-            // Social Studies
-            else if (name.includes('history')) {
-              return '📜';
-            } else if (name.includes('geography')) {
-              return '🌍';
-            } else if (name.includes('civics') || name.includes('citizenship')) {
-              return '🏛️';
-            } else if (name.includes('social studies') || name.includes('sociology')) {
-              return '👥';
-            }
-            
-            // Pakistan Studies
-            else if (name.includes('pakistan studies') || name.includes('pak studies')) {
-              return '🇵🇰';
-            }
-            
-            // Commerce & Business
-            else if (name.includes('accounting') || name.includes('accounts')) {
-              return '📈';
-            } else if (name.includes('commerce')) {
-              return '💼';
-            } else if (name.includes('business') || name.includes('business studies')) {
-              return '🏢';
-            } else if (name.includes('economics') || name.includes('economy')) {
-              return '💰';
-            }
-            
-            // Arts & Creative
-            else if (name.includes('art') || name.includes('drawing') || name.includes('painting')) {
-              return '🎨';
-            } else if (name.includes('music')) {
-              return '🎵';
-            } else if (name.includes('drama') || name.includes('theater')) {
-              return '🎭';
-            }
-            
-            // Physical Education
-            else if (name.includes('physical') || name.includes('sports') || name.includes('health') || 
-                     name.includes('pe') || name.includes('gym')) {
-              return '⚽';
-            }
-            
-            // General Knowledge
-            else if (name.includes('general knowledge') || name.includes('gk')) {
-              return '🧠';
-            }
-            
-            // Environmental Science
-            else if (name.includes('environment') || name.includes('ecology')) {
-              return '🌱';
-            }
-            
-            // Psychology
-            else if (name.includes('psychology')) {
-              return '🧠';
-            }
-            
-            // Philosophy
-            else if (name.includes('philosophy')) {
-              return '🤔';
-            }
-            
-            // Default fallback
-            else {
-              return '📘';
-            }
-          };
-
-          const subjectIcon = getSubjectIcon(subject.name);
-
-          return (
-            <div key={subject.id} className="col">
-              <div
-                className={`option-card ${
-                  watchedSubjectId === subject.id ? "active" : ""
-                }`}
-                onClick={() => setValue("subjectId", subject.id)}
-              >
-                <span className="display-6 mb-2">{subjectIcon}</span>
-                <h6 className="fw-semibold">{subject.name}</h6>
+          {step === 2 && (
+            <div className="step-card step-transition">
+              <div className="text-center mb-5">
+                <h5 className="fw-bold mb-3">📚 Select Subject</h5>
+                <p className="text-muted">Choose the subject for your paper</p>
               </div>
-            </div>
-          );
-        })}
-      </div>
-    )}
-    {errors.subjectId && (
-      <div className="text-danger small mt-2">{errors.subjectId.message}</div>
-    )}
-  </div>
-)}
-          {/* Step 3: Chapter selection */}
-          {step === 3 && (
-            <div>
-              <label className="form-label">Select Chapter Coverage</label>
-              <div className="row row-cols-1 row-cols-md-2 g-4 mb-4">
-                <div className="col">
-                  <div className={`card h-100 cursor-pointer p-3 border ${watchedChapterOption === 'full_book' ? 'border-primary bg-primary bg-opacity-10' : 'border-secondary'}`}
-                    onClick={() => {
-                      setValue('chapterOption', 'full_book');
-                      setValue('selectedChapters', []);
-                      setStep(4); 
-                    }}
-                  >
-                    <div className="card-body text-center">
-                      <span className="display-6 mb-2">📖</span>
-                      <h5 className="card-title">Full Book</h5>
-                      <p className="card-text">Cover all chapters in the subject</p>
-                    </div>
+              
+              {watchedClassId && subjects.length === 0 ? (
+                <div className="loading-state text-center py-5">
+                  <div className="spinner-border text-primary mb-3" role="status" style={{width: '3rem', height: '3rem'}}>
+                    <span className="visually-hidden">Loading...</span>
                   </div>
+                  <p className="fs-5 text-muted">Loading subjects for Class {classes.find(c => c.id === watchedClassId)?.name}...</p>
                 </div>
-                <div className="col">
-                  <div 
-                    className={`card h-100 cursor-pointer p-3 border ${watchedChapterOption === 'half_book' ? 'border-primary bg-primary bg-opacity-10' : 'border-secondary'}`}
-                    onClick={() => {
-                      setValue('chapterOption', 'half_book');
-                      setValue('selectedChapters', []);
-                      setStep(4); 
-                    }}
-                  >
-                    <div className="card-body text-center">
-                      <span className="display-6 mb-2">📘</span>
-                      <h5 className="card-title">Half Book</h5>
-                      <p className="card-text">Cover first half of the chapters</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="col">
-                  <div 
-                    className={`card h-100 cursor-pointer p-3 border ${watchedChapterOption === 'single_chapter' ? 'border-primary bg-primary bg-opacity-10' : 'border-secondary'}`}
-                    onClick={() => setValue('chapterOption', 'single_chapter')}
-                  >
-                    <div className="card-body text-center">
-                      <span className="display-6 mb-2">📄</span>
-                      <h5 className="card-title">Single Chapter</h5>
-                      <p className="card-text">Select one specific chapter</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="col">
-                  <div 
-                    className={`card h-100 cursor-pointer p-3 border ${watchedChapterOption === 'custom' ? 'border-primary bg-primary bg-opacity-10' : 'border-secondary'}`}
-                    onClick={() => setValue('chapterOption', 'custom')}
-                  >
-                    <div className="card-body text-center">
-                      <span className="display-6 mb-2">🎛️</span>
-                      <h5 className="card-title">Custom Selection</h5>
-                      <p className="card-text">Choose multiple chapters</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              ) : (
+                <div className="row row-cols-2 row-cols-md-4 g-4">
+                  {subjects.map((subject) => {
+                    const subjectIcon = getSubjectIcon(subject.name);
 
-              {(watchedChapterOption === 'custom' || watchedChapterOption === 'single_chapter') && (
-                <>
-                  <label className="form-label">
-                    {watchedChapterOption === 'single_chapter' ? 'Select Chapter' : 'Select Chapters'}
-                  </label>
-                  
-                  {/* Show loading state while chapters are loading */}
-                  {chapters.length === 0 && (
-                    <div className="text-center py-4">
-                      <div className="spinner-border text-primary" role="status">
-                        <span className="visually-hidden">Loading chapters...</span>
-                      </div>
-                      <p className="mt-2">Loading chapters...</p>
-                    </div>
-                  )}
-                  
-                  {/* Show message if no chapters found for this subject */}
-                  {chapters.length > 0 && chapters.filter(chapter => chapter.subject_id === watchedSubjectId).length === 0 && (
-                    <div className="alert alert-warning">
-                      No chapters found for the selected subject.
-                    </div>
-                  )}
-                  
-                  <div className="row row-cols-2 row-cols-md-4 g-4">
-                    {/* Filter chapters by selected subject */}
-                    {chapters
-                      .filter(chapter => chapter.subject_id === watchedSubjectId)
-                      .map(chapter => {
-                        const selectedChapters = watch('selectedChapters') || [];
-                        const isSelected = selectedChapters.includes(chapter.id);
-                        return (
-                          <div key={chapter.id} className="col">
-                            <div
-                              className={`card h-100 cursor-pointer p-3 border ${isSelected ? 'border-primary bg-primary bg-opacity-10' : 'border-secondary'}`}
-                              onClick={() => handleChapterSelection(chapter.id)}
-                            >
-                              <div className="card-body text-center">
-                                <span className="display-6 mb-2">📖</span>
-                                <h5 className="card-title">{chapter.chapterNo}. {chapter.name}</h5>
+                    return (
+                      <div key={subject.id} className="col">
+                        <div
+                          className={`option-card card h-100 text-center p-4 cursor-pointer ${
+                            watchedSubjectId === subject.id ? "active border-primary" : "border-light"
+                          }`}
+                          onClick={() => setValue("subjectId", subject.id)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <div className="card-body d-flex flex-column justify-content-center">
+                            <span className="display-6 mb-3">{subjectIcon}</span>
+                            <h6 className="fw-semibold mb-2">{subject.name}</h6>
+                            <small className="text-muted">Click to select</small>
+                            
+                            {watchedSubjectId === subject.id && (
+                              <div className="mt-3">
+                                <span className="badge bg-primary rounded-pill">
+                                  <i className="bi bi-check-circle me-1"></i>
+                                  Selected
+                                </span>
                               </div>
-                            </div>
+                            )}
                           </div>
-                        );
-                      })}
-                  </div>
-                  
-                  {watchedChapterOption === 'custom' && (
-                    <button 
-                      className="btn btn-primary mt-3"
-                      onClick={() => setStep(4)}
-                      disabled={!watch('selectedChapters')?.length}
-                    >
-                      Continue
-                    </button>
-                  )}
-                </>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {errors.subjectId && (
+                <div className="alert alert-danger mt-3" role="alert">
+                  <i className="bi bi-exclamation-triangle me-2"></i>
+                  {errors.subjectId.message}
+                </div>
               )}
             </div>
           )}
 
-          {/* Step 4: Paper details and settings */}
-          {step === 4 && (
-            <div className="step-card">
-              <h5 className="fw-bold mb-4">📝 Paper Details & Settings</h5>
+          {/* Step 3: Chapter selection */}
+          {step === 3 && (
+            <div className="step-transition">
+              <div className="text-center mb-5">
+                <h5 className="fw-bold mb-3">📖 Chapter Coverage</h5>
+                <p className="text-muted">Select how you want to cover chapters for {subjects.find(s => s.id === watchedSubjectId)?.name}</p>
+              </div>
 
-              {/* 🔹 Paper Type Selection */}
-              <div className="mb-4">
-                <div className="row g-4">
-                  <div className="col-md-6">
-                    <div
-                      className={`option-card ${watch("paperType") === "model" ? "active" : ""}`}
+              <div className="row row-cols-1 row-cols-md-2 g-4 mb-4">
+                {[
+                  { value: 'full_book', icon: '📖', title: 'Full Book', desc: 'Cover all chapters in the subject' },
+                  { value: 'half_book', icon: '📘', title: 'Half Book', desc: 'Cover first half of the chapters' },
+                  { value: 'single_chapter', icon: '📄', title: 'Single Chapter', desc: 'Select one specific chapter' },
+                  { value: 'custom', icon: '🎛️', title: 'Custom Selection', desc: 'Choose multiple chapters' }
+                ].map((option) => (
+                  <div key={option.value} className="col">
+                    <div 
+                      className={`card h-100 cursor-pointer p-4 transition-all ${
+                        watchedChapterOption === option.value ? 'border-primary bg-primary bg-opacity-10 shadow' : 'border-light'
+                      }`}
                       onClick={() => {
-                        setValue("paperType", "model");
-                        setValue("language", "bilingual");
-                        setValue("mcqCount", 12);
-                        setValue("mcqToAttempt", 12);
-                        setValue("shortCount", 24);
-                        setValue("shortToAttempt", 16);
-                        setValue("longCount", 3);
-                        setValue("longToAttempt", 2);
-                        setValue("mcqMarks", 1);
-                        setValue("shortMarks", 2);
-                        setValue("longMarks", 8);
-                        setValue("mcqPlacement", "separate");
-                        setValue("timeMinutes", 180);
-                        setValue("easyPercent", 20);
-                        setValue("mediumPercent", 50);
-                        setValue("hardPercent", 30);
-                        setValue("shuffleQuestions", true);
-                        setValue("dateOfPaper", undefined);
+                        setValue('chapterOption', option.value as any);
+                        if (option.value === 'full_book' || option.value === 'half_book') {
+                          setValue('selectedChapters', []);
+                          setTimeout(() => setStep(4), 300);
+                        }
                       }}
+                      style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
                     >
-                      <span className="display-6">🏛️</span>
-                      <h5 className="mt-2">Board Paper</h5>
-                      <p className="small text-muted">
-                        Predefined board style with fixed marks & time distribution.
-                      </p>
+                      <div className="card-body text-center">
+                        <span className="display-6 mb-3">{option.icon}</span>
+                        <h5 className="card-title fw-bold">{option.title}</h5>
+                        <p className="card-text text-muted">{option.desc}</p>
+                        
+                        {watchedChapterOption === option.value && (
+                          <div className="mt-3">
+                            <span className="badge bg-primary rounded-pill">
+                              <i className="bi bi-check-circle me-1"></i>
+                              Selected
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
 
-                  <div className="col-md-6">
-                    <div
-                      className={`option-card ${watch("paperType") === "custom" ? "active" : ""}`}
-                      onClick={() => {
-                        setValue("paperType", "custom");
-                        setValue("mcqCount", 10);
-                        setValue("shortCount", 5);
-                        setValue("longCount", 3);
-                        setValue("mcqMarks", 1);
-                        setValue("shortMarks", 2);
-                        setValue("longMarks", 5);
-                        setValue("mcqPlacement", "separate");
-                        setValue("timeMinutes", 60);
-                        setValue("easyPercent", 33);
-                        setValue("mediumPercent", 34);
-                        setValue("hardPercent", 33);
-                        setValue("shuffleQuestions", true);
-                        setValue("dateOfPaper", new Date().toISOString().split('T')[0]);
-                      }}
-                    >
-                      <span className="display-6">⚙️</span>
-                      <h5 className="mt-2">Custom Paper</h5>
-                      <p className="small text-muted">
-                        Customize marks, sections, difficulty levels, and time.
-                      </p>
+              {(watchedChapterOption === 'custom' || watchedChapterOption === 'single_chapter') && (
+                <div className="step-transition mt-5">
+                  <h6 className="fw-bold mb-4 text-center">
+                    {watchedChapterOption === 'single_chapter' ? 'Select Chapter' : 'Select Chapters'}
+                  </h6>
+                  
+                  {chapters.length === 0 ? (
+                    <div className="text-center py-4">
+                      <div className="spinner-border text-primary" role="status">
+                        <span className="visually-hidden">Loading chapters...</span>
+                      </div>
+                      <p className="mt-2 text-muted">Loading chapters...</p>
+                    </div>
+                  ) : chapters.filter(chapter => chapter.subject_id === watchedSubjectId).length === 0 ? (
+                    <div className="alert alert-warning text-center">
+                      <i className="bi bi-exclamation-triangle me-2"></i>
+                      No chapters found for the selected subject.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="row row-cols-2 row-cols-md-4 g-3">
+                        {chapters
+                          .filter(chapter => chapter.subject_id === watchedSubjectId)
+                          .map(chapter => {
+                            const selectedChapters = watch('selectedChapters') || [];
+                            const isSelected = selectedChapters.includes(chapter.id);
+                            return (
+                              <div key={chapter.id} className="col">
+                                <div
+                                  className={`card h-100 cursor-pointer p-3 transition-all ${
+                                    isSelected ? 'border-primary bg-primary bg-opacity-10' : 'border-light'
+                                  }`}
+                                  onClick={() => handleChapterSelection(chapter.id)}
+                                  style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
+                                >
+                                  <div className="card-body text-center">
+                                    <span className="display-6 mb-2">📖</span>
+                                    <h6 className="card-title">{chapter.chapterNo}. {chapter.name}</h6>
+                                    
+                                    {isSelected && (
+                                      <div className="mt-2">
+                                        <span className="badge bg-success rounded-pill">
+                                          <i className="bi bi-check me-1"></i>
+                                          Selected
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                      
+                      {watchedChapterOption === 'custom' && (
+                        <div className="text-center mt-4">
+                          <button 
+                            className="btn btn-primary px-4"
+                            onClick={() => setStep(4)}
+                            disabled={!watch('selectedChapters')?.length}
+                          >
+                            Continue to Paper Type <i className="bi bi-arrow-right ms-2"></i>
+                          </button>
+                          <div className="mt-2">
+                            <small className="text-muted">
+                              {watch('selectedChapters')?.length || 0} chapters selected
+                            </small>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 4: Paper Type Selection */}
+          {step === 4 && (
+            <div className="step-card step-transition">
+              <div className="text-center mb-5">
+                <h5 className="fw-bold mb-3">📝 Select Paper Type</h5>
+                <p className="text-muted">Choose between predefined board pattern or customize your own paper</p>
+              </div>
+
+              <div className="row g-4">
+                {/* Board Paper Card */}
+                <div className="col-md-6">
+                  <div
+                    className={`option-card card h-100 p-4 cursor-pointer ${
+                      watch("paperType") === "model" ? "active border-primary shadow" : "border-light"
+                    }`}
+               // In your Board Paper card onClick handler, replace with this:
+// Enhanced Board Paper selection
+onClick={() => {
+  // First clear everything
+  setSelectedQuestions({ mcq: [], short: [], long: [] });
+  setPreviewQuestions({ mcq: [], short: [], long: [] });
+  setQuestionsCache({});
+  setLastPreviewLoad(null);
+  
+  // Then set values with a small delay between them
+  setValue("paperType", "model");
+  setValue("language", "bilingual");
+  setValue("mcqCount", 12);
+  setValue("mcqToAttempt", 12);
+  setValue("shortCount", 24);
+  setValue("shortToAttempt", 16);
+  setValue("longCount", 3);
+  setValue("longToAttempt", 2);
+  setValue("mcqMarks", 1);
+  setValue("shortMarks", 2);
+  setValue("longMarks", 8);
+  setValue("mcqPlacement", "separate");
+  setValue("timeMinutes", 180);
+  setValue("easyPercent", 20);
+  setValue("mediumPercent", 50);
+  setValue("hardPercent", 30);
+  setValue("shuffleQuestions", true);
+  setValue("dateOfPaper", undefined);
+  setValue("source_type", "all");
+  setValue("selectionMethod", "auto");
+  
+  console.log('🏛️ Board Paper selected with values:', {
+    mcqCount: 12,
+    shortCount: 24,
+    longCount: 3
+  });
+  
+  // Force state update and then proceed
+  setTimeout(() => {
+    setStep(5);
+  }, 100);
+}}                    style={{ cursor: 'pointer' }}
+                  >
+                    <div className="card-body">
+                      <div className="text-center mb-4">
+                        <span className="display-6">🏛️</span>
+                        <h4 className="mt-3 fw-bold">Board Paper</h4>
+                        <p className="text-muted mb-4">Predefined board style with fixed marks & time distribution</p>
+                      </div>
+
+                      {/* Question Details */}
+                      <div className="bg-light rounded p-3 mb-4">
+                        <div className="row text-center g-3">
+                          <div className="col-4">
+                            <div className="fw-bold text-primary">MCQs</div>
+                            <div className="fs-6 fw-bold">12 × 1</div>
+                            <small className="text-muted">All to attempt</small>
+                          </div>
+                          <div className="col-4">
+                            <div className="fw-bold text-primary">Short</div>
+                            <div className="fs-6 fw-bold">24 Qs</div>
+                            <small className="text-muted">16 to attempt × 2</small>
+                          </div>
+                          <div className="col-4">
+                            <div className="fw-bold text-primary">Long</div>
+                            <div className="fs-6 fw-bold">3 Qs</div>
+                            <small className="text-muted">2 to attempt × 8</small>
+                          </div>
+                        </div>
+                        <div className="text-center mt-3 pt-2 border-top">
+                          <small className="text-muted">
+                            <i className="bi bi-clock me-1"></i>180 mins • 
+                            <i className="bi bi-translate ms-2 me-1"></i>Bilingual • 
+                            <i className="bi bi-star ms-2 me-1"></i>60 marks
+                          </small>
+                        </div>
+                      </div>
+
+                      <div className="text-center">
+                        <span className="badge bg-primary px-3 py-2">
+                          <i className="bi bi-lightning me-2"></i>
+                          Quick Setup - Click to Continue
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custom Paper Card */}
+                <div className="col-md-6">
+                  <div
+                    className={`option-card card h-100 p-4 cursor-pointer ${
+                      watch("paperType") === "custom" ? "active border-primary shadow" : "border-light"
+                    }`}
+                  // In your Custom Paper card onClick handler, replace with:
+onClick={() => {
+  setValue("paperType", "custom");
+  
+  // Set reasonable custom paper defaults instead of zeros
+  setValue("mcqCount", 10);
+  setValue("shortCount", 5);
+  setValue("longCount", 3);
+  setValue("mcqToAttempt", 10);
+  setValue("shortToAttempt", 5);
+  setValue("longToAttempt", 3);
+  setValue("mcqMarks", 1);
+  setValue("shortMarks", 2);
+  setValue("longMarks", 5);
+  setValue("mcqPlacement", "separate");
+  setValue("timeMinutes", 60);
+  setValue("easyPercent", 33);
+  setValue("mediumPercent", 34);
+  setValue("hardPercent", 33);
+  setValue("shuffleQuestions", true);
+  setValue("dateOfPaper", new Date().toISOString().split('T')[0]);
+  setValue("source_type", "all");
+  
+  // Clear selections and cache
+  setSelectedQuestions({
+    mcq: [],
+    short: [],
+    long: [],
+  });
+  setQuestionsCache({});
+  setLastPreviewLoad(null);
+  setPreviewQuestions({
+    mcq: [],
+    short: [],
+    long: [],
+  });
+}}                    style={{ cursor: 'pointer' }}
+                  >
+                    <div className="card-body">
+                      <div className="text-center mb-4">
+                        <span className="display-6">⚙️</span>
+                        <h4 className="mt-3 fw-bold">Custom Paper</h4>
+                        <p className="text-muted mb-4">Full control over marks, sections, difficulty, and timing</p>
+                      </div>
+
+                      {/* Features List */}
+                      <div className="bg-light rounded p-3 mb-4">
+                        <div className="row g-2">
+                          {[
+                            { icon: '🎯', text: 'Flexible marks distribution' },
+                            { icon: '⏱️', text: 'Custom timing options' },
+                            { icon: '🌐', text: 'Multiple language support' },
+                            { icon: '📊', text: 'Adjustable difficulty levels' },
+                            { icon: '🔀', text: 'Question shuffling' },
+                            { icon: '📝', text: 'Custom paper title' }
+                          ].map((feature, index) => (
+                            <div key={index} className="col-6">
+                              <div className="d-flex align-items-center mb-2">
+                                <span className="me-2">{feature.icon}</span>
+                                <small>{feature.text}</small>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="text-center">
+                        <span className="badge bg-success px-3 py-2">
+                          <i className="bi bi-sliders me-2"></i>
+                          Full Customization - Click to Configure
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* 🔹 Board Paper Preview */}
-              {watch("paperType") === "model" && (
-                <div className="preview-card mt-3">
-                  <h6 className="fw-bold mb-2">📋 Board Paper Pattern</h6>
-                  <div className="row">
-                    <div className="col-md-6">
-                      <ul className="list-unstyled small">
-                        <li><strong>Language:</strong> Bilingual</li>
-                        <li><strong>MCQs:</strong> 12 × 1 mark</li>
-                        <li><strong>Short:</strong> 24 Qs, 16 to attempt (2 marks)</li>
-                      </ul>
-                    </div>
-                    <div className="col-md-6">
-                      <ul className="list-unstyled small">
-                        <li><strong>Long:</strong> 3 Qs, attempt 2 (8 marks)</li>
-                        <li><strong>Time:</strong> 180 mins</li>
-                        <li><strong>Difficulty:</strong> 20% Easy, 50% Medium, 30% Hard</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 🔹 Custom Paper Settings */}
+              {/* Custom Paper Settings */}
               {watch("paperType") === "custom" && (
-                <div className="custom-settings mt-4">
-                  <h6 className="fw-bold mb-3">⚙️ Customize Settings</h6>
+                <div className="custom-settings mt-5 p-4 border rounded bg-light step-transition">
+                  <h6 className="fw-bold mb-3">⚙️ Customize Paper Settings</h6>
 
                   {/* Paper Title */}
                   <div className="mb-3">
@@ -1696,7 +2406,7 @@ const user = session.user;
                     {errors.title && <div className="invalid-feedback">{errors.title.message}</div>}
                   </div>
 
-  {/* 🆕 NEW: Date of Paper Field */}
+                  {/* Date of Paper Field */}
                   <div className="mb-3">
                     <label className="form-label">Date of Paper</label>
                     <div className="position-relative">
@@ -1761,6 +2471,7 @@ const user = session.user;
                       Select the date for this paper (optional)
                     </div>
                   </div>
+
                   {/* Language + Source */}
                   <div className="row mb-3">
                     <div className="col-md-6">
@@ -1850,7 +2561,7 @@ const user = session.user;
                   </div>
 
                   {/* Question Distribution */}
-                  <div className="distribution-card mt-3 p-3 bg-light rounded shadow-sm">
+                  <div className="distribution-card mt-3 p-3 bg-white rounded shadow-sm">
                     <h6 className="fw-semibold mb-3">📊 Question Distribution</h6>
 
                     <div className="table-responsive">
@@ -1930,50 +2641,81 @@ const user = session.user;
                       </div>
                     ))}
                   </div>
+
+                  {/* Continue Button for Custom Paper */}
+                  <div className="text-center mt-4 pt-3 border-top">
+                    <button 
+                      className="btn btn-primary btn-lg px-5" 
+                      onClick={() => setStep(5)}
+                    >
+                      Continue to Selection Method <i className="bi bi-arrow-right ms-2"></i>
+                    </button>
+                  </div>
                 </div>
               )}
-
-              {/* Next button */}
-              <div className="mt-4 d-flex justify-content-end">
-                <button className="btn btn-primary px-4" onClick={() => setStep(5)}>
-                  Next <i className="bi bi-arrow-right ms-1"></i>
-                </button>
-              </div>
             </div>
           )}
 
           {/* Step 5: Selection method */}
           {step === 5 && (
-            <div>
-              <label className="form-label">Question Selection Method</label>
+            <div className="step-transition">
+              <div className="text-center mb-5">
+                <h5 className="fw-bold mb-3">🎯 Selection Method</h5>
+                <p className="text-muted">Choose how you want to select questions for your paper</p>
+              </div>
+
               <div className="row row-cols-1 row-cols-md-2 g-4">
                 <div className="col">
                   <div 
-                    className={`card h-100 cursor-pointer p-3 border ${watchedSelectionMethod === 'auto' ? 'border-primary bg-primary bg-opacity-10' : 'border-secondary'}`}
+                    className={`card h-100 cursor-pointer p-4 transition-all ${
+                      watchedSelectionMethod === 'auto' ? 'border-primary bg-primary bg-opacity-10 shadow' : 'border-light'
+                    }`}
                     onClick={() => {
                       setValue('selectionMethod', 'auto');
-                      setStep(7);
+                      setTimeout(() => setStep(7), 400);
                     }}
+                    style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
                   >
                     <div className="card-body text-center">
-                      <span className="display-6 mb-2">🤖</span>
-                      <h5 className="card-title">Auto Generate</h5>
-                      <p className="card-text">System will automatically select questions randomly based on your criteria</p>
+                      <span className="display-6 mb-3">🤖</span>
+                      <h4 className="card-title fw-bold">Auto Generate</h4>
+                      <p className="card-text text-muted">
+                        System will automatically select questions randomly based on your criteria. 
+                        Perfect for quick paper generation with balanced difficulty distribution.
+                      </p>
+                      <div className="mt-4">
+                        <span className="badge bg-primary px-3 py-2">
+                          <i className="bi bi-lightning me-2"></i>
+                          Fast & Automated
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
                 <div className="col">
                   <div 
-                    className={`card h-100 cursor-pointer p-3 border ${watchedSelectionMethod === 'manual' ? 'border-primary bg-primary bg-opacity-10' : 'border-secondary'}`}
+                    className={`card h-100 cursor-pointer p-4 transition-all ${
+                      watchedSelectionMethod === 'manual' ? 'border-primary bg-primary bg-opacity-10 shadow' : 'border-light'
+                    }`}
                     onClick={() => {
                       setValue('selectionMethod', 'manual');
-                      setStep(6);
+                      setTimeout(() => setStep(6), 400);
                     }}
+                    style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
                   >
                     <div className="card-body text-center">
-                      <span className="display-6 mb-2">✍️</span>
-                      <h5 className="card-title">Manual Selection</h5>
-                      <p className="card-text">You will manually select each question</p>
+                      <span className="display-6 mb-3">✍️</span>
+                      <h4 className="card-title fw-bold">Manual Selection</h4>
+                      <p className="card-text text-muted">
+                        You will manually select each question from available pool. 
+                        Perfect for when you want full control over question selection.
+                      </p>
+                      <div className="mt-4">
+                        <span className="badge bg-success px-3 py-2">
+                          <i className="bi bi-eye me-2"></i>
+                          Full Control
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1983,7 +2725,7 @@ const user = session.user;
 
           {/* Step 6: Manual Question Selection */}
           {step === 6 && watchedSelectionMethod === 'manual' && (
-            <div>
+            <div className="step-transition">
               <ManualQuestionSelection
                 subjectId={watchedSubjectId}
                 classId={watchedClassId} 
@@ -1997,226 +2739,1424 @@ const user = session.user;
                 language={watch('language')}
                 source_type={watch('source_type')}
               />
-              <div className="mt-3">
-                <button className="btn btn-primary" onClick={() => setStep(7)}>
-                  Next
+              <div className="text-center mt-4">
+                <button className="btn btn-primary btn-lg px-5" onClick={() => setStep(7)}>
+                  Continue to Review <i className="bi bi-arrow-right ms-2"></i>
                 </button>
               </div>
             </div>
           )}
 
-          {/* Step 7: Review and Generate */}
+          {/* Step 7: PDF-like Review with Exact PDF Design - FIXED HTML STRUCTURE */}
           {step === 7 && (
-            <form onSubmit={handleSubmit(onSubmit)}>
-              <div className="card mb-4">
-                <div className="card-body">
-                  <h2 className="h5 card-title mb-3">Paper Summary</h2>
-                  <div className="row">
-                    <div className="col-md-6">
-                      <p><strong>Title:</strong> {watch('title')}</p>
-                      <p><strong>Class:</strong> {classes.find(c => c.id === watch('classId'))?.name}</p>
-                      <p><strong>Subject:</strong> {subjects.find(s => s.id === watch('subjectId'))?.name}</p>
-                      <p><strong>Paper Type:</strong> {watch('paperType')}</p>
-                      <p><strong>Language:</strong> {watch('language')}</p>
+            <form onSubmit={handleSubmit(onSubmit)} className="step-transition">
+<div className='row'>
+      <div className="col-12 mb-3">
+                  {/* Edit Mode Instructions */}
+
+                          {isEditMode && (
+                            <div className="alert alert-warning mt-4 mx-3">
+                              <h6 className="fw-bold mb-2">
+                                <i className="bi bi-magic me-2"></i>
+                                Paper Editing Mode - Active
+                              </h6>
+                              <div className="row">
+                                <div className="col-md-6">
+                                  <ul className="mb-2 small">
+                                    <li>📝 Drag questions within sections to reorder them</li>
+                                    <li>🎯 Adjust individual question marks using the input fields</li>
+                                    <li>🔢 Question numbers update automatically</li>
+                                  </ul>
+                                </div>
+                                <div className="col-md-6">
+                                  <ul className="mb-0 small">
+                                    <li>💾 Changes are saved for PDF generation</li>
+                                    <li>🔄 Use "Reset Order" to revert to original arrangement</li>
+                                    <li>👁️ Toggle off Edit Mode to see final paper layout</li>
+                                  </ul>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          </div>
+</div>
+              <div className="row">
+                {/* PDF-like Paper Preview */}
+                  
+                <div className="col-lg-8">
+                  <div className="card mb-4 border-0 shadow-sm">
+                    <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                      <h2 className="h4 card-title mb-0">📋 Paper Preview - Final Review</h2>
+                      <div className="d-flex align-items-center gap-3">
+                        <div className="form-check form-switch">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id="editModeToggle"
+                            checked={isEditMode}
+                            onChange={(e) => setIsEditMode(e.target.checked)}
+                          />
+                          <label className="form-check-label text-white" htmlFor="editModeToggle">
+                            {isEditMode ? '✏️ Edit Mode' : '👁️ Preview'}
+                          </label>
+                        </div>
+                        {isEditMode && (
+                          <button
+                            type="button"
+                            className="btn btn-warning btn-sm"
+                            onClick={loadPreviewQuestions}
+                          >
+                            <i className="bi bi-arrow-clockwise me-1"></i>
+                            Reset Order
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="col-md-6">
-                      <p><strong>Chapter Coverage:</strong> {watch('chapterOption')}</p>
-                      <p><strong>Selection Method:</strong> {watch('selectionMethod')}</p>
-                      <p><strong>Exam Time:</strong> {watch('timeMinutes')} minutes</p>
-                      <p><strong>Shuffle Questions:</strong> {watch('shuffleQuestions') ? 'Yes' : 'No'}</p>
-                      <p><strong>Difficulty Distribution:</strong> Easy {watch('easyPercent')}%, Medium {watch('mediumPercent')}%, Hard {watch('hardPercent')}%</p>
+                    
+                    <div className="card-body p-0">
+                      {/* Loading State */}
+                      {isLoadingPreview ? (
+                        <div className="text-center py-5">
+                          <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}}>
+                            <span className="visually-hidden">Loading...</span>
+                          </div>
+                          <h5>Loading Questions...</h5>
+                          <p className="text-muted">Preparing your paper preview</p>
+                        </div>
+                      ) : (
+                        <div 
+                          className="paper-preview" 
+                          style={{ 
+                            fontFamily: 'Arial, sans-serif',
+                            padding: '20px',
+                            background: 'white',
+                            minHeight: '800px',
+                            maxWidth: '900px',
+                            margin: '0 auto'
+                          }}
+                        >
+                          {/* Header matching PDF design exactly */}
+                          <div className="header text-center mb-1" style={{ fontSize: '13px' }}>
+                            <div className="mb-3">
+                              <h1 className="text-center mb-2" style={{
+                                fontFamily: "'Times New Roman', serif",
+                                direction: 'ltr'
+                              }}>
+                                <img src="/examly.jpg" className="header-img" height="40" width="100" alt="Examly"/>
+                                <span style={{
+                                  fontFamily: "'algerian', 'Times New Roman', serif",
+                                  fontSize: '14px',
+                                  display:'block',
+                                }}>
+                                  {watch('title') || 'BOARD OF INTERMEDIATE AND SECONDARY EDUCATION'}
+                                </span>
+                              </h1>
+                             
+                              {watch('dateOfPaper') && (
+                                <p className="mb-0 text-muted" style={{ 
+                                  fontSize: '12px',
+                                  fontFamily: "'Times New Roman', serif",
+                                  direction: 'ltr'
+                                }}>
+                                  Date: {formatDateForDisplay(watch('dateOfPaper'))}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Student Info Table - FIXED HTML STRUCTURE */}
+                          <table style={{
+                            width: '100%', 
+                            borderCollapse: 'collapse', 
+                            border: 'none !important', 
+                            fontFamily: "'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Noto Sans',Arial,sans-serif",
+                            marginBottom: '20px',
+                            direction: watch('language') === 'bilingual' || watch('language') === 'urdu' ? 'rtl' : 'ltr'
+                          }}>
+                            <tbody>
+                              {/* Row 1 */}
+                              <tr style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <td style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1.5 }}>
+                                  {watch('language') !== 'english' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif",
+                                      direction: 'rtl',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>
+                                  )}
+                                  {watch('language') !== 'urdu' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Sans',Arial,sans-serif",
+                                      direction: 'ltr',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>Student Name:_________</span>
+                                  )}
+                                </td>
+                                <td style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
+                                  {watch('language') !== 'english' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif",
+                                      direction: 'rtl',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>رول نمبر:۔۔۔۔۔۔</span>
+                                  )}
+                                  {watch('language') !== 'urdu' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Sans',Arial,sans-serif",
+                                      direction: 'ltr',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>Roll No:_________</span>
+                                  )}
+                                </td>
+                                <td style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
+                                  {watch('language') !== 'english' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif",
+                                      direction: 'rtl',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>سیکشن:۔۔۔۔۔۔</span>
+                                  )}
+                                  {watch('language') !== 'urdu' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Sans',Arial,sans-serif",
+                                      direction: 'ltr',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>Section:_______</span>
+                                  )}
+                                </td>
+                              </tr>
+
+                              {/* Row 2 */}
+                              <tr style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <td style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1.5 }}>
+                                  {watch('language') !== 'english' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif",
+                                      direction: 'rtl',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}><strong>کلاس: {classes.find(c => c.id === watch('classId'))?.name}</strong></span>
+                                  )}
+                                  {watch('language') !== 'urdu' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Sans',Arial,sans-serif",
+                                      direction: 'ltr',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>Class: {classes.find(c => c.id === watch('classId'))?.name}</span>
+                                  )}
+                                </td>
+                                <td style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
+                                  {watch('language') !== 'english' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif",
+                                      direction: 'rtl',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>مضمون: {subjects.find(s => s.id === watch('subjectId'))?.name}</span>
+                                  )}
+                                  {watch('language') !== 'urdu' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Sans',Arial,sans-serif",
+                                      direction: 'ltr',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>Subject: {subjects.find(s => s.id === watch('subjectId'))?.name}</span>
+                                  )}
+                                </td>
+                                <td style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
+                                  {watch('language') !== 'english' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif",
+                                      direction: 'rtl',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>تاریخ: {formatDateForDisplay(watch('dateOfPaper') || '')}</span>
+                                  )}
+                                  {watch('language') !== 'urdu' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Sans',Arial,sans-serif",
+                                      direction: 'ltr',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>Date: {formatDateForDisplay(watch('dateOfPaper') || '')}</span>
+                                  )}
+                                </td>
+                              </tr>
+
+                              {/* Row 3 */}
+                              <tr style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <td style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1.5 }}>
+                                  {watch('language') !== 'english' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif",
+                                      direction: 'rtl',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>وقت: {watch('timeMinutes')} منٹ</span>
+                                  )}
+                                  {watch('language') !== 'urdu' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Sans',Arial,sans-serif",
+                                      direction: 'ltr',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>Time Allowed: {watch('timeMinutes')} Minutes</span>
+                                  )}
+                                </td>
+                                <td style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
+                                  {watch('language') !== 'english' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif",
+                                      direction: 'rtl',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>کل نمبر: {
+                                      ((watch('mcqToAttempt') || watch('mcqCount') || 0) * (watch('mcqMarks') || 0) + 
+                                      (watch('shortToAttempt') || watch('shortCount') || 0) * (watch('shortMarks') || 0) + 
+                                      (watch('longToAttempt') || watch('longCount') || 0) * (watch('longMarks') || 0))
+                                    }</span>
+                                  )}
+                                  {watch('language') !== 'urdu' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Sans',Arial,sans-serif",
+                                      direction: 'ltr',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>Maximum Marks: {
+                                      ((watch('mcqToAttempt') || watch('mcqCount') || 0) * (watch('mcqMarks') || 0) + 
+                                      (watch('shortToAttempt') || watch('shortCount') || 0) * (watch('shortMarks') || 0) + 
+                                      (watch('longToAttempt') || watch('longCount') || 0) * (watch('longMarks') || 0))
+                                    }</span>
+                                  )}
+                                </td>
+                                <td style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
+                                  {watch('language') !== 'english' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif",
+                                      direction: 'rtl',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>حصہ انشائیہ</span>
+                                  )}
+                                  {watch('language') !== 'urdu' && (
+                                    <span style={{
+                                      fontFamily: "'Noto Sans',Arial,sans-serif",
+                                      direction: 'ltr',
+                                      fontSize: '12px',
+                                      verticalAlign: 'middle'
+                                    }}>Subjective Part</span>
+                                  )}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+
+                          <hr style={{ borderColor: '#000', margin: '20px 0' }} />
+
+                          {/* Questions Preview */}
+                          <div className="questions-preview">
+                            {/* MCQs Section */}
+                            {previewQuestions.mcq.length > 0 && (
+                              <div className="section mb-5">
+                                <div className="section-header mb-4">
+                                  <h5 className="fw-bold mb-2" style={{ 
+                                    fontSize: '14px', 
+                                    color: '#2c3e50',
+                                    fontFamily: "'Times New Roman', serif",
+                                    direction: 'ltr'
+                                  }}>
+                                    SECTION A - MULTIPLE CHOICE QUESTIONS
+                                    {watch('mcqPlacement') === 'separate' && ' (ON SEPARATE PAGE)'}
+                                  </h5>
+                                  <div className="note p-3 bg-light rounded border" style={{ padding: '10px', margin: '10px 0', fontSize: '12px', lineHeight: '1.2' }}>
+                                    {watch('language') !== 'english' && (
+                                      <p className="mb-1" style={{
+                                        fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                        direction: 'rtl',
+                                        fontSize: '14px',
+                                        lineHeight: '1.8'
+                                      }}>
+                                        نوٹ: ہر سوال کے چار ممکنہ جوابات A,B,C اور D دیئے گئے ہیں۔ درست جواب کے مطابق دائرہ پُر کریں۔ ایک سے زیادہ دائروں کو پُر کرنے کی صورت میں جواب غلط تصور ہوگا۔
+                                      </p>
+                                    )}
+                                    {watch('language') !== 'urdu' && (
+                                      <p className="mb-0" style={{
+                                        fontFamily: "'Times New Roman', serif",
+                                        direction: 'ltr',
+                                        fontSize: '14px',
+                                        lineHeight: '1.4'
+                                      }}>
+                                        Note: Four possible answers A, B, C and D to each question are given. Fill the correct option's circle. More than one filled circle will be treated wrong.
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="mt-2">
+                                    <small className="text-muted" style={{
+                                      fontFamily: "'Times New Roman', serif",
+                                      direction: 'ltr'
+                                    }}>
+                                      Attempt ALL {watch('mcqToAttempt') || watch('mcqCount')} questions. Each question carries {watch('mcqMarks')} mark.
+                                    </small>
+                                    <span className="badge bg-primary ms-2">
+                                      {watch('mcqToAttempt') || watch('mcqCount')} × {watch('mcqMarks')} = {(watch('mcqToAttempt') || watch('mcqCount') || 0) * (watch('mcqMarks') || 0)} marks
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                <div 
+                                  className="questions-list"
+                                  onDragOver={(e) => handleDragOver(e)}
+                                  onDrop={(e) => handleDrop(e, 'mcq')}
+                                >
+                                  <table style={{ 
+                                    width: '100%', 
+                                    borderCollapse: 'collapse', 
+                                    margin: '10px 0', 
+                                    fontSize: '14px',
+                                    direction: watch('language') === 'english' ? 'ltr' : 'rtl'
+                                  }}>
+                                    <tbody>
+                                      {previewQuestions.mcq.map((question, index) => (
+                                        <tr 
+                                          key={question.id}
+                                          className={`question-item ${isEditMode ? 'cursor-grab' : ''} ${
+                                            draggedQuestion?.id === question.id ? 'dragging' : ''
+                                          }`}
+                                          draggable={isEditMode}
+                                          onDragStart={(e) => handleDragStart(e, question.id, 'mcq')}
+                                          onDragEnd={handleDragEnd}
+                                          style={{ 
+                                            transition: 'all 0.3s ease',
+                                            position: 'relative',
+                                            cursor: isEditMode ? 'grab' : 'default'
+                                          }}
+                                        >
+                                          <td className="qnum" style={{ 
+                                            width: '40px', 
+                                            textAlign: 'center', 
+                                            fontWeight: 'bold',
+                                            border: '1px solid #000',
+                                            padding: '8px',
+                                            verticalAlign: 'top',
+                                            position: 'relative'
+                                          }}>
+                                            {/* Drag handle */}
+                                            {isEditMode && (
+                                              <div className="position-absolute top-0 start-0 m-1 text-muted" style={{ cursor: 'grab' }}>
+                                                <i className="bi bi-grip-vertical fs-6"></i>
+                                              </div>
+                                            )}
+                                            {index + 1}
+                                          </td>
+                                          <td style={{ 
+                                            border: '1px solid #000',
+                                            padding: '8px',
+                                            verticalAlign: 'top'
+                                          }}>
+                                            {/* Question Text - FIXED BILINGUAL DISPLAY */}
+                                            <div className="question" style={{ 
+                                              display: 'flex',
+                                              justifyContent: 'space-between',
+                                              alignItems: 'center',
+                                              margin: '0 0 10px 0'
+                                            }}>
+                                              <div className="flex-grow-1">
+                                                {watch('language') === 'english' && (
+                                                  <span className="fw-bold" style={{
+                                                    fontFamily: "'Times New Roman', serif",
+                                                    direction: 'ltr',
+                                                    fontSize: '14px',
+                                                    lineHeight: '1.4'
+                                                  }}>{question.question_text}</span>
+                                                )}
+                                                
+                                                {watch('language') === 'urdu' && (
+                                                  <span className="fw-bold" style={{
+                                                    fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                    direction: 'rtl',
+                                                    fontSize: '14px',
+                                                    lineHeight: '1.8'
+                                                  }}>{question.question_text_urdu || question.question_text}</span>
+                                                )}
+                                                
+                                                {watch('language') === 'bilingual' && (
+                                                  <div className="d-flex justify-content-between">
+                                                     {/* Urdu version */}
+                                                    <div className="fw-bold" style={{
+                                                      fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                      direction: 'rtl',
+                                                      fontSize: '14px',
+                                                      lineHeight: '1.8'
+                                                    }}>{question.question_text_urdu}</div>
+                                                    {/* English version */}
+                                                    <div className="fw-bold" style={{
+                                                      fontFamily: "'Times New Roman', serif",
+                                                      direction: 'ltr',
+                                                      fontSize: '14px',
+                                                      lineHeight: '1.4',
+                                                      marginBottom: '8px'
+                                                    }}>{question.question_text_english || question.question_text}</div>
+                                                 
+                                                  </div>
+                                                )}
+                                              </div>
+                                              <div className="d-flex align-items-center gap-2 ms-3">
+                                                {isEditMode && (
+                                                  <div className="individual-marks-input">
+                                                    <small className="text-muted me-2">Marks:</small>
+                                                    <input
+                                                      type="number"
+                                                      className="form-control form-control-sm"
+                                                      style={{ width: '70px' }}
+                                                      value={question.customMarks || watch('mcqMarks')}
+                                                      onChange={(e) => {
+                                                        const newMarks = parseInt(e.target.value) || 1;
+                                                        setPreviewQuestions(prev => ({
+                                                          ...prev,
+                                                          mcq: prev.mcq.map(q => 
+                                                            q.id === question.id 
+                                                              ? { ...q, customMarks: newMarks }
+                                                              : q
+                                                          )
+                                                        }));
+                                                      }}
+                                                      min="1"
+                                                    />
+                                                  </div>
+                                                )}
+                                               {/* <span className={`badge ${
+                                                  question.difficulty === 'easy' ? 'bg-success' :
+                                                  question.difficulty === 'medium' ? 'bg-warning text-dark' : 'bg-danger'
+                                                }`}>
+                                                  {question.difficulty}
+                                                </span>         */}
+                                              </div>
+                                            </div>
+                                      
+                                            
+                                            {/* Options - FIXED BILINGUAL DISPLAY */}
+                                            <div className="options" style={{ 
+                                              marginTop: '8px', 
+                                              display: 'flex', 
+                                              justifyContent: 'space-between', 
+                                              fontSize: '12px',
+                                              flexWrap: 'wrap',
+                                              gap: '15px'
+                                            }}>
+                                              {question.option_a && (
+                                                <span className="option-item d-flex justify-content-between">
+                                                 <span> (A).  </span> 
+                                                  {watch('language') === 'english' && (
+                                                    <span style={{
+                                                      fontFamily: "'Times New Roman', serif",
+                                                      direction: 'ltr'
+                                                    }}> {question.option_a}</span>
+                                                  )}
+                                                  {watch('language') === 'urdu' && (
+                                                    <span style={{
+                                                      fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                      direction: 'rtl'
+                                                    }}> {question.option_a_urdu || question.option_a}</span>
+                                                  )}
+                                                  {watch('language') === 'bilingual' && (
+                                                    <span className="d-flex justify-content-between">
+                                                         <span className="d-block" style={{
+                                                        fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                        direction: 'rtl'
+                                                      }}> {question.option_a_urdu}</span> &nbsp; 
+                                                      <span className="d-block" style={{
+                                                        fontFamily: "'Times New Roman', serif",
+                                                        direction: 'ltr',
+                                                        marginBottom: '2px'
+                                                      }}> {question.option_a_english || question.option_a}</span>
+                                                   
+                                                    </span>
+                                                  )}
+                                                </span>
+                                              )}
+                                              {question.option_b && (
+                                                <span className="option-item d-flex justify-content-between">
+                                                  <span>(B). </span> 
+                                                  {watch('language') === 'english' && (
+                                                    <span style={{
+                                                      fontFamily: "'Times New Roman', serif",
+                                                      direction: 'ltr'
+                                                    }}> {question.option_b}</span>
+                                                  )}
+                                                  {watch('language') === 'urdu' && (
+                                                    <span style={{
+                                                      fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                      direction: 'rtl'
+                                                    }}> {question.option_b_urdu || question.option_b}</span>
+                                                  )}
+                                                  {watch('language') === 'bilingual' && (
+                                                    <span className="d-flex justify-content-between">
+                                                        <span className="d-block" style={{
+                                                        fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                        direction: 'rtl'
+                                                      }}> {question.option_b_urdu}</span> &nbsp;
+                                                      <span className="d-block" style={{
+                                                        fontFamily: "'Times New Roman', serif",
+                                                        direction: 'ltr',
+                                                        marginBottom: '2px'
+                                                      }}> {question.option_b_english || question.option_b}</span>
+                                                    
+                                                    </span>
+                                                  )}
+                                                </span>
+                                              )}
+                                              {question.option_c && (
+                                                <span className="option-item d-flex justify-content-between">
+                                                 <span> (C). </span>  
+                                                  {watch('language') === 'english' && (
+                                                    <span style={{
+                                                      fontFamily: "'Times New Roman', serif",
+                                                      direction: 'ltr'
+                                                    }}> {question.option_c}</span>
+                                                  )}
+                                                  {watch('language') === 'urdu' && (
+                                                    <span style={{
+                                                      fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                      direction: 'rtl'
+                                                    }}> {question.option_c_urdu || question.option_c}</span>
+                                                  )}
+                                                  {watch('language') === 'bilingual' && (
+                                                    <span className="d-flex justify-content-between">
+                                                            <span className="d-block" style={{
+                                                        fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                        direction: 'rtl'
+                                                      }}> {question.option_c_urdu}.</span> &nbsp;
+                                                      <span className="d-block" style={{
+                                                        fontFamily: "'Times New Roman', serif",
+                                                        direction: 'ltr',
+                                                        marginBottom: '2px'
+                                                      }}> {question.option_c_english || question.option_c}</span>
+                                                
+                                                    </span>
+                                                  )}
+                                                </span>
+                                              )}
+                                              {question.option_d && (
+                                                <span className="option-item d-flex justify-content-between">
+                                                  <span>(D). </span>  
+                                                  {watch('language') === 'english' && (
+                                                    <span style={{
+                                                      fontFamily: "'Times New Roman', serif",
+                                                      direction: 'ltr'
+                                                    }}> {question.option_d}</span>
+                                                  )}
+                                                  {watch('language') === 'urdu' && (
+                                                    <span style={{
+                                                      fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                      direction: 'rtl'
+                                                    }}> {question.option_d_urdu || question.option_d}</span>
+                                                  )}
+                                                  {watch('language') === 'bilingual' && (
+                                                    <span className="d-flex justify-content-between">
+                                                      <span className="d-block" style={{
+                                                        fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                        direction: 'rtl'
+                                                      }}> {question.option_d_urdu}.</span> &nbsp;
+                                                      <span className="d-block" style={{
+                                                        fontFamily: "'Times New Roman', serif",
+                                                        direction: 'ltr',
+                                                        marginBottom: '2px'
+                                                      }}> {question.option_d_english || question.option_d}.</span>
+                                                     
+                                                    </span>
+                                                  )}
+                                                </span>
+                                              )}
+                                            </div>
+                                            
+                                            <div className="mt-2 pt-2 border-top text-start">
+                                              <small className="text-muted" style={{
+                                                fontFamily: "'Times New Roman', serif",
+                                                direction: 'ltr', textAlign: 'left'
+                                              }}>
+                                                <i className="bi bi-tag me-1"></i>
+                                                Chapter {chapters.find(c => c.id === question.chapter_id)?.chapterNo || '1'}
+                                                {question.topic && ` • ${question.topic}`}
+                                              </small>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Short Questions Section - PDF Design */}
+                            {previewQuestions.short.length > 0 && (
+                              <div className="section mb-5">
+                                <div className="section-header mb-4">
+                                  <h5 className="fw-bold mb-2 text-center" style={{ 
+                                    fontSize: '14px', 
+                                    color: '#2c3e50',
+                                    fontFamily: "'Times New Roman', serif",
+                                    direction: 'ltr'
+                                  }}>
+                                    (<span className="english">{(watch('language') === 'english' || watch('language') === 'bilingual') ? 'Part - I' : ''}</span>
+                                    <span className="urdu"> {(watch('language') === 'urdu' || watch('language') === 'bilingual') ? 'حصہ اول' : ''}</span>)
+                                  </h5>
+                                  
+                                  {/* Instructions */}
+                                  <div className="instructions mb-3" style={{ 
+                                    display: 'flex', 
+                                    justifyContent: 'space-between', 
+                                    marginBottom: '15px', 
+                                    fontWeight: 'bold',
+                                    fontSize: '14px'
+                                  }}>
+                                    {watch('language') === 'english' || watch('language') === 'bilingual' ? (
+                                      <div className="eng" style={{
+                                        fontFamily: "'Times New Roman', serif",
+                                        direction: 'ltr'
+                                      }}>
+                                        <strong>Part I.</strong> Write short answers. Attempt any {watch('shortToAttempt') || watch('shortCount')} question(s).
+                                      </div>
+                                    ) : null}
+                                    
+                                    {watch('language') === 'urdu' || watch('language') === 'bilingual' ? (
+                                      <div className="urdu" style={{
+                                        fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                        direction: 'rtl',
+                                        textAlign: 'right'
+                                      }}>
+                                        <strong>حصہ اول:</strong> مختصر جوابات لکھیں۔ کوئی {watch('shortToAttempt') || watch('shortCount')} سوالات حل کریں۔
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  
+                                  <div className="mt-2">
+                                    <small className="text-muted" style={{
+                                      fontFamily: "'Times New Roman', serif",
+                                      direction: 'ltr'
+                                    }}>
+                                      Attempt {watch('shortToAttempt') || watch('shortCount')} out of {watch('shortCount')} questions. Each question carries {watch('shortMarks')} marks.
+                                    </small>
+                                    <span className="badge bg-success ms-2">
+                                      {watch('shortToAttempt') || watch('shortCount')} × {watch('shortMarks')} = {(watch('shortToAttempt') || watch('shortCount') || 0) * (watch('shortMarks') || 0)} marks
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                <div 
+                                  className="questions-list"
+                                  onDragOver={(e) => handleDragOver(e)}
+                                  onDrop={(e) => handleDrop(e, 'short')}
+                                >
+                                  {previewQuestions.short.map((question, index) => (
+                                    <div
+                                      key={question.id}
+                                      className={`question-item mb-4 p-3 border rounded ${isEditMode ? 'cursor-grab bg-light' : ''} ${
+                                        draggedQuestion?.id === question.id ? 'dragging border-primary' : ''
+                                      }`}
+                                      draggable={isEditMode}
+                                      onDragStart={(e) => handleDragStart(e, question.id, 'short')}
+                                      onDragEnd={handleDragEnd}
+                                      style={{ 
+                                        transition: 'all 0.3s ease',
+                                        position: 'relative',
+                                        cursor: isEditMode ? 'grab' : 'default'
+                                      }}
+                                    >
+                                      {/* Drag handle */}
+                                      {isEditMode && (
+                                        <div className="position-absolute top-0 start-0 m-2 text-muted" style={{ cursor: 'grab' }}>
+                                          <i className="bi bi-grip-vertical fs-5"></i>
+                                        </div>
+                                      )}
+                                      
+                                      <div className="d-flex justify-content-between align-items-start">
+                                        <div style={{ flex: 1 }}>
+                                          {/* Question Number and Text */}
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '5px' }}>
+                                            <div style={{ minWidth: '35px', lineHeight: '1.0' }}>
+                                              {watch('language') === 'english' ? (
+                                                <strong style={{
+                                                  fontFamily: "'Times New Roman', serif",
+                                                  direction: 'ltr',
+                                                  fontSize: '14px'
+                                                }}>
+                                                  ({index + 1})
+                                                </strong>
+                                              ) : watch('language') === 'urdu' ? (
+                                                <strong style={{
+                                                  fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                  direction: 'rtl',
+                                                  fontSize: '14px',
+                                                  textAlign: 'right'
+                                                }}>
+                                                  ({index + 1})
+                                                </strong>
+                                              ) : (
+                                                <strong style={{
+                                                  fontFamily: "'Times New Roman', serif",
+                                                  direction: 'ltr',
+                                                  fontSize: '14px'
+                                                }}>
+                                                  ({index + 1})
+                                                </strong>
+                                              )}
+                                            </div>
+                                            
+                                            <div style={{ flex: 1 }}>
+                                              {/* Question Text - FIXED BILINGUAL DISPLAY */}
+                                              {watch('language') === 'english' && (
+                                                <span style={{
+                                                  fontFamily: "'Times New Roman', serif",
+                                                  direction: 'ltr',
+                                                  fontSize: '14px',
+                                                  lineHeight: '1.4'
+                                                }}>
+                                                  {question.question_text}
+                                                </span>
+                                              )}
+                                              
+                                              {watch('language') === 'urdu' && (
+                                                <span style={{
+                                                  fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                  direction: 'rtl',
+                                                  fontSize: '14px',
+                                                  lineHeight: '1.8',
+                                                  textAlign: 'right'
+                                                }}>
+                                                  {question.question_text_urdu || question.question_text}
+                                                </span>
+                                              )}
+                                              
+                                              {watch('language') === 'bilingual' && (
+                                                <div className='d-flex justify-content-between'>
+                                                     <div style={{
+                                                    fontFamily: "'Times New Roman', serif",
+                                                    direction: 'ltr',
+                                                    fontSize: '14px',
+                                                    lineHeight: '1.4'
+                                                  }}>
+                                                    {question.question_text_english || question.question_text}
+                                                  </div>
+                                                  <div style={{
+                                                    fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                    direction: 'rtl',
+                                                    fontSize: '14px',
+                                                    lineHeight: '1.8',
+                                                    textAlign: 'right',
+                                                    marginBottom: '8px'
+                                                  }}>
+                                                    {question.question_text_urdu}
+                                                  </div>
+                                                  
+                                               
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Marks and Difficulty */}
+                                        <div className="d-flex align-items-center gap-2 ms-3" style={{ minWidth: '20px' }}>
+                                          {isEditMode && (
+                                            <div className="individual-marks-input">
+                                              <small className="text-muted me-1">Marks:</small>
+                                              <input
+                                                type="number"
+                                                className="form-control form-control-sm"
+                                                style={{ width: '70px' }}
+                                                value={question.customMarks || watch('shortMarks')}
+                                                onChange={(e) => {
+                                                  const newMarks = parseInt(e.target.value) || 2;
+                                                  setPreviewQuestions(prev => ({
+                                                    ...prev,
+                                                    short: prev.short.map(q => 
+                                                      q.id === question.id 
+                                                        ? { ...q, customMarks: newMarks }
+                                                        : q
+                                                    )
+                                                  }));
+                                                }}
+                                                min="1"
+                                              />
+                                            </div>
+                                          )}
+                                          <span className="badge bg-secondary me-1">{question.customMarks || watch('shortMarks')} marks</span>
+                                        {/*  <span className={`badge ${
+                                            question.difficulty === 'easy' ? 'bg-success' :
+                                            question.difficulty === 'medium' ? 'bg-warning text-dark' : 'bg-danger'
+                                          }`}>
+                                            {question.difficulty}
+                                          </span>*/}
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="mt-2 pt-2 border-top">
+                                        <small className="text-muted" style={{
+                                          fontFamily: "'Times New Roman', serif",
+                                          direction: 'ltr'
+                                        }}>
+                                          <i className="bi bi-tag me-1"></i>
+                                          Chapter {chapters.find(c => c.id === question.chapter_id)?.chapterNo || '1'}
+                                          {question.topic && ` • ${question.topic}`}
+                                        </small>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Long Questions Section - PDF Design */}
+                            {previewQuestions.long.length > 0 && (
+                              <div className="section mb-5">
+                                <div className="section-header mb-4">
+                                  <h5 className="fw-bold mb-2 text-center" style={{ 
+                                    fontSize: '14px', 
+                                    color: '#2c3e50',
+                                    fontFamily: "'Times New Roman', serif",
+                                    direction: 'ltr'
+                                  }}>
+                                    (<span className="english">{(watch('language') === 'english' || watch('language') === 'bilingual') ? 'Part - II' : ''}</span>
+                                    <span className="urdu"> {(watch('language') === 'urdu' || watch('language') === 'bilingual') ? 'حصہ دوم' : ''}</span>)
+                                  </h5>
+                                  
+                                  {/* Instructions */}
+                                  <div className="instructions mb-3 d-flex justify-content-between" style={{ 
+                                    fontWeight: 'bold',
+                                    fontSize: '14px'
+                                  }}>
+                                    {watch('language') === 'english' || watch('language') === 'bilingual' ? (
+                                     
+                                      <div className="eng" style={{
+                                        fontFamily: "'Times New Roman', serif",
+                                        direction: 'ltr'
+                                      }}>
+                                        <strong>Note:</strong> Attempt any {watch('longToAttempt') || watch('longCount')} question(s).
+                                      </div>
+                                    ) : null}
+                                    
+                                    {watch('language') === 'urdu' || watch('language') === 'bilingual' ? (
+                                      <div className="urdu" style={{
+                                        fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                        direction: 'rtl',
+                                        textAlign: 'right'
+                                      }}>
+                                        <strong>نوٹ:</strong> کوئی {watch('longToAttempt') || watch('longCount')} سوالات حل کریں۔
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  
+                                  <div className="mt-2">
+                                    <small className="text-muted" style={{
+                                      fontFamily: "'Times New Roman', serif",
+                                      direction: 'ltr'
+                                    }}>
+                                      Attempt {watch('longToAttempt') || watch('longCount')} out of {watch('longCount')} questions. Each question carries {watch('longMarks')} marks.
+                                    </small>
+                                    <span className="badge bg-danger ms-2">
+                                      {watch('longToAttempt') || watch('longCount')} × {watch('longMarks')} = {(watch('longToAttempt') || watch('longCount') || 0) * (watch('longMarks') || 0)} marks
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                <div 
+                                  className="questions-list"
+                                  onDragOver={(e) => handleDragOver(e)}
+                                  onDrop={(e) => handleDrop(e, 'long')}
+                                >
+                                  {previewQuestions.long.map((question, index) => (
+                                    <div
+                                      key={question.id}
+                                      className={`question-item mb-4 p-3 border rounded ${isEditMode ? 'cursor-grab bg-light' : ''} ${
+                                        draggedQuestion?.id === question.id ? 'dragging border-primary' : ''
+                                      }`}
+                                      draggable={isEditMode}
+                                      onDragStart={(e) => handleDragStart(e, question.id, 'long')}
+                                      onDragEnd={handleDragEnd}
+                                      style={{ 
+                                        transition: 'all 0.3s ease',
+                                        position: 'relative',
+                                        cursor: isEditMode ? 'grab' : 'default'
+                                      }}
+                                    >
+                                      {/* Drag handle */}
+                                      {isEditMode && (
+                                        <div className="position-absolute top-0 start-0 m-2 text-muted" style={{ cursor: 'grab' }}>
+                                          <i className="bi bi-grip-vertical fs-5"></i>
+                                        </div>
+                                      )}
+                                      
+                                      <div className="d-flex justify-content-between align-items-start">
+                                        <div style={{ flex: 1 }}>
+                                          {/* Question Number and Text */}
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '5px' }}>
+                                            <div style={{ minWidth: '35px', lineHeight: '1.0' }}>
+                                              {watch('language') === 'english' ? (
+                                                <strong style={{
+                                                  fontFamily: "'Times New Roman', serif",
+                                                  direction: 'ltr',
+                                                  fontSize: '14px'
+                                                }}>
+                                                  Q.{index + 1}.
+                                                </strong>
+                                              ) : watch('language') === 'urdu' ? (
+                                                <strong style={{
+                                                  fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                  direction: 'rtl',
+                                                  fontSize: '14px',
+                                                  textAlign: 'right'
+                                                }}>
+                                                  سوال {index + 1}:
+                                                </strong>
+                                              ) : (
+                                                <strong style={{
+                                                  fontFamily: "'Times New Roman', serif",
+                                                  direction: 'ltr',
+                                                  fontSize: '14px'
+                                                }}>
+                                                  Q.{index + 1}.
+                                                </strong>
+                                              )}
+                                            </div>
+                                            
+                                            <div style={{ flex: 1 }}>
+                                              {/* Question Text - FIXED BILINGUAL DISPLAY */}
+                                              {watch('language') === 'english' && (
+                                                <span style={{
+                                                  fontFamily: "'Times New Roman', serif",
+                                                  direction: 'ltr',
+                                                  fontSize: '14px',
+                                                  lineHeight: '1.4'
+                                                }}>
+                                                  {question.question_text}
+                                                </span>
+                                              )}
+                                              
+                                              {watch('language') === 'urdu' && (
+                                                <span style={{
+                                                  fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                  direction: 'rtl',
+                                                  fontSize: '14px',
+                                                  lineHeight: '1.8',
+                                                  textAlign: 'right'
+                                                }}>
+                                                  {question.question_text_urdu || question.question_text}
+                                                </span>
+                                              )}
+                                              
+                                              {watch('language') === 'bilingual' && (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
+
+                                                  <div style={{ flex: 1 }}>
+                                                    <div style={{
+                                                      fontFamily: "'Times New Roman', serif",
+                                                      direction: 'ltr',
+                                                      fontSize: '14px',
+                                                      lineHeight: '1.4'
+                                                    }}>
+                                                      {question.question_text_english || question.question_text}
+                                                    </div>
+                                                  </div>
+                                                  <div style={{ flex: 1 }}>
+                                                    <div style={{
+                                                      fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                      direction: 'rtl',
+                                                      fontSize: '14px',
+                                                      lineHeight: '1.8',
+                                                      textAlign: 'right'
+                                                    }}>
+                                                      {question.question_text_urdu}
+                                                    </div>
+                                                  </div>
+                                             
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Marks and Difficulty */}
+                                        <div className="d-flex align-items-center gap-2 ms-3" style={{ minWidth: '20px' }}>
+                                          {isEditMode && (
+                                            <div className="individual-marks-input">
+                                              <small className="text-muted me-1">Marks:</small>
+                                              <input
+                                                type="number"
+                                                className="form-control form-control-sm"
+                                                style={{ width: '70px' }}
+                                                value={question.customMarks || watch('longMarks')}
+                                                onChange={(e) => {
+                                                  const newMarks = parseInt(e.target.value) || 5;
+                                                  setPreviewQuestions(prev => ({
+                                                    ...prev,
+                                                    long: prev.long.map(q => 
+                                                      q.id === question.id 
+                                                        ? { ...q, customMarks: newMarks }
+                                                        : q
+                                                    )
+                                                  }));
+                                                }}
+                                                min="1"
+                                              />
+                                            </div>
+                                          )}
+                                          <span className="badge bg-secondary me-1">{question.customMarks || watch('longMarks')} marks</span>
+                                        {/*  <span className={`badge ${
+                                            question.difficulty === 'easy' ? 'bg-success' :
+                                            question.difficulty === 'medium' ? 'bg-warning text-dark' : 'bg-danger'
+                                          }`}>
+                                            {question.difficulty}
+                                          </span>
+                                          */}
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="mt-2 pt-2 border-top">
+                                        <small className="text-muted" style={{
+                                          fontFamily: "'Times New Roman', serif",
+                                          direction: 'ltr'
+                                        }}>
+                                          <i className="bi bi-tag me-1"></i>
+                                          Chapter {chapters.find(c => c.id === question.chapter_id)?.chapterNo || '1'}
+                                          {question.topic && ` • ${question.topic}`}
+                                        </small>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* No Questions Message */}
+                            {previewQuestions.mcq.length === 0 && 
+                             previewQuestions.short.length === 0 && 
+                             previewQuestions.long.length === 0 && (
+                              <div className="text-center py-5">
+                                <i className="bi bi-inbox display-1 text-muted mb-3"></i>
+                                <h5 style={{
+                                  fontFamily: "'Times New Roman', serif",
+                                  direction: 'ltr'
+                                }}>No Questions Found</h5>
+                                <p className="text-muted" style={{
+                                  fontFamily: "'Times New Roman', serif",
+                                  direction: 'ltr'
+                                }}>
+                                  No questions match your current criteria. Try adjusting your chapter selection or difficulty settings.
+                                </p>
+                                <button 
+                                  className="btn btn-primary"
+                                  onClick={() => setStep(3)}
+                                >
+                                  <i className="bi bi-arrow-left me-2"></i>
+                                  Adjust Chapter Selection
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                        
+                          {/* Footer matching PDF */}
+                          <div className="footer no-break" style={{ 
+                            marginTop: '30px', 
+                            textAlign: 'center', 
+                            fontSize: '12px', 
+                            color: '#666', 
+                            borderTop: '1px solid #ccc', 
+                            paddingTop: '10px' 
+                          }}>
+                            <p style={{
+                              fontFamily: "'Times New Roman', serif",
+                              direction: 'ltr'
+                            }}>
+                              Generated on {new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  <div className="mt-3">
-                    <h3 className="h6">Question Counts & Marks</h3>
-                    <ul className="list-group">
-                      <li className="list-group-item d-flex justify-content-between align-items-center">
-                        MCQs
-                        <span className="badge bg-primary rounded-pill">
-                          {watch('mcqCount') || 0} questions ({watch('mcqToAttempt') || watch('mcqCount') || 0} to attempt) × {watch('mcqMarks') || 0} marks each
-                        </span>
-                      </li>
-                      <li className="list-group-item d-flex justify-content-between align-items-center">
-                        Short Questions
-                        <span className="badge bg-primary rounded-pill">
-                          {watch('shortCount') || 0} questions ({watch('shortToAttempt') || watch('shortCount') || 0} to attempt) × {watch('shortMarks') || 0} marks each
-                        </span>
-                      </li>
-                      <li className="list-group-item d-flex justify-content-between align-items-center">
-                        Long Questions
-                        <span className="badge bg-primary rounded-pill">
-                          {watch('longCount') || 0} questions ({watch('longToAttempt') || watch('longCount') || 0} to attempt) × {watch('longMarks') || 0} marks each
-                        </span>
-                      </li>
-                      <li className="list-group-item d-flex justify-content-between align-items-center">
-                        <strong>Total Marks</strong>
-                        <span className="badge bg-success rounded-pill">
-                          {(watch('mcqToAttempt') || watch('mcqCount') || 0) * (watch('mcqMarks') || 0) + 
-                          (watch('shortToAttempt') || watch('shortCount') || 0) * (watch('shortMarks') || 0) + 
-                          (watch('longToAttempt') || watch('longCount') || 0) * (watch('longMarks') || 0)} marks
-                        </span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="mt-3">
-                    <p><strong>MCQ Placement:</strong> {watch('mcqPlacement') === 'separate' ? 'Separate page' : 'Same page as other questions'}</p>
-                  </div>
-
-                  {/* 🔥 Add randomization info for auto generation */}
-                  {watch('selectionMethod') === 'auto' && watch('shuffleQuestions') && (
-                    <div className="alert alert-info mt-3">
-                      <i className="bi bi-shuffle me-2"></i>
-                      <strong>Auto-randomization enabled:</strong> Questions will be randomly selected each time you generate.
-                    </div>
-                  )}
                 </div>
-              </div>
 
-              <div className="d-flex gap-2 flex-wrap">
-                <button 
-                  className="btn btn-success" 
-                  type="submit" 
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                      Generating...
-                    </>
-                  ) : 'Generate Paper'}
-                </button>
+                {/* Controls Sidebar */}
+                <div className="col-lg-4">
+                  <div className="card mb-4 border-0 shadow-sm sticky-top" style={{ top: '50px',zIndex:'1' }}>
+                    <div className="card-header bg-primary text-white">
+                      <h3 className="h5 card-title mb-0">🎯 Paper Controls</h3>
+                    </div>
+                    <div className="card-body">
+                  
 
-                <button
-                  className="btn btn-info text-white"
-                  type="button"
-                  onClick={async () => {
-                    setIsDownloadingKey(true);
-                    try {
-                      const { data: { session } } = await supabase.auth.getSession();
-                      if (!session) {
-                        alert('You must be logged in to download the MCQ key.');
-                        return;
-                      }
+{/* Real-time Marks Calculator - FIXED TO SHOW CUSTOM MARKS */}
+<div className="mb-4 p-3 bg-light rounded">
+  <h6 className="fw-bold text-primary mb-3">📊 Live Marks Calculator</h6>
+  <div className="row text-center g-3">
+    <div className="col-4">
+      <div className="fw-bold text-primary">MCQs</div>
+      <div className="fs-5 fw-bold">{previewQuestions.mcq.length}</div>
+      <div className="small text-muted">
+        {previewQuestions.mcq.length} × Individual Marks
+      </div>
+      <div className="fw-bold text-success">
+        = {previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0)} marks
+      </div>
+    </div>
+    <div className="col-4">
+      <div className="fw-bold text-success">Short</div>
+      <div className="fs-5 fw-bold">{previewQuestions.short.length}</div>
+      <div className="small text-muted">
+        {previewQuestions.short.length} × Individual Marks
+      </div>
+      <div className="fw-bold text-success">
+        = {previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0)} marks
+      </div>
+    </div>
+    <div className="col-4">
+      <div className="fw-bold text-danger">Long</div>
+      <div className="fs-5 fw-bold">{previewQuestions.long.length}</div>
+      <div className="small text-muted">
+        {previewQuestions.long.length} × Individual Marks
+      </div>
+      <div className="fw-bold text-success">
+        = {previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)} marks
+      </div>
+    </div>
+  </div>
+  
+  <div className="text-center mt-3 pt-3 border-top">
+    <div className="fw-bold fs-4 text-primary">
+      Total: {
+        previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0) +
+        previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0) +
+        previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)
+      } Marks
+    </div>
+    <small className="text-muted">
+      {previewQuestions.mcq.some(q => q.customMarks) || 
+       previewQuestions.short.some(q => q.customMarks) || 
+       previewQuestions.long.some(q => q.customMarks) 
+        ? "Includes custom marks adjustments" 
+        : "Using default marks"}
+    </small>
+  </div>
+</div>
+                      {/* Action Buttons */}
+                      <div className="action-buttons">
+                        <button 
+                          className="btn btn-success w-100 btn-lg mb-3" 
+                          type="submit" 
+                          disabled={isLoading || isLoadingPreview}
+                        >
+                          {isLoading ? (
+                            <>
+                              <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                              Generating PDF...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-file-earmark-pdf me-2"></i>
+                              Generate Paper PDF
+                            </>
+                          )}
+                        </button>
 
-                      // Get the current form values
-                      const formValues = getValues();
-                      const method = formValues.selectionMethod;
-                      
-                      // Prepare payload with the same parameters used for paper generation
-                      const payload = {
-                        subjectId: watchedSubjectId,
-                        selectedChapters: formValues.selectedChapters || [],
-                        mcqCount: formValues.mcqCount,
-                        selectionMethod: method,
-                        chapterOption: formValues.chapterOption,
-                        paperTitle: formValues.title,
-                        mcqDifficulty: formValues.mcqDifficulty,
-                        sourceType: formValues.source_type,
-                        difficultyDistribution: {
-                          easy: formValues.easyPercent,
-                          medium: formValues.mediumPercent,
-                          hard: formValues.hardPercent
-                        },
-                        shuffleQuestions: formValues.shuffleQuestions,
-                        // For manual selection, pass the exact question IDs
-                        selectedQuestions: method === "manual" ? selectedQuestions : undefined,
-                        // Add random seed for randomization
-                        randomSeed: Date.now()
-                      };
+                        <button
+                          className="btn btn-info w-100 text-white btn-lg mb-3"
+                          type="button"
+                          onClick={async () => {
+                            setIsDownloadingKey(true);
+                            try {
+                              const { data: { session } } = await supabase.auth.getSession();
+                              if (!session) {
+                                alert('You must be logged in to download the MCQ key.');
+                                return;
+                              }
 
-                      const response = await fetch("/api/generate-mcq-key", {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                          "Authorization": `Bearer ${session.access_token}`,
-                        },
-                        body: JSON.stringify(payload),
-                      });
+                              const formValues = getValues();
+                              const payload = {
+                                subjectId: watchedSubjectId,
+                                selectedChapters: formValues.selectedChapters || [],
+                                mcqCount: formValues.mcqCount,
+                                selectionMethod: formValues.selectionMethod,
+                                chapterOption: formValues.chapterOption,
+                                paperTitle: formValues.title,
+                                mcqDifficulty: formValues.mcqDifficulty,
+                                sourceType: formValues.source_type,
+                                difficultyDistribution: {
+                                  easy: formValues.easyPercent,
+                                  medium: formValues.mediumPercent,
+                                  hard: formValues.hardPercent
+                                },
+                                shuffleQuestions: formValues.shuffleQuestions,
+                                selectedQuestions: formValues.selectionMethod === "manual" ? selectedQuestions : undefined,
+                                randomSeed: Date.now(),
+                                // Pass reordered questions to MCQ key generation
+                                reorderedQuestions: previewQuestions
+                              };
 
-                      if (response.ok) {
-                        const blob = await response.blob();
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `${payload.paperTitle.replace(/[^a-z0-9]/gi, '_')}-key.pdf`;
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        window.URL.revokeObjectURL(url);
-                      } else {
-                        // Try to get error message from JSON response
-                        try {
-                          const err = await response.json();
-                          alert("Failed: " + (err.message || 'Unknown error'));
-                        } catch {
-                          alert("Failed to generate answer key");
-                        }
-                      }
-                    } catch (error) {
-                      console.error("Error downloading MCQ key:", error);
-                      alert("Failed to download MCQ key.");
-                    } finally {
-                      setIsDownloadingKey(false);
-                    }
-                  }}
-                  disabled={isLoading || isDownloadingKey || watchedMcqCount === 0}
-                >
-                  {isDownloadingKey ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                      Downloading Key...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-key me-2"></i> Download MCQ Key
-                    </>
-                  )}
-                </button>
-                <button 
-                  className="btn btn-outline-primary" 
-                  type="button" 
-                  onClick={resetForm}
-                  disabled={isLoading}
-                >
-                  Generate New Paper
-                </button>
+                              const response = await fetch("/api/generate-mcq-key", {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  "Authorization": `Bearer ${session.access_token}`,
+                                },
+                                body: JSON.stringify(payload),
+                              });
+
+                              if (response.ok) {
+                                const blob = await response.blob();
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = `${payload.paperTitle.replace(/[^a-z0-9]/gi, '_')}-key.pdf`;
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                                window.URL.revokeObjectURL(url);
+                              } else {
+                                const err = await response.json();
+                                alert("Failed: " + (err.message || 'Unknown error'));
+                              }
+                            } catch (error) {
+                              console.error("Error downloading MCQ key:", error);
+                              alert("Failed to download MCQ key.");
+                            } finally {
+                              setIsDownloadingKey(false);
+                            }
+                          }}
+                          disabled={isLoading || isDownloadingKey || watchedMcqCount === 0 || isLoadingPreview}
+                        >
+                          {isDownloadingKey ? (
+                            <>
+                              <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                              Generating Key...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-key me-2"></i> Download Answer Key
+                            </>
+                          )}
+                        </button>
+                        
+                        <div className="row g-2 mb-3">
+                          <div className="col-6">
+                            <button 
+                              className="btn btn-outline-primary w-100" 
+                              type="button" 
+                              onClick={resetForm}
+                              disabled={isLoading}
+                            >
+                              <i className="bi bi-plus-circle me-2"></i>
+                              New Paper
+                            </button>
+                          </div>
+                          <div className="col-6">
+                            <button 
+                              className="btn btn-outline-secondary w-100" 
+                              type="button" 
+                              onClick={() => setStep(5)}
+                              disabled={isLoading}
+                            >
+                              <i className="bi bi-arrow-left me-2"></i>
+                              Back
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick Stats */}
+                      {/* Quick Stats - FIXED TO SHOW CUSTOM MARKS */}
+                <div className="quick-stats mt-4 p-3 border rounded">
+                  <h6 className="fw-bold text-primary mb-3">📈 Question Statistics</h6>
+                  <div className="row text-center g-3">
+                    <div className="col-4">
+                      <div className="fw-bold text-primary">{previewQuestions.mcq.length}</div>
+                      <small className="text-muted">MCQs</small>
+                      <div className="small text-success">
+                        {previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0)} marks
+                      </div>
+                    </div>
+                    <div className="col-4">
+                      <div className="fw-bold text-success">{previewQuestions.short.length}</div>
+                      <small className="text-muted">Short</small>
+                      <div className="small text-success">
+                        {previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0)} marks
+                      </div>
+                    </div>
+                    <div className="col-4">
+                      <div className="fw-bold text-danger">{previewQuestions.long.length}</div>
+                      <small className="text-muted">Long</small>
+                      <div className="small text-success">
+                        {previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)} marks
+                      </div>
+                    </div>
+                    <div className="col-12">
+                      <div className="fw-bold text-info fs-5">
+                        {previewQuestions.mcq.length + previewQuestions.short.length + previewQuestions.long.length}
+                      </div>
+                      <small className="text-muted">Total Questions</small>
+                      <div className="fw-bold text-success fs-6">
+                        {
+                          previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0) +
+                          previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0) +
+                          previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)
+                        } Total Marks
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                      {/* Edit Mode Tips */}
+                      {isEditMode && (
+                        <div className="edit-tips mt-3 p-3 bg-warning bg-opacity-10 rounded border">
+                          <h6 className="fw-bold mb-2">
+                            <i className="bi bi-lightbulb me-2"></i>
+                            Editing Tips
+                          </h6>
+                          <ul className="small mb-0">
+                            <li>Drag questions to reorder within sections</li>
+                            <li>Adjust marks for each question type</li>
+                            <li>Changes reflect in real-time PDF</li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </form>
           )}
         </div>
 
-        {/* Show upgrade prompt if trial expired */}
         {!canGeneratePaper() && trialStatus && isAuthenticated && (
-          <div className="card mt-4">
-            <div className="card-body text-center">
+          <div className="card mt-4 border-0 shadow-sm">
+            <div className="card-body text-center py-5">
+              <i className="bi bi-stars display-1 text-primary mb-3"></i>
               <h3 className="card-title">Upgrade to Continue</h3>
-              <p className="card-text">
+              <p className="card-text fs-5">
                 {trialStatus.isTrial 
                   ? "Your free trial has ended." 
                   : "Your free trial has ended."
                 } Subscribe to continue generating papers.
               </p>
               <button 
-                className="btn btn-primary btn-lg"
+                className="btn btn-primary btn-lg px-5"
                 onClick={() => window.location.href = '/dashboard/packages'}
               >
+                <i className="bi bi-rocket-takeoff me-2"></i>
                 View Subscription Plans
               </button>
             </div>
           </div>
         )}
       </div>
-      <style jsx>{`
-        .bi-shuffle.spinning {
-          animation: spin 0.5s linear infinite;
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </AcademyLayout>
   );
 }

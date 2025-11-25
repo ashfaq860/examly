@@ -223,21 +223,35 @@ export default function QuestionForm({
     }
   }, [formData.class_id, subjects, classSubjects]);
 
-  // ---- Filter chapters when subject changes ----
+  // ---- Filter chapters when class and subject change ----
   useEffect(() => {
+    const classId = formData.class_id;
     const subjectId = formData.subject_id;
 
-    if (subjectId) {
-      const chaptersForSubject = chapters.filter(
-        (c) => toId(c.subject_id) === subjectId
+    if (classId && subjectId) {
+      // Find the class_subject_id for the selected class and subject
+      const classSubject = classSubjects.find(
+        cs => toId(cs.class_id) === classId && toId(cs.subject_id) === subjectId
       );
-      setFilteredChapters(chaptersForSubject);
+      
+      if (classSubject) {
+        // Filter chapters by class_subject_id
+        const chaptersForClassSubject = chapters.filter(
+          chapter => toId(chapter.class_subject_id) === toId(classSubject.id)
+        );
+        setFilteredChapters(chaptersForClassSubject);
 
-      if (
-        formData.chapter_id &&
-        !chaptersForSubject.some((c) => toId(c.id) === formData.chapter_id)
-      ) {
-        setFormData((prev) => ({ ...prev, chapter_id: '', topic_id: '' }));
+        if (
+          formData.chapter_id &&
+          !chaptersForClassSubject.some((c) => toId(c.id) === formData.chapter_id)
+        ) {
+          setFormData((prev) => ({ ...prev, chapter_id: '', topic_id: '' }));
+        }
+      } else {
+        setFilteredChapters([]);
+        if (formData.chapter_id) {
+          setFormData((prev) => ({ ...prev, chapter_id: '', topic_id: '' }));
+        }
       }
     } else {
       setFilteredChapters([]);
@@ -245,7 +259,7 @@ export default function QuestionForm({
         setFormData((prev) => ({ ...prev, chapter_id: '', topic_id: '' }));
       }
     }
-  }, [formData.subject_id, chapters]);
+  }, [formData.class_id, formData.subject_id, chapters, classSubjects]);
 
   // ---- Filter topics when chapter changes ----
   useEffect(() => {
@@ -284,6 +298,12 @@ export default function QuestionForm({
           toId(cs.subject_id) === formData.subject_id
       );
       
+      if (!classSubject) {
+        toast.error('Please select a valid class and subject combination');
+        setLoading(false);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       const { data: profile } = await supabase
         .from('profiles')
@@ -312,7 +332,7 @@ export default function QuestionForm({
         answer_text_ur: formData.question_type !== 'mcq' ? formData.answer_text_ur : null,
         source_type: formData.source_type,
         source_year: formData.source_year ? parseInt(formData.source_year) : null,
-        class_subject_id: classSubject ? classSubject.id : null,
+        class_subject_id: classSubject.id,
         created_by: profile?.id,
       };
 
@@ -330,9 +350,11 @@ export default function QuestionForm({
         // Reset only text fields after successful save (for new questions only)
         resetTextFields();
       }
-    } catch (error) {
+      
+      onClose();
+    } catch (error: any) {
       console.error('Error saving question:', error);
-      toast.error('Failed to save question');
+      toast.error(error.message || 'Failed to save question');
     } finally {
       setLoading(false);
     }
@@ -422,7 +444,7 @@ export default function QuestionForm({
               name="chapter_id"
               value={formData.chapter_id}
               onChange={handleChange}
-              disabled={!formData.subject_id}
+              disabled={!formData.class_id || !formData.subject_id}
             >
               <option value="">Select Chapter</option>
               {filteredChapters.map((chapter) => (
