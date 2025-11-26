@@ -27,60 +27,126 @@ function isMobileUserAgent(userAgent: string | null): boolean {
 
 async function getPuppeteerBrowser() {
   if (browserPromise) {
-    const browser = await browserPromise;
-    if (browser.isConnected()) return browser;
+    try {
+      const browser = await browserPromise;
+      if (browser.isConnected()) return browser;
+    } catch (error) {
+      console.warn('Existing browser instance failed, creating new one:', error);
+      browserPromise = null;
+    }
   }
 
   const launchBrowser = async () => {
-    try {
-      // Configure Chromium for serverless environment
-      chromium.setHeadlessMode = true;
-      chromium.setGraphicsMode = false;
+    console.log('🚀 Launching Puppeteer browser...');
+    console.log('Environment:', process.env.NODE_ENV);
+    console.log('Vercel:', !!process.env.VERCEL);
 
+    try {
+      // Enhanced Chromium configuration for serverless environment
       const launchOptions: any = {
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
           '--disable-gpu',
-          '--disable-software-rasterizer',
-          '--disable-web-security',
           '--single-process',
           '--no-zygote',
           '--no-first-run',
           '--disable-background-timer-throttling',
           '--disable-backgrounding-occluded-windows',
           '--disable-renderer-backgrounding',
-          '--max-old-space-size=2048',
-          '--memory-pressure-off',
-          '--max_old_space_size=2048',
+          '--disable-features=TranslateUI',
+          '--disable-ipc-flooding-protection',
+          '--disable-hang-monitor',
+          '--disable-prompt-on-repost',
+          '--disable-domain-reliability',
+          '--disable-component-extensions-with-background-pages',
+          '--disable-client-side-phishing-detection',
+          '--disable-crash-reporter',
+          '--mute-audio',
+          '--disable-extensions',
+          '--disable-default-apps',
+          '--disable-translate',
+          '--disable-sync',
+          '--metrics-recording-only',
+          '--disable-default-apps',
+          '--window-size=1920,1080',
+          '--font-render-hinting=none',
+          '--disable-software-rasterizer',
+          '--disable-background-timer-throttling',
+          '--disable-renderer-backgrounding',
+          '--disable-field-trial-config',
+          '--disable-composited-antialiasing'
         ],
         headless: 'new',
-        timeout: 120000,
         ignoreHTTPSErrors: true,
+        timeout: 60000,
       };
 
       // Use @sparticuz/chromium in production, system Chrome in development
       if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
-        launchOptions.args = chromium.args;
-        launchOptions.executablePath = await chromium.executablePath();
+        console.log('🔧 Configuring Chromium for production...');
+        
+        // Configure Chromium for Vercel
+        chromium.setHeadlessMode = true;
+        chromium.setGraphicsMode = false;
+
+        // Get Chromium executable path
+        const executablePath = await chromium.executablePath();
+        console.log('📁 Chromium executable path:', executablePath);
+        
+        // Check if Chromium exists
+        if (fs.existsSync(executablePath)) {
+          console.log('✅ Chromium executable found');
+        } else {
+          console.warn('❌ Chromium executable not found at path');
+          // Try alternative path detection
+          const possiblePaths = [
+            executablePath,
+            '/var/task/node_modules/@sparticuz/chromium/bin/chromium',
+            '/var/task/chromium'
+          ];
+          for (const path of possiblePaths) {
+            if (path && fs.existsSync(path)) {
+              console.log(`✅ Found Chromium at alternative path: ${path}`);
+              launchOptions.executablePath = path;
+              break;
+            }
+          }
+        }
+
+        launchOptions.args = [...chromium.args, ...launchOptions.args];
+        launchOptions.executablePath = executablePath;
         launchOptions.defaultViewport = chromium.defaultViewport;
+        
+        console.log('🎯 Launch options configured for production');
       } else {
+        console.log('🔧 Configuring for development...');
         const chromePath = getChromePath();
         if (chromePath) {
           launchOptions.executablePath = chromePath;
+          console.log('✅ Using local Chrome:', chromePath);
+        } else {
+          console.warn('⚠️ No local Chrome found, using system default');
         }
       }
 
+      console.log('🔄 Launching browser with options...');
       const browser = await puppeteer.launch(launchOptions);
+      
+      console.log('✅ Browser launched successfully');
+      
+      // Set up cleanup on disconnect
       browser.on('disconnected', () => {
+        console.log('🔌 Browser disconnected, clearing instance');
         browserPromise = null;
       });
+      
       return browser;
     } catch (error) {
-      console.error('Failed to launch puppeteer:', error);
+      console.error('❌ Failed to launch puppeteer:', error);
       browserPromise = null;
-      throw new Error('PDF generation is not available at this time');
+      throw new Error(`PDF generation unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -1505,21 +1571,29 @@ ${separateMCQ ? `<div class="footer">
 
 // Function to generate PDF from HTML
 async function generatePDFFromHTML(htmlContent: string) {
-  let browser = null;
+  let browser: Browser | null = null;
   let page: Page | null = null;
   
   try {
+    console.log('🔄 Getting Puppeteer browser instance...');
     browser = await getPuppeteerBrowser();
+    console.log('✅ Browser instance obtained');
+    
     page = await browser.newPage();
+    console.log('✅ New page created');
     
     // Set reasonable timeouts
     page.setDefaultTimeout(120000);
     page.setDefaultNavigationTimeout(120000);
     
+    // Optimize page for performance
+    await page.setViewport({ width: 1920, height: 1080 });
+    
     // Disable unnecessary resources for faster loading
     await page.setRequestInterception(true);
     page.on('request', (req) => {
-      if (req.resourceType() === 'image' || req.resourceType() === 'font') {
+      const resourceType = req.resourceType();
+      if (resourceType === 'image' || resourceType === 'font' || resourceType === 'stylesheet') {
         req.abort();
       } else {
         req.continue();
@@ -1531,7 +1605,7 @@ async function generatePDFFromHTML(htmlContent: string) {
     // Use setContent with simpler wait conditions
     await page.setContent(htmlContent, {
       waitUntil: 'domcontentloaded',
-      timeout: 120000
+      timeout: 60000
     });
 
     console.log('✅ HTML content set, waiting for fonts...');
@@ -1542,72 +1616,37 @@ async function generatePDFFromHTML(htmlContent: string) {
       new Promise(resolve => setTimeout(resolve, 10000))
     ]);
 
-    // --- NEW: Auto-scale font if content exceeds a single A4 printable page ---
-    try {
-      // A4 size in inches: 8.27 x 11.69. Use 96 DPI -> pixels
-      const pxPerInch = 96;
-      const a4HeightPx = 11.69 * pxPerInch; // ~1122 px
-      // margins used in page.pdf call (top + bottom)
-      const marginTopBottom = 40; // matches margin: { top: '20px', bottom: '20px' } => 40px total
-      const printableHeight = Math.max(400, Math.floor(a4HeightPx - marginTopBottom)); // safe floor
-      
-      // Default root font-size (px)
-      let fontSizePx = 16;
-      const minFontSizePx = 9;
-      let iterations = 0;
-      const maxIterations = 20;
-      
-      // Inject initial root font-size (to be able to scale)
-      await page.evaluate((fs) => {
-        (document.documentElement.style as any).fontSize = `${fs}px`;
-      }, fontSizePx);
-      
-      // Measure and reduce until fits in one page or reach minimum font size
-      let contentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
-      console.log(`📏 initial contentHeight=${contentHeight}px, printableHeight=${printableHeight}px`);
-      
-      while (contentHeight > printableHeight && fontSizePx > minFontSizePx && iterations < maxIterations) {
-        iterations++;
-        // Reduce font-size by 10% each iteration for faster convergence
-        fontSizePx = Math.max(minFontSizePx, Math.floor(fontSizePx * 0.9));
-        await page.evaluate((fs) => {
-          (document.documentElement.style as any).fontSize = `${fs}px`;
-        }, fontSizePx);
-        // allow reflow
-        await page.waitForTimeout(120);
-        contentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
-        console.log(`🔽 iteration ${iterations} -> fontSize=${fontSizePx}px, contentHeight=${contentHeight}px`);
-      }
-      
-      if (contentHeight > printableHeight) {
-        console.warn('⚠️ Content still exceeds one printable page after scaling. Proceeding with current scale.');
-      } else {
-        console.log(`✅ Content fits single A4 page with font-size ${fontSizePx}px`);
-      }
-    } catch (scaleErr) {
-      console.warn('Scaling check failed, continuing without scaling:', scaleErr);
-    }
-    // --- END NEW ---
-
-    console.log('📄 Generating PDF...');
+    console.log('✅ Fonts loaded, generating PDF...');
     
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
       preferCSSPageSize: true,
-      timeout: 120000
+      timeout: 60000
     });
 
-    await page.close();
-    
     console.log('✅ PDF generated successfully');
     return pdfBuffer;
     
   } catch (error) {
-    if (page) await page.close();
     console.error('❌ PDF generation error:', error);
+    if (page) {
+      try {
+        await page.close();
+      } catch (e) {
+        console.warn('Error closing page:', e);
+      }
+    }
     throw error;
+  } finally {
+    if (page) {
+      try {
+        await page.close();
+      } catch (e) {
+        console.warn('Error closing page in finally:', e);
+      }
+    }
   }
 }
 
@@ -1703,25 +1742,24 @@ async function tryRpcRandomQuestions(
 export async function POST(request: Request) {
   console.log('📄 POST request received to generate paper');
   
-  const token = request.headers.get('Authorization')?.split(' ')[1];
-  if (!token) {
-    return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
-  }
-
-  // Verify user
-  const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-  if (userError || !user) {
-    console.error('Authentication error:', userError);
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // Check if user is on trial
-  const isTrialUser = await checkUserSubscription(user.id);
-  console.log(`👤 User ${user.id} is ${isTrialUser ? 'on trial' : 'paid'}`);
-
+  const startTime = Date.now();
   let paper: any;
 
   try {
+    const token = request.headers.get('Authorization')?.split(' ')[1];
+    if (!token) {
+      return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
+    }
+
+    // Verify user
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    if (userError || !user) {
+      console.error('Authentication error:', userError);
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    console.log(`👤 User ${user.id} authenticated`);
+
     const requestData: PaperGenerationRequest = await request.json();
     console.log('📋 Request data received:', {
       title: requestData.title,
@@ -1942,9 +1980,10 @@ export async function POST(request: Request) {
     }
 
     // Generate PDF
+    console.log('🔄 Generating HTML content...');
     const htmlContent = await generatePaperHTML(paper, user.id, requestData);
 
-    // Create PDF buffer from HTML
+    console.log('🔄 Creating PDF from HTML...');
     const pdfBuffer = await generatePDFFromHTML(htmlContent);
 
     // Increment user's papers_generated counter (best-effort)
@@ -1953,6 +1992,8 @@ export async function POST(request: Request) {
     } catch (incErr) {
       console.warn('Failed to increment papers generated count:', incErr);
     }
+
+    console.log(`✅ Paper generation completed successfully in ${Date.now() - startTime}ms`);
 
     // Return PDF as response
     return new NextResponse(pdfBuffer, {
@@ -1965,20 +2006,33 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error('❌ Error generating paper:', error);
+    
+    // Detailed error logging
+    if (error instanceof Error) {
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
 
     // Clean up created paper if it exists (best-effort)
     try {
       if (typeof paper !== 'undefined' && paper?.id) {
         await supabaseAdmin.from('papers').delete().eq('id', paper.id);
+        console.log('✅ Cleaned up paper record after error');
       }
     } catch (cleanupErr) {
       console.warn('Failed to cleanup paper record after error:', cleanupErr);
     }
 
     return NextResponse.json(
-      { error: 'Failed to generate paper. Please try again later.' },
+      { 
+        error: 'Failed to generate paper. Please try again later.',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      },
       { status: 500 }
     );
+  } finally {
+    console.log(`⏱️ Total request time: ${Date.now() - startTime}ms`);
   }
 }
 
