@@ -2,6 +2,7 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes
+
 import fs from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
@@ -10,20 +11,12 @@ import type { PaperGenerationRequest, QuestionType, Question } from '@/types/typ
 import { translate } from '@vitalets/google-translate-api';
 import type { Browser, Page } from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+import chromium from '@sparticuz/chromium'; // Use the correct package name
 
 // --- Optimizations ---
 
 // 1. Puppeteer browser instance singleton to avoid re-launching on every request.
 let browserPromise: Promise<Browser> | null = null;
-
-// Add mobile detection function
-function isMobileUserAgent(userAgent: string | null): boolean {
-  if (!userAgent) return false;
-  
-  const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
-  return mobileRegex.test(userAgent);
-}
 
 async function getPuppeteerBrowser() {
   if (browserPromise) {
@@ -45,6 +38,7 @@ async function getPuppeteerBrowser() {
       // Enhanced Chromium configuration for serverless environment
       const launchOptions: any = {
         args: [
+          ...chromium.args,
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
@@ -78,7 +72,7 @@ async function getPuppeteerBrowser() {
           '--disable-field-trial-config',
           '--disable-composited-antialiasing'
         ],
-        headless: 'new',
+        headless: chromium.headless,
         ignoreHTTPSErrors: true,
         timeout: 60000,
       };
@@ -88,44 +82,10 @@ async function getPuppeteerBrowser() {
         console.log('🔧 Configuring Chromium for production...');
         
         // Configure Chromium for Vercel
-        chromium.setHeadlessMode(true);
-        chromium.setGraphicsMode(false);
-
-        // Get Chromium executable path
-        const executablePath = await chromium.executablePath();
-        console.log('📁 Chromium executable path:', executablePath);
-        
-        // Check if Chromium exists
-        if (executablePath && fs.existsSync(executablePath)) {
-          console.log('✅ Chromium executable found');
-          launchOptions.executablePath = executablePath;
-        } else {
-          console.warn('❌ Chromium executable not found at path, trying alternatives');
-          // Try alternative path detection
-          const possiblePaths = [
-            executablePath,
-            '/var/task/node_modules/@sparticuz/chromium/bin/chromium',
-            '/var/task/chromium',
-            '/opt/nodejs/node_modules/@sparticuz/chromium/bin/chromium'
-          ];
-          for (const p of possiblePaths) {
-            if (p && fs.existsSync(p)) {
-              console.log(`✅ Found Chromium at alternative path: ${p}`);
-              launchOptions.executablePath = p;
-              break;
-            }
-          }
-          
-          // If still no executable found, use default
-          if (!launchOptions.executablePath) {
-            console.warn('⚠️ No Chromium executable found, using default');
-          }
-        }
-
-        launchOptions.args = [...chromium.args, ...launchOptions.args];
+        launchOptions.executablePath = await chromium.executablePath();
         launchOptions.defaultViewport = chromium.defaultViewport;
         
-        console.log('🎯 Launch options configured for production');
+        console.log('✅ Using @sparticuz/chromium for production');
       } else {
         console.log('🔧 Configuring for development...');
         const chromePath = getChromePath();
@@ -138,6 +98,8 @@ async function getPuppeteerBrowser() {
       }
 
       console.log('🔄 Launching browser with options...');
+      console.log('Executable path:', launchOptions.executablePath);
+      
       const browser = await puppeteer.launch(launchOptions);
       
       console.log('✅ Browser launched successfully');
@@ -199,6 +161,9 @@ function getChromePath() {
 
   return null;
 }
+
+// [The rest of your existing code remains exactly the same - all the font cache, 
+// translation cache, question finding functions, PDF generation logic, etc.]
 
 // 2. In-memory cache for fonts
 const fontCache = new Map<string, string>();
