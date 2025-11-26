@@ -88,35 +88,41 @@ async function getPuppeteerBrowser() {
         console.log('🔧 Configuring Chromium for production...');
         
         // Configure Chromium for Vercel
-        chromium.setHeadlessMode = true;
-        chromium.setGraphicsMode = false;
+        chromium.setHeadlessMode(true);
+        chromium.setGraphicsMode(false);
 
         // Get Chromium executable path
         const executablePath = await chromium.executablePath();
         console.log('📁 Chromium executable path:', executablePath);
         
         // Check if Chromium exists
-        if (fs.existsSync(executablePath)) {
+        if (executablePath && fs.existsSync(executablePath)) {
           console.log('✅ Chromium executable found');
+          launchOptions.executablePath = executablePath;
         } else {
-          console.warn('❌ Chromium executable not found at path');
+          console.warn('❌ Chromium executable not found at path, trying alternatives');
           // Try alternative path detection
           const possiblePaths = [
             executablePath,
             '/var/task/node_modules/@sparticuz/chromium/bin/chromium',
-            '/var/task/chromium'
+            '/var/task/chromium',
+            '/opt/nodejs/node_modules/@sparticuz/chromium/bin/chromium'
           ];
-          for (const path of possiblePaths) {
-            if (path && fs.existsSync(path)) {
-              console.log(`✅ Found Chromium at alternative path: ${path}`);
-              launchOptions.executablePath = path;
+          for (const p of possiblePaths) {
+            if (p && fs.existsSync(p)) {
+              console.log(`✅ Found Chromium at alternative path: ${p}`);
+              launchOptions.executablePath = p;
               break;
             }
+          }
+          
+          // If still no executable found, use default
+          if (!launchOptions.executablePath) {
+            console.warn('⚠️ No Chromium executable found, using default');
           }
         }
 
         launchOptions.args = [...chromium.args, ...launchOptions.args];
-        launchOptions.executablePath = executablePath;
         launchOptions.defaultViewport = chromium.defaultViewport;
         
         console.log('🎯 Launch options configured for production');
