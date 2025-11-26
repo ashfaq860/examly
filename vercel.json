@@ -1,9 +1,7 @@
 {
-  "version": 2,
   "functions": {
     "app/api/generate-paper/route.ts": {
-      "maxDuration": 300,
-      "memory": 2048
+      "maxDuration": 300
     }
   }
 }
