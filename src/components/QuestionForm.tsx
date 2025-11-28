@@ -351,7 +351,7 @@ export default function QuestionForm({
         resetTextFields();
       }
       
-      onClose();
+     // onClose();
     } catch (error: any) {
       console.error('Error saving question:', error);
       toast.error(error.message || 'Failed to save question');
