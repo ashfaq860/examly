@@ -64,10 +64,26 @@ export default function QuestionForm({
   // Function to reset only text fields
   const resetTextFields = () => {
     setFormData(prev => ({
-      ...prev,
-      ...initialTextFields,
+     // ...prev,
+     // ...initialTextFields,
       // Keep the correct_option reset only if it's an MCQ
-      correct_option: prev.question_type === 'mcq' ? '' : prev.correct_option
+     // correct_option: prev.question_type === 'mcq' ? '' : prev.correct_option
+       ...prev,
+    // Reset only the text content fields
+    question_text: '',
+    question_text_ur: '',
+    option_a: '',
+    option_b: '',
+    option_c: '',
+    option_d: '',
+    option_a_ur: '',
+    option_b_ur: '',
+    option_c_ur: '',
+    option_d_ur: '',
+    answer_text: '',
+    answer_text_ur: '',
+    // Reset correct_option only for MCQ questions
+    correct_option: prev.question_type === 'mcq' ? '' : prev.correct_option
     }));
   };
 
