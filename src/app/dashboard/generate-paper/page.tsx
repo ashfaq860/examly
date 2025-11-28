@@ -1577,8 +1577,20 @@ const getDropIndex = (container: HTMLElement, y: number, questions: Question[]):
       return;
     }
 
-    const user = session.user;
-    const accessToken = session.access_token;
+    const user = session?.user;
+    let  accessToken = session?.access_token;
+// If there's no token, re-check session once (helps when session is stale or not hydrated)
+if (!accessToken) {
+  const refreshed = await supabase.auth.getSession(); // re-check
+  accessToken = refreshed?.data?.session?.access_token || refreshed?.session?.access_token || null;
+}
+// If still no token, fail with a helpful message and do NOT call the API with an undefined token
+if (!accessToken) {
+  console.warn('No Supabase access token found for current session. Aborting paper generation.');
+  alert('Session problem: we could not obtain an authentication token. Please logout and login again (use Google login once more) and try again.');
+  setIsLoading(false);
+  return;
+}
     const randomSeed = Date.now();
     
     // Get chapter IDs for validation
@@ -1689,7 +1701,7 @@ const getDropIndex = (container: HTMLElement, y: number, questions: Question[]):
       shortMarks: payload.reorderedQuestions.short.map(q => ({ id: q.id, marks: q.marks })),
       longMarks: payload.reorderedQuestions.long.map(q => ({ id: q.id, marks: q.marks }))
     });
-
+/*
     const response = await fetch("/api/generate-paper", {
       method: "POST",
       headers: {
@@ -1698,7 +1710,19 @@ const getDropIndex = (container: HTMLElement, y: number, questions: Question[]):
       },
       body: JSON.stringify(payload),
     });
+*/
+// Build headers (only include Authorization when token exists)
+const headers: Record<string,string> = {
+  "Content-Type": "application/json"
+};
+headers.Authorization = `Bearer ${accessToken}`;
 
+// perform the fetch with valid headers
+const response = await fetch("/api/generate-paper", {
+  method: "POST",
+  headers,
+  body: JSON.stringify(payload),
+});
     const contentType = response.headers.get("content-type") || "";
     
     if (response.ok) {

@@ -1717,10 +1717,25 @@ export async function POST(request: Request) {
   let paper: any;
 
   try {
-    const token = request.headers.get('Authorization')?.split(' ')[1];
+    let token = request.headers.get('Authorization')?.split(' ')[1];
     if (!token) {
-      return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
+       const cookieHeader = request.headers.get('cookie') || '';
+        try {
+    const match = cookieHeader.match(/sb-access-token=([^;]+)/) || cookieHeader.match(/supabase-auth-token=([^;]+)/) || cookieHeader.match(/sb:token=([^;]+)/);
+    if (match) {
+      token = decodeURIComponent(match[1]);
+      console.log('Found token in cookie (best-effort).');
     }
+  } catch (e) {
+    // ignore
+  }
+     // return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
+    }
+
+    if (!token) {
+  console.warn('No Authorization token provided in header or cookies.');
+  return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
+}
 
     // Verify user
     const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
