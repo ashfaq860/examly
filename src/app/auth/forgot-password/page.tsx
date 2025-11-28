@@ -16,7 +16,8 @@ export default function ForgotPassword() {
     setMsg(null);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL}/auth/reset-password`
+     redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL ?? 'https://www.examly.pk'}/auth/reset-password`,
+
     });
 
     setLoading(false);
