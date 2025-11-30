@@ -81,7 +81,7 @@ const Header = ({
             <Menu size={28} />          </button>
          <Link
   href="/academy"
-  className="text-decoration-none fw-bold text-primary fs-6 fs-sm-3"
+  className="text-decoration-none fw-bold text-primary fs-6 fs-sm-2"
 >
   <i className="bi bi-mortarboard me-2"></i> Examly: Paper Generation DashBoard
 </Link>
