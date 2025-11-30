@@ -80,7 +80,7 @@ const Header = ({
           >
             <Menu size={28} />          </button>
        <Link
-  href="/academy"
+  href="/dashboard"
   className="text-decoration-none fw-bold text-primary d-flex align-items-center flex-wrap"
   style={{ lineHeight: "1.2" }}
 >
