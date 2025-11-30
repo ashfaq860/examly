@@ -2050,7 +2050,7 @@ if (response.ok && contentType.includes("application/pdf")) {
                         onClick={() => setValue("classId", cls.id)}
                         style={{ cursor: 'pointer' }}
                       >
-                        <div className="card-body d-flex flex-column justify-content-center">
+                        <div className="card-body d-flex flex-column justify-content-center p-2 p-sm-1">
                           <span className="display-6 mb-3">🎓</span>
                           <h6 className="fw-semibold mb-2">Class {cls.name}</h6>
                           <small className="text-muted d-none d-sm-inline">Select to continue</small>

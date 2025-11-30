@@ -20,7 +20,7 @@ const Header = ({ sidebarOpen, setSidebarOpen }: any) => {
   }, []);
 
   return (
-    <nav className="navbar navbar-light bg-white shadow-sm sticky-top px-3">
+    <nav className="navbar navbar-light bg-white shadow-sm sticky-top px-1">
       {/* Left mobile toggle and logo */}
       <div className="d-flex align-items-center">
         <button
