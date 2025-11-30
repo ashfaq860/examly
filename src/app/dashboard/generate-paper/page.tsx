@@ -1580,7 +1580,7 @@ const getDropIndex = (container: HTMLElement, y: number, questions: Question[]):
     const user = session?.user;
     let  accessToken = session?.access_token;
 // If there's no token, re-check session once (helps when session is stale or not hydrated)
-if (!accessToken) {
+/*if (!accessToken) {
   const refreshed = await supabase.auth.getSession(); // re-check
   accessToken = refreshed?.data?.session?.access_token || refreshed?.session?.access_token || null;
 }
@@ -1588,6 +1588,22 @@ if (!accessToken) {
 if (!accessToken) {
   console.warn('No Supabase access token found for current session. Aborting paper generation.');
   alert('Session problem: we could not obtain an authentication token. Please logout and login again (use Google login once more) and try again.');
+  setIsLoading(false);
+  return;
+}
+  */
+ // If there's no token, try to refresh the session
+if (!accessToken) {
+  const { data: refreshedSession } = await supabase.auth.refreshSession();
+  if (refreshedSession?.session) {
+    accessToken = refreshedSession.session.access_token;
+  }
+}
+
+// Final validation
+if (!accessToken) {
+  console.warn('No access token available');
+  alert('Authentication issue. Please try logging in again.');
   setIsLoading(false);
   return;
 }

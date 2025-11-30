@@ -11,7 +11,7 @@ import type { PaperGenerationRequest, QuestionType, Question } from '@/types/typ
 import { translate } from '@vitalets/google-translate-api';
 import type { Browser, Page } from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium'; // Use the correct package name
+import chromium from '@sparticuz/chromium';
 
 // --- Optimizations ---
 
@@ -162,9 +162,6 @@ function getChromePath() {
   return null;
 }
 
-// [The rest of your existing code remains exactly the same - all the font cache, 
-// translation cache, question finding functions, PDF generation logic, etc.]
-
 // 2. In-memory cache for fonts
 const fontCache = new Map<string, string>();
 
@@ -225,6 +222,40 @@ async function getClassSubjectId(classId: string, subjectId: string): Promise<st
     console.warn('Error getting class_subject_id:', error);
     return null;
   }
+}
+
+// Enhanced token extraction function
+function extractToken(request: Request): string | null {
+  // Method 1: Check Authorization header first
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+
+  // Method 2: Check various cookie patterns
+  const cookieHeader = request.headers.get('cookie');
+  if (cookieHeader) {
+    const cookiePatterns = [
+      /sb-access-token=([^;]+)/,
+      /supabase-auth-token=([^;]+)/,
+      /sb:token=([^;]+)/,
+      /^sb-[^=]+=([^;]+)/, // Generic Supabase pattern
+    ];
+
+    for (const pattern of cookiePatterns) {
+      const match = cookieHeader.match(pattern);
+      if (match) {
+        try {
+          return decodeURIComponent(match[1]);
+        } catch (e) {
+          console.warn('Failed to decode token from cookie:', e);
+          return match[1]; // Return undecoded as fallback
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 // Enhanced fallback function to find questions with proper filtering
@@ -1717,34 +1748,42 @@ export async function POST(request: Request) {
   let paper: any;
 
   try {
-    let token = request.headers.get('Authorization')?.split(' ')[1];
-    if (!token) {
-       const cookieHeader = request.headers.get('cookie') || '';
-        try {
-    const match = cookieHeader.match(/sb-access-token=([^;]+)/) || cookieHeader.match(/supabase-auth-token=([^;]+)/) || cookieHeader.match(/sb:token=([^;]+)/);
-    if (match) {
-      token = decodeURIComponent(match[1]);
-      console.log('Found token in cookie (best-effort).');
-    }
-  } catch (e) {
-    // ignore
-  }
-     // return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
-    }
+    // Use the enhanced token extraction
+    const token = extractToken(request);
 
     if (!token) {
-  console.warn('No Authorization token provided in header or cookies.');
-  return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
-}
+      console.warn('No authorization token found in headers or cookies');
+      return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
+    }
 
-    // Verify user
+    console.log('🔐 Token found, verifying user...');
+
+    // Verify user with better error handling
     const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-    if (userError || !user) {
-      console.error('Authentication error:', userError);
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    
+    if (userError) {
+      console.error('Token validation error:', userError);
+      
+      // Specific handling for common token issues
+      if (userError.message.includes('JWT')) {
+        return NextResponse.json({ 
+          error: 'Invalid or expired token. Please sign in again.' 
+        }, { status: 401 });
+      }
+      
+      return NextResponse.json({ 
+        error: 'Authentication failed',
+        details: process.env.NODE_ENV === 'development' ? userError.message : undefined
+      }, { status: 401 });
     }
 
-    console.log(`👤 User ${user.id} authenticated`);
+    if (!user) {
+      console.error('No user found for valid token');
+      return NextResponse.json({ error: 'User not found' }, { status: 401 });
+    }
+
+    console.log(`👤 User ${user.id} authenticated successfully`);
+    console.log(`🔐 User auth method: ${user.app_metadata?.provider || 'email'}`);
 
     const requestData: PaperGenerationRequest = await request.json();
     console.log('📋 Request data received:', {
