@@ -79,12 +79,17 @@ const Header = ({
             style={{ padding: "5px" }}
           >
             <Menu size={28} />          </button>
-         <Link
+       <Link
   href="/academy"
-  className="text-decoration-none fw-bold text-primary fs-6 fs-sm-2"
+  className="text-decoration-none fw-bold text-primary d-flex align-items-center flex-wrap"
+  style={{ lineHeight: "1.2" }}
 >
-  <i className="bi bi-mortarboard me-2"></i> Examly: Paper Generation DashBoard
+  <i className="bi bi-mortarboard me-2"></i>
+  <span className="me-1">Examly:</span>
+  <span className="d-none d-sm-inline">Paper Generation</span> {/* hidden on xs */}
+  <span className="ms-1">DashBoard</span>
 </Link>
+
 
         </div>
 
