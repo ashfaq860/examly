@@ -79,12 +79,13 @@ const Header = ({
             style={{ padding: "5px" }}
           >
             <Menu size={28} />          </button>
-          <Link
-            href="/academy"
-            className="text-decoration-none fw-bold fs-5 text-primary"
-          >
-            <i className="bi bi-mortarboard me-2"></i> Examly: Paper Generation DashBoard
-          </Link>
+         <Link
+  href="/academy"
+  className="text-decoration-none fw-bold text-primary fs-6 fs-sm-5"
+>
+  <i className="bi bi-mortarboard me-2"></i> Examly: Paper Generation DashBoard
+</Link>
+
         </div>
 
         {/* User Info */}
