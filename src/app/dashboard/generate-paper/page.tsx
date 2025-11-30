@@ -1727,11 +1727,15 @@ if (!accessToken) {
       body: JSON.stringify(payload),
     });
 */
-// Build headers (only include Authorization when token exists)
 const headers: Record<string,string> = {
   "Content-Type": "application/json"
 };
-headers.Authorization = `Bearer ${accessToken}`;
+if (accessToken && typeof accessToken === 'string' && accessToken.split('.').length === 3) {
+  headers.Authorization = `Bearer ${accessToken}`;
+} else {
+  // debug log to help triage in future
+  console.warn('No valid access token for API call; not sending Authorization header.');
+}
 
 // perform the fetch with valid headers
 const response = await fetch("/api/generate-paper", {

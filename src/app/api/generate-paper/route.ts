@@ -225,38 +225,83 @@ async function getClassSubjectId(classId: string, subjectId: string): Promise<st
 }
 
 // Enhanced token extraction function
+// Robust token extractor for Next API route
 function extractToken(request: Request): string | null {
-  // Method 1: Check Authorization header first
-  const authHeader = request.headers.get('Authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    return authHeader.substring(7);
+  // 1) Authorization header: Bail out early if valid Bearer token present
+  const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+  if (authHeader) {
+    const m = authHeader.match(/Bearer\s+(.+)/i);
+    if (m && m[1]) return m[1];
   }
 
-  // Method 2: Check various cookie patterns
+  // 2) Inspect cookies (common Supabase cookie names)
   const cookieHeader = request.headers.get('cookie');
-  if (cookieHeader) {
-    const cookiePatterns = [
-      /sb-access-token=([^;]+)/,
-      /supabase-auth-token=([^;]+)/,
-      /sb:token=([^;]+)/,
-      /^sb-[^=]+=([^;]+)/, // Generic Supabase pattern
-    ];
+  if (!cookieHeader) return null;
 
-    for (const pattern of cookiePatterns) {
-      const match = cookieHeader.match(pattern);
-      if (match) {
-        try {
-          return decodeURIComponent(match[1]);
-        } catch (e) {
-          console.warn('Failed to decode token from cookie:', e);
-          return match[1]; // Return undecoded as fallback
-        }
+  const cookiePairs = cookieHeader.split(';').map(c => c.trim());
+  // Common cookie names Supabase uses or people store: sb-access-token, supabase-auth-token, sb:token, sb-session
+  const candidates = ['sb-access-token', 'supabase-auth-token', 'sb:token', 'sb-session', 'sb-token'];
+
+  for (const pair of cookiePairs) {
+    const [name, ...rest] = pair.split('=');
+    const value = rest.join('=');
+    if (!name || !value) continue;
+
+    const key = name.trim();
+    if (!candidates.includes(key)) continue;
+
+    // Try to decode and parse JSON (some Supabase cookies store JSON)
+    let decoded = value;
+    try { decoded = decodeURIComponent(value); } catch (e) { /* ignore */ }
+
+    // If looks like JSON, parse and extract access_token
+    if (decoded.startsWith('{') || decoded.startsWith('%7B')) {
+      try {
+        const parsed = JSON.parse(decoded);
+        if (parsed?.access_token) return parsed.access_token;
+        if (parsed?.token) return parsed.token;
+        // Sometimes Supabase stores an object under .currentSession or .persistedSession
+        if (parsed?.currentSession?.access_token) return parsed.currentSession.access_token;
+        if (parsed?.persistedSession?.access_token) return parsed.persistedSession.access_token;
+      } catch (e) {
+        // not JSON — fall through
       }
+    }
+
+    // Otherwise, if cookie value contains 'Bearer ' return the token part
+    const bearer = decoded.match(/Bearer\s+(.+)/i);
+    if (bearer && bearer[1]) return bearer[1];
+
+    // If value *looks like* a JWT (three parts separated by dots) return it directly
+    if (decoded.split('.').length === 3) return decoded;
+  }
+
+  // 3) Fallback: try simple regex patterns in cookie header (older formats)
+  const fallbackPatterns = [
+    /sb-access-token=([^;]+)/,
+    /supabase-auth-token=([^;]+)/,
+    /sb:token=([^;]+)/,
+    /sb-session=([^;]+)/
+  ];
+  for (const p of fallbackPatterns) {
+    const m = cookieHeader.match(p);
+    if (m && m[1]) {
+      try {
+        const candidate = decodeURIComponent(m[1]);
+        if (candidate.split('.').length === 3) return candidate;
+        // try JSON parse fallback
+        try {
+          const json = JSON.parse(candidate);
+          if (json?.access_token) return json.access_token;
+        } catch {}
+        return candidate;
+      } catch { return m[1]; }
     }
   }
 
   return null;
 }
+
 
 // Enhanced fallback function to find questions with proper filtering
 async function findQuestionsWithFallback(
@@ -1750,7 +1795,7 @@ export async function POST(request: Request) {
   try {
     // Use the enhanced token extraction
     const token = extractToken(request);
-
+console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(-6)}` : 'none');
     if (!token) {
       console.warn('No authorization token found in headers or cookies');
       return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
