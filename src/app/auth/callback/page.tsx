@@ -14,10 +14,9 @@ export default function AuthCallback() {
     const handleAuth = async () => {
       try {
         console.log('🔄 Checking Supabase session after OAuth redirect...');
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-        if (error || !session) {
-          console.error('❌ Failed to retrieve session:', error);
+        if (sessionError || !session) {
           toast.error('Login failed. Please try again.');
           router.replace('/auth/login');
           return;
@@ -26,27 +25,32 @@ export default function AuthCallback() {
         const user = session.user;
         console.log('✅ Auth callback user:', user);
 
-        // 1️⃣ Try to get role via RPC
-        let { data: roleData, error: rpcError } = await supabase.rpc('get_user_role', { user_id: user.id });
+        // First-time login: ensure profile exists
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
 
-        // 2️⃣ If no profile found → Create a new one
-        if (!roleData) {
+        if (profileError || !profileData) {
           console.log('🆕 First login detected! Creating profile...');
-
-          await supabase.from('profiles').insert({
+          const { error: insertError } = await supabase.from('profiles').insert({
             id: user.id,
             email: user.email,
-            role: 'teacher', // default role
-            expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)), // 1 year free trial
-            created_at: new Date()
+            full_name: user.user_metadata?.name || 'New User',
+            role: user.user_metadata?.role || 'teacher',
+            trial_ends_at: new Date(Date.now() + 365*24*60*60*1000), // 1-year trial
+            trial_given: false
           });
 
-          // fetch role again after insert
-          const retry = await supabase.rpc('get_user_role', { user_id: user.id });
-          roleData = retry.data;
+          if (insertError) console.error('❌ Failed to create profile:', insertError);
         }
 
-        if (!roleData) {
+        // Get role via RPC
+        const { data: roleData, error: rpcError } = await supabase.rpc('get_user_role', { user_id: user.id });
+
+        if (rpcError || !roleData) {
+          console.error('❌ Error fetching role:', rpcError);
           toast.error('Unable to determine user role.');
           await supabase.auth.signOut();
           router.replace('/auth/login');
@@ -54,20 +58,19 @@ export default function AuthCallback() {
         }
 
         console.log('🎯 User role determined:', roleData);
+
+        // Set cookie
         Cookies.set('role', roleData, { expires: 7, path: '/' });
 
-        // Redirect by role
+        // Redirect based on role
         if (roleData === 'admin' || roleData === 'super_admin') {
           toast.success('Welcome back, Admin! 👑');
           router.replace('/admin');
-        } else if (roleData === 'teacher' || roleData === 'academy') {
+        } else {
           toast.success('Welcome back, Teacher! 🎓');
           router.replace('/dashboard');
-        } else {
-          toast.error('Access denied: Unsupported role.');
-          await supabase.auth.signOut();
-          router.replace('/auth/login');
         }
+
       } catch (err) {
         console.error('💥 Auth callback error:', err);
         toast.error('Unexpected error during login.');
