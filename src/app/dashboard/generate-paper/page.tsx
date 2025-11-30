@@ -2044,7 +2044,7 @@ if (response.ok && contentType.includes("application/pdf")) {
                   {classes.map((cls) => (
                     <div key={cls.id} className="col">
                       <div
-                        className={`option-card card h-100 text-center p-4 cursor-pointer ${
+                        className={`option-card card h-20 text-center p-2 cursor-pointer ${
                           watchedClassId === cls.id ? "active border-primary" : "border-light"
                         }`}
                         onClick={() => setValue("classId", cls.id)}
@@ -2053,7 +2053,7 @@ if (response.ok && contentType.includes("application/pdf")) {
                         <div className="card-body d-flex flex-column justify-content-center">
                           <span className="display-6 mb-3">🎓</span>
                           <h6 className="fw-semibold mb-2">Class {cls.name}</h6>
-                          <small className="text-muted">Select to continue</small>
+                          <small className="text-muted d-none d-sm-inline">Select to continue</small>
                           
                           {watchedClassId === cls.id && (
                             <div className="mt-3">
