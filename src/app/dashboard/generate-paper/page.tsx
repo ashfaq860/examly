@@ -1748,8 +1748,19 @@ const response = await fetch("/api/generate-paper", {
     if (response.ok) {
       await refreshTrialStatus();
     }
-    
-    if (response.ok && contentType.includes("application/pdf")) {
+    if (!response.ok) {
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    const json = await response.json();
+    console.error('API error response JSON:', json);
+    alert(json.error || json.message || 'Server error (see console)');
+  } else {
+    const text = await response.text();
+    console.error('API error response text:', text);
+    alert('Server error (see console)');
+  }
+}else
+if (response.ok && contentType.includes("application/pdf")) {
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
