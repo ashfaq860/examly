@@ -9,8 +9,8 @@ import toast from 'react-hot-toast';
 import { Eye, EyeOff } from 'lucide-react';
 export default function SignupForm() {
   const search = useSearchParams();
-  const preRole = search?.get('role') ?? 'student';
-  const [role, setRole] = useState(preRole);
+  
+  const [role, setRole] = useState("teacher");
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,9 +18,7 @@ export default function SignupForm() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    setRole(preRole);
-  }, [preRole]);
+  
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -72,13 +70,7 @@ export default function SignupForm() {
     <AuthLayout title="SignUp" subtitle="Only PTB Syllabus">  
       <form onSubmit={handleSignup}>
         {/* Role */}
-        <div className="mb-3">
-          <label className="form-label">Role</label>
-          <select className="form-select" value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="student">Student</option>
-            <option value="teacher">Teacher / Academy</option>
-          </select>
-        </div>
+  
 
         {/* Name */}
         <div className="mb-3">

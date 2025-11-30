@@ -26,11 +26,27 @@ export default function AuthCallback() {
         const user = session.user;
         console.log('✅ Auth callback user:', user);
 
-        // Fetch role from your RPC
-        const { data: roleData, error: rpcError } = await supabase.rpc('get_user_role', { user_id: user.id });
+        // 1️⃣ Try to get role via RPC
+        let { data: roleData, error: rpcError } = await supabase.rpc('get_user_role', { user_id: user.id });
 
-        if (rpcError || !roleData) {
-          console.error('❌ Error fetching role:', rpcError);
+        // 2️⃣ If no profile found → Create a new one
+        if (!roleData) {
+          console.log('🆕 First login detected! Creating profile...');
+
+          await supabase.from('profiles').insert({
+            id: user.id,
+            email: user.email,
+            role: 'teacher', // default role
+            expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)), // 1 year free trial
+            created_at: new Date()
+          });
+
+          // fetch role again after insert
+          const retry = await supabase.rpc('get_user_role', { user_id: user.id });
+          roleData = retry.data;
+        }
+
+        if (!roleData) {
           toast.error('Unable to determine user role.');
           await supabase.auth.signOut();
           router.replace('/auth/login');
@@ -38,11 +54,9 @@ export default function AuthCallback() {
         }
 
         console.log('🎯 User role determined:', roleData);
-
-        // Store role cookie
         Cookies.set('role', roleData, { expires: 7, path: '/' });
 
-        // Show success toast and redirect
+        // Redirect by role
         if (roleData === 'admin' || roleData === 'super_admin') {
           toast.success('Welcome back, Admin! 👑');
           router.replace('/admin');

@@ -399,7 +399,7 @@ async function findQuestionsWithFallback(
   console.log(`   - Class Subject ID: ${classSubjectId || 'none'}`);
   console.log(`   - Source Type: ${dbSourceType || 'all'}`);
   console.log(`   - Difficulty: ${difficulty || 'any'}`);
-
+  
   // Apply randomization using randomSeed
   if (randomSeed) {
     // Use random ordering for shuffling
