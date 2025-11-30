@@ -1852,7 +1852,7 @@ if (response.ok && contentType.includes("application/pdf")) {
 
   return (
     <AcademyLayout>
-      <div className="container mx-auto px-4 py-4">
+      <div className="container mx-auto px-0 py-4">
         <style jsx>{`
           .step-transition {
             transition: all 0.3s ease-in-out;
@@ -1945,17 +1945,24 @@ if (response.ok && contentType.includes("application/pdf")) {
           pointerEvents: canGeneratePaper() && isAuthenticated ? 'auto' : 'none'
         }}>
           <div className="d-flex justify-content-between align-items-center mb-4">
-            <h1 className="h2 mb-0">Generate New Paper</h1>
+            <h1 className="h2 mb-0">Generate <span className='d-none d-sm-inline'>New</span> Paper</h1>
             {step > 1 && (
-              <button className="btn btn-outline-primary btn-lg" onClick={prevStep}>
-                <i className="bi bi-arrow-left me-2"></i>
-                {step === 2 && 'Back to Class Selection'}
-                {step === 3 && 'Back to Subject Selection'}
-                {step === 4 && 'Back to Chapter Selection'}
-                {step === 5 && 'Back to Paper Type'}
-                {step === 6 && 'Back to Selection Method'}
-                {step === 7 && 'Back to Previous Step'}
-              </button>
+           <button className="btn btn-outline-primary btn-lg" onClick={prevStep}>
+  <i className="bi bi-arrow-left me-2"></i>
+
+  {/* Mobile text (visible only on xs screens) */}
+  <span className="d-inline d-sm-none">Back</span>
+
+  {/* Desktop text (hidden on xs screens) */}
+  <span className="d-none d-sm-inline">
+    {step === 2 && 'Back to Class Selection'}
+    {step === 3 && 'Back to Subject Selection'}
+    {step === 4 && 'Back to Chapter Selection'}
+    {step === 5 && 'Back to Paper Type'}
+    {step === 6 && 'Back to Selection Method'}
+    {step === 7 && 'Back to Previous Step'}
+  </span>
+</button>
             )}
           </div>
 
@@ -2099,18 +2106,18 @@ if (response.ok && contentType.includes("application/pdf")) {
                     const subjectIcon = getSubjectIcon(subject.name);
 
                     return (
-                      <div key={subject.id} className="col">
+                      <div key={subject.id} className="col px-1">
                         <div
-                          className={`option-card card h-100 text-center p-4 cursor-pointer ${
+                          className={`option-card card h-10 text-center p-0 cursor-pointer ${
                             watchedSubjectId === subject.id ? "active border-primary" : "border-light"
                           }`}
                           onClick={() => setValue("subjectId", subject.id)}
                           style={{ cursor: 'pointer' }}
                         >
-                          <div className="card-body d-flex flex-column justify-content-center">
+                          <div className="card-body d-flex flex-column justify-content-center p-2">
                             <span className="display-6 mb-3">{subjectIcon}</span>
                             <h6 className="fw-semibold mb-2">{subject.name}</h6>
-                            <small className="text-muted">Click to select</small>
+                            <small className="text-muted d-none d-sm-inline">Click to select</small>
                             
                             {watchedSubjectId === subject.id && (
                               <div className="mt-3">
