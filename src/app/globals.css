@@ -315,3 +315,21 @@ body{
 .password-toggle-btn:hover {
   color: #0d6efd;
 }
+
+/* Dashboard Paper generation progress bar responsiveness*/
+.progress-scroll {
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin; /* Firefox */
+  -webkit-overflow-scrolling: touch; /* Smooth scroll for mobile */
+}
+
+.progress-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.progress-scroll::-webkit-scrollbar-thumb {
+  background: #0d6efd; /* Bootstrap primary */
+  border-radius: 10px;
+}
+

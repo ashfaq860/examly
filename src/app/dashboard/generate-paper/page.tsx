@@ -614,7 +614,7 @@ function ManualQuestionSelection({
                 </div>
                 <div className="d-flex align-items-center">
                   <span className={`badge ${currentStep === 'mcq' ? 'bg-primary' : 
-                                  getCompletionStatus('mcq').completed ? 'bg-success' : 'bg-secondary'} me-2`}>
+                   getCompletionStatus('mcq').completed ? 'bg-success' : 'bg-secondary'} me-2`}>
                     {getCompletionStatus('mcq').progress}
                   </span>
                   {currentStep === 'mcq' && !getCompletionStatus('mcq').completed && (
@@ -1960,66 +1960,69 @@ if (response.ok && contentType.includes("application/pdf")) {
           </div>
 
           {/* Enhanced Step Progress Indicator */}
-          <div className="mb-5">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              {[
-                { step: 1, label: 'Class', icon: '🎓' },
-                { step: 2, label: 'Subject', icon: '📚' },
-                { step: 3, label: 'Chapters', icon: '📖' },
-                { step: 4, label: 'Paper Type', icon: '📝' },
-                { step: 5, label: 'Method', icon: '🤖' },
-                { step: 6, label: 'Selection', icon: '✍️' },
-                { step: 7, label: 'Review', icon: '👁️' }
-              ].map((item, index) => (
-                <div key={item.step} className="d-flex flex-column align-items-center position-relative">
-                  {index > 0 && (
-                    <div 
-                      className={`position-absolute top-50 start-0 w-100 h-2 ${
-                        step > item.step ? 'bg-primary' : 'bg-light'
-                      }`}
-                      style={{ zIndex: 1, transform: 'translateY(-50%)' }}
-                    ></div>
-                  )}
-                  
-                  <div 
-                    className={`rounded-circle d-flex align-items-center justify-content-center position-relative ${
-                      step >= item.step ? 'bg-primary text-white' : 'bg-light text-muted'
-                    }`}
-                    style={{ 
-                      width: '50px', 
-                      height: '50px', 
-                      zIndex: 2,
-                      transition: 'all 0.3s ease'
-                    }}
-                  >
-                    {step > item.step ? (
-                      <i className="bi bi-check-lg fs-6"></i>
-                    ) : (
-                      <span className="fs-5">{item.icon}</span>
-                    )}
-                  </div>
-                  
-                  <small className={`mt-2 fw-semibold ${step >= item.step ? 'text-primary' : 'text-muted'}`}>
-                    {item.label}
-                  </small>
-                </div>
-              ))}
-            </div>
-            
-            <div className="text-center">
-              <small className="text-muted">
-                Step {step} of 7 - {
-                  step === 1 ? 'Selecting Class' :
-                  step === 2 ? 'Choosing Subject' :
-                  step === 3 ? 'Setting Chapter Coverage' :
-                  step === 4 ? 'Configuring Paper Type' :
-                  step === 5 ? 'Selection Method' :
-                  step === 6 ? 'Manual Question Selection' :
-                  'Final Review & Generation'
-                }
-              </small>
-            </div>
-          </div>
+<div className="mb-5">
+  <div 
+    className="d-flex justify-content-start align-items-center mb-3 progress-scroll"
+  >
+    {[
+      { step: 1, label: 'Class', icon: '🎓' },
+      { step: 2, label: 'Subject', icon: '📚' },
+      { step: 3, label: 'Chapters', icon: '📖' },
+      { step: 4, label: 'Paper Type', icon: '📝' },
+      { step: 5, label: 'Method', icon: '🤖' },
+      { step: 6, label: 'Selection', icon: '✍️' },
+      { step: 7, label: 'Review', icon: '👁️' }
+    ].map((item, index) => (
+      <div key={item.step} className="d-flex flex-column align-items-center position-relative me-4">
+        {index > 0 && (
+          <div 
+            className={`position-absolute top-50 start-0 w-100 h-2 ${
+              step > item.step ? 'bg-primary' : 'bg-light'
+            }`}
+            style={{ zIndex: 1, transform: 'translateY(-50%)' }}
+          ></div>
+        )}
+
+        <div 
+          className={`rounded-circle d-flex align-items-center justify-content-center position-relative ${
+            step >= item.step ? 'bg-primary text-white' : 'bg-light text-muted'
+          }`}
+          style={{ 
+            width: '50px', 
+            height: '50px', 
+            zIndex: 2,
+            transition: 'all 0.3s ease'
+          }}
+        >
+          {step > item.step ? (
+            <i className="bi bi-check-lg fs-6"></i>
+          ) : (
+            <span className="fs-5">{item.icon}</span>
+          )}
+        </div>
+        
+        <small className={`mt-2 fw-semibold ${step >= item.step ? 'text-primary' : 'text-muted'}`}>
+          {item.label}
+        </small>
+      </div>
+    ))}
+  </div>
+
+  <div className="text-center">
+    <small className="text-muted">
+      Step {step} of 7 - {
+        step === 1 ? 'Selecting Class' :
+        step === 2 ? 'Choosing Subject' :
+        step === 3 ? 'Setting Chapter Coverage' :
+        step === 4 ? 'Configuring Paper Type' :
+        step === 5 ? 'Selection Method' :
+        step === 6 ? 'Manual Question Selection' :
+        'Final Review & Generation'
+      }
+    </small>
+  </div>
+</div>
+
 
           {/* Step 1: Class selection */}
           {step === 1 && (
