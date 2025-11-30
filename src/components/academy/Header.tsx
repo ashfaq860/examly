@@ -35,8 +35,8 @@ const Header = ({ sidebarOpen, setSidebarOpen }: any) => {
           className="navbar-brand fw-bold text-primary d-flex align-items-center"
         >
           <i className="bi bi-mortarboard me-2"></i>
-           <span className="ms-1">Examly </span>
-          <span className="d-none d-sm-inline">Paper Generation</span>
+           <span className="ms-1">Examly: </span>
+          <span className="d-none d-sm-inline"> Paper Generation</span>
           <span className="ms-1">Dashboard</span>
         </Link>
       </div>
