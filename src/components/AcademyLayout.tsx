@@ -10,7 +10,11 @@ export default function AcademyLayout({ children }: any) {
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const isActive = (path: string) => pathname?.startsWith(path);
+  // FIXED ACTIVE STATE
+  const isActive = (path: string) => {
+    if (path === "/dashboard") return pathname === "/dashboard";
+    return pathname?.startsWith(path);
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem("theme");
@@ -24,6 +28,17 @@ export default function AcademyLayout({ children }: any) {
 
   return (
     <div className={darkMode ? "bg-dark text-light" : "bg-light text-dark"}>
+      {/* === Hover Styling Injected === */}
+      <style>{`
+        .sidebar-link:hover {
+          background-color: #0d6efd !important;
+          color: #fff !important;
+        }
+        .sidebar-link:hover i {
+          color: #fff !important;
+        }
+      `}</style>
+
       {/* HEADER */}
       <Header
         sidebarOpen={sidebarOpen}
@@ -54,7 +69,7 @@ export default function AcademyLayout({ children }: any) {
         >
           <ul className="nav nav-pills flex-column">
             {[
-              { path: "/dashboard", icon: "bi-speedometer2", label: "Dashboard" },
+              { path: "/dashboard", icon: "bi-speedometer", label: "Dashboard" },
               { path: "/dashboard/generate-paper", icon: "bi-file-earmark-text", label: "Generate Paper" },
               { path: "/dashboard/profile", icon: "bi-person", label: "Profile" },
               { path: "/dashboard/settings", icon: "bi-gear", label: "Settings" },
@@ -63,7 +78,7 @@ export default function AcademyLayout({ children }: any) {
               <li key={item.path} className="mb-2">
                 <Link
                   href={item.path}
-                  className={`nav-link d-flex align-items-center ${
+                  className={`nav-link sidebar-link d-flex align-items-center ${
                     isActive(item.path) ? "active" : ""
                   }`}
                 >
@@ -82,7 +97,7 @@ export default function AcademyLayout({ children }: any) {
           <div className="col-lg-2 d-none d-lg-block border-end">
             <ul className="nav nav-pills flex-column">
               {[
-                { path: "/dashboard", icon: "bi-speedometer2", label: "Dashboard" },
+                { path: "/dashboard", icon: "bi-speedometer", label: "Dashboard" },
                 { path: "/dashboard/generate-paper", icon: "bi-file-earmark-text", label: "Generate Paper" },
                 { path: "/dashboard/profile", icon: "bi-person", label: "Profile" },
                 { path: "/dashboard/settings", icon: "bi-gear", label: "Settings" },
@@ -91,7 +106,7 @@ export default function AcademyLayout({ children }: any) {
                 <li key={item.path} className="mb-2">
                   <Link
                     href={item.path}
-                    className={`nav-link d-flex align-items-center ${
+                    className={`nav-link sidebar-link d-flex align-items-center ${
                       isActive(item.path) ? "active" : ""
                     }`}
                   >

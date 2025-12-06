@@ -1,6 +1,6 @@
 /** app/dashboard/generate-paper/page.tsx */
 'use client';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -38,7 +38,7 @@ const paperSchema = z.object({
   mcqMarks: z.number().min(0),
   shortMarks: z.number().min(1),
   longMarks: z.number().min(1),
-  mcqPlacement: z.enum(['same_page', 'separate']),
+  mcqPlacement: z.enum(['same_page', 'separate','two_papers']),
   mcqToAttempt: z.number().min(0).optional(),
   shortToAttempt: z.number().min(0).optional(),
   longToAttempt: z.number().min(0).optional(),
@@ -108,7 +108,8 @@ const TrialStatusBanner = ({ trialStatus }: { trialStatus: TrialStatus | null })
               {trialStatus.subscriptionType === "paper_pack" ? (
                 <>{trialStatus.papersRemaining} paper(s) left in your pack.</>
               ) : (
-                <>Renews on {trialStatus.subscriptionEndDate?.toLocaleDateString()}.</>
+                <>{//Renews on {//trialStatus.subscriptionEndDate?.toLocaleDateString()}.
+                }</>
               )}
             </p>
           </div>
@@ -232,6 +233,116 @@ const SubscriptionModal = ({
     </div>
   </div>
 );
+
+// 🎨 Generation Progress Modal
+const GenerationProgressModal = ({ 
+  progress 
+}: { 
+  progress: { percentage: number; message: string; isVisible: boolean } 
+}) => {
+  if (!progress.isVisible) return null;
+
+  return (
+    <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+          <div className="modal-body p-5 text-center">
+            {/* Animated Spinner with Percentage */}
+            <div className="mb-4 position-relative" style={{ height: '100px' }}>
+              <div className="position-absolute top-50 start-50 translate-middle">
+                <div className="spinner-border text-primary" style={{ 
+                  width: '80px', 
+                  height: '80px',
+                  borderWidth: '8px'
+                }} role="status">
+                  <span className="visually-hidden">Loading...</span>
+                </div>
+                
+                {/* Percentage inside spinner */}
+                <div className="position-absolute top-50 start-50 translate-middle">
+                  <span className="fw-bold fs-2 text-primary">{progress.percentage}%</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="mb-4">
+              <div className="progress" style={{ height: '12px', borderRadius: '6px' }}>
+                <div 
+                  className="progress-bar progress-bar-striped progress-bar-animated" 
+                  role="progressbar" 
+                  style={{ 
+                    width: `${progress.percentage}%`,
+                    backgroundColor: '#0d6efd',
+                    backgroundImage: 'linear-gradient(45deg, rgba(255,255,255,0.3) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0.3) 75%, transparent 75%, transparent)'
+                  }}
+                ></div>
+              </div>
+            </div>
+            
+            {/* Progress Message */}
+            <h5 className="fw-bold mb-3 text-primary">
+              {progress.message}
+            </h5>
+            
+            {/* Animated dots for loading effect */}
+            <div className="loading-dots">
+              <span className="dot" style={{ 
+                animation: 'bounce 1.4s infinite',
+                animationDelay: '0s',
+                backgroundColor: '#0d6efd'
+              }}></span>
+              <span className="dot" style={{ 
+                animation: 'bounce 1.4s infinite',
+                animationDelay: '0.2s',
+                backgroundColor: '#0d6efd'
+              }}></span>
+              <span className="dot" style={{ 
+                animation: 'bounce 1.4s infinite',
+                animationDelay: '0.4s',
+                backgroundColor: '#0d6efd'
+              }}></span>
+            </div>
+            
+            {/* Additional info */}
+            <p className="text-muted mt-3 small">
+              Please wait while we prepare your paper...
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      <style jsx>{`
+        @keyframes bounce {
+          0%, 60%, 100% { transform: translateY(0); }
+          30% { transform: translateY(-10px); }
+        }
+        
+        .loading-dots {
+          display: flex;
+          justify-content: center;
+          gap: 8px;
+        }
+        
+        .dot {
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          display: inline-block;
+        }
+        
+        .progress-bar-animated {
+          animation: progress-bar-stripes 1s linear infinite;
+        }
+        
+        @keyframes progress-bar-stripes {
+          0% { background-position: 1rem 0; }
+          100% { background-position: 0 0; }
+        }
+      `}</style>
+    </div>
+  );
+};
 
 interface ManualQuestionSelectionProps {
   subjectId: string;
@@ -956,6 +1067,16 @@ export default function GeneratePaperPage() {
     source_type: string;
   } | null>(null);
   
+  // Generation progress state
+  const [generationProgress, setGenerationProgress] = useState({
+    percentage: 0,
+    message: 'Starting generation...',
+    isVisible: false
+  });
+
+  // Scroll ref for chapter selection
+  const chaptersListRef = useRef<HTMLDivElement>(null);
+
   const { trialStatus, isLoading: trialLoading, refreshTrialStatus } = useUser();
 
   const {
@@ -1030,6 +1151,18 @@ export default function GeneratePaperPage() {
     };
     checkAuth();
   }, []);
+
+  // Scroll to chapters list when chapter option changes to single_chapter or custom
+  useEffect(() => {
+    if ((watchedChapterOption === 'custom' || watchedChapterOption === 'single_chapter') && chaptersListRef.current) {
+      setTimeout(() => {
+        chaptersListRef.current?.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'start' 
+        });
+      }, 100);
+    }
+  }, [watchedChapterOption]);
 
   // Check if user can generate paper
   const canGeneratePaper = () => {
@@ -1204,54 +1337,34 @@ export default function GeneratePaperPage() {
     }
   };
 
-  // Load auto selected questions
-// Load auto selected questions - IMPROVED VERSION
-const loadAutoSelectedQuestions = async (chapterIds: string[], formValues: PaperFormData) => {
-  try {
-    const language = formValues.language;
-    const sourceType = formValues.source_type;
-    
-    console.log('🔍 Loading auto questions with:', {
-      mcqCount: formValues.mcqCount,
-      shortCount: formValues.shortCount, 
-      longCount: formValues.longCount,
-      chapterIds: chapterIds.length,
-      subjectId: watchedSubjectId,
-      classId: watchedClassId
-    });
-
-    // Fetch questions for each type with better handling
-    const fetchQuestionsByType = async (
-      questionType: QuestionType, 
-      count: number,
-      chapterIds: string[]
-    ) => {
-      if (count <= 0) return [];
+  // FIXED: Load auto selected questions - Randomly from all chapters
+  const loadAutoSelectedQuestions = async (chapterIds: string[], formValues: PaperFormData) => {
+    try {
+      const language = formValues.language;
+      const sourceType = formValues.source_type;
       
-      try {
-        console.log(`📥 Fetching ${count} ${questionType} questions`);
+      console.log('🔍 Loading auto questions with:', {
+        mcqCount: formValues.mcqCount,
+        shortCount: formValues.shortCount, 
+        longCount: formValues.longCount,
+        chapterIds: chapterIds.length,
+        subjectId: watchedSubjectId,
+        classId: watchedClassId
+      });
+
+      // Helper function to get random questions from ALL chapters
+      const fetchRandomQuestionsByType = async (
+        questionType: QuestionType, 
+        count: number,
+        chapterIds: string[]
+      ) => {
+        if (count <= 0) return [];
         
-        const response = await axios.get(`/api/questions`, {
-          params: {
-            subjectId: watchedSubjectId,
-            classId: watchedClassId,
-            questionType,
-            chapterIds: chapterIds.join(','),
-            language,
-            includeUrdu: language !== 'english',
-            sourceType: sourceType !== 'all' ? sourceType : undefined,
-            limit: count * 2, // Fetch more to ensure we have enough
-            random: true
-          },
-        });
-        
-        const questions = response.data || [];
-        console.log(`✅ Got ${questions.length} ${questionType} questions, need ${count}`);
-        
-        // If we don't have enough questions, try without source type filter
-        if (questions.length < count && sourceType !== 'all') {
-          console.log(`🔄 Not enough ${questionType} questions, trying without source filter`);
-          const fallbackResponse = await axios.get(`/api/questions`, {
+        try {
+          console.log(`📥 Fetching ${count} ${questionType} questions from ${chapterIds.length} chapters`);
+          
+          // First, try to get enough questions with all chapters
+          const response = await axios.get(`/api/questions`, {
             params: {
               subjectId: watchedSubjectId,
               classId: watchedClassId,
@@ -1259,193 +1372,294 @@ const loadAutoSelectedQuestions = async (chapterIds: string[], formValues: Paper
               chapterIds: chapterIds.join(','),
               language,
               includeUrdu: language !== 'english',
-              limit: count * 2,
-              random: true
+              sourceType: sourceType !== 'all' ? sourceType : undefined,
+              limit: count * 3, // Fetch more to ensure we have enough for randomization
+              random: true,
+              shuffle: true // Ensure randomness
             },
           });
           
-          const fallbackQuestions = fallbackResponse.data || [];
-          console.log(`🔄 Got ${fallbackQuestions.length} ${questionType} questions from fallback`);
+          let questions = response.data || [];
+          console.log(`✅ Got ${questions.length} ${questionType} questions from database`);
           
-          // Combine and deduplicate
-          const combinedQuestions = [...questions, ...fallbackQuestions];
-          const uniqueQuestions = combinedQuestions.filter((q, index, self) => 
-            index === self.findIndex(q2 => q2.id === q.id)
-          );
+          // If we don't have enough questions, try without source filter
+          if (questions.length < count && sourceType !== 'all') {
+            console.log(`🔄 Not enough ${questionType} questions, trying without source filter`);
+            const fallbackResponse = await axios.get(`/api/questions`, {
+              params: {
+                subjectId: watchedSubjectId,
+                classId: watchedClassId,
+                questionType,
+                chapterIds: chapterIds.join(','),
+                language,
+                includeUrdu: language !== 'english',
+                limit: count * 3,
+                random: true,
+                shuffle: true
+              },
+            });
+            
+            const fallbackQuestions = fallbackResponse.data || [];
+            console.log(`🔄 Got ${fallbackQuestions.length} ${questionType} questions from fallback`);
+            
+            // Combine and deduplicate
+            const combinedQuestions = [...questions, ...fallbackQuestions];
+            const uniqueQuestions = combinedQuestions.filter((q, index, self) => 
+              index === self.findIndex(q2 => q2.id === q.id)
+            );
+            
+            questions = uniqueQuestions;
+          }
           
-          return uniqueQuestions.slice(0, count);
+          // Ensure questions are truly randomized across chapters
+          if (questions.length > 0) {
+            // Shuffle the array for true randomness
+            const shuffled = [...questions].sort(() => Math.random() - 0.5);
+            
+            // If we have chapters, ensure distribution across chapters
+            if (chapterIds.length > 1 && shuffled.length >= count) {
+              const questionsByChapter: Record<string, Question[]> = {};
+              
+              // Group questions by chapter
+              shuffled.forEach(question => {
+                const chapterId = question.chapter_id;
+                if (!questionsByChapter[chapterId]) {
+                  questionsByChapter[chapterId] = [];
+                }
+                questionsByChapter[chapterId].push(question);
+              });
+              
+              // Distribute questions across chapters
+              const distributedQuestions: Question[] = [];
+              const chaptersWithQuestions = Object.keys(questionsByChapter);
+              
+              if (chaptersWithQuestions.length > 0) {
+                let chapterIndex = 0;
+                let attempts = 0;
+                const maxAttempts = count * 2; // Prevent infinite loop
+                
+                while (distributedQuestions.length < count && attempts < maxAttempts) {
+                  const chapterId = chaptersWithQuestions[chapterIndex % chaptersWithQuestions.length];
+                  const chapterQuestions = questionsByChapter[chapterId] || [];
+                  
+                  if (chapterQuestions.length > 0) {
+                    const question = chapterQuestions.shift(); // Take one question from this chapter
+                    if (question) {
+                      distributedQuestions.push(question);
+                    }
+                  }
+                  
+                  chapterIndex++;
+                  attempts++;
+                  
+                  // If we've gone through all chapters and still need more questions,
+                  // take from whatever is left
+                  if (chapterIndex >= chaptersWithQuestions.length * 2 && distributedQuestions.length < count) {
+                    const remainingQuestions = shuffled.filter(q => 
+                      !distributedQuestions.some(dq => dq.id === q.id)
+                    );
+                    distributedQuestions.push(...remainingQuestions.slice(0, count - distributedQuestions.length));
+                    break;
+                  }
+                }
+              }
+              
+              // If distribution didn't work, fall back to random selection
+              if (distributedQuestions.length >= count) {
+                return distributedQuestions.slice(0, count);
+              }
+            }
+            
+            // Fallback: just take the first 'count' shuffled questions
+            return shuffled.slice(0, count);
+          }
+          
+          return questions.slice(0, count);
+        } catch (error) {
+          console.error(`❌ Error fetching ${questionType} questions:`, error);
+          return [];
         }
-        
-        return questions.slice(0, count);
-      } catch (error) {
-        console.error(`❌ Error fetching ${questionType} questions:`, error);
-        return [];
+      };
+
+      // Fetch all question types in parallel with improved randomization
+      const [mcqQuestions, shortQuestions, longQuestions] = await Promise.all([
+        fetchRandomQuestionsByType('mcq', formValues.mcqCount, chapterIds),
+        fetchRandomQuestionsByType('short', formValues.shortCount, chapterIds),
+        fetchRandomQuestionsByType('long', formValues.longCount, chapterIds),
+      ]);
+
+      console.log('🎯 Final question distribution:', {
+        mcq: mcqQuestions.length,
+        short: shortQuestions.length,
+        long: longQuestions.length,
+        totalChaptersUsed: [...new Set([
+          ...mcqQuestions.map(q => q.chapter_id),
+          ...shortQuestions.map(q => q.chapter_id),
+          ...longQuestions.map(q => q.chapter_id)
+        ])].length,
+        expected: {
+          mcq: formValues.mcqCount,
+          short: formValues.shortCount,
+          long: formValues.longCount
+        }
+      });
+
+      // Log chapter distribution for debugging
+      if (chapterIds.length > 1) {
+        const chapterDistribution: Record<string, number> = {};
+        [...mcqQuestions, ...shortQuestions, ...longQuestions].forEach(q => {
+          const chapterNo = chapters.find(c => c.id === q.chapter_id)?.chapterNo || 'Unknown';
+          chapterDistribution[chapterNo] = (chapterDistribution[chapterNo] || 0) + 1;
+        });
+        console.log('📊 Chapter distribution:', chapterDistribution);
       }
-    };
 
-    // Fetch all question types in parallel
-    const [mcqQuestions, shortQuestions, longQuestions] = await Promise.all([
-      fetchQuestionsByType('mcq', formValues.mcqCount, chapterIds),
-      fetchQuestionsByType('short', formValues.shortCount, chapterIds),
-      fetchQuestionsByType('long', formValues.longCount, chapterIds),
-    ]);
+      // Use the fixed translation function
+      const result = {
+        mcq: handleLanguageTranslation(mcqQuestions, language),
+        short: handleLanguageTranslation(shortQuestions, language),
+        long: handleLanguageTranslation(longQuestions, language),
+      };
 
-    console.log('🎯 Final question counts:', {
-      mcq: mcqQuestions.length,
-      short: shortQuestions.length,
-      long: longQuestions.length,
-      expected: {
-        mcq: formValues.mcqCount,
-        short: formValues.shortCount,
-        long: formValues.longCount
-      }
-    });
+      return result;
+    } catch (error) {
+      console.error('❌ Error loading auto questions:', error);
+      throw error;
+    }
+  };
 
-    // Use the fixed translation function
-    const result = {
-      mcq: handleLanguageTranslation(mcqQuestions, language),
-      short: handleLanguageTranslation(shortQuestions, language),
-      long: handleLanguageTranslation(longQuestions, language),
-    };
-
-    return result;
-  } catch (error) {
-    console.error('❌ Error loading auto questions:', error);
-    throw error;
-  }
-};
   // Optimized load preview questions when reaching step 7
-// Optimized load preview questions when reaching step 7 - FIXED VERSION
-const loadPreviewQuestions = async () => {
-  try {
-    setIsLoadingPreview(true);
-    
-    // Get selected chapter IDs
-    const chapterIds = getChapterIdsToUse();
-    
-    console.log('🔄 Loading preview questions...', {
-      chapterIds: chapterIds.length,
-      subjectId: watchedSubjectId,
-      classId: watchedClassId,
-      selectionMethod: watch('selectionMethod'),
-      paperType: watch('paperType')
-    });
+  const loadPreviewQuestions = async () => {
+    try {
+      setIsLoadingPreview(true);
+      
+      // Get selected chapter IDs
+      const chapterIds = getChapterIdsToUse();
+      
+      console.log('🔄 Loading preview questions...', {
+        chapterIds: chapterIds.length,
+        subjectId: watchedSubjectId,
+        classId: watchedClassId,
+        selectionMethod: watch('selectionMethod'),
+        paperType: watch('paperType')
+      });
 
-    if (chapterIds.length === 0) {
-      console.error('❌ No chapters selected');
-      setPreviewQuestions({ mcq: [], short: [], long: [] });
-      return;
+      if (chapterIds.length === 0) {
+        console.error('❌ No chapters selected');
+        setPreviewQuestions({ mcq: [], short: [], long: [] });
+        return;
+      }
+
+      const formValues = getValues();
+      
+      console.log('📋 Form values for preview:', {
+        mcqCount: formValues.mcqCount,
+        shortCount: formValues.shortCount,
+        longCount: formValues.longCount,
+        mcqMarks: formValues.mcqMarks,
+        shortMarks: formValues.shortMarks,
+        longMarks: formValues.longMarks,
+        selectionMethod: formValues.selectionMethod
+      });
+
+      // Fetch real questions based on selection method
+      let result: Record<QuestionType, Question[]>;
+      
+      if (formValues.selectionMethod === 'manual' && Object.keys(selectedQuestions).some(type => selectedQuestions[type as QuestionType].length > 0)) {
+        console.log('🔧 Using manual selection');
+        // For manual selection, fetch the specific selected questions
+        result = await loadManualSelectedQuestions();
+      } else {
+        console.log('🤖 Using auto selection');
+        // For auto selection, fetch questions based on criteria
+        result = await loadAutoSelectedQuestions(chapterIds, formValues);
+      }
+      
+      console.log('✅ Preview questions loaded:', {
+        mcq: result.mcq.length,
+        short: result.short.length,
+        long: result.long.length
+      });
+
+      setPreviewQuestions(result);
+      
+    } catch (error) {
+      console.error('❌ Error loading preview questions:', error);
+      alert('Failed to load questions for preview. Please try again.');
+    } finally {
+      setIsLoadingPreview(false);
     }
+  };
 
-    const formValues = getValues();
-    
-    console.log('📋 Form values for preview:', {
-      mcqCount: formValues.mcqCount,
-      shortCount: formValues.shortCount,
-      longCount: formValues.longCount,
-      mcqMarks: formValues.mcqMarks,
-      shortMarks: formValues.shortMarks,
-      longMarks: formValues.longMarks,
-      selectionMethod: formValues.selectionMethod
-    });
-
-    // Fetch real questions based on selection method
-    let result: Record<QuestionType, Question[]>;
-    
-    if (formValues.selectionMethod === 'manual' && Object.keys(selectedQuestions).some(type => selectedQuestions[type as QuestionType].length > 0)) {
-      console.log('🔧 Using manual selection');
-      // For manual selection, fetch the specific selected questions
-      result = await loadManualSelectedQuestions();
-    } else {
-      console.log('🤖 Using auto selection');
-      // For auto selection, fetch questions based on criteria
-      result = await loadAutoSelectedQuestions(chapterIds, formValues);
+  // Force refresh preview when paper type changes
+  useEffect(() => {
+    if (step === 7 && watchedPaperType) {
+      // Clear cache and reload when paper type changes
+      setQuestionsCache({});
+      setLastPreviewLoad(null);
+      loadPreviewQuestions();
     }
-    
-    console.log('✅ Preview questions loaded:', {
-      mcq: result.mcq.length,
-      short: result.short.length,
-      long: result.long.length
-    });
+  }, [watchedPaperType]);
 
-    setPreviewQuestions(result);
-    
-  } catch (error) {
-    console.error('❌ Error loading preview questions:', error);
-    alert('Failed to load questions for preview. Please try again.');
-  } finally {
-    setIsLoadingPreview(false);
-  }
-};
+  // Fixed useEffect for step 7 loading - FORCE RELOAD
+  useEffect(() => {
+    if (step === 7 && watchedSubjectId && watchedClassId) {
+      console.log('🎯 Step 7 activated - FORCE loading preview');
+      
+      // Clear any cached data to force fresh load
+      setQuestionsCache({});
+      setLastPreviewLoad(null);
+      
+      const chapterIds = getChapterIdsToUse();
+      
+      if (chapterIds.length > 0) {
+        // Small delay to ensure form values are updated
+        setTimeout(() => {
+          loadPreviewQuestions();
+        }, 100);
+      } else {
+        console.warn('⚠️ No chapters selected, skipping preview load');
+        setPreviewQuestions({ mcq: [], short: [], long: [] });
+      }
+    }
+  }, [step, watchedSubjectId, watchedClassId]);
 
-// Force refresh preview when paper type changes
-useEffect(() => {
-  if (step === 7 && watchedPaperType) {
-    // Clear cache and reload when paper type changes
-    setQuestionsCache({});
-    setLastPreviewLoad(null);
-    loadPreviewQuestions();
-  }
-}, [watchedPaperType]);
-  // Optimized useEffect for step 7 loading
-// Optimized useEffect for step 7 loading// Fixed useEffect for step 7 loading
-// Fixed useEffect for step 7 loading - FORCE RELOAD
-useEffect(() => {
-  if (step === 7 && watchedSubjectId && watchedClassId) {
-    console.log('🎯 Step 7 activated - FORCE loading preview');
-    
-    // Clear any cached data to force fresh load
-    setQuestionsCache({});
-    setLastPreviewLoad(null);
-    
-    const chapterIds = getChapterIdsToUse();
-    
-    if (chapterIds.length > 0) {
-      // Small delay to ensure form values are updated
-      setTimeout(() => {
+  // Listen for form value changes and reload preview
+  useEffect(() => {
+    if (step === 7) {
+      console.log('📊 Form values changed in step 7:', {
+        mcqCount: watchedMcqCount,
+        shortCount: watchedShortCount,
+        longCount: watchedLongCount,
+        paperType: watchedPaperType
+      });
+      
+      const timer = setTimeout(() => {
         loadPreviewQuestions();
-      }, 100);
-    } else {
-      console.warn('⚠️ No chapters selected, skipping preview load');
-      setPreviewQuestions({ mcq: [], short: [], long: [] });
+      }, 300);
+      
+      return () => clearTimeout(timer);
     }
-  }
-}, [step, watchedSubjectId, watchedClassId]);
+  }, [watchedMcqCount, watchedShortCount, watchedLongCount, watchedPaperType, step]);
 
-// Listen for form value changes and reload preview
-useEffect(() => {
-  if (step === 7) {
-    console.log('📊 Form values changed in step 7:', {
-      mcqCount: watchedMcqCount,
-      shortCount: watchedShortCount,
-      longCount: watchedLongCount,
-      paperType: watchedPaperType
-    });
-    
-    const timer = setTimeout(() => {
-      loadPreviewQuestions();
-    }, 300);
-    
-    return () => clearTimeout(timer);
-  }
-}, [watchedMcqCount, watchedShortCount, watchedLongCount, watchedPaperType, step]);
-// Additional effect to reload when question counts change while on step 7
-useEffect(() => {
-  if (step === 7) {
-    console.log('🔄 Question counts changed, reloading preview', {
-      mcq: watchedMcqCount,
-      short: watchedShortCount,
-      long: watchedLongCount
-    });
-    
-    // Debounce the reload to prevent too many requests
-    const timer = setTimeout(() => {
-      loadPreviewQuestions();
-    }, 500);
-    
-    return () => clearTimeout(timer);
-  }
-}, [watchedMcqCount, watchedShortCount, watchedLongCount, step]);
+  // Additional effect to reload when question counts change while on step 7
+  useEffect(() => {
+    if (step === 7) {
+      console.log('🔄 Question counts changed, reloading preview', {
+        mcq: watchedMcqCount,
+        short: watchedShortCount,
+        long: watchedLongCount
+      });
+      
+      // Debounce the reload to prevent too many requests
+      const timer = setTimeout(() => {
+        loadPreviewQuestions();
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [watchedMcqCount, watchedShortCount, watchedLongCount, step]);
+
   // Auto-advance steps when selections are made
   useEffect(() => {
     if (step === 1 && watchedClassId) {
@@ -1470,59 +1684,59 @@ useEffect(() => {
     e.dataTransfer.dropEffect = 'move';
   };
 
- const handleDrop = (e: React.DragEvent, targetType: QuestionType) => {
-  e.preventDefault();
-  
-  if (!draggedQuestion) return;
-
-  // Only allow reordering within the same section
-  if (draggedQuestion.type === targetType) {
-    const questions = [...previewQuestions[targetType]];
-    const draggedIndex = questions.findIndex(q => q.id === draggedQuestion.id);
+  const handleDrop = (e: React.DragEvent, targetType: QuestionType) => {
+    e.preventDefault();
     
-    if (draggedIndex !== -1) {
-      // Get drop position
-      const dropIndex = getDropIndex(e.currentTarget as HTMLElement, e.clientY, questions);
+    if (!draggedQuestion) return;
+
+    // Only allow reordering within the same section
+    if (draggedQuestion.type === targetType) {
+      const questions = [...previewQuestions[targetType]];
+      const draggedIndex = questions.findIndex(q => q.id === draggedQuestion.id);
       
-      if (dropIndex !== -1) {
-        // Remove dragged item from current position
-        const [draggedItem] = questions.splice(draggedIndex, 1);
+      if (draggedIndex !== -1) {
+        // Get drop position
+        const dropIndex = getDropIndex(e.currentTarget as HTMLElement, e.clientY, questions);
         
-        // Insert at new position (below the target)
-        let newIndex = dropIndex;
-        if (draggedIndex < dropIndex) {
-          newIndex = dropIndex - 1; // Adjust index since we removed an item before this position
+        if (dropIndex !== -1) {
+          // Remove dragged item from current position
+          const [draggedItem] = questions.splice(draggedIndex, 1);
+          
+          // Insert at new position (below the target)
+          let newIndex = dropIndex;
+          if (draggedIndex < dropIndex) {
+            newIndex = dropIndex - 1; // Adjust index since we removed an item before this position
+          }
+          
+          questions.splice(newIndex, 0, draggedItem);
+          
+          setPreviewQuestions(prev => ({
+            ...prev,
+            [targetType]: questions
+          }));
         }
-        
-        questions.splice(newIndex, 0, draggedItem);
-        
-        setPreviewQuestions(prev => ({
-          ...prev,
-          [targetType]: questions
-        }));
       }
     }
-  }
-  
-  setDraggedQuestion(null);
-};
-
-const getDropIndex = (container: HTMLElement, y: number, questions: Question[]): number => {
-  const questionElements = container.querySelectorAll('.question-item');
-  if (questionElements.length === 0) return questions.length; // Add to end
-
-  for (let i = 0; i < questionElements.length; i++) {
-    const element = questionElements[i];
-    const rect = element.getBoundingClientRect();
-    const middle = rect.top + rect.height / 2;
     
-    if (y < middle) {
-      return i; // Drop above this element
+    setDraggedQuestion(null);
+  };
+
+  const getDropIndex = (container: HTMLElement, y: number, questions: Question[]): number => {
+    const questionElements = container.querySelectorAll('.question-item');
+    if (questionElements.length === 0) return questions.length; // Add to end
+
+    for (let i = 0; i < questionElements.length; i++) {
+      const element = questionElements[i];
+      const rect = element.getBoundingClientRect();
+      const middle = rect.top + rect.height / 2;
+      
+      if (y < middle) {
+        return i; // Drop above this element
+      }
     }
-  }
-  
-  return questions.length; // Drop at the end
-};
+    
+    return questions.length; // Drop at the end
+  };
 
   const handleDragEnd = () => {
     setDraggedQuestion(null);
@@ -1556,7 +1770,17 @@ const getDropIndex = (container: HTMLElement, y: number, questions: Question[]):
     }
   };
 
- const onSubmit = async (formData: PaperFormData) => {
+  // FIXED: onSubmit with progress tracking
+const onSubmit = async (formData: PaperFormData) => {
+  // Validate two_papers layout before anything else
+  if (formData.mcqPlacement === 'two_papers') {
+    const totalQuestions = formData.mcqCount + formData.shortCount + formData.longCount;
+    if (totalQuestions > 15) {
+      alert(`Two Papers Layout: Maximum 15 total questions allowed. You have ${totalQuestions}. Please adjust your question counts.`);
+      return;
+    }
+  }
+
   if (!canGeneratePaper()) {
     setShowSubscriptionModal(true);
     return;
@@ -1567,6 +1791,13 @@ const getDropIndex = (container: HTMLElement, y: number, questions: Question[]):
     return;
   }
 
+  // Show progress modal
+  setGenerationProgress({
+    percentage: 0,
+    message: 'Starting paper generation...',
+    isVisible: true
+  });
+
   setIsLoading(true);
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -1574,39 +1805,36 @@ const getDropIndex = (container: HTMLElement, y: number, questions: Question[]):
     if (!session) {
       alert('You must be logged in to generate a paper.');
       setIsLoading(false);
+      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
       return;
     }
 
     const user = session?.user;
-    let  accessToken = session?.access_token;
-// If there's no token, re-check session once (helps when session is stale or not hydrated)
-/*if (!accessToken) {
-  const refreshed = await supabase.auth.getSession(); // re-check
-  accessToken = refreshed?.data?.session?.access_token || refreshed?.session?.access_token || null;
-}
-// If still no token, fail with a helpful message and do NOT call the API with an undefined token
-if (!accessToken) {
-  console.warn('No Supabase access token found for current session. Aborting paper generation.');
-  alert('Session problem: we could not obtain an authentication token. Please logout and login again (use Google login once more) and try again.');
-  setIsLoading(false);
-  return;
-}
-  */
- // If there's no token, try to refresh the session
-if (!accessToken) {
-  const { data: refreshedSession } = await supabase.auth.refreshSession();
-  if (refreshedSession?.session) {
-    accessToken = refreshedSession.session.access_token;
-  }
-}
+    let accessToken = session?.access_token;
 
-// Final validation
-if (!accessToken) {
-  console.warn('No access token available');
-  alert('Authentication issue. Please try logging in again.');
-  setIsLoading(false);
-  return;
-}
+    // Update progress
+    setGenerationProgress({
+      percentage: 10,
+      message: 'Preparing paper data...',
+      isVisible: true
+    });
+
+    if (!accessToken) {
+      const { data: refreshedSession } = await supabase.auth.refreshSession();
+      if (refreshedSession?.session) {
+        accessToken = refreshedSession.session.access_token;
+      }
+    }
+
+    // Final validation
+    if (!accessToken) {
+      console.warn('No access token available');
+      alert('Authentication issue. Please try logging in again.');
+      setIsLoading(false);
+      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+      return;
+    }
+
     const randomSeed = Date.now();
     
     // Get chapter IDs for validation
@@ -1616,6 +1844,7 @@ if (!accessToken) {
     if (chapterIds.length === 0) {
       alert('No chapters found for the selected subject and class. Please check your selection.');
       setIsLoading(false);
+      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
       return;
     }
 
@@ -1623,20 +1852,47 @@ if (!accessToken) {
     if (formData.mcqCount === 0 && formData.shortCount === 0 && formData.longCount === 0) {
       alert('Please select at least one question type with count greater than 0.');
       setIsLoading(false);
+      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
       return;
     }
 
-    console.log('🎯 Sending request to API with data:', {
-      subjectId: formData.subjectId,
-      classId: formData.classId,
-      chapterIds: chapterIds,
-      mcqCount: formData.mcqCount,
-      shortCount: formData.shortCount,
-      longCount: formData.longCount,
-      source_type: formData.source_type,
-      selectionMethod: formData.selectionMethod
+    // Validate attempt counts
+    if (
+      formData.mcqToAttempt > formData.mcqCount ||
+      formData.shortToAttempt > formData.shortCount ||
+      formData.longToAttempt > formData.longCount
+    ) {
+      alert("Please fix the 'To Attempt' values. They cannot exceed 'Total Qs'.");
+      setIsLoading(false);
+      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+      return;
+    }
+
+    // Debug log to verify form data
+    console.log('🎯 Debug - Form submission details:', {
+      mcqPlacement: formData.mcqPlacement,
+      isTwoPapers: formData.mcqPlacement === 'two_papers',
+      questionCounts: {
+        mcq: formData.mcqCount,
+        short: formData.shortCount,
+        long: formData.longCount,
+        total: formData.mcqCount + formData.shortCount + formData.longCount
+      },
+      timeSettings: {
+        timeMinutes: formData.timeMinutes,
+        mcqTimeMinutes: formData.mcqTimeMinutes,
+        subjectiveTimeMinutes: formData.subjectiveTimeMinutes
+      },
+      layoutLimits: formData.mcqPlacement === 'two_papers' ? 'Max 15 questions' : 'No limit'
     });
-    
+
+    // Update progress
+    setGenerationProgress({
+      percentage: 25,
+      message: 'Validating question selection...',
+      isVisible: true
+    });
+
     // Prepare selected questions based on current preview order
     const selectedQuestionsFromPreview = {
       mcq: previewQuestions.mcq.map(q => q.id),
@@ -1644,13 +1900,18 @@ if (!accessToken) {
       long: previewQuestions.long.map(q => q.id)
     };
 
+    // Calculate total time based on layout
+    let totalTimeMinutes = formData.timeMinutes;
+    if (formData.mcqPlacement === 'separate') {
+      // For separate layout, sum objective and subjective times
+      totalTimeMinutes = (formData.mcqTimeMinutes || 0) + (formData.subjectiveTimeMinutes || 0);
+    }
+
     // CRITICAL FIX: Prepare questions with custom marks for PDF generation
     const questionsWithCustomMarks = {
       mcq: previewQuestions.mcq.map(q => ({
         ...q,
-        // Include the custom marks in the question object itself
         marks: q.customMarks || formData.mcqMarks,
-        // Ensure the default marks are also available
         defaultMarks: formData.mcqMarks
       })),
       short: previewQuestions.short.map(q => ({
@@ -1665,8 +1926,16 @@ if (!accessToken) {
       }))
     };
 
+    // Prepare the payload with all layout support
     const payload = {
       ...formData,
+      // Ensure mcqPlacement is properly included
+      mcqPlacement: formData.mcqPlacement,
+      // Handle time fields properly for all layouts
+      timeMinutes: totalTimeMinutes,
+      // For separate layout, keep individual times
+      mcqTimeMinutes: formData.mcqPlacement === 'separate' ? formData.mcqTimeMinutes : undefined,
+      subjectiveTimeMinutes: formData.mcqPlacement === 'separate' ? formData.subjectiveTimeMinutes : undefined,
       userId: user.id,
       randomSeed,
       mcqToAttempt: formData.mcqToAttempt || formData.mcqCount,
@@ -1675,9 +1944,7 @@ if (!accessToken) {
       selectedQuestions: selectedQuestionsFromPreview,
       language: formData.language,
       shuffleQuestions: formData.shuffleQuestions,
-      // CRITICAL: Pass questions WITH CUSTOM MARKS embedded in each question
       reorderedQuestions: questionsWithCustomMarks,
-      // Add explicit ordering information with marks
       questionOrder: {
         mcq: previewQuestions.mcq.map((q, index) => ({ 
           id: q.id, 
@@ -1695,7 +1962,6 @@ if (!accessToken) {
           marks: q.customMarks || formData.longMarks 
         }))
       },
-      // Add custom marks as a separate object for backup
       customMarksData: {
         mcq: previewQuestions.mcq.map(q => ({
           questionId: q.id,
@@ -1711,65 +1977,99 @@ if (!accessToken) {
         }))
       }
     };
-    
-    console.log('📦 Payload with custom marks:', {
-      mcqMarks: payload.reorderedQuestions.mcq.map(q => ({ id: q.id, marks: q.marks })),
-      shortMarks: payload.reorderedQuestions.short.map(q => ({ id: q.id, marks: q.marks })),
-      longMarks: payload.reorderedQuestions.long.map(q => ({ id: q.id, marks: q.marks }))
+
+    // Update progress
+    setGenerationProgress({
+      percentage: 40,
+      message: 'Sending request to server...',
+      isVisible: true
     });
-/*
+
+    const headers: Record<string,string> = {
+      "Content-Type": "application/json"
+    };
+    
+    if (accessToken && typeof accessToken === 'string' && accessToken.split('.').length === 3) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+
+    // Log the payload for debugging
+    console.log('📤 Submitting payload to API:', {
+      mcqPlacement: payload.mcqPlacement,
+      totalQuestions: payload.mcqCount + payload.shortCount + payload.longCount,
+      timeMinutes: payload.timeMinutes,
+      layoutType: payload.mcqPlacement === 'two_papers' ? 'Two Papers Layout' : 
+                 payload.mcqPlacement === 'separate' ? 'Separate Layout' : 'Single Page Layout'
+    });
+
+    // Update progress
+    setGenerationProgress({
+      percentage: 60,
+      message: 'Generating PDF content...',
+      isVisible: true
+    });
+
+    // Perform the fetch with valid headers
     const response = await fetch("/api/generate-paper", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${accessToken}`,
-      },
+      headers,
       body: JSON.stringify(payload),
     });
-*/
-const headers: Record<string,string> = {
-  "Content-Type": "application/json"
-};
-if (accessToken && typeof accessToken === 'string' && accessToken.split('.').length === 3) {
-  headers.Authorization = `Bearer ${accessToken}`;
-} else {
-  // debug log to help triage in future
-  console.warn('No valid access token for API call; not sending Authorization header.');
-}
-
-// perform the fetch with valid headers
-const response = await fetch("/api/generate-paper", {
-  method: "POST",
-  headers,
-  body: JSON.stringify(payload),
-});
+    
     const contentType = response.headers.get("content-type") || "";
     
     if (response.ok) {
+      // Update progress
+      setGenerationProgress({
+        percentage: 80,
+        message: 'Finalizing PDF...',
+        isVisible: true
+      });
+      
       await refreshTrialStatus();
     }
+    
     if (!response.ok) {
-  const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('application/json')) {
-    const json = await response.json();
-    console.error('API error response JSON:', json);
-    alert(json.error || json.message || 'Server error (see console)');
-  } else {
-    const text = await response.text();
-    console.error('API error response text:', text);
-    alert('Server error (see console)');
-  }
-}else
-if (response.ok && contentType.includes("application/pdf")) {
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const json = await response.json();
+        console.error('API error response JSON:', json);
+        alert(json.error || json.message || 'Server error (see console)');
+      } else {
+        const text = await response.text();
+        console.error('API error response text:', text);
+        alert('Server error (see console)');
+      }
+    } else if (response.ok && contentType.includes("application/pdf")) {
+      // Update progress
+      setGenerationProgress({
+        percentage: 95,
+        message: 'Downloading PDF...',
+        isVisible: true
+      });
+      
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "paper.pdf";
+      a.download = `paper-${new Date().getTime()}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      
+      // Update progress to completion
+      setGenerationProgress({
+        percentage: 100,
+        message: 'Paper generated successfully!',
+        isVisible: true
+      });
+      
+      // Hide progress modal after a delay
+      setTimeout(() => {
+        setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+      }, 1000);
+      
     } else if (contentType.includes("application/json")) {
       const result = await response.json();
       alert(result.error || "Paper generated, but no PDF was returned.");
@@ -1780,10 +2080,19 @@ if (response.ok && contentType.includes("application/pdf")) {
   } catch (error) {
     console.error('Error generating paper:', error);
     alert("Failed to generate paper (client error)");
+    
+    // Hide progress modal on error
+    setGenerationProgress(prev => ({ ...prev, isVisible: false }));
   } finally {
     setIsLoading(false);
+    
+    // Ensure progress modal is hidden if not already
+    setTimeout(() => {
+      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+    }, 2000);
   }
 };
+
   const resetForm = () => {
     setStep(1);
     reset({
@@ -1909,6 +2218,12 @@ if (response.ok && contentType.includes("application/pdf")) {
               #f8f9fa 21px
             );
           }
+          .modal-backdrop {
+            z-index: 1050 !important;
+          }
+          .modal {
+            z-index: 1055 !important;
+          }
         `}</style>
 
         {trialLoading && (
@@ -1933,6 +2248,9 @@ if (response.ok && contentType.includes("application/pdf")) {
           </>
         )}
 
+        {/* Generation Progress Modal */}
+        <GenerationProgressModal progress={generationProgress} />
+
         {!isAuthenticated && (
           <div className="alert alert-warning mb-4">
             <i className="bi bi-exclamation-triangle me-2"></i>
@@ -1947,94 +2265,94 @@ if (response.ok && contentType.includes("application/pdf")) {
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h1 className="h2 mb-0">Generate <span className='d-none d-sm-inline'>New</span> Paper</h1>
             {step > 1 && (
-           <button className="btn btn-outline-primary btn-lg" onClick={prevStep}>
-  <i className="bi bi-arrow-left me-2"></i>
+              <button className="btn btn-outline-primary btn-lg" onClick={prevStep}>
+                <i className="bi bi-arrow-left me-2"></i>
 
-  {/* Mobile text (visible only on xs screens) */}
-  <span className="d-inline d-sm-none">Back</span>
+                {/* Mobile text (visible only on xs screens) */}
+                <span className="d-inline d-sm-none">Back</span>
 
-  {/* Desktop text (hidden on xs screens) */}
-  <span className="d-none d-sm-inline">
-    {step === 2 && 'Back to Class Selection'}
-    {step === 3 && 'Back to Subject Selection'}
-    {step === 4 && 'Back to Chapter Selection'}
-    {step === 5 && 'Back to Paper Type'}
-    {step === 6 && 'Back to Selection Method'}
-    {step === 7 && 'Back to Previous Step'}
-  </span>
-</button>
+                {/* Desktop text (hidden on xs screens) */}
+                <span className="d-none d-sm-inline">
+                  {step === 2 && 'Back to Class Selection'}
+                  {step === 3 && 'Back to Subject Selection'}
+                  {step === 4 && 'Back to Chapter Selection'}
+                  {step === 5 && 'Back to Paper Type'}
+                  {step === 6 && 'Back to Selection Method'}
+                  {step === 7 && 'Back to Previous Step'}
+                </span>
+              </button>
             )}
           </div>
 
           {/* Enhanced Step Progress Indicator */}
-<div className="mb-5">
-  <div 
-    className="d-flex justify-content-start align-items-center mb-3 progress-scroll"
-  >
-    {[
-      { step: 1, label: 'Class', icon: '🎓' },
-      { step: 2, label: 'Subject', icon: '📚' },
-      { step: 3, label: 'Chapters', icon: '📖' },
-      { step: 4, label: 'Paper Type', icon: '📝' },
-      { step: 5, label: 'Method', icon: '🤖' },
-      { step: 6, label: 'Selection', icon: '✍️' },
-      { step: 7, label: 'Review', icon: '👁️' }
-    ].map((item, index) => (
-      <div key={item.step} className="d-flex flex-column align-items-center position-relative me-4">
-        {index > 0 && (
-          <div 
-            className={`position-absolute top-50 start-0 w-100 h-2 ${
-              step > item.step ? 'bg-primary' : 'bg-light'
-            }`}
-            style={{ zIndex: 1, transform: 'translateY(-50%)' }}
-          ></div>
-        )}
+          <div className="mb-3">
+            <div 
+              className="d-flex justify-content-between align-items-center mb-3 progress-scroll"
+            >
+              {[
+                { step: 1, label: 'Select Class', icon: '🎓' },
+                { step: 2, label: 'Select Subject', icon: '📚' },
+                { step: 3, label: 'Select Chapters', icon: '📖' },
+                { step: 4, label: 'Select Paper Type', icon: '📝' },
+                { step: 5, label: 'Select Method', icon: '🤖' },
+                { step: 6, label: 'Question Selection', icon: '✍️' },
+                { step: 7, label: 'Review', icon: '👁️' }
+              ].map((item, index) => (
+                <div key={item.step} className="d-flex flex-column align-items-center position-relative me-4">
+                  <span>{index+1}</span>
+                  {index > 0 && (
+                    <div 
+                      className={`position-absolute top-50 start-0 w-100 h-2 ${
+                        step > item.step ? 'bg-primary' : 'bg-light'
+                      }`}
+                      style={{ zIndex: 1, transform: 'translateY(-50%)' }}
+                    ></div>
+                  )}
 
-        <div 
-          className={`rounded-circle d-flex align-items-center justify-content-center position-relative ${
-            step >= item.step ? 'bg-primary text-white' : 'bg-light text-muted'
-          }`}
-          style={{ 
-            width: '50px', 
-            height: '50px', 
-            zIndex: 2,
-            transition: 'all 0.3s ease'
-          }}
-        >
-          {step > item.step ? (
-            <i className="bi bi-check-lg fs-6"></i>
-          ) : (
-            <span className="fs-5">{item.icon}</span>
-          )}
-        </div>
-        
-        <small className={`mt-2 fw-semibold ${step >= item.step ? 'text-primary' : 'text-muted'}`}>
-          {item.label}
-        </small>
-      </div>
-    ))}
-  </div>
+                  <div 
+                    className={`rounded-circle d-flex align-items-center justify-content-center position-relative ${
+                      step >= item.step ? 'bg-primary text-white' : 'bg-light text-muted'
+                    }`}
+                    style={{ 
+                      width: '50px', 
+                      height: '50px', 
+                      zIndex: 2,
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    {step > item.step ? (
+                      <i className="bi bi-check-lg fs-6"></i>
+                    ) : (
+                      <span className="fs-5">{item.icon}</span>
+                    )}
+                  </div>
+                  
+                  <small className={`mt-2 fw-semibold ${step >= item.step ? 'text-primary' : 'text-muted'}`}>
+                    {item.label}
+                  </small>
+                </div>
+              ))}
+            </div>
 
-  <div className="text-center">
-    <small className="text-muted">
-      Step {step} of 7 - {
-        step === 1 ? 'Selecting Class' :
-        step === 2 ? 'Choosing Subject' :
-        step === 3 ? 'Setting Chapter Coverage' :
-        step === 4 ? 'Configuring Paper Type' :
-        step === 5 ? 'Selection Method' :
-        step === 6 ? 'Manual Question Selection' :
-        'Final Review & Generation'
-      }
-    </small>
-  </div>
-</div>
-
+            <div className="text-center">
+              <small className="text-muted">
+                Step {step} of 7 - {
+                  step === 1 ? 'Selecting Class' :
+                  step === 2 ? 'Choosing Subject' :
+                  step === 3 ? 'Setting Chapter Coverage' :
+                  step === 4 ? 'Configuring Paper Type' :
+                  step === 5 ? 'Selection Method' :
+                  step === 6 ? 'Manual Question Selection' :
+                  'Final Review & Generation'
+                }
+              </small>
+            </div>
+          </div>
 
           {/* Step 1: Class selection */}
           {step === 1 && (
             <div className="step-card step-transition">
-              <div className="text-center mb-5">
+              <div className="text-center mb-3">
                 <h5 className="fw-bold mb-3">🎓 Select Your Class</h5>
                 <p className="text-muted">Choose the class for which you want to generate the paper</p>
               </div>
@@ -2088,7 +2406,7 @@ if (response.ok && contentType.includes("application/pdf")) {
           {/* Step 2: Subject selection */}
           {step === 2 && (
             <div className="step-card step-transition">
-              <div className="text-center mb-5">
+              <div className="text-center mb-3">
                 <h5 className="fw-bold mb-3">📚 Select Subject</h5>
                 <p className="text-muted">Choose the subject for your paper</p>
               </div>
@@ -2143,10 +2461,10 @@ if (response.ok && contentType.includes("application/pdf")) {
             </div>
           )}
 
-          {/* Step 3: Chapter selection */}
+          {/* Step 3: Chapter selection - WITH AUTO-SCROLL FIX */}
           {step === 3 && (
             <div className="step-transition">
-              <div className="text-center mb-5">
+              <div className="text-center mb-3">
                 <h5 className="fw-bold mb-3">📖 Chapter Coverage</h5>
                 <p className="text-muted">Select how you want to cover chapters for {subjects.find(s => s.id === watchedSubjectId)?.name}</p>
               </div>
@@ -2168,6 +2486,10 @@ if (response.ok && contentType.includes("application/pdf")) {
                         if (option.value === 'full_book' || option.value === 'half_book') {
                           setValue('selectedChapters', []);
                           setTimeout(() => setStep(4), 300);
+                        }
+                        // For single_chapter, reset selected chapters
+                        if (option.value === 'single_chapter') {
+                          setValue('selectedChapters', []);
                         }
                       }}
                       style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
@@ -2191,87 +2513,99 @@ if (response.ok && contentType.includes("application/pdf")) {
                 ))}
               </div>
 
-              {(watchedChapterOption === 'custom' || watchedChapterOption === 'single_chapter') && (
-                <div className="step-transition mt-5">
-                  <h6 className="fw-bold mb-4 text-center">
-                    {watchedChapterOption === 'single_chapter' ? 'Select Chapter' : 'Select Chapters'}
-                  </h6>
-                  
-                  {chapters.length === 0 ? (
-                    <div className="text-center py-4">
-                      <div className="spinner-border text-primary" role="status">
-                        <span className="visually-hidden">Loading chapters...</span>
+              {/* Add ref to this section for auto-scroll */}
+              <div ref={chaptersListRef}>
+                {(watchedChapterOption === 'custom' || watchedChapterOption === 'single_chapter') && (
+                  <div className="step-transition mt-5">
+                    <h6 className="fw-bold mb-4 text-center">
+                      {watchedChapterOption === 'single_chapter' ? 'Select Chapter' : 'Select Chapters'}
+                    </h6>
+                    
+                    {chapters.length === 0 ? (
+                      <div className="text-center py-4">
+                        <div className="spinner-border text-primary" role="status">
+                          <span className="visually-hidden">Loading chapters...</span>
+                        </div>
+                        <p className="mt-2 text-muted">Loading chapters...</p>
                       </div>
-                      <p className="mt-2 text-muted">Loading chapters...</p>
-                    </div>
-                  ) : chapters.filter(chapter => chapter.subject_id === watchedSubjectId).length === 0 ? (
-                    <div className="alert alert-warning text-center">
-                      <i className="bi bi-exclamation-triangle me-2"></i>
-                      No chapters found for the selected subject.
-                    </div>
-                  ) : (
-                    <>
-                      <div className="row row-cols-2 row-cols-md-4 g-3">
-                        {chapters
-                          .filter(chapter => chapter.subject_id === watchedSubjectId)
-                          .map(chapter => {
-                            const selectedChapters = watch('selectedChapters') || [];
-                            const isSelected = selectedChapters.includes(chapter.id);
-                            return (
-                              <div key={chapter.id} className="col">
-                                <div
-                                  className={`card h-100 cursor-pointer p-3 transition-all ${
-                                    isSelected ? 'border-primary bg-primary bg-opacity-10' : 'border-light'
-                                  }`}
-                                  onClick={() => handleChapterSelection(chapter.id)}
-                                  style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
-                                >
-                                  <div className="card-body text-center">
-                                    <span className="display-6 mb-2">📖</span>
-                                    <h6 className="card-title">{chapter.chapterNo}. {chapter.name}</h6>
-                                    
-                                    {isSelected && (
-                                      <div className="mt-2">
-                                        <span className="badge bg-success rounded-pill">
-                                          <i className="bi bi-check me-1"></i>
-                                          Selected
-                                        </span>
-                                      </div>
-                                    )}
+                    ) : chapters.filter(chapter => chapter.subject_id === watchedSubjectId).length === 0 ? (
+                      <div className="alert alert-warning text-center">
+                        <i className="bi bi-exclamation-triangle me-2"></i>
+                        No chapters found for the selected subject.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="row row-cols-2 row-cols-md-4 g-3">
+                          {chapters
+                            .filter(chapter => chapter.subject_id === watchedSubjectId)
+                            .map(chapter => {
+                              const selectedChapters = watch('selectedChapters') || [];
+                              const isSelected = selectedChapters.includes(chapter.id);
+                              
+                              // For single_chapter, auto-move to step 4 when a chapter is selected
+                              const handleClick = () => {
+                                handleChapterSelection(chapter.id);
+                                if (watchedChapterOption === 'single_chapter') {
+                                  setTimeout(() => setStep(4), 300);
+                                }
+                              };
+                              
+                              return (
+                                <div key={chapter.id} className="col">
+                                  <div
+                                    className={`card h-100 cursor-pointer p-3 transition-all ${
+                                      isSelected ? 'border-primary bg-primary bg-opacity-10' : 'border-light'
+                                    }`}
+                                    onClick={handleClick}
+                                    style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
+                                  >
+                                    <div className="card-body text-center">
+                                      <span className="display-6 mb-2">📖</span>
+                                      <h6 className="card-title">{chapter.chapterNo}. {chapter.name}</h6>
+                                      
+                                      {isSelected && (
+                                        <div className="mt-2">
+                                          <span className="badge bg-success rounded-pill">
+                                            <i className="bi bi-check me-1"></i>
+                                            Selected
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-                      
-                      {watchedChapterOption === 'custom' && (
-                        <div className="text-center mt-4">
-                          <button 
-                            className="btn btn-primary px-4"
-                            onClick={() => setStep(4)}
-                            disabled={!watch('selectedChapters')?.length}
-                          >
-                            Continue to Paper Type <i className="bi bi-arrow-right ms-2"></i>
-                          </button>
-                          <div className="mt-2">
-                            <small className="text-muted">
-                              {watch('selectedChapters')?.length || 0} chapters selected
-                            </small>
-                          </div>
+                              );
+                            })}
                         </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
+                        
+                        {watchedChapterOption === 'custom' && (
+                          <div className="text-center mt-4">
+                            <button 
+                              className="btn btn-primary px-4"
+                              onClick={() => setStep(4)}
+                              disabled={!watch('selectedChapters')?.length}
+                            >
+                              Continue to Paper Type <i className="bi bi-arrow-right ms-2"></i>
+                            </button>
+                            <div className="mt-2">
+                              <small className="text-muted">
+                                {watch('selectedChapters')?.length || 0} chapters selected
+                              </small>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           {/* Step 4: Paper Type Selection */}
           {step === 4 && (
             <div className="step-card step-transition">
-              <div className="text-center mb-5">
+              <div className="text-center mb-3">
                 <h5 className="fw-bold mb-3">📝 Select Paper Type</h5>
                 <p className="text-muted">Choose between predefined board pattern or customize your own paper</p>
               </div>
@@ -2283,48 +2617,47 @@ if (response.ok && contentType.includes("application/pdf")) {
                     className={`option-card card h-100 p-4 cursor-pointer ${
                       watch("paperType") === "model" ? "active border-primary shadow" : "border-light"
                     }`}
-               // In your Board Paper card onClick handler, replace with this:
-// Enhanced Board Paper selection
-onClick={() => {
-  // First clear everything
-  setSelectedQuestions({ mcq: [], short: [], long: [] });
-  setPreviewQuestions({ mcq: [], short: [], long: [] });
-  setQuestionsCache({});
-  setLastPreviewLoad(null);
-  
-  // Then set values with a small delay between them
-  setValue("paperType", "model");
-  setValue("language", "bilingual");
-  setValue("mcqCount", 12);
-  setValue("mcqToAttempt", 12);
-  setValue("shortCount", 24);
-  setValue("shortToAttempt", 16);
-  setValue("longCount", 3);
-  setValue("longToAttempt", 2);
-  setValue("mcqMarks", 1);
-  setValue("shortMarks", 2);
-  setValue("longMarks", 8);
-  setValue("mcqPlacement", "separate");
-  setValue("timeMinutes", 180);
-  setValue("easyPercent", 20);
-  setValue("mediumPercent", 50);
-  setValue("hardPercent", 30);
-  setValue("shuffleQuestions", true);
-  setValue("dateOfPaper", undefined);
-  setValue("source_type", "all");
-  setValue("selectionMethod", "auto");
-  
-  console.log('🏛️ Board Paper selected with values:', {
-    mcqCount: 12,
-    shortCount: 24,
-    longCount: 3
-  });
-  
-  // Force state update and then proceed
-  setTimeout(() => {
-    setStep(5);
-  }, 100);
-}}                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      // First clear everything
+                      setSelectedQuestions({ mcq: [], short: [], long: [] });
+                      setPreviewQuestions({ mcq: [], short: [], long: [] });
+                      setQuestionsCache({});
+                      setLastPreviewLoad(null);
+                      
+                      // Then set values with a small delay between them
+                      setValue("paperType", "model");
+                      setValue("language", "bilingual");
+                      setValue("mcqCount", 12);
+                      setValue("mcqToAttempt", 12);
+                      setValue("shortCount", 24);
+                      setValue("shortToAttempt", 16);
+                      setValue("longCount", 3);
+                      setValue("longToAttempt", 2);
+                      setValue("mcqMarks", 1);
+                      setValue("shortMarks", 2);
+                      setValue("longMarks", 8);
+                      setValue("mcqPlacement", "separate");
+                      setValue("timeMinutes", 180);
+                      setValue("easyPercent", 20);
+                      setValue("mediumPercent", 50);
+                      setValue("hardPercent", 30);
+                      setValue("shuffleQuestions", true);
+                      setValue("dateOfPaper", undefined);
+                      setValue("source_type", "all");
+                      setValue("selectionMethod", "auto");
+                      
+                      console.log('🏛️ Board Paper selected with values:', {
+                        mcqCount: 12,
+                        shortCount: 24,
+                        longCount: 3
+                      });
+                      
+                      // Force state update and then proceed
+                      setTimeout(() => {
+                        setStep(5);
+                      }, 100);
+                    }}
+                    style={{ cursor: 'pointer' }}
                   >
                     <div className="card-body">
                       <div className="text-center mb-4">
@@ -2377,43 +2710,51 @@ onClick={() => {
                     className={`option-card card h-100 p-4 cursor-pointer ${
                       watch("paperType") === "custom" ? "active border-primary shadow" : "border-light"
                     }`}
-                  // In your Custom Paper card onClick handler, replace with:
-onClick={() => {
-  setValue("paperType", "custom");
-  
-  // Set reasonable custom paper defaults instead of zeros
-  setValue("mcqCount", 10);
-  setValue("shortCount", 5);
-  setValue("longCount", 3);
-  setValue("mcqToAttempt", 10);
-  setValue("shortToAttempt", 5);
-  setValue("longToAttempt", 3);
-  setValue("mcqMarks", 1);
-  setValue("shortMarks", 2);
-  setValue("longMarks", 5);
-  setValue("mcqPlacement", "separate");
-  setValue("timeMinutes", 60);
-  setValue("easyPercent", 33);
-  setValue("mediumPercent", 34);
-  setValue("hardPercent", 33);
-  setValue("shuffleQuestions", true);
-  setValue("dateOfPaper", new Date().toISOString().split('T')[0]);
-  setValue("source_type", "all");
-  
-  // Clear selections and cache
-  setSelectedQuestions({
-    mcq: [],
-    short: [],
-    long: [],
-  });
-  setQuestionsCache({});
-  setLastPreviewLoad(null);
-  setPreviewQuestions({
-    mcq: [],
-    short: [],
-    long: [],
-  });
-}}                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      setValue("paperType", "custom");
+                      
+                      // Set reasonable custom paper defaults
+                      setValue("mcqCount", 5);
+                      setValue("shortCount", 5);
+                      setValue("longCount", 2);
+                      setValue("mcqToAttempt", 5);
+                      setValue("shortToAttempt", 5);
+                      setValue("longToAttempt", 2);
+                      setValue("mcqMarks", 1);
+                      setValue("shortMarks", 2);
+                      setValue("longMarks", 5);
+                      setValue("mcqPlacement", "same_page");
+                      setValue("timeMinutes", 60);
+                      setValue("shuffleQuestions", true);
+                      setValue("dateOfPaper", new Date().toISOString().split('T')[0]);
+                      setValue("source_type", "all");
+                      
+                      // Clear selections and cache
+                      setSelectedQuestions({
+                        mcq: [],
+                        short: [],
+                        long: [],
+                      });
+                      setQuestionsCache({});
+                      setLastPreviewLoad(null);
+                      setPreviewQuestions({
+                        mcq: [],
+                        short: [],
+                        long: [],
+                      });
+                      
+                      // Scroll to custom settings after a short delay to allow DOM update
+                      setTimeout(() => {
+                        const customSettings = document.querySelector('.custom-settings');
+                        if (customSettings) {
+                          customSettings.scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'start' 
+                          });
+                        }
+                      }, 300);
+                    }}
+                    style={{ cursor: 'pointer' }}
                   >
                     <div className="card-body">
                       <div className="text-center mb-4">
@@ -2456,156 +2797,388 @@ onClick={() => {
 
               {/* Custom Paper Settings */}
               {watch("paperType") === "custom" && (
-                <div className="custom-settings mt-5 p-4 border rounded bg-light step-transition">
+                <div className="custom-settings mt-5 p-4 border rounded bg-light step-transition" id="custom-settings">
                   <h6 className="fw-bold mb-3">⚙️ Customize Paper Settings</h6>
 
-                  {/* Paper Title */}
-                  <div className="mb-3">
-                    <label className="form-label">Paper Title</label>
-                    <input
-                      type="text"
-                      defaultValue="BISE LAHORE"
-                      {...register("title")}
-                      className={`form-control ${errors.title ? "is-invalid" : ""}`}
-                    />
-                    {errors.title && <div className="invalid-feedback">{errors.title.message}</div>}
-                  </div>
-
-                  {/* Date of Paper Field */}
-                  <div className="mb-3">
-                    <label className="form-label">Date of Paper</label>
-                    <div className="position-relative">
-                      <button
-                        type="button"
-                        className="form-control text-start bg-white"
-                        onClick={() => setShowDatePicker(!showDatePicker)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        {formatDateForDisplay(watch('dateOfPaper') || '')}
-                        <i className="bi bi-calendar float-end"></i>
-                      </button>
-                      
-                      {/* Date Picker Dropdown */}
-                      {showDatePicker && (
-                        <div className="card position-absolute top-100 start-0 mt-1 shadow-lg z-3 w-100">
-                          <div className="card-body p-3">
-                            <div className="d-flex justify-content-between align-items-center mb-2">
-                              <h6 className="mb-0">Select Date</h6>
-                              <button 
-                                type="button" 
-                                className="btn-close"
-                                onClick={() => setShowDatePicker(false)}
-                              ></button>
-                            </div>
-                            <input
-                              type="date"
-                              className="form-control"
-                              value={watch('dateOfPaper') || ''}
-                              onChange={(e) => {
-                                setValue('dateOfPaper', e.target.value);
-                                setShowDatePicker(false);
-                              }}
-                            />
-                            <div className="mt-2 d-flex gap-2">
-                              <button
-                                type="button"
-                                className="btn btn-outline-primary btn-sm flex-fill"
-                                onClick={() => {
-                                  setValue('dateOfPaper', new Date().toISOString().split('T')[0]);
-                                  setShowDatePicker(false);
-                                }}
-                              >
-                                Today
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-outline-secondary btn-sm flex-fill"
-                                onClick={() => {
-                                  setValue('dateOfPaper', '');
-                                  setShowDatePicker(false);
-                                }}
-                              >
-                                Clear
-                              </button>
+                  {/* TOP ROW: MCQ Placement Cards */}
+                  <div className="row mb-4">
+                    <div className="col-12">
+                      <label className="form-label mb-3">📄 Question Paper Layout</label>
+                      <div className="row g-3">
+                        {/* Option 1: Objective & Subjective on Separate Page */}
+                        <div className="col-md-4">
+                          <div 
+                            className={`card h-100 cursor-pointer p-3 ${watch("mcqPlacement") === "separate" ? "border-primary bg-primary bg-opacity-10 shadow" : "border-light"}`}
+                            onClick={() => {
+                              setValue("mcqPlacement", "separate");
+                              // Enforce limits for separate layout
+                              const currentMcq = watch("mcqCount") || 0;
+                              const currentShort = watch("shortCount") || 0;
+                              const currentLong = watch("longCount") || 0;
+                              
+                              // MCQs max 15 for separate layout
+                              if (currentMcq > 15) {
+                                setValue("mcqCount", 15);
+                                setValue("mcqToAttempt", Math.min(watch("mcqToAttempt") || 0, 15));
+                              }
+                              
+                              // Short+Long max 30 for separate layout
+                              const subjectiveTotal = currentShort + currentLong;
+                              if (subjectiveTotal > 30) {
+                                const ratio = 30 / subjectiveTotal;
+                                const newShort = Math.min(Math.round(currentShort * ratio), 30);
+                                const newLong = Math.min(30 - newShort, currentLong);
+                                
+                                setValue("shortCount", newShort);
+                                setValue("longCount", newLong);
+                                setValue("shortToAttempt", Math.min(watch("shortToAttempt") || 0, newShort));
+                                setValue("longToAttempt", Math.min(watch("longToAttempt") || 0, newLong));
+                              }
+                            }}
+                            style={{ 
+                              cursor: 'pointer',
+                              transition: 'all 0.3s ease',
+                              minHeight: '180px'
+                            }}
+                          >
+                            <div className="card-body text-center">
+                              <div className="mb-2">
+                                <div className="position-relative" style={{ height: '60px' }}>
+                                  <div className="position-absolute start-0 top-0 bg-info rounded p-2" style={{ width: '45%', height: '100%' }}>
+                                    <div className="text-white small">MCQs</div>
+                                    <div className="text-white fw-bold">Max 15</div>
+                                  </div>
+                                  <div className="position-absolute end-0 top-0 bg-success rounded p-2" style={{ width: '45%', height: '100%' }}>
+                                    <div className="text-white small">Subjective</div>
+                                    <div className="text-white fw-bold">Max 30</div>
+                                  </div>
+                                </div>
+                              </div>
+                              <h6 className="fw-bold mb-1">Separate Pages</h6>
+                              <p className="small text-muted mb-0">
+                                Objective and subjective on different pages
+                              </p>
+                              <div className="mt-2">
+                                <span className="badge bg-info">MCQs: Max 15</span>
+                                <span className="badge bg-success ms-1">Subjective: Max 30</span>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      )}
-                    </div>
-                    <div className="form-text">
-                      Select the date for this paper (optional)
+
+                        {/* Option 2: Objective & Subjective Same Page */}
+                        <div className="col-md-4">
+                          <div 
+                            className={`card h-100 cursor-pointer p-3 ${watch("mcqPlacement") === "same_page" ? "border-primary bg-primary bg-opacity-10 shadow" : "border-light"}`}
+                            onClick={() => {
+                              setValue("mcqPlacement", "same_page");
+                              // Enforce limits for single page layout
+                              const currentMcq = watch("mcqCount") || 0;
+                              const currentShort = watch("shortCount") || 0;
+                              const currentLong = watch("longCount") || 0;
+                              
+                              // MCQs max 5 for single page layout
+                              if (currentMcq > 5) {
+                                setValue("mcqCount", 5);
+                                setValue("mcqToAttempt", Math.min(watch("mcqToAttempt") || 0, 5));
+                              }
+                              
+                              // Short+Long max 15 for single page layout
+                              const subjectiveTotal = currentShort + currentLong;
+                              if (subjectiveTotal > 15) {
+                                const ratio = 15 / subjectiveTotal;
+                                const newShort = Math.min(Math.round(currentShort * ratio), 15);
+                                const newLong = Math.min(15 - newShort, currentLong);
+                                
+                                setValue("shortCount", newShort);
+                                setValue("longCount", newLong);
+                                setValue("shortToAttempt", Math.min(watch("shortToAttempt") || 0, newShort));
+                                setValue("longToAttempt", Math.min(watch("longToAttempt") || 0, newLong));
+                              }
+                            }}
+                            style={{ 
+                              cursor: 'pointer',
+                              transition: 'all 0.3s ease',
+                              minHeight: '180px'
+                            }}
+                          >
+                            <div className="card-body text-center">
+                              <div className="mb-2">
+                                <div className="bg-light rounded p-2" style={{ height: '60px' }}>
+                                  <div className="d-flex justify-content-between align-items-center h-100">
+                                    <div className="text-center">
+                                      <div className="text-primary fw-bold">MCQs: Max 5</div>
+                                      <small className="text-muted">Subjective: Max 15</small>
+                                    </div>
+                                    <div className="vr"></div>
+                                    <div className="text-center">
+                                      <div className="text-success fw-bold">Single Page</div>
+                                      <small className="text-muted">Combined layout</small>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              <h6 className="fw-bold mb-1">Single Page</h6>
+                              <p className="small text-muted mb-0">
+                                All questions combined on a single page
+                              </p>
+                              <div className="mt-2">
+                                <span className="badge bg-primary">MCQs: Max 5</span>
+                                <span className="badge bg-success ms-1">Subjective: Max 15</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Option 3: Two Papers Per Page (Front/Back) */}
+                        <div className="col-md-4">
+                          <div 
+                            className={`card h-100 cursor-pointer p-3 ${watch("mcqPlacement") === "two_papers" ? "border-primary bg-primary bg-opacity-10 shadow" : "border-light"}`}
+                            onClick={() => {
+                              setValue("mcqPlacement", "two_papers");
+                              // Enforce limits for two-paper layout
+                              const currentMcq = watch("mcqCount") || 0;
+                              const currentShort = watch("shortCount") || 0;
+                              const currentLong = watch("longCount") || 0;
+                              
+                              // MCQs max 5 for two papers layout
+                              if (currentMcq > 5) {
+                                setValue("mcqCount", 5);
+                                setValue("mcqToAttempt", Math.min(watch("mcqToAttempt") || 0, 5));
+                              }
+                              
+                              // Short+Long max 10 for two papers layout
+                              const subjectiveTotal = currentShort + currentLong;
+                              if (subjectiveTotal > 10) {
+                                const ratio = 10 / subjectiveTotal;
+                                const newShort = Math.min(Math.round(currentShort * ratio), 10);
+                                const newLong = Math.min(10 - newShort, currentLong);
+                                
+                                setValue("shortCount", newShort);
+                                setValue("longCount", newLong);
+                                setValue("shortToAttempt", Math.min(watch("shortToAttempt") || 0, newShort));
+                                setValue("longToAttempt", Math.min(watch("longToAttempt") || 0, newLong));
+                              }
+                            }}
+                            style={{ 
+                              cursor: 'pointer',
+                              transition: 'all 0.3s ease',
+                              minHeight: '180px'
+                            }}
+                          >
+                            <div className="card-body text-center">
+                              <div className="mb-2">
+                                <div className="position-relative" style={{ height: '60px' }}>
+                                  {/* Front side */}
+                                  <div className="position-absolute start-0 top-0 border rounded p-2" style={{ 
+                                    width: '45%', 
+                                    height: '100%',
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    color: 'white'
+                                  }}>
+                                    <div className="small">MCQs</div>
+                                    <div className="fw-bold">Max 5</div>
+                                  </div>
+                                  {/* Back side */}
+                                  <div className="position-absolute end-0 top-0 border rounded p-2" style={{ 
+                                    width: '45%', 
+                                    height: '100%',
+                                    background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                                    color: 'white'
+                                  }}>
+                                    <div className="small">Subjective</div>
+                                    <div className="fw-bold">Max 10</div>
+                                  </div>
+                                </div>
+                              </div>
+                              <h6 className="fw-bold mb-1">Two Papers Layout</h6>
+                              <p className="small text-muted mb-0">
+                                Optimized for printing two papers per page
+                              </p>
+                              <div className="mt-2">
+                                <span className="badge bg-purple">MCQs: Max 5</span>
+                                <span className="badge bg-pink ms-1">Subjective: Max 10</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Layout Description */}
+                      <div className="mt-2">
+                        <small className="text-muted">
+                          <i className="bi bi-info-circle me-1"></i>
+                          {watch("mcqPlacement") === "separate" && 
+                            "MCQs on separate page (max 15), subjective questions (max 30) on following pages"}
+                          {watch("mcqPlacement") === "same_page" && 
+                            "Single page layout: MCQs (max 5), subjective questions (max 15)"}
+                          {watch("mcqPlacement") === "two_papers" && 
+                            "Two papers per page: MCQs (max 5), subjective questions (max 10)"}
+                        </small>
+                      </div>
                     </div>
                   </div>
 
+                  {/* SECOND ROW: Paper Title, Date, and Time ALL on same row */}
+                  <div className="row mb-3 g-3">
+                    {/* Paper Title - Mobile: full width, Desktop: 3 columns */}
+                    <div className="col-12 col-lg-3">
+                      <label className="form-label">Paper Title</label>
+                      <input
+                        type="text"
+                        defaultValue="BISE LAHORE"
+                        {...register("title")}
+                        className={`form-control ${errors.title ? "is-invalid" : ""}`}
+                        placeholder="Enter paper title"
+                      />
+                      {errors.title && <div className="invalid-feedback">{errors.title.message}</div>}
+                    </div>
+
+                    {/* Date of Paper - Mobile: full width, Desktop: 3 columns */}
+                    <div className="col-12 col-lg-3">
+                      <label className="form-label">Date of Paper</label>
+                      <div className="position-relative">
+                        <button
+                          type="button"
+                          className="form-control text-start bg-white d-flex justify-content-between align-items-center"
+                          onClick={() => setShowDatePicker(!showDatePicker)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <span>{formatDateForDisplay(watch('dateOfPaper') || '')}</span>
+                          <i className="bi bi-calendar"></i>
+                        </button>
+                        
+                        {/* Date Picker Dropdown */}
+                        {showDatePicker && (
+                          <div className="card position-absolute top-100 start-0 mt-1 shadow-lg z-3 w-100">
+                            <div className="card-body p-3">
+                              <div className="d-flex justify-content-between align-items-center mb-2">
+                                <h6 className="mb-0">Select Date</h6>
+                                <button 
+                                  type="button" 
+                                  className="btn-close"
+                                  onClick={() => setShowDatePicker(false)}
+                                ></button>
+                              </div>
+                              <input
+                                type="date"
+                                className="form-control"
+                                value={watch('dateOfPaper') || ''}
+                                onChange={(e) => {
+                                  setValue('dateOfPaper', e.target.value);
+                                  setShowDatePicker(false);
+                                }}
+                              />
+                              <div className="mt-2 d-flex gap-2">
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-primary btn-sm flex-fill"
+                                  onClick={() => {
+                                    setValue('dateOfPaper', new Date().toISOString().split('T')[0]);
+                                    setShowDatePicker(false);
+                                  }}
+                                >
+                                  Today
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-secondary btn-sm flex-fill"
+                                  onClick={() => {
+                                    setValue('dateOfPaper', '');
+                                    setShowDatePicker(false);
+                                  }}
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Time Fields - Dynamic based on placement */}
+                    {watch("mcqPlacement") === "separate" ? (
+                      <>
+                        {/* Objective Time - Mobile: half width, Desktop: 3 columns */}
+                        <div className="col-6 col-lg-3">
+                          <label className="form-label">Objective Time</label>
+                          <div className="input-group">
+                            <input
+                              type="number"
+                              {...register("mcqTimeMinutes", { valueAsNumber: true })}
+                              className="form-control no-spinner"
+                              placeholder="Min"
+                              style={{ textAlign: 'center' }}
+                            />
+                            <span className="input-group-text" style={{ padding: '0.375rem 0.5rem' }}>min</span>
+                          </div>
+                        </div>
+                        
+                        {/* Subjective Time - Mobile: half width, Desktop: 3 columns */}
+                        <div className="col-6 col-lg-3">
+                          <label className="form-label">Subjective Time</label>
+                          <div className="input-group">
+                            <input
+                              type="number"
+                              {...register("subjectiveTimeMinutes", { valueAsNumber: true })}
+                              className="form-control no-spinner"
+                              placeholder="Min"
+                              style={{ textAlign: 'center' }}
+                            />
+                            <span className="input-group-text" style={{ padding: '0.375rem 0.5rem' }}>min</span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      /* Single Time Field for same_page and two_papers layouts */
+                      <div className="col-12 col-lg-3">
+                        <label className="form-label">Total Time</label>
+                        <div className="input-group">
+                          <input
+                            type="number"
+                            {...register("timeMinutes", { valueAsNumber: true })}
+                            className="form-control no-spinner"
+                            placeholder="Minutes"
+                            style={{ textAlign: 'center' }}
+                          />
+                          <span className="input-group-text" style={{ padding: '0.375rem 0.5rem' }}>min</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Language + Source */}
-                  <div className="row mb-3">
+                  <div className="row mb-3 g-3">
                     <div className="col-md-6">
                       <label className="form-label d-block">Language</label>
-                      {["english", "urdu", "bilingual"].map((lang) => (
-                        <div className="form-check form-check-inline" key={lang}>
-                          <input
-                            className="form-check-input"
-                            type="radio"
-                            value={lang}
-                            {...register("language")}
-                            id={`lang-${lang}`}
-                          />
-                          <label className="form-check-label" htmlFor={`lang-${lang}`}>
-                            {lang.charAt(0).toUpperCase() + lang.slice(1)}
-                          </label>
-                        </div>
-                      ))}
+                      <div className="d-flex flex-wrap gap-3">
+                        {["english", "urdu", "bilingual"].map((lang) => (
+                          <div className="form-check" key={lang}>
+                            <input
+                              className="form-check-input"
+                              type="radio"
+                              value={lang}
+                              {...register("language")}
+                              id={`lang-${lang}`}
+                            />
+                            <label className="form-check-label" htmlFor={`lang-${lang}`}>
+                              {lang === "english" ? "🇬🇧 English" : 
+                               lang === "urdu" ? "🇵🇰 Urdu" : 
+                               "🌐 Bilingual"}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     <div className="col-md-6">
                       <label className="form-label">Source Type</label>
                       <select {...register("source_type")} className="form-select">
-                        <option value="all">All</option>
-                        <option value="book">Book</option>
-                        <option value="model_paper">Model Paper</option>
-                        <option value="past_paper">Past Paper</option>
+                        <option value="all">📚 All Sources</option>
+                        <option value="book">📖 Book Only</option>
+                        <option value="model_paper">📋 Model Papers</option>
+                        <option value="past_paper">📜 Past Papers</option>
                       </select>
-                    </div>
-                  </div>
-
-                  {/* Timing & Placement */}
-                  <div className="row mb-3">
-                    <div className="col-md-6">
-                      <label className="form-label">MCQ Placement</label>
-                      <select {...register("mcqPlacement")} className="form-select">
-                        <option value="same_page">Same Page</option>
-                        <option value="separate">Separate Page</option>
-                      </select>
-                    </div>
-                    <div className="col-md-6">
-                      {watch("mcqPlacement") === "separate" ? (
-                        <div className="row g-2">
-                          <div className="col">
-                            <label className="form-label">Objective Time (mins)</label>
-                            <input
-                              type="number"
-                              {...register("mcqTimeMinutes", { valueAsNumber: true })}
-                              className="form-control"
-                            />
-                          </div>
-                          <div className="col">
-                            <label className="form-label">Subjective Time (mins)</label>
-                            <input
-                              type="number"
-                              {...register("subjectiveTimeMinutes", { valueAsNumber: true })}
-                              className="form-control"
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <label className="form-label">Total Time (mins)</label>
-                          <input
-                            type="number"
-                            {...register("timeMinutes", { valueAsNumber: true })}
-                            className="form-control"
-                          />
-                        </>
-                      )}
                     </div>
                   </div>
 
@@ -2618,103 +3191,390 @@ onClick={() => {
                       {...register("shuffleQuestions")}
                     />
                     <label className="form-check-label" htmlFor="shuffleQuestions">
-                      Shuffle Questions
+                      🔀 Shuffle Questions
                     </label>
                     <div className="form-text">
                       Randomize the order of questions in each section
                     </div>
                   </div>
 
-                  {/* Question Distribution */}
+                  {/* Question Distribution with Validation - Fixed for Mobile */}
                   <div className="distribution-card mt-3 p-3 bg-white rounded shadow-sm">
                     <h6 className="fw-semibold mb-3">📊 Question Distribution</h6>
+                    
+                    {/* Validation Alert */}
+                    {(watch("mcqToAttempt") > watch("mcqCount") || 
+                      watch("shortToAttempt") > watch("shortCount") || 
+                      watch("longToAttempt") > watch("longCount")) && (
+                      <div className="alert alert-warning mb-3">
+                        <i className="bi bi-exclamation-triangle me-2"></i>
+                        "To Attempt" values cannot exceed "Total Qs". Please adjust.
+                      </div>
+                    )}
 
+                    {/* Layout-specific Validation Alerts */}
+                    {watch("mcqPlacement") === "separate" && (
+                      <div className="alert alert-info mb-3">
+                        <i className="bi bi-info-circle me-2"></i>
+                        <strong>Separate Pages Layout Limits:</strong>
+                        <div className="mt-1 small">
+                          • MCQs: Maximum 15 questions
+                          <br/>
+                          • Subjective (Short + Long): Maximum 30 questions total
+                          {((watch("shortCount") || 0) + (watch("longCount") || 0) > 30) && (
+                            <div className="text-danger">
+                              Current subjective: {(watch("shortCount") || 0) + (watch("longCount") || 0)} questions
+                            </div>
+                          )}
+                          {((watch("mcqCount") || 0) > 15) && (
+                            <div className="text-danger">
+                              Current MCQs: {watch("mcqCount")} questions
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {watch("mcqPlacement") === "same_page" && (
+                      <div className="alert alert-info mb-3">
+                        <i className="bi bi-info-circle me-2"></i>
+                        <strong>Single Page Layout Limits:</strong>
+                        <div className="mt-1 small">
+                          • MCQs: Maximum 5 questions
+                          <br/>
+                          • Subjective (Short + Long): Maximum 15 questions total
+                          {((watch("shortCount") || 0) + (watch("longCount") || 0) > 15) && (
+                            <div className="text-danger">
+                              Current subjective: {(watch("shortCount") || 0) + (watch("longCount") || 0)} questions
+                            </div>
+                          )}
+                          {((watch("mcqCount") || 0) > 5) && (
+                            <div className="text-danger">
+                              Current MCQs: {watch("mcqCount")} questions
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {watch("mcqPlacement") === "two_papers" && (
+                      <div className="alert alert-info mb-3">
+                        <i className="bi bi-info-circle me-2"></i>
+                        <strong>Two Papers Layout Limits:</strong>
+                        <div className="mt-1 small">
+                          • MCQs: Maximum 5 questions
+                          <br/>
+                          • Subjective (Short + Long): Maximum 10 questions total
+                          {((watch("shortCount") || 0) + (watch("longCount") || 0) > 10) && (
+                            <div className="text-danger">
+                              Current subjective: {(watch("shortCount") || 0) + (watch("longCount") || 0)} questions
+                            </div>
+                          )}
+                          {((watch("mcqCount") || 0) > 5) && (
+                            <div className="text-danger">
+                              Current MCQs: {watch("mcqCount")} questions
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mobile-friendly table */}
                     <div className="table-responsive">
-                      <table className="table text-center align-middle">
+                      <table className="table text-center align-middle" style={{ minWidth: '600px' }}>
                         <thead className="table-light">
                           <tr>
-                            <th style={{ width: "20%" }}>Type</th>
-                            <th style={{ width: "15%" }}>Total Qs</th>
-                            <th style={{ width: "15%" }}>To Attempt</th>
-                            <th style={{ width: "15%" }}>Marks Each</th>
-                            <th style={{ width: "20%" }}>Difficulty</th>
+                            <th style={{ width: "20%", minWidth: "80px" }}>Type</th>
+                            <th style={{ width: "15%", minWidth: "70px" }}>Total Qs</th>
+                            <th style={{ width: "15%", minWidth: "70px" }}>To Attempt</th>
+                            <th style={{ width: "15%", minWidth: "70px" }}>Marks Each</th>
+                            <th style={{ width: "20%", minWidth: "80px" }}>Difficulty</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {["mcq", "short", "long"].map((type) => (
-                            <tr key={type}>
-                              <td className="fw-bold text-capitalize">
-                                {type === "mcq" ? "MCQs" : type === "short" ? "Short" : "Long"}
-                              </td>
-                              <td className="text-center">
-                                <input
-                                  type="number"
-                                  {...register(`${type}Count`, { valueAsNumber: true })}
-                                  className="form-control text-center"
-                                  placeholder="Total"
-                                  min="0"
-                                />
-                              </td>
-                              <td className="text-center">
-                                <input
-                                  type="number"
-                                  {...register(`${type}ToAttempt`, { valueAsNumber: true })}
-                                  className="form-control text-center"
-                                  placeholder="Attempt"
-                                  min="0"
-                                />
-                              </td>
-                              <td className="text-center">
-                                <input
-                                  type="number"
-                                  {...register(`${type}Marks`, { valueAsNumber: true })}
-                                  className="form-control text-center"
-                                  placeholder="Marks"
-                                  min="1"
-                                />
-                              </td>
-                              <td className="text-center">
-                                <select
-                                  {...register(`${type}Difficulty`)}
-                                  className="form-select text-center"
-                                >
-                                  <option value="any">Any</option>
-                                  <option value="easy">Easy</option>
-                                  <option value="medium">Medium</option>
-                                  <option value="hard">Hard</option>
-                                </select>
-                              </td>
-                            </tr>
-                          ))}
+                          {["mcq", "short", "long"].map((type) => {
+                            const totalField = `${type}Count`;
+                            const attemptField = `${type}ToAttempt`;
+                            const marksField = `${type}Marks`;
+                            const difficultyField = `${type}Difficulty`;
+                            
+                            // Get current values
+                            const totalValue = watch(totalField) || 0;
+                            const attemptValue = watch(attemptField) || 0;
+                            
+                            return (
+                              <tr key={type}>
+                                <td className="fw-bold text-capitalize">
+                                  {type === "mcq" ? "❓ MCQs" : type === "short" ? "📝 Short" : "📋 Long"}
+                                </td>
+                                <td className="text-center">
+                                  <div className="position-relative" style={{ maxWidth: '100px', margin: '0 auto' }}>
+                                    <input
+                                      type="number"
+                                      {...register(totalField, { 
+                                        valueAsNumber: true,
+                                        onChange: (e) => {
+                                          const newTotal = parseInt(e.target.value) || 0;
+                                          const currentAttempt = watch(attemptField) || 0;
+                                          
+                                          // If total is reduced below current attempt, adjust attempt value
+                                          if (currentAttempt > newTotal) {
+                                            setValue(attemptField, newTotal);
+                                          }
+                                          
+                                          // Enforce layout-specific limits
+                                          const placement = watch("mcqPlacement");
+                                          const currentMcq = watch("mcqCount") || 0;
+                                          const currentShort = watch("shortCount") || 0;
+                                          const currentLong = watch("longCount") || 0;
+                                          
+                                          // Handle MCQs limits
+                                          if (type === "mcq") {
+                                            let maxMcq = 0;
+                                            if (placement === "separate") maxMcq = 15;
+                                            if (placement === "same_page") maxMcq = 5;
+                                            if (placement === "two_papers") maxMcq = 5;
+                                            
+                                            if (newTotal > maxMcq) {
+                                              setValue("mcqCount", maxMcq);
+                                              setValue("mcqToAttempt", Math.min(watch("mcqToAttempt") || 0, maxMcq));
+                                              alert(`MCQs: Maximum ${maxMcq} questions allowed for ${placement === "separate" ? "Separate Pages" : placement === "same_page" ? "Single Page" : "Two Papers"} layout.`);
+                                            }
+                                          }
+                                          
+                                          // Handle subjective limits
+                                          if (type === "short" || type === "long") {
+                                            const subjectiveTotal = (type === "short" ? newTotal : currentShort) + 
+                                                                   (type === "long" ? newTotal : currentLong);
+                                            
+                                            let maxSubjective = 0;
+                                            if (placement === "separate") maxSubjective = 30;
+                                            if (placement === "same_page") maxSubjective = 15;
+                                            if (placement === "two_papers") maxSubjective = 10;
+                                            
+                                            if (subjectiveTotal > maxSubjective) {
+                                              // Adjust proportionally
+                                              if (type === "short") {
+                                                const maxShort = maxSubjective - currentLong;
+                                                setValue("shortCount", maxShort);
+                                                setValue("shortToAttempt", Math.min(watch("shortToAttempt") || 0, maxShort));
+                                              } else {
+                                                const maxLong = maxSubjective - currentShort;
+                                                setValue("longCount", maxLong);
+                                                setValue("longToAttempt", Math.min(watch("longToAttempt") || 0, maxLong));
+                                              }
+                                              
+                                              alert(`Subjective questions: Maximum ${maxSubjective} total questions allowed for ${placement === "separate" ? "Separate Pages" : placement === "same_page" ? "Single Page" : "Two Papers"} layout.`);
+                                            }
+                                          }
+                                        }
+                                      })}
+                                      className={`form-control text-center no-spinner ${attemptValue > totalValue ? "is-invalid" : ""}`}
+                                      placeholder="0"
+                                      min="0"
+                                      max={100}
+                                      style={{ 
+                                        padding: '0.375rem 0.25rem',
+                                        fontSize: '0.875rem',
+                                        width: '100%'
+                                      }}
+                                    />
+                                  </div>
+                                  {type === "mcq" && (
+                                    <small className="text-muted d-block mt-1">
+                                      Max: {
+                                        watch("mcqPlacement") === "separate" ? "15" :
+                                        watch("mcqPlacement") === "same_page" ? "5" :
+                                        watch("mcqPlacement") === "two_papers" ? "5" : ""
+                                      }
+                                    </small>
+                                  )}
+                                  {(type === "short" || type === "long") && (
+                                    <small className="text-muted d-block mt-1">
+                                      Max total: {
+                                        watch("mcqPlacement") === "separate" ? "30" :
+                                        watch("mcqPlacement") === "same_page" ? "15" :
+                                        watch("mcqPlacement") === "two_papers" ? "10" : ""
+                                      }
+                                    </small>
+                                  )}
+                                </td>
+                                <td className="text-center">
+                                  <div className="position-relative" style={{ maxWidth: '100px', margin: '0 auto' }}>
+                                    <input
+                                      type="number"
+                                      {...register(attemptField, { 
+                                        valueAsNumber: true,
+                                        onChange: (e) => {
+                                          const newAttempt = parseInt(e.target.value) || 0;
+                                          const total = watch(totalField) || 0;
+                                          
+                                          // Ensure attempt doesn't exceed total
+                                          if (newAttempt > total) {
+                                            setValue(attemptField, total);
+                                          }
+                                        }
+                                      })}
+                                      className={`form-control text-center no-spinner ${attemptValue > totalValue ? "is-invalid" : ""}`}
+                                      placeholder="0"
+                                      min="0"
+                                      max={totalValue}
+                                      style={{ 
+                                        padding: '0.375rem 0.25rem',
+                                        fontSize: '0.875rem',
+                                        width: '100%'
+                                      }}
+                                    />
+                                  </div>
+                                  {attemptValue > totalValue && (
+                                    <div className="invalid-feedback d-block small">
+                                      Exceeds total
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="text-center">
+                                  <div className="position-relative" style={{ maxWidth: '100px', margin: '0 auto' }}>
+                                    <input
+                                      type="number"
+                                      {...register(marksField, { valueAsNumber: true })}
+                                      className="form-control text-center no-spinner"
+                                      placeholder="1"
+                                      min="1"
+                                      style={{ 
+                                        padding: '0.375rem 0.25rem',
+                                        fontSize: '0.875rem',
+                                        width: '100%'
+                                      }}
+                                    />
+                                  </div>
+                                </td>
+                                <td className="text-center">
+                                  <select
+                                    {...register(difficultyField)}
+                                    className="form-select text-center"
+                                    style={{ 
+                                      padding: '0.375rem 0.25rem',
+                                      fontSize: '0.875rem',
+                                      minWidth: '80px'
+                                    }}
+                                  >
+                                    <option value="any">🎲 Any</option>
+                                    <option value="easy">😊 Easy</option>
+                                    <option value="medium">😐 Medium</option>
+                                    <option value="hard">😰 Hard</option>
+                                  </select>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
-                  </div>
-
-                  {/* Difficulty Mix */}
-                  <div className="row mt-3">
-                    {["easy", "medium", "hard"].map((level) => (
-                      <div className="col" key={level}>
-                        <label className="form-label text-capitalize">{level} %</label>
-                        <input
-                          type="number"
-                          {...register(`${level}Percent`, { valueAsNumber: true })}
-                          className="form-control"
-                          min="0"
-                          max="100"
-                        />
+                    
+                    {/* Summary - Mobile friendly */}
+                    <div className="row mt-3 text-center g-2">
+                      <div className="col-4">
+                        <div className="fw-bold text-primary small">📋 MCQs</div>
+                        <div className="fs-6 fw-bold">
+                          {watch("mcqCount") || 0}
+                        </div>
+                        <small className="text-muted">
+                          Max: {
+                            watch("mcqPlacement") === "separate" ? "15" :
+                            watch("mcqPlacement") === "same_page" ? "5" :
+                            watch("mcqPlacement") === "two_papers" ? "5" : ""
+                          }
+                        </small>
                       </div>
-                    ))}
+                      <div className="col-4">
+                        <div className="fw-bold text-success small">🎯 Subjective</div>
+                        <div className="fs-6 fw-bold">
+                          {(watch("shortCount") || 0) + (watch("longCount") || 0)}
+                        </div>
+                        <small className="text-muted">
+                          Max: {
+                            watch("mcqPlacement") === "separate" ? "30" :
+                            watch("mcqPlacement") === "same_page" ? "15" :
+                            watch("mcqPlacement") === "two_papers" ? "10" : ""
+                          }
+                        </small>
+                      </div>
+                      <div className="col-4">
+                        <div className="fw-bold text-danger small">⭐ Total Marks</div>
+                        <div className="fs-6 fw-bold">
+                          {((watch("mcqToAttempt") || 0) * (watch("mcqMarks") || 0)) +
+                           ((watch("shortToAttempt") || 0) * (watch("shortMarks") || 0)) +
+                           ((watch("longToAttempt") || 0) * (watch("longMarks") || 0))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Continue Button for Custom Paper */}
                   <div className="text-center mt-4 pt-3 border-top">
                     <button 
-                      className="btn btn-primary btn-lg px-5" 
-                      onClick={() => setStep(5)}
+                      className="btn btn-primary btn-lg px-4 px-sm-5" 
+                      onClick={() => {
+                        // Validate before proceeding
+                        if (watch("mcqToAttempt") > watch("mcqCount") || 
+                            watch("shortToAttempt") > watch("shortCount") || 
+                            watch("longToAttempt") > watch("longCount")) {
+                          alert("Please fix the 'To Attempt' values. They cannot exceed 'Total Qs'.");
+                          return;
+                        }
+                        
+                        // Validate layout-specific limits
+                        const placement = watch("mcqPlacement");
+                        const mcqCount = watch("mcqCount") || 0;
+                        const shortCount = watch("shortCount") || 0;
+                        const longCount = watch("longCount") || 0;
+                        const subjectiveTotal = shortCount + longCount;
+                        
+                        if (placement === "separate") {
+                          if (mcqCount > 15) {
+                            alert(`Separate Pages Layout: Maximum 15 MCQs allowed. You have ${mcqCount}.`);
+                            return;
+                          }
+                          if (subjectiveTotal > 30) {
+                            alert(`Separate Pages Layout: Maximum 30 subjective questions allowed. You have ${subjectiveTotal}.`);
+                            return;
+                          }
+                        }
+                        
+                        if (placement === "same_page") {
+                          if (mcqCount > 5) {
+                            alert(`Single Page Layout: Maximum 5 MCQs allowed. You have ${mcqCount}.`);
+                            return;
+                          }
+                          if (subjectiveTotal > 15) {
+                            alert(`Single Page Layout: Maximum 15 subjective questions allowed. You have ${subjectiveTotal}.`);
+                            return;
+                          }
+                        }
+                        
+                        if (placement === "two_papers") {
+                          if (mcqCount > 5) {
+                            alert(`Two Papers Layout: Maximum 5 MCQs allowed. You have ${mcqCount}.`);
+                            return;
+                          }
+                          if (subjectiveTotal > 10) {
+                            alert(`Two Papers Layout: Maximum 10 subjective questions allowed. You have ${subjectiveTotal}.`);
+                            return;
+                          }
+                        }
+                        
+                        setStep(5);
+                      }}
                     >
                       Continue to Selection Method <i className="bi bi-arrow-right ms-2"></i>
                     </button>
+                    
+                    <div className="mt-2">
+                      <small className="text-muted">
+                        <i className="bi bi-info-circle me-1"></i>
+                        You can always come back and adjust these settings
+                      </small>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2724,7 +3584,7 @@ onClick={() => {
           {/* Step 5: Selection method */}
           {step === 5 && (
             <div className="step-transition">
-              <div className="text-center mb-5">
+              <div className="text-center mb-3">
                 <h5 className="fw-bold mb-3">🎯 Selection Method</h5>
                 <p className="text-muted">Choose how you want to select questions for your paper</p>
               </div>
@@ -2745,7 +3605,7 @@ onClick={() => {
                       <span className="display-6 mb-3">🤖</span>
                       <h4 className="card-title fw-bold">Auto Generate</h4>
                       <p className="card-text text-muted">
-                        System will automatically select questions randomly based on your criteria. 
+                        System will automatically select questions randomly from ALL chapters based on your criteria. 
                         Perfect for quick paper generation with balanced difficulty distribution.
                       </p>
                       <div className="mt-4">
@@ -2815,39 +3675,38 @@ onClick={() => {
           {/* Step 7: PDF-like Review with Exact PDF Design - FIXED HTML STRUCTURE */}
           {step === 7 && (
             <form onSubmit={handleSubmit(onSubmit)} className="step-transition">
-<div className='row'>
-      <div className="col-12 mb-3">
+              <div className='row'>
+                <div className="col-12 mb-3">
                   {/* Edit Mode Instructions */}
-
-                          {isEditMode && (
-                            <div className="alert alert-warning mt-4 mx-3">
-                              <h6 className="fw-bold mb-2">
-                                <i className="bi bi-magic me-2"></i>
-                                Paper Editing Mode - Active
-                              </h6>
-                              <div className="row">
-                                <div className="col-md-6">
-                                  <ul className="mb-2 small">
-                                    <li>📝 Drag questions within sections to reorder them</li>
-                                    <li>🎯 Adjust individual question marks using the input fields</li>
-                                    <li>🔢 Question numbers update automatically</li>
-                                  </ul>
-                                </div>
-                                <div className="col-md-6">
-                                  <ul className="mb-0 small">
-                                    <li>💾 Changes are saved for PDF generation</li>
-                                    <li>🔄 Use "Reset Order" to revert to original arrangement</li>
-                                    <li>👁️ Toggle off Edit Mode to see final paper layout</li>
-                                  </ul>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          </div>
-</div>
+                  {isEditMode && (
+                    <div className="alert alert-warning mt-4 mx-3">
+                      <h6 className="fw-bold mb-2">
+                        <i className="bi bi-magic me-2"></i>
+                        Paper Editing Mode - Active
+                      </h6>
+                      <div className="row">
+                        <div className="col-md-6">
+                          <ul className="mb-2 small">
+                            <li>📝 Drag questions within sections to reorder them</li>
+                            <li>🎯 Adjust individual question marks using the input fields</li>
+                            <li>🔢 Question numbers update automatically</li>
+                          </ul>
+                        </div>
+                        <div className="col-md-6">
+                          <ul className="mb-0 small">
+                            <li>💾 Changes are saved for PDF generation</li>
+                            <li>🔄 Use "Reset Order" to revert to original arrangement</li>
+                            <li>👁️ Toggle off Edit Mode to see final paper layout</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
               <div className="row">
                 {/* PDF-like Paper Preview */}
-                  
                 <div className="col-lg-8">
                   <div className="card mb-4 border-0 shadow-sm">
                     <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
@@ -2930,6 +3789,7 @@ onClick={() => {
                           </div>
 
                           {/* Student Info Table - FIXED HTML STRUCTURE */}
+                          <div className=' table-responsive'>
                           <table style={{
                             width: '100%', 
                             borderCollapse: 'collapse', 
@@ -3122,14 +3982,14 @@ onClick={() => {
                               </tr>
                             </tbody>
                           </table>
-
+                    </div>
                           <hr style={{ borderColor: '#000', margin: '20px 0' }} />
 
                           {/* Questions Preview */}
                           <div className="questions-preview">
                             {/* MCQs Section */}
                             {previewQuestions.mcq.length > 0 && (
-                              <div className="section mb-5">
+                              <div className="section mb-3">
                                 <div className="section-header mb-4">
                                   <h5 className="fw-bold mb-2" style={{ 
                                     fontSize: '14px', 
@@ -3253,7 +4113,7 @@ onClick={() => {
                                                 
                                                 {watch('language') === 'bilingual' && (
                                                   <div className="d-flex justify-content-between">
-                                                     {/* Urdu version */}
+                                                    {/* Urdu version */}
                                                     <div className="fw-bold" style={{
                                                       fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
                                                       direction: 'rtl',
@@ -3268,7 +4128,6 @@ onClick={() => {
                                                       lineHeight: '1.4',
                                                       marginBottom: '8px'
                                                     }}>{question.question_text_english || question.question_text}</div>
-                                                 
                                                   </div>
                                                 )}
                                               </div>
@@ -3296,15 +4155,8 @@ onClick={() => {
                                                     />
                                                   </div>
                                                 )}
-                                               {/* <span className={`badge ${
-                                                  question.difficulty === 'easy' ? 'bg-success' :
-                                                  question.difficulty === 'medium' ? 'bg-warning text-dark' : 'bg-danger'
-                                                }`}>
-                                                  {question.difficulty}
-                                                </span>         */}
                                               </div>
                                             </div>
-                                      
                                             
                                             {/* Options - FIXED BILINGUAL DISPLAY */}
                                             <div className="options" style={{ 
@@ -3317,7 +4169,7 @@ onClick={() => {
                                             }}>
                                               {question.option_a && (
                                                 <span className="option-item d-flex justify-content-between">
-                                                 <span> (A).  </span> 
+                                                  <span> (A).  </span> 
                                                   {watch('language') === 'english' && (
                                                     <span style={{
                                                       fontFamily: "'Times New Roman', serif",
@@ -3332,7 +4184,7 @@ onClick={() => {
                                                   )}
                                                   {watch('language') === 'bilingual' && (
                                                     <span className="d-flex justify-content-between">
-                                                         <span className="d-block" style={{
+                                                      <span className="d-block" style={{
                                                         fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
                                                         direction: 'rtl'
                                                       }}> {question.option_a_urdu}</span> &nbsp; 
@@ -3341,7 +4193,6 @@ onClick={() => {
                                                         direction: 'ltr',
                                                         marginBottom: '2px'
                                                       }}> {question.option_a_english || question.option_a}</span>
-                                                   
                                                     </span>
                                                   )}
                                                 </span>
@@ -3363,7 +4214,7 @@ onClick={() => {
                                                   )}
                                                   {watch('language') === 'bilingual' && (
                                                     <span className="d-flex justify-content-between">
-                                                        <span className="d-block" style={{
+                                                      <span className="d-block" style={{
                                                         fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
                                                         direction: 'rtl'
                                                       }}> {question.option_b_urdu}</span> &nbsp;
@@ -3372,14 +4223,13 @@ onClick={() => {
                                                         direction: 'ltr',
                                                         marginBottom: '2px'
                                                       }}> {question.option_b_english || question.option_b}</span>
-                                                    
                                                     </span>
                                                   )}
                                                 </span>
                                               )}
                                               {question.option_c && (
                                                 <span className="option-item d-flex justify-content-between">
-                                                 <span> (C). </span>  
+                                                  <span> (C). </span>  
                                                   {watch('language') === 'english' && (
                                                     <span style={{
                                                       fontFamily: "'Times New Roman', serif",
@@ -3394,7 +4244,7 @@ onClick={() => {
                                                   )}
                                                   {watch('language') === 'bilingual' && (
                                                     <span className="d-flex justify-content-between">
-                                                            <span className="d-block" style={{
+                                                      <span className="d-block" style={{
                                                         fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
                                                         direction: 'rtl'
                                                       }}> {question.option_c_urdu}.</span> &nbsp;
@@ -3403,7 +4253,6 @@ onClick={() => {
                                                         direction: 'ltr',
                                                         marginBottom: '2px'
                                                       }}> {question.option_c_english || question.option_c}</span>
-                                                
                                                     </span>
                                                   )}
                                                 </span>
@@ -3434,7 +4283,6 @@ onClick={() => {
                                                         direction: 'ltr',
                                                         marginBottom: '2px'
                                                       }}> {question.option_d_english || question.option_d}.</span>
-                                                     
                                                     </span>
                                                   )}
                                                 </span>
@@ -3462,7 +4310,7 @@ onClick={() => {
 
                             {/* Short Questions Section - PDF Design */}
                             {previewQuestions.short.length > 0 && (
-                              <div className="section mb-5">
+                              <div className="section mb-3">
                                 <div className="section-header mb-4">
                                   <h5 className="fw-bold mb-2 text-center" style={{ 
                                     fontSize: '14px', 
@@ -3602,7 +4450,7 @@ onClick={() => {
                                               
                                               {watch('language') === 'bilingual' && (
                                                 <div className='d-flex justify-content-between'>
-                                                     <div style={{
+                                                  <div style={{
                                                     fontFamily: "'Times New Roman', serif",
                                                     direction: 'ltr',
                                                     fontSize: '14px',
@@ -3620,8 +4468,6 @@ onClick={() => {
                                                   }}>
                                                     {question.question_text_urdu}
                                                   </div>
-                                                  
-                                               
                                                 </div>
                                               )}
                                             </div>
@@ -3654,12 +4500,6 @@ onClick={() => {
                                             </div>
                                           )}
                                           <span className="badge bg-secondary me-1">{question.customMarks || watch('shortMarks')} marks</span>
-                                        {/*  <span className={`badge ${
-                                            question.difficulty === 'easy' ? 'bg-success' :
-                                            question.difficulty === 'medium' ? 'bg-warning text-dark' : 'bg-danger'
-                                          }`}>
-                                            {question.difficulty}
-                                          </span>*/}
                                         </div>
                                       </div>
                                       
@@ -3681,7 +4521,7 @@ onClick={() => {
 
                             {/* Long Questions Section - PDF Design */}
                             {previewQuestions.long.length > 0 && (
-                              <div className="section mb-5">
+                              <div className="section mb-3">
                                 <div className="section-header mb-4">
                                   <h5 className="fw-bold mb-2 text-center" style={{ 
                                     fontSize: '14px', 
@@ -3699,7 +4539,6 @@ onClick={() => {
                                     fontSize: '14px'
                                   }}>
                                     {watch('language') === 'english' || watch('language') === 'bilingual' ? (
-                                     
                                       <div className="eng" style={{
                                         fontFamily: "'Times New Roman', serif",
                                         direction: 'ltr'
@@ -3819,7 +4658,6 @@ onClick={() => {
                                               
                                               {watch('language') === 'bilingual' && (
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
-
                                                   <div style={{ flex: 1 }}>
                                                     <div style={{
                                                       fontFamily: "'Times New Roman', serif",
@@ -3841,7 +4679,6 @@ onClick={() => {
                                                       {question.question_text_urdu}
                                                     </div>
                                                   </div>
-                                             
                                                 </div>
                                               )}
                                             </div>
@@ -3874,13 +4711,6 @@ onClick={() => {
                                             </div>
                                           )}
                                           <span className="badge bg-secondary me-1">{question.customMarks || watch('longMarks')} marks</span>
-                                        {/*  <span className={`badge ${
-                                            question.difficulty === 'easy' ? 'bg-success' :
-                                            question.difficulty === 'medium' ? 'bg-warning text-dark' : 'bg-danger'
-                                          }`}>
-                                            {question.difficulty}
-                                          </span>
-                                          */}
                                         </div>
                                       </div>
                                       
@@ -3927,7 +4757,6 @@ onClick={() => {
                             )}
                           </div>
 
-                        
                           {/* Footer matching PDF */}
                           <div className="footer no-break" style={{ 
                             marginTop: '30px', 
@@ -3952,66 +4781,65 @@ onClick={() => {
 
                 {/* Controls Sidebar */}
                 <div className="col-lg-4">
-                  <div className="card mb-4 border-0 shadow-sm sticky-top" style={{ top: '50px',zIndex:'1' }}>
+                  <div className="card mb-4 border-0 shadow-sm sticky-top" style={{ top: '50px', zIndex: '1' }}>
                     <div className="card-header bg-primary text-white">
                       <h3 className="h5 card-title mb-0">🎯 Paper Controls</h3>
                     </div>
                     <div className="card-body">
-                  
+                      {/* Real-time Marks Calculator - FIXED TO SHOW CUSTOM MARKS */}
+                      <div className="mb-4 p-3 bg-light rounded">
+                        <h6 className="fw-bold text-primary mb-3">📊 Live Marks Calculator</h6>
+                        <div className="row text-center g-3">
+                          <div className="col-4">
+                            <div className="fw-bold text-primary">MCQs</div>
+                            <div className="fs-5 fw-bold">{previewQuestions.mcq.length}</div>
+                            <div className="small text-muted">
+                              {previewQuestions.mcq.length} × Individual Marks
+                            </div>
+                            <div className="fw-bold text-success">
+                              = {previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0)} marks
+                            </div>
+                          </div>
+                          <div className="col-4">
+                            <div className="fw-bold text-success">Short</div>
+                            <div className="fs-5 fw-bold">{previewQuestions.short.length}</div>
+                            <div className="small text-muted">
+                              {previewQuestions.short.length} × Individual Marks
+                            </div>
+                            <div className="fw-bold text-success">
+                              = {previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0)} marks
+                            </div>
+                          </div>
+                          <div className="col-4">
+                            <div className="fw-bold text-danger">Long</div>
+                            <div className="fs-5 fw-bold">{previewQuestions.long.length}</div>
+                            <div className="small text-muted">
+                              {previewQuestions.long.length} × Individual Marks
+                            </div>
+                            <div className="fw-bold text-success">
+                              = {previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)} marks
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="text-center mt-3 pt-3 border-top">
+                          <div className="fw-bold fs-4 text-primary">
+                            Total: {
+                              previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0) +
+                              previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0) +
+                              previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)
+                            } Marks
+                          </div>
+                          <small className="text-muted">
+                            {previewQuestions.mcq.some(q => q.customMarks) || 
+                             previewQuestions.short.some(q => q.customMarks) || 
+                             previewQuestions.long.some(q => q.customMarks) 
+                              ? "Includes custom marks adjustments" 
+                              : "Using default marks"}
+                          </small>
+                        </div>
+                      </div>
 
-{/* Real-time Marks Calculator - FIXED TO SHOW CUSTOM MARKS */}
-<div className="mb-4 p-3 bg-light rounded">
-  <h6 className="fw-bold text-primary mb-3">📊 Live Marks Calculator</h6>
-  <div className="row text-center g-3">
-    <div className="col-4">
-      <div className="fw-bold text-primary">MCQs</div>
-      <div className="fs-5 fw-bold">{previewQuestions.mcq.length}</div>
-      <div className="small text-muted">
-        {previewQuestions.mcq.length} × Individual Marks
-      </div>
-      <div className="fw-bold text-success">
-        = {previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0)} marks
-      </div>
-    </div>
-    <div className="col-4">
-      <div className="fw-bold text-success">Short</div>
-      <div className="fs-5 fw-bold">{previewQuestions.short.length}</div>
-      <div className="small text-muted">
-        {previewQuestions.short.length} × Individual Marks
-      </div>
-      <div className="fw-bold text-success">
-        = {previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0)} marks
-      </div>
-    </div>
-    <div className="col-4">
-      <div className="fw-bold text-danger">Long</div>
-      <div className="fs-5 fw-bold">{previewQuestions.long.length}</div>
-      <div className="small text-muted">
-        {previewQuestions.long.length} × Individual Marks
-      </div>
-      <div className="fw-bold text-success">
-        = {previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)} marks
-      </div>
-    </div>
-  </div>
-  
-  <div className="text-center mt-3 pt-3 border-top">
-    <div className="fw-bold fs-4 text-primary">
-      Total: {
-        previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0) +
-        previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0) +
-        previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)
-      } Marks
-    </div>
-    <small className="text-muted">
-      {previewQuestions.mcq.some(q => q.customMarks) || 
-       previewQuestions.short.some(q => q.customMarks) || 
-       previewQuestions.long.some(q => q.customMarks) 
-        ? "Includes custom marks adjustments" 
-        : "Using default marks"}
-    </small>
-  </div>
-</div>
                       {/* Action Buttons */}
                       <div className="action-buttons">
                         <button 
@@ -4136,47 +4964,46 @@ onClick={() => {
                         </div>
                       </div>
 
-                      {/* Quick Stats */}
                       {/* Quick Stats - FIXED TO SHOW CUSTOM MARKS */}
-                <div className="quick-stats mt-4 p-3 border rounded">
-                  <h6 className="fw-bold text-primary mb-3">📈 Question Statistics</h6>
-                  <div className="row text-center g-3">
-                    <div className="col-4">
-                      <div className="fw-bold text-primary">{previewQuestions.mcq.length}</div>
-                      <small className="text-muted">MCQs</small>
-                      <div className="small text-success">
-                        {previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0)} marks
+                      <div className="quick-stats mt-4 p-3 border rounded">
+                        <h6 className="fw-bold text-primary mb-3">📈 Question Statistics</h6>
+                        <div className="row text-center g-3">
+                          <div className="col-4">
+                            <div className="fw-bold text-primary">{previewQuestions.mcq.length}</div>
+                            <small className="text-muted">MCQs</small>
+                            <div className="small text-success">
+                              {previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0)} marks
+                            </div>
+                          </div>
+                          <div className="col-4">
+                            <div className="fw-bold text-success">{previewQuestions.short.length}</div>
+                            <small className="text-muted">Short</small>
+                            <div className="small text-success">
+                              {previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0)} marks
+                            </div>
+                          </div>
+                          <div className="col-4">
+                            <div className="fw-bold text-danger">{previewQuestions.long.length}</div>
+                            <small className="text-muted">Long</small>
+                            <div className="small text-success">
+                              {previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)} marks
+                            </div>
+                          </div>
+                          <div className="col-12">
+                            <div className="fw-bold text-info fs-5">
+                              {previewQuestions.mcq.length + previewQuestions.short.length + previewQuestions.long.length}
+                            </div>
+                            <small className="text-muted">Total Questions</small>
+                            <div className="fw-bold text-success fs-6">
+                              {
+                                previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0) +
+                                previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0) +
+                                previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)
+                              } Total Marks
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="col-4">
-                      <div className="fw-bold text-success">{previewQuestions.short.length}</div>
-                      <small className="text-muted">Short</small>
-                      <div className="small text-success">
-                        {previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0)} marks
-                      </div>
-                    </div>
-                    <div className="col-4">
-                      <div className="fw-bold text-danger">{previewQuestions.long.length}</div>
-                      <small className="text-muted">Long</small>
-                      <div className="small text-success">
-                        {previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)} marks
-                      </div>
-                    </div>
-                    <div className="col-12">
-                      <div className="fw-bold text-info fs-5">
-                        {previewQuestions.mcq.length + previewQuestions.short.length + previewQuestions.long.length}
-                      </div>
-                      <small className="text-muted">Total Questions</small>
-                      <div className="fw-bold text-success fs-6">
-                        {
-                          previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0) +
-                          previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0) +
-                          previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)
-                        } Total Marks
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
                       {/* Edit Mode Tips */}
                       {isEditMode && (

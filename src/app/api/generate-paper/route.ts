@@ -239,7 +239,7 @@ function extractToken(request: Request): string | null {
   if (!cookieHeader) return null;
 
   const cookiePairs = cookieHeader.split(';').map(c => c.trim());
-  // Common cookie names Supabase uses or people store: sb-access-token, supabase-auth-token, sb:token, sb-session
+  // Common cookie names Supabase uses or people store: sb-access-token, supabase-auth-token, sb:token, sb-session, sb-token
   const candidates = ['sb-access-token', 'supabase-auth-token', 'sb:token', 'sb-session', 'sb-token'];
 
   for (const pair of cookiePairs) {
@@ -301,7 +301,6 @@ function extractToken(request: Request): string | null {
 
   return null;
 }
-
 
 // Enhanced fallback function to find questions with proper filtering
 async function findQuestionsWithFallback(
@@ -824,8 +823,67 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
   }
 }
 
+// Function to fetch user's profile logo and convert to base64
+async function getUserLogoBase64(userId: string): Promise<string> {
+  try {
+    // Fetch user profile with logo
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('logo')
+      .eq('id', userId)
+      .single();
+
+    if (profileError || !profile?.logo) {
+      console.log('⚠️ No user logo found, using default logo');
+      return loadImageAsBase64('examly.jpg');
+    }
+
+    // Check if logo is a URL or base64 string
+    const logoUrl = profile.logo;
+    
+    // If it's already a base64 data URL, return it
+    if (logoUrl.startsWith('data:image/')) {
+      return logoUrl;
+    }
+    
+    // If it's a URL, try to fetch and convert to base64
+    try {
+      console.log('🔄 Fetching user logo from URL:', logoUrl);
+      const response = await fetch(logoUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch logo: ${response.status} ${response.statusText}`);
+      }
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      
+      // Determine content type from response headers or URL
+      const contentType = response.headers.get('content-type') || 
+                         (logoUrl.match(/\.(jpg|jpeg|png|gif|webp)/i) 
+                          ? `image/${logoUrl.match(/\.(jpg|jpeg|png|gif|webp)/i)![1].toLowerCase()}`
+                          : 'image/jpeg');
+      
+      const base64Image = buffer.toString('base64');
+      const formattedBase64 = `data:${contentType};base64,${base64Image}`;
+      
+      console.log('✅ User logo converted to base64 successfully');
+      return formattedBase64;
+      
+    } catch (fetchError) {
+      console.error('❌ Error fetching user logo:', fetchError);
+      // Fallback to default logo
+      return loadImageAsBase64('examly.jpg');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error getting user logo:', error);
+    return loadImageAsBase64('examly.jpg');
+  }
+}
+
 // Function to generate paper HTML
-async function generatePaperHTML(paper: any, userId: string, requestData: PaperGenerationRequest) {
+async function generatePaperHTML(paper: any, userId: string, requestData: PaperGenerationRequest, logoBase64: string) {
   const {
     language = 'bilingual',
     mcqMarks = 1,
@@ -962,8 +1020,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   const isBilingual = language === 'bilingual';
   const isEnglish = language === 'english';
   const separateMCQ = mcqPlacement === 'separate';
-  
-  // Handle title
+  const paperLayout = mcqPlacement;  // 'single_page' or 'separate' or 'two_papers
   const englishTitle = `${paper.title}`;
   const urduTitle = paper.title;
 
@@ -1036,9 +1093,6 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   const timeToDisplay = separateMCQ ? requestData.mcqTimeMinutes : paper.time_minutes;
   const subjectiveTimeToDisplay = separateMCQ ? requestData.subjectiveTimeMinutes : paper.time_minutes;
 
-  // Load the image
-  const examlyImageBase64 = loadImageAsBase64('examly.jpg');
-
   // Get questions by type from the final ordered list
   const mcqQuestions = finalQuestions.filter((pq: any) => 
     pq.question_type === 'mcq' && pq.questions
@@ -1063,8 +1117,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
 <head>
   <meta charset="UTF-8">
   <title>${isUrdu ? subject_ur : subject} </title>
-  
-  <style>
+   <style>
   ${getWatermarkStyle()}
    @font-face {
       font-family: 'Jameel Noori Nastaleeq';
@@ -1102,8 +1155,8 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     font-family: "Times New Roman", serif;
     direction: ltr;
   }
-    .meta { display: flex; justify-content: space-between; margin: 0 0; font-size: 12px; font-weight:bold;  }
-   .metaUrdu, .metaEng {
+  .meta { display: flex; justify-content: space-between; margin: 0 0; font-size: 12px; font-weight:bold;  }
+  .metaUrdu, .metaEng {
   display: inline-block;
   vertical-align: middle;
   line-height: 1.5;
@@ -1124,21 +1177,22 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   font-family: 'Noto Sans',Arial,sans-serif;
 }
 
-    .note {  padding: 0px; margin:0 0; font-size: 12px; line-height: 1.2; }
+    .note {  padding: 0px; margin:0 0; font-size: 12px; line-height: 1.1; }
     table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 14px; ${isEnglish? ' direction:ltr' : ' direction:rtl'}}
     table, th, td { border: 1px solid #000; }
     td { padding: 3px; vertical-align: top; }
     hr{color:black}
-    .qnum { width: 40px; text-align: center; font-weight: bold; }
+    .qnum { width: 20px; text-align: center; font-weight: bold; }
     .question { display: flex;
     justify-content: space-between;
     align-items: center;
-    margin: 0 0; 
+    margin: 0 0;
+     font-size:11px; 
     }
-    ol li{ font-size:10px; }
+    ol li{ font-size:9px; }
     .student-info{ margin-top: 10px; margin-bottom:10px; display: flex; justify-content: space-between;  flex-direction: ${isEnglish ? 'row-reverse' : 'row'}; }
   
-    .options { margin-top: 2px; display: flex; justify-content: space-between; font-size: 11px; }
+    .options { margin-top: 0px; display: flex; justify-content: space-between; font-size: 11px; }
     .footer { 
       text-align: left; 
       margin-top: 10px; 
@@ -1161,22 +1215,25 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
 
     /* Marks styling */
     .marks-display {
-      color: #2c5aa0;
+      color: #5a5a5aff;
       font-weight: bold;
-      margin-left: 8px;
-      font-size: 12px;
+      
+      margin-left: 2px;
+      font-size: 10px;
     }
     .urdu .marks-display {
       margin-left: 0;
-      margin-right: 8px;
+      margin-right: 2px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-  <div class="header">
+
+<div class="container" ${mcqPlacement === 'two_papers' ? 'style="height:525px; overflow:hidden"' : ''}>
+
+    <div class="header">
      <h1 class="eng text-center">
-        ${examlyImageBase64 ? `<img src="${examlyImageBase64}" class="header-img"  height="40" width="100"/>` : ''} <br/>
+        ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="60" width="140"/>` : ''} <br/>
      <span class="institute">   ${englishTitle}</span>
       </h1>
      </div>
@@ -1226,9 +1283,9 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
       ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : ''}
     </td>
    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-     ${isUrdu || isBilingual ? `<span class="metaUrdu">حصہ انشائیہ</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Subjective Part</span>` : ''}
-    </td>
+   ${mcqPlacement==="separate" ||mcqPlacement==="two_papers" ? (isUrdu || isBilingual ? `<span class="metaUrdu">حصہ معروضی</span>` : '') :  isUrdu || isBilingual ? `<span class="metaUrdu">حصہ معروضی/انشائیہ</span>` : ''} 
+   ${mcqPlacement==="separate" ||mcqPlacement==="two_papers" ? (isEnglish || isBilingual ? `<span class="metaEng">Subjective Part</span>` : '') : isEnglish || isBilingual ? `<span class="metaEng">Subjective/Objective Part</span>` : ''} 
+   </td>
   </tr>
 </table>
 <hr  style="color:black;"/> <br />`;
@@ -1324,16 +1381,31 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
 
     htmlContent += `
        </table>
-${separateMCQ ? `<div class="footer">
-    <p>117-023-I (Objective Type) - 14500 (5833) (New Course)</p>
+${mcqPlacement==="separate" || mcqPlacement==="two_papers" ? `
+    <div class="footer no-break" style="margin-top: 5px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #ccc; padding-top: 5px;">
+    <p class="english">Generated on ${new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time</p>
+    
+</div>
   </div>` : ``}
   
+</div>`;
+  }
+
+
+if(mcqPlacement==="two_papers"){
+  //htmlContent += `  <div style="margin:20px; border-top:1px solid black; border-style: dotted;"></div>`;
+  htmlContent += ` <div style="display:flex; align-items:center;">
+  <span style="font-size:18px; margin-right:6px;">✂</span>
+  <hr style="flex:1; border-top: 2px dotted black;" />
 </div>
-  ${separateMCQ ? `
+`+htmlContent;
+}
+
+htmlContent += ` ${mcqPlacement==="separate" || mcqPlacement==="two_papers"  ? `
     <!-- Page break before subjective section -->
     <div style="page-break-before: always;"></div>` : ''}
 `;
-  }
+
 
   // Determine attempt counts once (available to both short and long sections)
   const shortToAttempt = Number(paper.short_to_attempt ?? requestData.shortToAttempt ?? requestData.shortCount ?? 0);
@@ -1344,13 +1416,13 @@ ${separateMCQ ? `<div class="footer">
     const romans = ['i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii','xiii','xiv','xv','xvi','xvii','xviii'];
     return romans[num - 1] || num.toString();
   }
-
-  htmlContent += `
-  ${separateMCQ ? `
+let subjectiveContent = ``;
+  subjectiveContent += ` <div class="container" ${mcqPlacement === 'two_papers' ? 'style="height:525px; overflow:hidden"' : ''}>
+  ${mcqPlacement==="separate" || mcqPlacement==="two_papers"  ? `
      <div class="header">
    <h1 class="eng text-center">
-      ${examlyImageBase64 ? `<img src="${examlyImageBase64}" class="header-img"  height="40" width="100"/>` : ''} <br/>
-   <span class="institute">   ${englishTitle}</span>
+      ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="60" width="140"/>` : ''} <br/>
+   <span class="institute">   ${englishTitle} </span>
     </h1>
    </div>
     <!-- Student Info Table -->
@@ -1398,23 +1470,27 @@ ${separateMCQ ? `<div class="footer">
       ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : ''}
     </td>
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-     ${isUrdu || isBilingual ? `<span class="metaUrdu">حصہ معروضی/انشائیہ</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Subjective/Objective Part</span>` : ''}
+
+         ${isUrdu || isBilingual ? `<span class="metaUrdu">حصہ انشائیہ</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Subjective Part</span>` : ''}
     </td>
 </tr>
 </table>
-<hr  style="color:black;"/> <br /> `:``
+<hr  style="color:black;"/>  `:``
   }    
   `;
 
   // Add subjective questions
   if (subjectiveQuestions.length > 0) {
-    htmlContent += `
-  <!-- Short Questions Section -->
-  <div class="header">
-   (<span class="english">${(isEnglish || isBilingual)? 'Part - I':''}<span><span class="urdu"> ${(isUrdu || isBilingual)? 'حصہ اول':''}  </span>)
-  </div>
+    subjectiveContent += `
 
+   <div class="header" style="font-size:13px; font-weight:bold; display: flex; align-items: baseline; justify-content: center; gap: 5px;">
+    (
+    ${(isEnglish || isBilingual) ? `<span class="english" style="vertical-align: baseline;">Part - I</span>` : ''}
+    ${(isUrdu || isBilingual) ? `<span class="urdu" style="vertical-align: baseline; position: relative; top: 1px;">حصہ اول</span>` : ''}
+    )
+  </div>
+  
 `;
 
     const isBoardPaper = (paper.paper_type === 'model' || requestData.paperType === 'model');
@@ -1434,7 +1510,7 @@ ${separateMCQ ? `<div class="footer">
           // Q. numbering starts from 2 for Part I in board layout, keep group index as displayed number
           const questionNumber = g + 2;
 
-          let instructionHtml = '<div style="display:flex; justify-content:space-between; margin-bottom:0px; font-weight:bold">';
+          let instructionHtml = '<div style="display:flex; justify-content:space-between; margin-bottom:2px; margin-top:4px; font-weight:bold">';
           if (isEnglish || isBilingual) {
             instructionHtml += `<div class="eng"><strong>${questionNumber}.</strong> Write short answers to any ${shortToAttempt} question(s).</div>`;
           }
@@ -1443,9 +1519,9 @@ ${separateMCQ ? `<div class="footer">
           }
           instructionHtml += '</div>';
 
-          htmlContent += `
+          subjectiveContent += `
     
-    <div class="short-questions ${isUrdu ? 'urdu' : ''}">
+    <div class="short-questions ${isUrdu ? 'urdu' : ''}" style="line-height:1.2; font-size:12px;">
       ${instructionHtml}
   `;
 
@@ -1457,40 +1533,40 @@ ${separateMCQ ? `<div class="footer">
             const englishQuestion = formatQuestionText(englishQuestionRaw || '');
             const urduQuestion = formatQuestionText(urduQuestionRaw || '');
 
-            let questionItemHtml = '<div class="short-question-item" style="display:flex; justify-content:space-between; margin-bottom:0px;">';
+            let questionItemHtml = '<div class="short-question-item" style="display:flex; justify-content:space-between; margin-bottom:0px; line-height:1.5; font-size:12px;">';
             if (isEnglish) {
-                questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion} <span class="marks-display">[${questionMarks} marks]</span></div>`;
+                questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
             } else if (isUrdu) {
-                questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion || englishQuestion} <span class="marks-display">[${questionMarks} نمبر]</span></div>`;
+                questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion || englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
             } else { // bilingual
-                questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion} <span class="marks-display">[${questionMarks} marks]</span></div>`;
+                questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
                 if (hasActualUrduText(urduQuestion)) {
-                    questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion} <span class="marks-display">[${questionMarks} نمبر]</span></div>`;
+                    questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
                 }
             }
             questionItemHtml += '</div>';
 
-            htmlContent += `
+            subjectiveContent += `
        ${questionItemHtml}
     `;
           });
 
-          htmlContent += `
+          subjectiveContent += `
      </div>
   `;
         }
       } else {
         // Custom Paper: single heading + flat list of all short questions
-        let instructionHtml = '<div style="display:flex; justify-content:space-between; margin-bottom:6px; font-weight:bold">';
+        let instructionHtml = '<div style="display:flex;  justify-content:space-between; margin-bottom:0px; font-weight:bold">';
         if (isEnglish || isBilingual) {
-          instructionHtml += `<div class="eng"><strong>Part I.</strong> Write short answers. Attempt any ${shortToAttempt} question(s).</div>`;
+          instructionHtml += `<div class="eng"> Write short answers of any ${shortToAttempt} question(s).</div>`;
         }
         if (isUrdu || isBilingual) {
-          instructionHtml += `<div class="urdu" style="direction:rtl;"><strong>حصہ اول:</strong> مختصر جوابات لکھیں۔ کوئی ${shortToAttempt} سوالات حل کریں۔</div>`;
+          instructionHtml += `<div class="urdu" style="direction:rtl;">  کوئی سے  ${shortToAttempt} سوالات کے مختصرجوابات تحریر کریں۔</div>`;
         }
         instructionHtml += '</div>';
 
-        htmlContent += `<div class="short-questions ${isUrdu ? 'urdu' : ''}"> ${instructionHtml}`;
+        subjectiveContent += `<div class="short-questions ${isUrdu ? 'urdu' : ''}"> ${instructionHtml}`;
 
         shortQuestions.forEach((pq: any, idx: number) => {
           const q = pq.questions;
@@ -1500,47 +1576,51 @@ ${separateMCQ ? `<div class="footer">
           const englishQuestion = formatQuestionText(englishQuestionRaw || '');
           const urduQuestion = formatQuestionText(urduQuestionRaw || '');
 
-          let questionItemHtml = '<div class="short-question-item" style="display:flex; justify-content:space-between; margin-bottom:6px;">';
+          let questionItemHtml = '<div class="short-question-item" style="display:flex; justify-content:space-between; margin-bottom:0px; line-height:1.5; font-size:12px;">';
           if (isEnglish) {
-              questionItemHtml += `<div class="eng">(${idx + 1}) ${englishQuestion} <span class="marks-display">[${questionMarks} marks]</span></div>`;
+              questionItemHtml += `<div class="eng">(${idx + 1}) ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
           } else if (isUrdu) {
-              questionItemHtml += `<div class="urdu" style="direction:rtl;">(${idx + 1}) ${urduQuestion || englishQuestion} <span class="marks-display">[${questionMarks} نمبر]</span></div>`;
+              questionItemHtml += `<div class="urdu" style="direction:rtl;">(${idx + 1}) ${urduQuestion || englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
           } else { // bilingual
-              questionItemHtml += `<div class="eng">(${idx + 1}) ${englishQuestion} <span class="marks-display">[${questionMarks} marks]</span></div>`;
+              questionItemHtml += `<div class="eng">(${idx + 1}) ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
               if (hasActualUrduText(urduQuestion)) {
-                  questionItemHtml += `<div class="urdu" style="direction:rtl;">(${idx + 1}) ${urduQuestion} <span class="marks-display">[${questionMarks} نمبر]</span></div>`;
+                  questionItemHtml += `<div class="urdu" style="direction:rtl;">(${idx + 1}) ${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
               }
           }
           questionItemHtml += '</div>';
 
-          htmlContent += `
+          subjectiveContent += `
           ${questionItemHtml}
         `;
         });
 
-        htmlContent += `</div>`;
+        subjectiveContent += `</div>`;
       }
     }
   }
 
   // Add long questions
+   // Add long questions
   if (longQuestions.length > 0) {
-    htmlContent += `
-  <div class="header">
-      (<span class="english">${(isEnglish || isBilingual)? 'Part - II':''}<span> <span class="urdu"> ${(isUrdu || isBilingual)? 'حصہ دوم ':''}  </span>)
+    // Long Questions Section Header
+    subjectiveContent += `
+  <div class="header" style="font-weight:bold; display: flex; align-items: baseline; justify-content: center; gap: 5px;">
+    (
+    ${(isEnglish || isBilingual) ? `<span class="english" style="vertical-align: baseline;">Part - II</span>` : ''}
+    ${(isUrdu || isBilingual) ? `<span class="urdu" style="vertical-align: baseline; position: relative; top: 1px;">حصہ دوم</span>` : ''}
+    )
   </div>
-  <div class="instructions" style="font-weight:bold">`;
+  <div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
 
     // use computed longToAttempt above (fallbacks already applied)
     if (isEnglish || isBilingual) {
-      htmlContent += `<div class="instruction-text eng"><span>Note:</span> Attempt any ${longToAttempt} question(s).</div>`;
+      subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline;"><span>Note:</span> Attempt any ${longToAttempt} question(s) in detail.</div>`;
     }
     if (isUrdu || isBilingual) {
-      htmlContent += `<div class="instruction-text urdu" style="direction: rtl;"><span>نوٹ:</span> کوئی ${longToAttempt} سوالات حل کریں۔</div>`;
+      subjectiveContent += `<div class="instruction-text urdu" style="direction: rtl; vertical-align: baseline; position: relative; top: 1px;"><span>نوٹ:</span> کوئی ${longToAttempt} سوالات کے تفصیل سے جوابات تحریر کریں۔</div>`;
     }
-    htmlContent += `</div>
+    subjectiveContent += `</div>
 `;
-
     longQuestions.forEach((pq: any, idx: number) => {
       const q = pq.questions;
       const questionMarks = pq.custom_marks || longMarks;
@@ -1555,64 +1635,76 @@ ${separateMCQ ? `<div class="footer">
 
       if (subQuestions.length > 0) {
         subQsHTML += `
-      <div style="display: flex; justify-content: space-between; margin-top:5px;">
+      <div style="display: flex; justify-content:space-between; font-size:12px; margin-top:0px; line-height:1.5;">
         ${isEnglish || isBilingual ? `<div class="eng" style="width: 48%;"><ol type="a">${subQuestions.map((sq: any) => `<li>${formatQuestionText(sq.question_text || '')}</li>`).join('')}</ol></div>` : ''}
         ${isUrdu || isBilingual ? `<div class="urdu" style="width: 48%; direction: rtl; text-align: right;"><ol type="a">${subQuestions.map((sq: any) => `<li>${formatQuestionText(sq.question_text_ur || '')}</li>`).join('')}</ol></div>` : ''}
       </div>
     `;
       }
 
-      let longQuestionDisplayHtml = '<div class="long-question" style="margin-bottom:12px;"><div style="display:flex; justify-content:space-between; align-items:flex-start;">';
+      let longQuestionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:0px;  line-height:1.2;">';
       if (isEnglish) {
-          longQuestionDisplayHtml += `<div class="eng" style="width:100%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion} <span class="marks-display">[${questionMarks} marks]</span></div>`;
+          longQuestionDisplayHtml += `<div class="eng" style="width:100%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
       } else if (isUrdu) {
-          longQuestionDisplayHtml += `<div class="urdu" style="width:100%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion} <span class="marks-display">[${questionMarks} نمبر]</span></div>`;
+          longQuestionDisplayHtml += `<div class="urdu" style="width:100%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
       } else { // bilingual
-          longQuestionDisplayHtml += `<div class="eng" style="width:48%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion} <span class="marks-display">[${questionMarks} marks]</span></div>`;
+          longQuestionDisplayHtml += `<div class="eng" style="width:48%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
           if (hasUrduQuestion) {
-              longQuestionDisplayHtml += `<div class="urdu" style="width:48%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion} <span class="marks-display">[${questionMarks} نمبر]</span></div>`;
+              longQuestionDisplayHtml += `<div class="urdu" style="width:48%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
           }
       }
       longQuestionDisplayHtml += `</div>${subQsHTML}</div>`;
 
-      htmlContent += `
+      subjectiveContent += `
     ${longQuestionDisplayHtml}
   `;
     });
   }
 
-  htmlContent += `
-  </div>
+  subjectiveContent += `
+  
 `;
 
   // Footer
-  htmlContent += `
-  <div class="footer no-break" style="margin-top: 30px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">
+  subjectiveContent += `
+  <div class="footer no-break" style="margin-top: 30px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 5px;">
     <p class="english">Generated on ${new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time</p>
   </div>
+</div>
 </div>
 `;
 
   // Check if user is on trial for watermark
   const isTrialUser = await checkUserSubscription(userId);
   if (isTrialUser) {
-    htmlContent += `
+    subjectiveContent += `
 <div class="watermark">
   <div class="watermark-text">
     www.examly.pk  
-    Generate perfect papers&Prepare exam with Examly  
+  
     
   </div>
 </div>
+
 `;
   }
 
+  if(mcqPlacement==="two_papers"){
+    subjectiveContent +=  `<div style="display:flex; align-items:center;">
+  <span style="font-size:18px; margin-right:6px;">✂</span>
+  <hr style="flex:1; border-top: 2px dotted black;" />
+</div>
+`+subjectiveContent;
+    htmlContent += subjectiveContent;
+  }else
+{
+  htmlContent += subjectiveContent;
+}
   htmlContent += `
 </body>
 </html>
 `;
-
-  // Simplify and optimize HTML content
+// Simplify and optimize HTML content
   return optimizeHtmlForPuppeteer(simplifyHtmlContent(htmlContent));
 }
 
@@ -1829,6 +1921,11 @@ console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(
 
     console.log(`👤 User ${user.id} authenticated successfully`);
     console.log(`🔐 User auth method: ${user.app_metadata?.provider || 'email'}`);
+
+    // Fetch user's profile logo before processing the request
+    console.log('🔄 Fetching user profile logo...');
+    const logoBase64 = await getUserLogoBase64(user.id);
+    console.log('✅ User logo processed');
 
     const requestData: PaperGenerationRequest = await request.json();
     console.log('📋 Request data received:', {
@@ -2051,7 +2148,7 @@ console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(
 
     // Generate PDF
     console.log('🔄 Generating HTML content...');
-    const htmlContent = await generatePaperHTML(paper, user.id, requestData);
+    const htmlContent = await generatePaperHTML(paper, user.id, requestData, logoBase64);
 
     console.log('🔄 Creating PDF from HTML...');
     const pdfBuffer = await generatePDFFromHTML(htmlContent);

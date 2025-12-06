@@ -106,3 +106,4 @@ export interface PaperTemplateConfig {
   includeLogo: boolean;
   questionSource: 'book' | 'model_paper' | 'past_paper' | 'mixed';
 }
+export type MCQPlacement = 'same_page' | 'separate' | 'two_papers';

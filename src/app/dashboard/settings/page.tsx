@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import AcademyLayout from "@/components/AcademyLayout";
 import { User, Phone, University, Mail, Save, Upload, X, Calendar, CheckCircle, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 type Profile = {
   id: string;
@@ -23,7 +22,6 @@ type Profile = {
 };
 
 export default function ProfileSettingsPage() {
-  const supabase = createClientComponentClient();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -229,8 +227,21 @@ export default function ProfileSettingsPage() {
         throw new Error('You must select an image to upload.');
       }
       
-      setUploading(true);
       const file = e.target.files[0];
+      
+      // Validate file size (Max 500KB)
+      const fileSizeInKB = file.size / 1024;
+      if (fileSizeInKB > 500) {
+        throw new Error('Image size must be less than 500KB.');
+      }
+      
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      if (!validTypes.includes(file.type)) {
+        throw new Error('Only JPG, PNG, and GIF images are allowed.');
+      }
+      
+      setUploading(true);
       const formData = new FormData();
       formData.append('file', file);
 
@@ -387,7 +398,7 @@ export default function ProfileSettingsPage() {
                     {/* Profile Picture Upload */}
                     <div className="row mb-4">
                       <div className="col-md-12">
-                        <label className="form-label fw-semibold">Profile Picture</label>
+                        <label className="form-label fw-semibold">Academy Logo <small>(For Question paper or Test)</small></label>
                         <div className="d-flex align-items-center">
                           <div className="position-relative me-4">
                             {profile.logo ? (
@@ -438,11 +449,11 @@ export default function ProfileSettingsPage() {
                               ) : (
                                 <>
                                   <Upload size={16} className="me-2" />
-                                  Upload Image
+                                  Upload Academy Logo
                                 </>
                               )}
                             </label>
-                            <div className="form-text">JPG, PNG or GIF. Max size 2MB.</div>
+                            <div className="form-text">JPG, PNG or GIF. Max size 500KB.</div>
                           </div>
                         </div>
                       </div>
