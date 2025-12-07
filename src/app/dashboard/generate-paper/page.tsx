@@ -2614,7 +2614,7 @@ const onSubmit = async (formData: PaperFormData) => {
                 {/* Board Paper Card */}
                 <div className="col-md-6">
                   <div
-                    className={`option-card card h-100 p-4 cursor-pointer ${
+                    className={`option-card card h-100 p-2 cursor-pointer ${
                       watch("paperType") === "model" ? "active border-primary shadow" : "border-light"
                     }`}
                     onClick={() => {
@@ -2659,7 +2659,7 @@ const onSubmit = async (formData: PaperFormData) => {
                     }}
                     style={{ cursor: 'pointer' }}
                   >
-                    <div className="card-body">
+                    <div className="card-body p-0">
                       <div className="text-center mb-4">
                         <span className="display-6">🏛️</span>
                         <h4 className="mt-3 fw-bold">Board Paper</h4>
@@ -2697,7 +2697,7 @@ const onSubmit = async (formData: PaperFormData) => {
                       <div className="text-center">
                         <span className="badge bg-primary px-3 py-2">
                           <i className="bi bi-lightning me-2"></i>
-                          Quick Setup - Click to Continue
+                         <span className="d-none d-sm-inline"> Quick Setup - </span>Click to Continue
                         </span>
                       </div>
                     </div>
@@ -2707,7 +2707,7 @@ const onSubmit = async (formData: PaperFormData) => {
                 {/* Custom Paper Card */}
                 <div className="col-md-6">
                   <div
-                    className={`option-card card h-100 p-4 cursor-pointer ${
+                    className={`option-card card h-100 p-2 cursor-pointer ${
                       watch("paperType") === "custom" ? "active border-primary shadow" : "border-light"
                     }`}
                     onClick={() => {
@@ -2756,7 +2756,7 @@ const onSubmit = async (formData: PaperFormData) => {
                     }}
                     style={{ cursor: 'pointer' }}
                   >
-                    <div className="card-body">
+                    <div className="card-body p-0">
                       <div className="text-center mb-4">
                         <span className="display-6">⚙️</span>
                         <h4 className="mt-3 fw-bold">Custom Paper</h4>
@@ -2787,7 +2787,7 @@ const onSubmit = async (formData: PaperFormData) => {
                       <div className="text-center">
                         <span className="badge bg-success px-3 py-2">
                           <i className="bi bi-sliders me-2"></i>
-                          Full Customization - Click to Configure
+                          <span className="d-none d-sm-inline"> Full Customization - </span>Click to Configure
                         </span>
                       </div>
                     </div>
