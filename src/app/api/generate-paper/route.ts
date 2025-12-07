@@ -715,6 +715,7 @@ function loadImageAsBase64(imageFileName: string): string {
 }
 
 // Function to create paper record
+// Function to create paper record
 async function createPaperRecord(requestData: PaperGenerationRequest, userId: string) {
   const { 
     title,
@@ -735,39 +736,82 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
     mcqMarks = 1,
     shortMarks = 2,
     longMarks = 5,
-    reorderedQuestions, // Add this
-    customMarksData // Add this
+    reorderedQuestions,
+    customMarksData
   } = requestData;
 
-  // Calculate total marks considering custom marks
+  // CRITICAL FIX: Calculate total marks based on "to attempt" values
+  // If "to attempt" values are not provided, fall back to "count" values
+  const actualMcqToAttempt = mcqToAttempt !== undefined ? mcqToAttempt : mcqCount;
+  const actualShortToAttempt = shortToAttempt !== undefined ? shortToAttempt : shortCount;
+  const actualLongToAttempt = longToAttempt !== undefined ? longToAttempt : longCount;
+
   let totalMarks = 0;
   
+  // Use custom marks if available (for manual selection with custom marks)
   if (reorderedQuestions && customMarksData) {
-    // Use custom marks if available
-    const mcqTotal = reorderedQuestions.mcq.reduce((sum, q) => {
-      const customMark = customMarksData.mcq.find((cm: any) => cm.questionId === q.id)?.marks;
-      return sum + (customMark || mcqMarks);
-    }, 0);
+    console.log('📊 Calculating total marks with custom marks...');
     
-    const shortTotal = reorderedQuestions.short.reduce((sum, q) => {
-      const customMark = customMarksData.short.find((cm: any) => cm.questionId === q.id)?.marks;
-      return sum + (customMark || shortMarks);
-    }, 0);
+    // Calculate marks for each question type using custom marks
+    const mcqQuestions = reorderedQuestions.mcq || [];
+    const shortQuestions = reorderedQuestions.short || [];
+    const longQuestions = reorderedQuestions.long || [];
     
-    const longTotal = reorderedQuestions.long.reduce((sum, q) => {
-      const customMark = customMarksData.long.find((cm: any) => cm.questionId === q.id)?.marks;
-      return sum + (customMark || longMarks);
-    }, 0);
+    // Calculate marks for questions that will be attempted (based on toAttempt values)
+    // For MCQs: if custom marks are provided, calculate based on toAttempt count
+    let mcqTotal = 0;
+    if (mcqQuestions.length > 0) {
+      // Get custom marks for the first 'actualMcqToAttempt' questions
+      const attemptedMcqQuestions = mcqQuestions.slice(0, actualMcqToAttempt);
+      mcqTotal = attemptedMcqQuestions.reduce((sum, q) => {
+        const customMark = customMarksData.mcq?.find((cm: any) => cm.questionId === q.id)?.marks;
+        return sum + (customMark || mcqMarks);
+      }, 0);
+    }
+    
+    // For Short questions
+    let shortTotal = 0;
+    if (shortQuestions.length > 0) {
+      const attemptedShortQuestions = shortQuestions.slice(0, actualShortToAttempt);
+      shortTotal = attemptedShortQuestions.reduce((sum, q) => {
+        const customMark = customMarksData.short?.find((cm: any) => cm.questionId === q.id)?.marks;
+        return sum + (customMark || shortMarks);
+      }, 0);
+    }
+    
+    // For Long questions
+    let longTotal = 0;
+    if (longQuestions.length > 0) {
+      const attemptedLongQuestions = longQuestions.slice(0, actualLongToAttempt);
+      longTotal = attemptedLongQuestions.reduce((sum, q) => {
+        const customMark = customMarksData.long?.find((cm: any) => cm.questionId === q.id)?.marks;
+        return sum + (customMark || longMarks);
+      }, 0);
+    }
     
     totalMarks = mcqTotal + shortTotal + longTotal;
-    console.log(`📊 Total marks calculated with custom marks: ${totalMarks}`);
+    console.log(`📊 Total marks (custom): ${totalMarks} = MCQ:${mcqTotal} + Short:${shortTotal} + Long:${longTotal}`);
   } else {
-    // Fallback to default calculation
-    totalMarks = (mcqToAttempt || mcqCount || 0) * mcqMarks + 
-                (shortToAttempt || shortCount || 0) * shortMarks + 
-                (longToAttempt || longCount || 0) * longMarks;
-    console.log(`📊 Total marks calculated with default marks: ${totalMarks}`);
+    // Standard calculation based on "to attempt" counts
+    totalMarks = (actualMcqToAttempt || 0) * mcqMarks + 
+                (actualShortToAttempt || 0) * shortMarks + 
+                (actualLongToAttempt || 0) * longMarks;
+    console.log(`📊 Total marks (standard): ${totalMarks} = MCQ:${actualMcqToAttempt}×${mcqMarks} + Short:${actualShortToAttempt}×${shortMarks} + Long:${actualLongToAttempt}×${longMarks}`);
   }
+
+  // Log the calculation details for debugging
+  console.log('📋 Marks calculation details:', {
+    mcqToAttempt: mcqToAttempt,
+    shortToAttempt: shortToAttempt,
+    longToAttempt: longToAttempt,
+    mcqCount: mcqCount,
+    shortCount: shortCount,
+    longCount: longCount,
+    actualMcqToAttempt,
+    actualShortToAttempt,
+    actualLongToAttempt,
+    totalMarks
+  });
 
   // Determine chapters to include
   let chapterIds: string[] = [];
@@ -785,7 +829,7 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
     console.log(`🎯 Chapters selected (${chapterOption}): ${chapterIds.length}`);
   }
 
-  // Create paper record
+  // Create paper record with corrected marks calculation
   const paperData: any = {
     title: title,
     subject_id: subjectId,
@@ -796,9 +840,9 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
     difficulty: 'medium',
     total_marks: totalMarks,
     time_minutes: timeMinutes,
-    mcq_to_attempt: mcqToAttempt || mcqCount,
-    short_to_attempt: shortToAttempt || shortCount,
-    long_to_attempt: longToAttempt || longCount,
+    mcq_to_attempt: actualMcqToAttempt,  // Store the actual "to attempt" value
+    short_to_attempt: actualShortToAttempt,  // Store the actual "to attempt" value
+    long_to_attempt: actualLongToAttempt,  // Store the actual "to attempt" value
     language: language,
     source_type: source_type
   };
@@ -816,6 +860,13 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
     }
 
     console.log(`✅ Paper created with ID: ${paper.id}`);
+    console.log(`📊 Paper details:`, {
+      title: paper.title,
+      total_marks: paper.total_marks,
+      mcq_to_attempt: paper.mcq_to_attempt,
+      short_to_attempt: paper.short_to_attempt,
+      long_to_attempt: paper.long_to_attempt
+    });
     return paper;
   } catch (error) {
     console.error('Error creating paper:', error);
