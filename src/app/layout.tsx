@@ -9,7 +9,7 @@ import ClientLayoutWrapper from "./ClientLayoutWrapper";
 
 export const metadata = {
   title: 'Examly —  Generate Papers • Make Tests • Make Teacher Time Table • Quiz Online',
-  description: 'Examly - learning resources, paper generation, and online quizzes for students and academies.',
+  description: 'Examly - Make Tests, paper generation, Make Teacher Time Table and online quizzes for students and academies.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -884,92 +884,186 @@ function ManualQuestionSelection({
                           )}
                         </p>
                         
-                        {currentStep === 'mcq' && (
-                          <div className={`mt-2 ${language === 'urdu' ? 'urdu-rtl' : ''}`}>
-                            <div className="row">
-                              {question.option_a && (
-                                <div className="col-md-6">
-                                  <span className={language === 'urdu' ? 'urdu-text' : language === 'bilingual' ? 'bilingual-text' : ''}>
-                                    A) {
-                                      language === 'english' && question.option_a
-                                    }
-                                    {language === 'urdu' && (question.option_a_urdu || question.option_a)}
-                                    {language === 'bilingual' && (
-                                      <>
-                                        <div style={{ direction: 'ltr', textAlign: 'left' }}>
-                                          {question.option_a_english || question.option_a}
-                                        </div>
-                                        <div style={{ direction: 'rtl', textAlign: 'right' }}>
-                                          {question.option_a_urdu}
-                                        </div>
-                                      </>
-                                    )}
-                                  </span>
-                                </div>
-                              )}
-                              {question.option_b && (
-                                <div className="col-md-6">
-                                  <span className={language === 'urdu' ? 'urdu-text' : language === 'bilingual' ? 'bilingual-text' : ''}>
-                                    B) {
-                                      language === 'english' && question.option_b
-                                    }
-                                    {language === 'urdu' && (question.option_b_urdu || question.option_b)}
-                                    {language === 'bilingual' && (
-                                      <>
-                                        <div style={{ direction: 'ltr', textAlign: 'left' }}>
-                                          {question.option_b_english || question.option_b}
-                                        </div>
-                                        <div style={{ direction: 'rtl', textAlign: 'right' }}>
-                                          {question.option_b_urdu}
-                                        </div>
-                                      </>
-                                    )}
-                                  </span>
-                                </div>
-                              )}
-                              {question.option_c && (
-                                <div className="col-md-6">
-                                  <span className={language === 'urdu' ? 'urdu-text' : language === 'bilingual' ? 'bilingual-text' : ''}>
-                                    C) {
-                                      language === 'english' && question.option_c
-                                    }
-                                    {language === 'urdu' && (question.option_c_urdu || question.option_c)}
-                                    {language === 'bilingual' && (
-                                      <>
-                                        <div style={{ direction: 'ltr', textAlign: 'left' }}>
-                                          {question.option_c_english || question.option_c}
-                                        </div>
-                                        <div style={{ direction: 'rtl', textAlign: 'right' }}>
-                                          {question.option_c_urdu}
-                                        </div>
-                                      </>
-                                    )}
-                                  </span>
-                                </div>
-                              )}
-                              {question.option_d && (
-                                <div className="col-md-6">
-                                  <span className={language === 'urdu' ? 'urdu-text' : language === 'bilingual' ? 'bilingual-text' : ''}>
-                                    D) {
-                                      language === 'english' && question.option_d
-                                    }
-                                    {language === 'urdu' && (question.option_d_urdu || question.option_d)}
-                                    {language === 'bilingual' && (
-                                      <>
-                                        <div style={{ direction: 'ltr', textAlign: 'left' }}>
-                                          {question.option_d_english || question.option_d}
-                                        </div>
-                                        <div style={{ direction: 'rtl', textAlign: 'right' }}>
-                                          {question.option_d_urdu}
-                                        </div>
-                                      </>
-                                    )}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                  {currentStep === 'mcq' && (
+  <div className={`mt-2 ${language === 'urdu' ? 'urdu-rtl' : ''}`}>
+    {/* Options in a single row with bilingual on same line */}
+    <div className="row g-1">
+      {question.option_a && (
+        <div className="col-12 col-md-6 col-lg-3 mb-2">
+          <div className="option-container border rounded p-1 bg-light">
+            <div className="d-flex justify-content-between align-items-start">
+              <span className="badge bg-primary me-1">A)</span>
+              <div className="flex-grow-1">
+                {language === 'english' && (
+                  <span className="d-block" style={{ fontFamily: "'Times New Roman', serif" }}>
+                    {question.option_a}
+                  </span>
+                )}
+                {language === 'urdu' && (
+                  <span className="d-block urdu-text" style={{ textAlign: 'right' }}>
+                    {question.option_a_urdu || question.option_a}
+                  </span>
+                )}
+                {language === 'bilingual' && (
+                  <div className="bilingual-same-line">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="english-option" style={{ 
+                        fontFamily: "'Times New Roman', serif",
+                        fontSize: '12px',
+                        flex: 1,
+                        paddingRight: '5px'
+                      }}>
+                        {question.option_a_english || question.option_a}
+                      </span>
+                      <span className="urdu-option urdu-text" style={{ 
+                        fontSize: '12px',
+                        flex: 1,
+                        textAlign: 'right',
+                        paddingLeft: '5px'
+                      }}>
+                        {question.option_a_urdu}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {question.option_b && (
+        <div className="col-12 col-md-6 col-lg-3 mb-2">
+          <div className="option-container border rounded p-1 bg-light">
+            <div className="d-flex justify-content-between align-items-start">
+              <span className="badge bg-primary me-1">B)</span>
+              <div className="flex-grow-1">
+                {language === 'english' && (
+                  <span className="d-block" style={{ fontFamily: "'Times New Roman', serif" }}>
+                    {question.option_b}
+                  </span>
+                )}
+                {language === 'urdu' && (
+                  <span className="d-block urdu-text" style={{ textAlign: 'right' }}>
+                    {question.option_b_urdu || question.option_b}
+                  </span>
+                )}
+                {language === 'bilingual' && (
+                  <div className="bilingual-same-line">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="english-option" style={{ 
+                        fontFamily: "'Times New Roman', serif",
+                        fontSize: '12px',
+                        flex: 1,
+                        paddingRight: '5px'
+                      }}>
+                        {question.option_b_english || question.option_b}
+                      </span>
+                      <span className="urdu-option urdu-text" style={{ 
+                        fontSize: '12px',
+                        flex: 1,
+                        textAlign: 'right',
+                        paddingLeft: '5px'
+                      }}>
+                        {question.option_b_urdu}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {question.option_c && (
+        <div className="col-12 col-md-6 col-lg-3 mb-2">
+          <div className="option-container border rounded p-1 bg-light">
+            <div className="d-flex justify-content-between align-items-start" >
+              <span className="badge bg-primary me-1">C)</span>
+              <div className="flex-grow-1">
+                {language === 'english' && (
+                  <span className="d-block" style={{ fontFamily: "'Times New Roman', serif" }}>
+                    {question.option_c}
+                  </span>
+                )}
+                {language === 'urdu' && (
+                  <span className="d-block urdu-text" style={{ textAlign: 'right' }}>
+                    {question.option_c_urdu || question.option_c}
+                  </span>
+                )}
+                {language === 'bilingual' && (
+                  <div className="bilingual-same-line">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="english-option" style={{ 
+                        fontFamily: "'Times New Roman', serif",
+                        fontSize: '12px',
+                        flex: 1,
+                        paddingRight: '5px'
+                      }}>
+                        {question.option_c_english || question.option_c}
+                      </span>
+                      <span className="urdu-option urdu-text" style={{ 
+                        fontSize: '12px',
+                        flex: 1,
+                        textAlign: 'right',
+                        paddingLeft: '5px'
+                      }}>
+                        {question.option_c_urdu}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {question.option_d && (
+        <div className="col-12 col-md-6 col-lg-3 mb-2">
+          <div className="option-container border rounded p-1 bg-light">
+            <div className="d-flex justify-content-between align-items-start">
+              <span className="badge bg-primary me-1">D)</span>
+              <div className="flex-grow-1">
+                {language === 'english' && (
+                  <span className="d-block" style={{ fontFamily: "'Times New Roman', serif" }}>
+                    {question.option_d}
+                  </span>
+                )}
+                {language === 'urdu' && (
+                  <span className="d-block urdu-text" style={{ textAlign: 'right' }}>
+                    {question.option_d_urdu || question.option_d}
+                  </span>
+                )}
+                {language === 'bilingual' && (
+                  <div className="bilingual-same-line">
+                    <div className="d-flex justify-content-between align-items-center" >
+                      <span className="english-option" style={{ 
+                        fontFamily: "'Times New Roman', serif",
+                        fontSize: '12px',
+                        flex: 1,
+                        paddingRight: '5px'
+                      }}>
+                        {question.option_d_english || question.option_d}
+                      </span>
+                      <span className="urdu-option urdu-text" style={{ 
+                        fontSize: '12px',
+                        flex: 1,
+                        textAlign: 'right',
+                        paddingLeft: '5px'
+                      }}>
+                        {question.option_d_urdu}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
                         
                         <div className="d-flex gap-2 mt-2">
                           <span className={`badge ${
@@ -1770,328 +1864,460 @@ export default function GeneratePaperPage() {
     }
   };
 
-  // FIXED: onSubmit with progress tracking
-const onSubmit = async (formData: PaperFormData) => {
-  // Validate two_papers layout before anything else
-  if (formData.mcqPlacement === 'two_papers') {
-    const totalQuestions = formData.mcqCount + formData.shortCount + formData.longCount;
-    if (totalQuestions > 15) {
-      alert(`Two Papers Layout: Maximum 15 total questions allowed. You have ${totalQuestions}. Please adjust your question counts.`);
-      return;
-    }
-  }
-
-  if (!canGeneratePaper()) {
-    setShowSubscriptionModal(true);
-    return;
-  }
-
-  if (!isAuthenticated) {
-    alert('Please login to generate papers');
-    return;
-  }
-
-  // Show progress modal
-  setGenerationProgress({
-    percentage: 0,
-    message: 'Starting paper generation...',
-    isVisible: true
-  });
-
-  setIsLoading(true);
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (!session) {
-      alert('You must be logged in to generate a paper.');
-      setIsLoading(false);
-      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
-      return;
-    }
-
-    const user = session?.user;
-    let accessToken = session?.access_token;
-
-    // Update progress
-    setGenerationProgress({
-      percentage: 10,
-      message: 'Preparing paper data...',
-      isVisible: true
-    });
-
-    if (!accessToken) {
-      const { data: refreshedSession } = await supabase.auth.refreshSession();
-      if (refreshedSession?.session) {
-        accessToken = refreshedSession.session.access_token;
+  // FIXED: onSubmit with comprehensive auth error handling
+  const onSubmit = async (formData: PaperFormData) => {
+    // Validate two_papers layout before anything else
+    if (formData.mcqPlacement === 'two_papers') {
+      const totalQuestions = formData.mcqCount + formData.shortCount + formData.longCount;
+      if (totalQuestions > 15) {
+        alert(`Two Papers Layout: Maximum 15 total questions allowed. You have ${totalQuestions}. Please adjust your question counts.`);
+        return;
       }
     }
 
-    // Final validation
-    if (!accessToken) {
-      console.warn('No access token available');
-      alert('Authentication issue. Please try logging in again.');
-      setIsLoading(false);
-      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+    if (!canGeneratePaper()) {
+      setShowSubscriptionModal(true);
       return;
     }
 
-    const randomSeed = Date.now();
-    
-    // Get chapter IDs for validation
-    const chapterIds = getChapterIdsToUse();
-    
-    // Validate we have chapters
-    if (chapterIds.length === 0) {
-      alert('No chapters found for the selected subject and class. Please check your selection.');
-      setIsLoading(false);
-      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
-      return;
-    }
-
-    // Validate we're requesting questions
-    if (formData.mcqCount === 0 && formData.shortCount === 0 && formData.longCount === 0) {
-      alert('Please select at least one question type with count greater than 0.');
-      setIsLoading(false);
-      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
-      return;
-    }
-
-    // Validate attempt counts
-    if (
-      formData.mcqToAttempt > formData.mcqCount ||
-      formData.shortToAttempt > formData.shortCount ||
-      formData.longToAttempt > formData.longCount
-    ) {
-      alert("Please fix the 'To Attempt' values. They cannot exceed 'Total Qs'.");
-      setIsLoading(false);
-      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
-      return;
-    }
-
-    // Debug log to verify form data
-    console.log('🎯 Debug - Form submission details:', {
-      mcqPlacement: formData.mcqPlacement,
-      isTwoPapers: formData.mcqPlacement === 'two_papers',
-      questionCounts: {
-        mcq: formData.mcqCount,
-        short: formData.shortCount,
-        long: formData.longCount,
-        total: formData.mcqCount + formData.shortCount + formData.longCount
-      },
-      timeSettings: {
-        timeMinutes: formData.timeMinutes,
-        mcqTimeMinutes: formData.mcqTimeMinutes,
-        subjectiveTimeMinutes: formData.subjectiveTimeMinutes
-      },
-      layoutLimits: formData.mcqPlacement === 'two_papers' ? 'Max 15 questions' : 'No limit'
-    });
-
-    // Update progress
+    // Show progress modal
     setGenerationProgress({
-      percentage: 25,
-      message: 'Validating question selection...',
+      percentage: 0,
+      message: 'Starting paper generation...',
       isVisible: true
     });
 
-    // Prepare selected questions based on current preview order
-    const selectedQuestionsFromPreview = {
-      mcq: previewQuestions.mcq.map(q => q.id),
-      short: previewQuestions.short.map(q => q.id),
-      long: previewQuestions.long.map(q => q.id)
-    };
+    setIsLoading(true);
 
-    // Calculate total time based on layout
-    let totalTimeMinutes = formData.timeMinutes;
-    if (formData.mcqPlacement === 'separate') {
-      // For separate layout, sum objective and subjective times
-      totalTimeMinutes = (formData.mcqTimeMinutes || 0) + (formData.subjectiveTimeMinutes || 0);
-    }
+    try {
+      // 1. Get current session with error handling
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+        setIsLoading(false);
+        alert('Authentication error. Please try logging in again.');
+        window.location.href = '/login';
+        return;
+      }
 
-    // CRITICAL FIX: Prepare questions with custom marks for PDF generation
-    const questionsWithCustomMarks = {
-      mcq: previewQuestions.mcq.map(q => ({
-        ...q,
-        marks: q.customMarks || formData.mcqMarks,
-        defaultMarks: formData.mcqMarks
-      })),
-      short: previewQuestions.short.map(q => ({
-        ...q,
-        marks: q.customMarks || formData.shortMarks,
-        defaultMarks: formData.shortMarks
-      })),
-      long: previewQuestions.long.map(q => ({
-        ...q,
-        marks: q.customMarks || formData.longMarks,
-        defaultMarks: formData.longMarks
-      }))
-    };
+      if (!session) {
+        console.error('No session found');
+        setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+        setIsLoading(false);
+        alert('Your session has expired. Please log in again.');
+        window.location.href = '/login';
+        return;
+      }
 
-    // Prepare the payload with all layout support
-    const payload = {
-      ...formData,
-      // Ensure mcqPlacement is properly included
-      mcqPlacement: formData.mcqPlacement,
-      // Handle time fields properly for all layouts
-      timeMinutes: totalTimeMinutes,
-      // For separate layout, keep individual times
-      mcqTimeMinutes: formData.mcqPlacement === 'separate' ? formData.mcqTimeMinutes : undefined,
-      subjectiveTimeMinutes: formData.mcqPlacement === 'separate' ? formData.subjectiveTimeMinutes : undefined,
-      userId: user.id,
-      randomSeed,
-      mcqToAttempt: formData.mcqToAttempt || formData.mcqCount,
-      shortToAttempt: formData.shortToAttempt || formData.shortCount,
-      longToAttempt: formData.longToAttempt || formData.longCount,
-      selectedQuestions: selectedQuestionsFromPreview,
-      language: formData.language,
-      shuffleQuestions: formData.shuffleQuestions,
-      reorderedQuestions: questionsWithCustomMarks,
-      questionOrder: {
-        mcq: previewQuestions.mcq.map((q, index) => ({ 
-          id: q.id, 
-          order: index + 1,
-          marks: q.customMarks || formData.mcqMarks 
-        })),
-        short: previewQuestions.short.map((q, index) => ({ 
-          id: q.id, 
-          order: index + 1,
-          marks: q.customMarks || formData.shortMarks 
-        })),
-        long: previewQuestions.long.map((q, index) => ({ 
-          id: q.id, 
-          order: index + 1,
-          marks: q.customMarks || formData.longMarks 
-        }))
-      },
-      customMarksData: {
+      const user = session.user;
+      let accessToken = session.access_token;
+
+      // Update progress
+      setGenerationProgress({
+        percentage: 10,
+        message: 'Preparing paper data...',
+        isVisible: true
+      });
+
+      // 2. Check token validity and refresh if needed
+      if (!accessToken || accessToken.split('.').length !== 3) {
+        console.warn('Invalid or missing access token, attempting refresh...');
+        try {
+          const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession();
+          
+          if (refreshError) {
+            console.error('Token refresh error:', refreshError);
+            throw new Error('Token refresh failed');
+          }
+          
+          if (!refreshedSession?.session) {
+            throw new Error('No session after refresh');
+          }
+          
+          accessToken = refreshedSession.session.access_token;
+          console.log('Token refreshed successfully');
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+          setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+          setIsLoading(false);
+          alert('Your session has expired. Please log in again.');
+          window.location.href = '/login';
+          return;
+        }
+      }
+
+      // 3. Validate token format
+      if (!accessToken || accessToken.split('.').length !== 3) {
+        console.error('Invalid token format');
+        setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+        setIsLoading(false);
+        alert('Authentication token is invalid. Please log in again.');
+        window.location.href = '/login';
+        return;
+      }
+
+      const randomSeed = Date.now();
+      
+      // Get chapter IDs for validation
+      const chapterIds = getChapterIdsToUse();
+      
+      // Validate we have chapters
+      if (chapterIds.length === 0) {
+        setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+        setIsLoading(false);
+        alert('No chapters found for the selected subject and class. Please check your selection.');
+        return;
+      }
+
+      // Validate we're requesting questions
+      if (formData.mcqCount === 0 && formData.shortCount === 0 && formData.longCount === 0) {
+        setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+        setIsLoading(false);
+        alert('Please select at least one question type with count greater than 0.');
+        return;
+      }
+
+      // Validate attempt counts
+      if (
+        formData.mcqToAttempt > formData.mcqCount ||
+        formData.shortToAttempt > formData.shortCount ||
+        formData.longToAttempt > formData.longCount
+      ) {
+        setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+        setIsLoading(false);
+        alert("Please fix the 'To Attempt' values. They cannot exceed 'Total Qs'.");
+        return;
+      }
+
+      // Debug log to verify form data
+      console.log('🎯 Debug - Form submission details:', {
+        mcqPlacement: formData.mcqPlacement,
+        isTwoPapers: formData.mcqPlacement === 'two_papers',
+        questionCounts: {
+          mcq: formData.mcqCount,
+          short: formData.shortCount,
+          long: formData.longCount,
+          total: formData.mcqCount + formData.shortCount + formData.longCount
+        },
+        attemptCounts: {
+          mcq: formData.mcqToAttempt,
+          short: formData.shortToAttempt,
+          long: formData.longToAttempt
+        },
+        timeSettings: {
+          timeMinutes: formData.timeMinutes,
+          mcqTimeMinutes: formData.mcqTimeMinutes,
+          subjectiveTimeMinutes: formData.subjectiveTimeMinutes
+        },
+        layoutLimits: formData.mcqPlacement === 'two_papers' ? 'Max 15 questions' : 'No limit'
+      });
+
+      // Update progress
+      setGenerationProgress({
+        percentage: 25,
+        message: 'Validating question selection...',
+        isVisible: true
+      });
+
+      // Prepare selected questions based on current preview order
+      const selectedQuestionsFromPreview = {
+        mcq: previewQuestions.mcq.map(q => q.id),
+        short: previewQuestions.short.map(q => q.id),
+        long: previewQuestions.long.map(q => q.id)
+      };
+
+      // Calculate total time based on layout
+      let totalTimeMinutes = formData.timeMinutes;
+      if (formData.mcqPlacement === 'separate') {
+        // For separate layout, sum objective and subjective times
+        totalTimeMinutes = (formData.mcqTimeMinutes || 0) + (formData.subjectiveTimeMinutes || 0);
+      }
+
+      // Prepare questions with custom marks for PDF generation
+      const questionsWithCustomMarks = {
         mcq: previewQuestions.mcq.map(q => ({
-          questionId: q.id,
-          marks: q.customMarks || formData.mcqMarks
+          ...q,
+          marks: q.customMarks || formData.mcqMarks,
+          defaultMarks: formData.mcqMarks
         })),
         short: previewQuestions.short.map(q => ({
-          questionId: q.id,
-          marks: q.customMarks || formData.shortMarks
+          ...q,
+          marks: q.customMarks || formData.shortMarks,
+          defaultMarks: formData.shortMarks
         })),
         long: previewQuestions.long.map(q => ({
-          questionId: q.id,
-          marks: q.customMarks || formData.longMarks
+          ...q,
+          marks: q.customMarks || formData.longMarks,
+          defaultMarks: formData.longMarks
         }))
-      }
-    };
+      };
 
-    // Update progress
-    setGenerationProgress({
-      percentage: 40,
-      message: 'Sending request to server...',
-      isVisible: true
-    });
+      // Prepare the payload with all layout support
+      const payload = {
+        ...formData,
+        // Ensure mcqPlacement is properly included
+        mcqPlacement: formData.mcqPlacement,
+        // Handle time fields properly for all layouts
+        timeMinutes: totalTimeMinutes,
+        // For separate layout, keep individual times
+        mcqTimeMinutes: formData.mcqPlacement === 'separate' ? formData.mcqTimeMinutes : undefined,
+        subjectiveTimeMinutes: formData.mcqPlacement === 'separate' ? formData.subjectiveTimeMinutes : undefined,
+        userId: user.id,
+        randomSeed,
+        mcqToAttempt: formData.mcqToAttempt || formData.mcqCount,
+        shortToAttempt: formData.shortToAttempt || formData.shortCount,
+        longToAttempt: formData.longToAttempt || formData.longCount,
+        selectedQuestions: selectedQuestionsFromPreview,
+        language: formData.language,
+        shuffleQuestions: formData.shuffleQuestions,
+        reorderedQuestions: questionsWithCustomMarks,
+        questionOrder: {
+          mcq: previewQuestions.mcq.map((q, index) => ({ 
+            id: q.id, 
+            order: index + 1,
+            marks: q.customMarks || formData.mcqMarks 
+          })),
+          short: previewQuestions.short.map((q, index) => ({ 
+            id: q.id, 
+            order: index + 1,
+            marks: q.customMarks || formData.shortMarks 
+          })),
+          long: previewQuestions.long.map((q, index) => ({ 
+            id: q.id, 
+            order: index + 1,
+            marks: q.customMarks || formData.longMarks 
+          }))
+        },
+        customMarksData: {
+          mcq: previewQuestions.mcq.map(q => ({
+            questionId: q.id,
+            marks: q.customMarks || formData.mcqMarks
+          })),
+          short: previewQuestions.short.map(q => ({
+            questionId: q.id,
+            marks: q.customMarks || formData.shortMarks
+          })),
+          long: previewQuestions.long.map(q => ({
+            questionId: q.id,
+            marks: q.customMarks || formData.longMarks
+          }))
+        }
+      };
 
-    const headers: Record<string,string> = {
-      "Content-Type": "application/json"
-    };
-    
-    if (accessToken && typeof accessToken === 'string' && accessToken.split('.').length === 3) {
-      headers.Authorization = `Bearer ${accessToken}`;
-    }
-
-    // Log the payload for debugging
-    console.log('📤 Submitting payload to API:', {
-      mcqPlacement: payload.mcqPlacement,
-      totalQuestions: payload.mcqCount + payload.shortCount + payload.longCount,
-      timeMinutes: payload.timeMinutes,
-      layoutType: payload.mcqPlacement === 'two_papers' ? 'Two Papers Layout' : 
-                 payload.mcqPlacement === 'separate' ? 'Separate Layout' : 'Single Page Layout'
-    });
-
-    // Update progress
-    setGenerationProgress({
-      percentage: 60,
-      message: 'Generating PDF content...',
-      isVisible: true
-    });
-
-    // Perform the fetch with valid headers
-    const response = await fetch("/api/generate-paper", {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-    });
-    
-    const contentType = response.headers.get("content-type") || "";
-    
-    if (response.ok) {
       // Update progress
       setGenerationProgress({
-        percentage: 80,
-        message: 'Finalizing PDF...',
+        percentage: 40,
+        message: 'Sending request to server...',
         isVisible: true
       });
+
+      // Prepare headers with token
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
       
-      await refreshTrialStatus();
-    }
-    
-    if (!response.ok) {
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const json = await response.json();
-        console.error('API error response JSON:', json);
-        alert(json.error || json.message || 'Server error (see console)');
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+        console.log('🔐 Using token for API request:', {
+          tokenLength: accessToken.length,
+          tokenPrefix: accessToken.substring(0, 20) + '...'
+        });
       } else {
-        const text = await response.text();
-        console.error('API error response text:', text);
-        alert('Server error (see console)');
+        console.error('No access token available for request');
+        setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+        setIsLoading(false);
+        alert('Authentication token missing. Please log in again.');
+        window.location.href = '/login';
+        return;
       }
-    } else if (response.ok && contentType.includes("application/pdf")) {
+
+      // Log the payload for debugging
+      console.log('📤 Submitting payload to API:', {
+        mcqPlacement: payload.mcqPlacement,
+        totalQuestions: payload.mcqCount + payload.shortCount + payload.longCount,
+        attemptQuestions: payload.mcqToAttempt + payload.shortToAttempt + payload.longToAttempt,
+        timeMinutes: payload.timeMinutes,
+        layoutType: payload.mcqPlacement === 'two_papers' ? 'Two Papers Layout' : 
+                   payload.mcqPlacement === 'separate' ? 'Separate Layout' : 'Single Page Layout',
+        hasToken: !!accessToken
+      });
+
       // Update progress
       setGenerationProgress({
-        percentage: 95,
-        message: 'Downloading PDF...',
+        percentage: 60,
+        message: 'Generating PDF content...',
         isVisible: true
       });
+
+      // Perform the fetch with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+      let response;
+      try {
+        response = await fetch("/api/generate-paper", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          console.error('Request timeout');
+          alert('Request timeout. Please try again.');
+        } else {
+          console.error('Fetch error:', fetchError);
+          alert('Network error. Please check your connection and try again.');
+        }
+        
+        setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+        setIsLoading(false);
+        return;
+      }
       
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `paper-${new Date().getTime()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      clearTimeout(timeoutId);
       
-      // Update progress to completion
-      setGenerationProgress({
-        percentage: 100,
-        message: 'Paper generated successfully!',
-        isVisible: true
-      });
+      const contentType = response.headers.get("content-type") || "";
       
-      // Hide progress modal after a delay
+      if (response.ok) {
+        // Update progress
+        setGenerationProgress({
+          percentage: 80,
+          message: 'Finalizing PDF...',
+          isVisible: true
+        });
+        
+        await refreshTrialStatus();
+      }
+      
+      // Handle API errors
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        
+        console.error('API Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          contentType,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+        
+        if (contentType.includes('application/json')) {
+          try {
+            const json = await response.json();
+            console.error('API error response JSON:', json);
+            
+            // Handle authentication errors
+            if (response.status === 401 || response.status === 403) {
+              if (json.message?.includes('session') || json.error?.includes('Auth') || Object.keys(json).length === 0) {
+                alert('Your session has expired. Please log in again.');
+                window.location.href = '/login';
+              } else {
+                alert(json.error || json.message || 'Authentication failed.');
+              }
+            } else {
+              alert(json.error || json.message || `Server error (${response.status})`);
+            }
+          } catch (jsonError) {
+            console.error('Failed to parse JSON error:', jsonError);
+            alert(`Server error (${response.status}). Please try again.`);
+          }
+        } else {
+          try {
+            const text = await response.text();
+            console.error('API error response text:', text);
+            
+            if (response.status === 401 || response.status === 403) {
+              alert('Authentication failed. Please log in again.');
+              window.location.href = '/login';
+            } else if (text) {
+              alert(text);
+            } else {
+              alert(`Server error (${response.status}). Please try again.`);
+            }
+          } catch (textError) {
+            console.error('Failed to read error text:', textError);
+            alert(`Server error (${response.status}). Please try again.`);
+          }
+        }
+        
+        setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+        setIsLoading(false);
+        return;
+      }
+      
+      // Handle successful PDF response
+      if (response.ok && contentType.includes("application/pdf")) {
+        setGenerationProgress({
+          percentage: 95,
+          message: 'Downloading PDF...',
+          isVisible: true
+        });
+        
+        try {
+          const blob = await response.blob();
+          
+          if (blob.size === 0) {
+            throw new Error('Empty PDF received');
+          }
+          
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `paper-${formData.title?.replace(/[^a-z0-9]/gi, '_') || 'paper'}-${new Date().getTime()}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+          
+          setGenerationProgress({
+            percentage: 100,
+            message: 'Paper generated successfully!',
+            isVisible: true
+          });
+          
+          setTimeout(() => {
+            setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+          }, 1000);
+          
+        } catch (blobError) {
+          console.error('Error processing PDF blob:', blobError);
+          alert('Failed to download PDF. Please try again.');
+          setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+        }
+      } else if (contentType.includes("application/json")) {
+        try {
+          const result = await response.json();
+          alert(result.error || result.message || "Paper generated, but no PDF was returned.");
+        } catch (jsonError) {
+          console.error('Failed to parse JSON response:', jsonError);
+          alert('Server returned unexpected response.');
+        }
+      } else {
+        try {
+          const text = await response.text();
+          alert(text || "Failed to generate paper (unknown error)");
+        } catch (textError) {
+          console.error('Failed to read response text:', textError);
+          alert('Server error occurred. Please try again.');
+        }
+      }
+    } catch (error) {
+      console.error('Unexpected error generating paper:', error);
+      alert("An unexpected error occurred. Please try again.");
+      
+      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+    } finally {
+      setIsLoading(false);
+      
       setTimeout(() => {
         setGenerationProgress(prev => ({ ...prev, isVisible: false }));
-      }, 1000);
-      
-    } else if (contentType.includes("application/json")) {
-      const result = await response.json();
-      alert(result.error || "Paper generated, but no PDF was returned.");
-    } else {
-      const text = await response.text();
-      alert(text || "Failed to generate paper (unknown error)");
+      }, 2000);
     }
-  } catch (error) {
-    console.error('Error generating paper:', error);
-    alert("Failed to generate paper (client error)");
-    
-    // Hide progress modal on error
-    setGenerationProgress(prev => ({ ...prev, isVisible: false }));
-  } finally {
-    setIsLoading(false);
-    
-    // Ensure progress modal is hidden if not already
-    setTimeout(() => {
-      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
-    }, 2000);
-  }
-};
+  };
 
   const resetForm = () => {
     setStep(1);
@@ -2159,6 +2385,36 @@ const onSubmit = async (formData: PaperFormData) => {
     else return '📘';
   };
 
+  // Helper function to calculate total marks based on "To Attempt" values
+  const calculateTotalMarks = () => {
+    const formValues = getValues();
+    
+    // Calculate marks for each section based on "To Attempt" values
+    const mcqAttempt = formValues.mcqToAttempt || formValues.mcqCount;
+    const shortAttempt = formValues.shortToAttempt || formValues.shortCount;
+    const longAttempt = formValues.longToAttempt || formValues.longCount;
+    
+    // Use custom marks if available, otherwise use default marks
+    const mcqMarks = previewQuestions.mcq.length > 0 
+      ? previewQuestions.mcq.slice(0, mcqAttempt).reduce((total, q) => total + (q.customMarks || formValues.mcqMarks), 0)
+      : mcqAttempt * formValues.mcqMarks;
+    
+    const shortMarks = previewQuestions.short.length > 0
+      ? previewQuestions.short.slice(0, shortAttempt).reduce((total, q) => total + (q.customMarks || formValues.shortMarks), 0)
+      : shortAttempt * formValues.shortMarks;
+    
+    const longMarks = previewQuestions.long.length > 0
+      ? previewQuestions.long.slice(0, longAttempt).reduce((total, q) => total + (q.customMarks || formValues.longMarks), 0)
+      : longAttempt * formValues.longMarks;
+    
+    return {
+      mcq: mcqMarks,
+      short: shortMarks,
+      long: longMarks,
+      total: mcqMarks + shortMarks + longMarks
+    };
+  };
+
   return (
     <AcademyLayout>
       <div className="container mx-auto px-0 py-4">
@@ -2223,6 +2479,45 @@ const onSubmit = async (formData: PaperFormData) => {
           }
           .modal {
             z-index: 1055 !important;
+          }
+          
+          /* Mobile Responsive Styles */
+          @media (max-width: 768px) {
+            .mobile-action-buttons {
+              position: fixed;
+              bottom: 0;
+              left: 0;
+              right: 0;
+              z-index: 1000;
+              background: white;
+              box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+              padding: 10px;
+            }
+            
+            .paper-preview {
+              padding: 10px !important;
+              font-size: 13px !important;
+            }
+            
+            .bilingual-stacked {
+              flex-direction: column !important;
+              gap: 8px !important;
+            }
+            
+            .bilingual-stacked .english-version,
+            .bilingual-stacked .urdu-version {
+              width: 100% !important;
+              padding: 0 !important;
+            }
+            
+            .urdu-version {
+              margin-bottom: 8px !important;
+            }
+            
+            .questions-preview .question-item {
+              padding: 10px !important;
+              margin-bottom: 15px !important;
+            }
           }
         `}</style>
 
@@ -2649,7 +2944,10 @@ const onSubmit = async (formData: PaperFormData) => {
                       console.log('🏛️ Board Paper selected with values:', {
                         mcqCount: 12,
                         shortCount: 24,
-                        longCount: 3
+                        longCount: 3,
+                        mcqToAttempt: 12,
+                        shortToAttempt: 16,
+                        longToAttempt: 2
                       });
                       
                       // Force state update and then proceed
@@ -2671,25 +2969,28 @@ const onSubmit = async (formData: PaperFormData) => {
                         <div className="row text-center g-3">
                           <div className="col-4">
                             <div className="fw-bold text-primary">MCQs</div>
-                            <div className="fs-6 fw-bold">12 × 1</div>
-                            <small className="text-muted">All to attempt</small>
+                            <div className="fs-6 fw-bold">12 Qs</div>
+                            <small className="text-muted">12 to attempt × 1</small>
+                            <div className="fw-bold text-success">12 marks</div>
                           </div>
                           <div className="col-4">
                             <div className="fw-bold text-primary">Short</div>
                             <div className="fs-6 fw-bold">24 Qs</div>
                             <small className="text-muted">16 to attempt × 2</small>
+                            <div className="fw-bold text-success">32 marks</div>
                           </div>
                           <div className="col-4">
                             <div className="fw-bold text-primary">Long</div>
                             <div className="fs-6 fw-bold">3 Qs</div>
                             <small className="text-muted">2 to attempt × 8</small>
+                            <div className="fw-bold text-success">16 marks</div>
                           </div>
                         </div>
                         <div className="text-center mt-3 pt-2 border-top">
+                          <div className="fw-bold text-primary">Total: 60 marks</div>
                           <small className="text-muted">
                             <i className="bi bi-clock me-1"></i>180 mins • 
-                            <i className="bi bi-translate ms-2 me-1"></i>Bilingual • 
-                            <i className="bi bi-star ms-2 me-1"></i>60 marks
+                            <i className="bi bi-translate ms-2 me-1"></i>Bilingual
                           </small>
                         </div>
                       </div>
@@ -3289,6 +3590,7 @@ const onSubmit = async (formData: PaperFormData) => {
                             <th style={{ width: "15%", minWidth: "70px" }}>To Attempt</th>
                             <th style={{ width: "15%", minWidth: "70px" }}>Marks Each</th>
                             <th style={{ width: "20%", minWidth: "80px" }}>Difficulty</th>
+                            <th style={{ width: "15%", minWidth: "70px" }}>Section Marks</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3301,6 +3603,10 @@ const onSubmit = async (formData: PaperFormData) => {
                             // Get current values
                             const totalValue = watch(totalField) || 0;
                             const attemptValue = watch(attemptField) || 0;
+                            const marksValue = watch(marksField) || 0;
+                            
+                            // Calculate section marks based on "To Attempt"
+                            const sectionMarks = attemptValue * marksValue;
                             
                             return (
                               <tr key={type}>
@@ -3464,6 +3770,9 @@ const onSubmit = async (formData: PaperFormData) => {
                                     <option value="hard">😰 Hard</option>
                                   </select>
                                 </td>
+                                <td className="text-center fw-bold text-success">
+                                  {sectionMarks} marks
+                                </td>
                               </tr>
                             );
                           })}
@@ -3471,33 +3780,27 @@ const onSubmit = async (formData: PaperFormData) => {
                       </table>
                     </div>
                     
-                    {/* Summary - Mobile friendly */}
+                    {/* Summary - Mobile friendly - FIXED: Shows marks based on "To Attempt" */}
                     <div className="row mt-3 text-center g-2">
                       <div className="col-4">
                         <div className="fw-bold text-primary small">📋 MCQs</div>
                         <div className="fs-6 fw-bold">
-                          {watch("mcqCount") || 0}
+                          {watch("mcqToAttempt") || 0}/{watch("mcqCount") || 0}
                         </div>
-                        <small className="text-muted">
-                          Max: {
-                            watch("mcqPlacement") === "separate" ? "15" :
-                            watch("mcqPlacement") === "same_page" ? "5" :
-                            watch("mcqPlacement") === "two_papers" ? "5" : ""
-                          }
-                        </small>
+                        <div className="fw-bold text-success">
+                          {(watch("mcqToAttempt") || 0) * (watch("mcqMarks") || 0)} marks
+                        </div>
                       </div>
                       <div className="col-4">
                         <div className="fw-bold text-success small">🎯 Subjective</div>
                         <div className="fs-6 fw-bold">
+                          {(watch("shortToAttempt") || 0) + (watch("longToAttempt") || 0)}/
                           {(watch("shortCount") || 0) + (watch("longCount") || 0)}
                         </div>
-                        <small className="text-muted">
-                          Max: {
-                            watch("mcqPlacement") === "separate" ? "30" :
-                            watch("mcqPlacement") === "same_page" ? "15" :
-                            watch("mcqPlacement") === "two_papers" ? "10" : ""
-                          }
-                        </small>
+                        <div className="fw-bold text-success">
+                          {((watch("shortToAttempt") || 0) * (watch("shortMarks") || 0)) +
+                           ((watch("longToAttempt") || 0) * (watch("longMarks") || 0))} marks
+                        </div>
                       </div>
                       <div className="col-4">
                         <div className="fw-bold text-danger small">⭐ Total Marks</div>
@@ -3506,6 +3809,7 @@ const onSubmit = async (formData: PaperFormData) => {
                            ((watch("shortToAttempt") || 0) * (watch("shortMarks") || 0)) +
                            ((watch("longToAttempt") || 0) * (watch("longMarks") || 0))}
                         </div>
+                        <small className="text-muted">Based on To Attempt</small>
                       </div>
                     </div>
                   </div>
@@ -3675,6 +3979,103 @@ const onSubmit = async (formData: PaperFormData) => {
           {/* Step 7: PDF-like Review with Exact PDF Design - FIXED HTML STRUCTURE */}
           {step === 7 && (
             <form onSubmit={handleSubmit(onSubmit)} className="step-transition">
+              {/* Mobile Floating Action Buttons - Only shown on mobile */}
+              <div className="d-lg-none mobile-action-buttons">
+                <div className="container">
+                  <div className="row g-2">
+                    <div className="col-6">
+                      <button 
+                        className="btn btn-success w-100" 
+                        type="submit" 
+                        disabled={isLoading || isLoadingPreview}
+                      >
+                        {isLoading ? (
+                          <span className="spinner-border spinner-border-sm me-1"></span>
+                        ) : (
+                          <i className="bi bi-file-earmark-pdf me-1"></i>
+                        )}
+                        <span className=" d-sm-inline"> Paper</span>
+                      </button>
+                    </div>
+                    <div className="col-6">
+                      <button
+                        className="btn btn-info w-100 text-white"
+                        type="button"
+                        onClick={async () => {
+                          setIsDownloadingKey(true);
+                          try {
+                            const { data: { session } } = await supabase.auth.getSession();
+                            if (!session) {
+                              alert('You must be logged in to download the MCQ key.');
+                              return;
+                            }
+
+                            const formValues = getValues();
+                            const payload = {
+                              subjectId: watchedSubjectId,
+                              selectedChapters: formValues.selectedChapters || [],
+                              mcqCount: formValues.mcqCount,
+                              selectionMethod: formValues.selectionMethod,
+                              chapterOption: formValues.chapterOption,
+                              paperTitle: formValues.title,
+                              mcqDifficulty: formValues.mcqDifficulty,
+                              sourceType: formValues.source_type,
+                              difficultyDistribution: {
+                                easy: formValues.easyPercent,
+                                medium: formValues.mediumPercent,
+                                hard: formValues.hardPercent
+                              },
+                              shuffleQuestions: formValues.shuffleQuestions,
+                              selectedQuestions: formValues.selectionMethod === "manual" ? selectedQuestions : undefined,
+                              randomSeed: Date.now(),
+                              // Pass reordered questions to MCQ key generation
+                              reorderedQuestions: previewQuestions
+                            };
+
+                            const response = await fetch("/api/generate-mcq-key", {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${session.access_token}`,
+                              },
+                              body: JSON.stringify(payload),
+                            });
+
+                            if (response.ok) {
+                              const blob = await response.blob();
+                              const url = window.URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = `${payload.paperTitle.replace(/[^a-z0-9]/gi, '_')}-key.pdf`;
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                              window.URL.revokeObjectURL(url);
+                            } else {
+                              const err = await response.json();
+                              alert("Failed: " + (err.message || 'Unknown error'));
+                            }
+                          } catch (error) {
+                            console.error("Error downloading MCQ key:", error);
+                            alert("Failed to download MCQ key.");
+                          } finally {
+                            setIsDownloadingKey(false);
+                          }
+                        }}
+                        disabled={isLoading || isDownloadingKey || watchedMcqCount === 0 || isLoadingPreview}
+                      >
+                        {isDownloadingKey ? (
+                          <span className="spinner-border spinner-border-sm me-1"></span>
+                        ) : (
+                          <i className="bi bi-key me-1"></i>
+                        )}
+                         <span className=" d-sm-inline">  Key</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className='row'>
                 <div className="col-12 mb-3">
                   {/* Edit Mode Instructions */}
@@ -3708,34 +4109,164 @@ const onSubmit = async (formData: PaperFormData) => {
               <div className="row">
                 {/* PDF-like Paper Preview */}
                 <div className="col-lg-8">
+
                   <div className="card mb-4 border-0 shadow-sm">
-                    <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                      <h2 className="h4 card-title mb-0">📋 Paper Preview - Final Review</h2>
-                      <div className="d-flex align-items-center gap-3">
-                        <div className="form-check form-switch">
-                          <input
-                            className="form-check-input"
-                            type="checkbox"
-                            id="editModeToggle"
-                            checked={isEditMode}
-                            onChange={(e) => setIsEditMode(e.target.checked)}
-                          />
-                          <label className="form-check-label text-white" htmlFor="editModeToggle">
-                            {isEditMode ? '✏️ Edit Mode' : '👁️ Preview'}
-                          </label>
-                        </div>
-                        {isEditMode && (
-                          <button
-                            type="button"
-                            className="btn btn-warning btn-sm"
-                            onClick={loadPreviewQuestions}
-                          >
-                            <i className="bi bi-arrow-clockwise me-1"></i>
-                            Reset Order
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                   <div className="card-header bg-primary text-white">
+  {/* Mobile header layout - stacked */}
+  <div className="d-lg-none">
+    {/* Top row: Title and Edit mode toggle */}
+    <div className="d-flex justify-content-between align-items-center mb-2">
+      <h2 className="h5 card-title mb-0">📋 Review</h2>
+      <div className="d-flex align-items-center gap-2">
+        <div className="form-check form-switch m-0">
+          <input
+            className="form-check-input"
+            type="checkbox"
+            id="editModeToggleMobile"
+            checked={isEditMode}
+            onChange={(e) => setIsEditMode(e.target.checked)}
+          />
+          <label className="form-check-label text-white small" htmlFor="editModeToggleMobile">
+            {isEditMode ? '✏️' : '👁️'}
+          </label>
+        </div>
+        {isEditMode && (
+          <button
+            type="button"
+            className="btn btn-warning btn-sm p-1"
+            onClick={loadPreviewQuestions}
+            title="Reset Order"
+          >
+            <i className="bi bi-arrow-clockwise"></i>
+          </button>
+        )}
+      </div>
+    </div>
+    
+    {/* Middle row: Action buttons */}
+    <div className="d-flex justify-content-between mb-2">
+      <div className="d-flex gap-2">
+        <button 
+          className="btn btn-success btn-sm flex-fill" 
+          type="submit" 
+          disabled={isLoading || isLoadingPreview}
+        >
+          {isLoading ? (
+            <span className="spinner-border spinner-border-sm"></span>
+          ) : (
+            <>
+              <i className="bi bi-file-earmark-pdf me-1"></i>
+              Generate PDF
+            </>
+          )}
+        </button>
+        <button
+          className="btn btn-info btn-sm text-white flex-fill"
+          type="button"
+          onClick={async () => {
+            setIsDownloadingKey(true);
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session) {
+                alert('You must be logged in to download the MCQ key.');
+                return;
+              }
+
+              const formValues = getValues();
+              const payload = {
+                subjectId: watchedSubjectId,
+                selectedChapters: formValues.selectedChapters || [],
+                mcqCount: formValues.mcqCount,
+                selectionMethod: formValues.selectionMethod,
+                chapterOption: formValues.chapterOption,
+                paperTitle: formValues.title,
+                mcqDifficulty: formValues.mcqDifficulty,
+                sourceType: formValues.source_type,
+                difficultyDistribution: {
+                  easy: formValues.easyPercent,
+                  medium: formValues.mediumPercent,
+                  hard: formValues.hardPercent
+                },
+                shuffleQuestions: formValues.shuffleQuestions,
+                selectedQuestions: formValues.selectionMethod === "manual" ? selectedQuestions : undefined,
+                randomSeed: Date.now(),
+                reorderedQuestions: previewQuestions
+              };
+
+              const response = await fetch("/api/generate-mcq-key", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify(payload),
+              });
+
+              if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${payload.paperTitle.replace(/[^a-z0-9]/gi, '_')}-key.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+              } else {
+                const err = await response.json();
+                alert("Failed: " + (err.message || 'Unknown error'));
+              }
+            } catch (error) {
+              console.error("Error downloading MCQ key:", error);
+              alert("Failed to download MCQ key.");
+            } finally {
+              setIsDownloadingKey(false);
+            }
+          }}
+          disabled={isLoading || isDownloadingKey || watchedMcqCount === 0 || isLoadingPreview}
+        >
+          {isDownloadingKey ? (
+            <span className="spinner-border spinner-border-sm"></span>
+          ) : (
+            <>
+              <i className="bi bi-key me-1"></i>
+              Answer Key
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {/* Desktop header layout - inline */}
+  <div className="d-none d-lg-flex justify-content-between align-items-center">
+    <h2 className="h4 card-title mb-0">📋 Paper Preview - Final Review</h2>
+    <div className="d-flex align-items-center gap-3">
+      <div className="form-check form-switch">
+        <input
+          className="form-check-input"
+          type="checkbox"
+          id="editModeToggleDesktop"
+          checked={isEditMode}
+          onChange={(e) => setIsEditMode(e.target.checked)}
+        />
+        <label className="form-check-label text-white" htmlFor="editModeToggleDesktop">
+          {isEditMode ? '✏️ Edit Mode' : '👁️ Preview'}
+        </label>
+      </div>
+      {isEditMode && (
+        <button
+          type="button"
+          className="btn btn-warning btn-sm"
+          onClick={loadPreviewQuestions}
+        >
+          <i className="bi bi-arrow-clockwise me-1"></i>
+          Reset Order
+        </button>
+      )}
+    </div>
+  </div>
+</div>
                     
                     <div className="card-body p-0">
                       {/* Loading State */}
@@ -3942,11 +4473,7 @@ const onSubmit = async (formData: PaperFormData) => {
                                       direction: 'rtl',
                                       fontSize: '12px',
                                       verticalAlign: 'middle'
-                                    }}>کل نمبر: {
-                                      ((watch('mcqToAttempt') || watch('mcqCount') || 0) * (watch('mcqMarks') || 0) + 
-                                      (watch('shortToAttempt') || watch('shortCount') || 0) * (watch('shortMarks') || 0) + 
-                                      (watch('longToAttempt') || watch('longCount') || 0) * (watch('longMarks') || 0))
-                                    }</span>
+                                    }}>کل نمبر: {calculateTotalMarks().total}</span>
                                   )}
                                   {watch('language') !== 'urdu' && (
                                     <span style={{
@@ -3954,11 +4481,7 @@ const onSubmit = async (formData: PaperFormData) => {
                                       direction: 'ltr',
                                       fontSize: '12px',
                                       verticalAlign: 'middle'
-                                    }}>Maximum Marks: {
-                                      ((watch('mcqToAttempt') || watch('mcqCount') || 0) * (watch('mcqMarks') || 0) + 
-                                      (watch('shortToAttempt') || watch('shortCount') || 0) * (watch('shortMarks') || 0) + 
-                                      (watch('longToAttempt') || watch('longCount') || 0) * (watch('longMarks') || 0))
-                                    }</span>
+                                    }}>Maximum Marks: {calculateTotalMarks().total}</span>
                                   )}
                                 </td>
                                 <td style={{ border: 'none !important', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
@@ -4449,24 +4972,51 @@ const onSubmit = async (formData: PaperFormData) => {
                                               )}
                                               
                                               {watch('language') === 'bilingual' && (
-                                                <div className='d-flex justify-content-between'>
-                                                  <div style={{
-                                                    fontFamily: "'Times New Roman', serif",
-                                                    direction: 'ltr',
-                                                    fontSize: '14px',
-                                                    lineHeight: '1.4'
-                                                  }}>
-                                                    {question.question_text_english || question.question_text}
+                                                <div className="bilingual-stacked d-flex justify-content-between">
+                                                  {/* Mobile view - stacked */}
+                                                  <div className="d-md-none w-100">
+                                                    <div className="urdu-version mb-2" style={{
+                                                      fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                      direction: 'rtl',
+                                                      fontSize: '14px',
+                                                      lineHeight: '1.8',
+                                                      textAlign: 'right'
+                                                    }}>
+                                                      {question.question_text_urdu}
+                                                    </div>
+                                                    <div className="english-version" style={{
+                                                      fontFamily: "'Times New Roman', serif",
+                                                      direction: 'ltr',
+                                                      fontSize: '14px',
+                                                      lineHeight: '1.4'
+                                                    }}>
+                                                      {question.question_text_english || question.question_text}
+                                                    </div>
                                                   </div>
-                                                  <div style={{
-                                                    fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
-                                                    direction: 'rtl',
-                                                    fontSize: '14px',
-                                                    lineHeight: '1.8',
-                                                    textAlign: 'right',
-                                                    marginBottom: '8px'
-                                                  }}>
-                                                    {question.question_text_urdu}
+                                                  
+                                                  {/* Desktop view - side by side */}
+                                                  <div className="d-none d-md-flex w-100">
+                                                    <div className="english-version" style={{
+                                                      fontFamily: "'Times New Roman', serif",
+                                                      direction: 'ltr',
+                                                      fontSize: '14px',
+                                                      lineHeight: '1.4',
+                                                      flex: 1,
+                                                      paddingRight: '15px'
+                                                    }}>
+                                                      {question.question_text_english || question.question_text}
+                                                    </div>
+                                                    <div className="urdu-version" style={{
+                                                      fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                      direction: 'rtl',
+                                                      fontSize: '14px',
+                                                      lineHeight: '1.8',
+                                                      textAlign: 'right',
+                                                      flex: 1,
+                                                      paddingLeft: '15px'
+                                                    }}>
+                                                      {question.question_text_urdu}
+                                                    </div>
                                                   </div>
                                                 </div>
                                               )}
@@ -4657,9 +5207,19 @@ const onSubmit = async (formData: PaperFormData) => {
                                               )}
                                               
                                               {watch('language') === 'bilingual' && (
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
-                                                  <div style={{ flex: 1 }}>
-                                                    <div style={{
+                                                <div className="bilingual-stacked d-flex justify-content-between">
+                                                  {/* Mobile view - stacked */}
+                                                  <div className="d-md-none w-100">
+                                                    <div className="urdu-version mb-2" style={{
+                                                      fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
+                                                      direction: 'rtl',
+                                                      fontSize: '14px',
+                                                      lineHeight: '1.8',
+                                                      textAlign: 'right'
+                                                    }}>
+                                                      {question.question_text_urdu}
+                                                    </div>
+                                                    <div className="english-version" style={{
                                                       fontFamily: "'Times New Roman', serif",
                                                       direction: 'ltr',
                                                       fontSize: '14px',
@@ -4668,13 +5228,27 @@ const onSubmit = async (formData: PaperFormData) => {
                                                       {question.question_text_english || question.question_text}
                                                     </div>
                                                   </div>
-                                                  <div style={{ flex: 1 }}>
-                                                    <div style={{
+                                                  
+                                                  {/* Desktop view - side by side */}
+                                                  <div className="d-none d-md-flex w-100">
+                                                    <div className="english-version" style={{
+                                                      fontFamily: "'Times New Roman', serif",
+                                                      direction: 'ltr',
+                                                      fontSize: '14px',
+                                                      lineHeight: '1.4',
+                                                      flex: 1,
+                                                      paddingRight: '15px'
+                                                    }}>
+                                                      {question.question_text_english || question.question_text}
+                                                    </div>
+                                                    <div className="urdu-version" style={{
                                                       fontFamily: "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif",
                                                       direction: 'rtl',
                                                       fontSize: '14px',
                                                       lineHeight: '1.8',
-                                                      textAlign: 'right'
+                                                      textAlign: 'right',
+                                                      flex: 1,
+                                                      paddingLeft: '15px'
                                                     }}>
                                                       {question.question_text_urdu}
                                                     </div>
@@ -4786,56 +5360,48 @@ const onSubmit = async (formData: PaperFormData) => {
                       <h3 className="h5 card-title mb-0">🎯 Paper Controls</h3>
                     </div>
                     <div className="card-body">
-                      {/* Real-time Marks Calculator - FIXED TO SHOW CUSTOM MARKS */}
+                      {/* Real-time Marks Calculator - FIXED: Uses "To Attempt" values */}
                       <div className="mb-4 p-3 bg-light rounded">
                         <h6 className="fw-bold text-primary mb-3">📊 Live Marks Calculator</h6>
                         <div className="row text-center g-3">
                           <div className="col-4">
                             <div className="fw-bold text-primary">MCQs</div>
-                            <div className="fs-5 fw-bold">{previewQuestions.mcq.length}</div>
+                            <div className="fs-5 fw-bold">{watch('mcqToAttempt') || 0}/{previewQuestions.mcq.length}</div>
                             <div className="small text-muted">
-                              {previewQuestions.mcq.length} × Individual Marks
+                              {watch('mcqToAttempt') || 0} to attempt
                             </div>
                             <div className="fw-bold text-success">
-                              = {previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0)} marks
+                              = {calculateTotalMarks().mcq} marks
                             </div>
                           </div>
                           <div className="col-4">
                             <div className="fw-bold text-success">Short</div>
-                            <div className="fs-5 fw-bold">{previewQuestions.short.length}</div>
+                            <div className="fs-5 fw-bold">{watch('shortToAttempt') || 0}/{previewQuestions.short.length}</div>
                             <div className="small text-muted">
-                              {previewQuestions.short.length} × Individual Marks
+                              {watch('shortToAttempt') || 0} to attempt
                             </div>
                             <div className="fw-bold text-success">
-                              = {previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0)} marks
+                              = {calculateTotalMarks().short} marks
                             </div>
                           </div>
                           <div className="col-4">
                             <div className="fw-bold text-danger">Long</div>
-                            <div className="fs-5 fw-bold">{previewQuestions.long.length}</div>
+                            <div className="fs-5 fw-bold">{watch('longToAttempt') || 0}/{previewQuestions.long.length}</div>
                             <div className="small text-muted">
-                              {previewQuestions.long.length} × Individual Marks
+                              {watch('longToAttempt') || 0} to attempt
                             </div>
                             <div className="fw-bold text-success">
-                              = {previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)} marks
+                              = {calculateTotalMarks().long} marks
                             </div>
                           </div>
                         </div>
                         
                         <div className="text-center mt-3 pt-3 border-top">
                           <div className="fw-bold fs-4 text-primary">
-                            Total: {
-                              previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0) +
-                              previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0) +
-                              previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)
-                            } Marks
+                            Total: {calculateTotalMarks().total} Marks
                           </div>
                           <small className="text-muted">
-                            {previewQuestions.mcq.some(q => q.customMarks) || 
-                             previewQuestions.short.some(q => q.customMarks) || 
-                             previewQuestions.long.some(q => q.customMarks) 
-                              ? "Includes custom marks adjustments" 
-                              : "Using default marks"}
+                            Based on "To Attempt" values
                           </small>
                         </div>
                       </div>
@@ -4964,43 +5530,36 @@ const onSubmit = async (formData: PaperFormData) => {
                         </div>
                       </div>
 
-                      {/* Quick Stats - FIXED TO SHOW CUSTOM MARKS */}
+                      {/* Quick Stats - FIXED: Shows marks based on "To Attempt" */}
                       <div className="quick-stats mt-4 p-3 border rounded">
                         <h6 className="fw-bold text-primary mb-3">📈 Question Statistics</h6>
                         <div className="row text-center g-3">
                           <div className="col-4">
-                            <div className="fw-bold text-primary">{previewQuestions.mcq.length}</div>
-                            <small className="text-muted">MCQs</small>
+                            <div className="fw-bold text-primary">{watch('mcqToAttempt') || 0}/{previewQuestions.mcq.length}</div>
+                            <small className="text-muted">MCQs (Attempt/Total)</small>
                             <div className="small text-success">
-                              {previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0)} marks
+                              {calculateTotalMarks().mcq} marks
                             </div>
                           </div>
                           <div className="col-4">
-                            <div className="fw-bold text-success">{previewQuestions.short.length}</div>
-                            <small className="text-muted">Short</small>
+                            <div className="fw-bold text-success">{(watch('shortToAttempt') || 0) + (watch('longToAttempt') || 0)}/{(previewQuestions.short.length + previewQuestions.long.length)}</div>
+                            <small className="text-muted">Subjective (Attempt/Total)</small>
                             <div className="small text-success">
-                              {previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0)} marks
+                              {calculateTotalMarks().short + calculateTotalMarks().long} marks
                             </div>
                           </div>
                           <div className="col-4">
-                            <div className="fw-bold text-danger">{previewQuestions.long.length}</div>
-                            <small className="text-muted">Long</small>
-                            <div className="small text-success">
-                              {previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)} marks
+                            <div className="fw-bold text-danger">{(watch('mcqToAttempt') || 0) + (watch('shortToAttempt') || 0) + (watch('longToAttempt') || 0)}</div>
+                            <small className="text-muted">Total to Attempt</small>
+                            <div className="fw-bold text-success fs-6">
+                              {calculateTotalMarks().total} Total Marks
                             </div>
                           </div>
                           <div className="col-12">
                             <div className="fw-bold text-info fs-5">
-                              {previewQuestions.mcq.length + previewQuestions.short.length + previewQuestions.long.length}
+                              Total: {calculateTotalMarks().total} Marks
                             </div>
-                            <small className="text-muted">Total Questions</small>
-                            <div className="fw-bold text-success fs-6">
-                              {
-                                previewQuestions.mcq.reduce((total, q) => total + (q.customMarks || watch('mcqMarks') || 0), 0) +
-                                previewQuestions.short.reduce((total, q) => total + (q.customMarks || watch('shortMarks') || 0), 0) +
-                                previewQuestions.long.reduce((total, q) => total + (q.customMarks || watch('longMarks') || 0), 0)
-                              } Total Marks
-                            </div>
+                            <small className="text-muted">Based on "To Attempt" values</small>
                           </div>
                         </div>
                       </div>
