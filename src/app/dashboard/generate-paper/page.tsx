@@ -2667,7 +2667,7 @@ const onSubmit = async (formData: PaperFormData) => {
                       </div>
 
                       {/* Question Details */}
-                      <div className="bg-light rounded p-3 mb-4">
+                      <div className="bg-light rounded p-0 mb-4">
                         <div className="row text-center g-3">
                           <div className="col-4">
                             <div className="fw-bold text-primary">MCQs</div>
@@ -2764,7 +2764,7 @@ const onSubmit = async (formData: PaperFormData) => {
                       </div>
 
                       {/* Features List */}
-                      <div className="bg-light rounded p-3 mb-4">
+                      <div className="bg-light rounded p-0 mb-4">
                         <div className="row g-2">
                           {[
                             { icon: '🎯', text: 'Flexible marks distribution' },
