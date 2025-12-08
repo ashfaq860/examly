@@ -1,10 +1,12 @@
 /** app/api/generate-paper/route.ts */
+//'use server';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes
 
-import fs from 'fs';
-import path from 'path';
+import { readFileSync, existsSync } from 'fs';
+import { join, extname } from 'path';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import type { PaperGenerationRequest, QuestionType, Question } from '@/types/types';
@@ -156,7 +158,7 @@ function getChromePath() {
   }
 
   for (const p of paths) {
-    if (p && fs.existsSync(p)) return p;
+    if (p && existsSync(p)) return p;
   }
 
   return null;
@@ -171,9 +173,9 @@ function loadFontAsBase64(fontFileName: string): string {
     return fontCache.get(fontFileName)!;
   }
   try {
-    const fontPath = path.join(process.cwd(), 'public', 'fonts', fontFileName);
-    if (fs.existsSync(fontPath)) {
-      const fontBuffer = fs.readFileSync(fontPath);
+    const fontPath = join(process.cwd(), 'public', 'fonts', fontFileName);
+    if (existsSync(fontPath)) {
+      const fontBuffer = readFileSync(fontPath);
       const base64Font = fontBuffer.toString('base64');
       fontCache.set(fontFileName, base64Font);
       return base64Font;
@@ -699,11 +701,11 @@ function formatPaperDate(dateString: string | undefined): string {
 // Function to load image as base64
 function loadImageAsBase64(imageFileName: string): string {
   try {
-    const imagePath = path.join(process.cwd(), 'public', imageFileName);
-    if (fs.existsSync(imagePath)) {
-      const imageBuffer = fs.readFileSync(imagePath);
+    const imagePath = join(process.cwd(), 'public', imageFileName);
+    if (existsSync(imagePath)) {
+      const imageBuffer = readFileSync(imagePath);
       const base64Image = imageBuffer.toString('base64');
-      const extension = path.extname(imageFileName).toLowerCase();
+      const extension = extname(imageFileName).toLowerCase();
       const mimeType = extension === '.jpg' || extension === '.jpeg' ? 'jpeg' : extension.replace('.', '');
       return `data:image/${mimeType};base64,${base64Image}`;
     }
@@ -714,7 +716,6 @@ function loadImageAsBase64(imageFileName: string): string {
   }
 }
 
-// Function to create paper record
 // Function to create paper record
 async function createPaperRecord(requestData: PaperGenerationRequest, userId: string) {
   const { 
@@ -933,7 +934,50 @@ async function getUserLogoBase64(userId: string): Promise<string> {
   }
 }
 
-// Function to generate paper HTML
+// FIXED: Time formatting function
+/** Format time properly for display */
+// FIXED: Time formatting function - shows hours:minutes when time >= 60
+function formatTimeForDisplay(minutes: number, lang: string = 'eng'): string {
+  if (!minutes || minutes <= 0) {
+    if(lang === 'urdu' || lang === 'ur'){
+      return '0 منٹ';
+    } else {
+      return '0 minutes';
+    }
+  }
+  
+  // If less than 60 minutes, show just minutes
+  if (minutes < 60) {
+    if(lang === 'urdu' || lang === 'ur'){
+      return `${minutes} منٹ`;
+    } else {
+      return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+    }
+  }
+  
+  // If 60 minutes or more, show hours:minutes format
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  
+  // If no remaining minutes, show just hours
+  if (remainingMinutes === 0) {
+    if(lang === 'urdu' || lang === 'ur'){
+      return `${hours} گھنٹے`;
+    } else {
+      return `${hours} hour${hours !== 1 ? 's' : ''}`;
+    }
+  }
+  
+  // Format minutes with leading zero if needed
+  const formattedMinutes = remainingMinutes.toString().padStart(2, '0');
+  if(lang === 'urdu' || lang === 'ur'){
+    return `${hours}:${formattedMinutes} گھنٹے`;
+  } else {
+    return `${hours}:${formattedMinutes} hour${hours !== 1 ? 's' : ''}`;
+  }
+}
+
+// FIXED: Function to generate paper HTML with proper time handling
 async function generatePaperHTML(paper: any, userId: string, requestData: PaperGenerationRequest, logoBase64: string) {
   const {
     language = 'bilingual',
@@ -943,7 +987,11 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     mcqPlacement = 'separate',
     dateOfPaper,
     reorderedQuestions,
-    customMarksData // Add this to extract custom marks
+    customMarksData,
+    // Time values from frontend
+    timeMinutes = 60,
+    mcqTimeMinutes = 15,
+    subjectiveTimeMinutes = 45
   } = requestData;
 
   // Create a map for quick custom marks lookup
@@ -1066,6 +1114,37 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     throw new Error('No questions found for the generated paper');
   }
 
+  // FIXED: Determine time values based on MCQ placement
+  const getTimeValues = () => {
+    const placement = mcqPlacement || 'separate';
+    
+    if (placement === 'separate') {
+      // For separate layout, use specific times for each section
+      return {
+        mcqTime: mcqTimeMinutes || 15,
+        subjectiveTime: subjectiveTimeMinutes || 45
+      };
+    } else {
+      // For same_page or two_papers, use total time for both
+      return {
+        mcqTime: timeMinutes || 60,
+        subjectiveTime: timeMinutes || 60
+      };
+    }
+  };
+
+  const timeValues = getTimeValues();
+  console.log('⏱️ Time values for PDF:', {
+    mcqPlacement: mcqPlacement,
+    mcqTime: timeValues.mcqTime,
+    mcqTimeDisplayEng: formatTimeForDisplay(timeValues.mcqTime,'eng'),
+    subjectiveTime: timeValues.subjectiveTime,
+    subjectiveTimeDisplayUrdu: formatTimeForDisplay(timeValues.subjectiveTime,'urdu'),
+    timeMinutes: timeMinutes,
+    mcqTimeMinutes: mcqTimeMinutes,
+    subjectiveTimeMinutes: subjectiveTimeMinutes
+  });
+
   // Generate HTML content for PDF
   const isUrdu = language === 'urdu';
   const isBilingual = language === 'bilingual';
@@ -1128,22 +1207,6 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     paperClass = 'Class';
   }
 
-  /** CONVERT PAPER MINUTES INTO HOURS */
-  function convertMinutesToTimeFormat(minutes: number): string {
-    if (minutes <= 0) return '0:00';
-    
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    
-    // Format with leading zero for minutes
-    const formattedMinutes = remainingMinutes.toString().padStart(2, '0');
-    
-    return `${hours}:${formattedMinutes}`;
-  }
-
-  const timeToDisplay = separateMCQ ? requestData.mcqTimeMinutes : paper.time_minutes;
-  const subjectiveTimeToDisplay = separateMCQ ? requestData.subjectiveTimeMinutes : paper.time_minutes;
-
   // Get questions by type from the final ordered list
   const mcqQuestions = finalQuestions.filter((pq: any) => 
     pq.question_type === 'mcq' && pq.questions
@@ -1160,6 +1223,12 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   const longQuestions = subjectiveQuestions.filter((pq: any) => 
     pq.question_type === 'long'
   );
+
+  // FIXED: Get formatted time display
+  const mcqTimeDisplayEng = formatTimeForDisplay(timeValues.mcqTime,'eng');
+  const subjectiveTimeDisplayEng = formatTimeForDisplay(timeValues.subjectiveTime, 'eng');
+ const mcqTimeDisplayUrdu = formatTimeForDisplay(timeValues.mcqTime, 'urdu');
+  const subjectiveTimeDisplayUrdu = formatTimeForDisplay(timeValues.subjectiveTime, 'urdu');
 
   // Build HTML content
   let htmlContent = `
@@ -1324,12 +1393,27 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   </tr>
 
   <!-- Row 3 -->
-  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${convertMinutesToTimeFormat(timeToDisplay || paper.time_minutes)} منٹ</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || paper.time_minutes)} Minutes</span>` : ''}
-    </td>
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">`;
+
+   // For separate layout, show different times for objective and subjective
+if (mcqPlacement === 'separate') {
+  // Objective section time
+  htmlContent += `<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${formatTimeForDisplay(timeValues.mcqTime,'ur')}</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${formatTimeForDisplay(timeValues.mcqTime,'eng')}</span>` : ''}
+  </td>`;
+  
+  // Subjective section time (will be shown on separate page)
+  // This goes in the subjective section HTML
+} else {
+  // For same_page and two_papers, show total time
+  htmlContent += `<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${formatTimeForDisplay(timeValues.subjectiveTime,'urdu')}</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${formatTimeForDisplay(timeValues.subjectiveTime,'eng')}</span>` : ''}
+  </td>`;
+}
+
+    htmlContent+=`<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
       ${isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : ''}
       ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : ''}
     </td>
@@ -1513,8 +1597,8 @@ let subjectiveContent = ``;
 <!-- Row 3 -->
 <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
-    ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${convertMinutesToTimeFormat(timeToDisplay || paper.time_minutes)} منٹ</span>` : ''}
-    ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${convertMinutesToTimeFormat(timeToDisplay || paper.time_minutes)} Minutes</span>` : ''}
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${subjectiveTimeDisplayUrdu}</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${subjectiveTimeDisplayEng}</span>` : ''}
   </td>
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
       ${isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : ''}
@@ -1563,10 +1647,10 @@ let subjectiveContent = ``;
 
           let instructionHtml = '<div style="display:flex; justify-content:space-between; margin-bottom:2px; margin-top:4px; font-weight:bold">';
           if (isEnglish || isBilingual) {
-            instructionHtml += `<div class="eng"><strong>${questionNumber}.</strong> Write short answers to any ${shortToAttempt} question(s).</div>`;
+            instructionHtml += `<div class="eng"><strong>${questionNumber}.</strong> Write short answers to any ${isBoardPaper?'4': shortToAttempt} question(s).</div>`;
           }
           if (isUrdu || isBilingual) {
-            instructionHtml += `<div class="urdu" style="direction:rtl;"><strong><span>${questionNumber}.</span> جوابات میں سے ${shortToAttempt} سوالات کے مختصر جوابات لکھیں۔ </strong></div>`;
+            instructionHtml += `<div class="urdu" style="direction:rtl;"><strong><span>${questionNumber}.</span> جوابات میں سے ${isBoardPaper?'4': shortToAttempt}  سوالات کے مختصر جوابات لکھیں۔ </strong></div>`;
           }
           instructionHtml += '</div>';
 
@@ -1651,7 +1735,6 @@ let subjectiveContent = ``;
   }
 
   // Add long questions
-   // Add long questions
   if (longQuestions.length > 0) {
     // Long Questions Section Header
     subjectiveContent += `
@@ -1987,7 +2070,12 @@ console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(
       selectionMethod: requestData.selectionMethod,
       randomSeed: requestData.randomSeed,
       hasReorderedQuestions: !!requestData.reorderedQuestions,
-      hasCustomMarksData: !!requestData.customMarksData
+      hasCustomMarksData: !!requestData.customMarksData,
+      // Log time values
+      timeMinutes: requestData.timeMinutes,
+      mcqTimeMinutes: requestData.mcqTimeMinutes,
+      subjectiveTimeMinutes: requestData.subjectiveTimeMinutes,
+      mcqPlacement: requestData.mcqPlacement
     });
 
     const { 
