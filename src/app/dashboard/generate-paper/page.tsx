@@ -11,7 +11,6 @@ import { useUser } from '@/app/context/userContext';
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 const supabase = createClientComponentClient();
-
 // Form validation schema
 const paperSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -1173,6 +1172,9 @@ export default function GeneratePaperPage() {
 
   const { trialStatus, isLoading: trialLoading, refreshTrialStatus } = useUser();
 
+  // Add this state
+  const [isFormInitialized, setIsFormInitialized] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -1181,6 +1183,7 @@ export default function GeneratePaperPage() {
     formState: { errors },
     getValues,
     reset,
+    trigger,
   } = useForm<PaperFormData>({
     resolver: zodResolver(paperSchema),
     defaultValues: {
@@ -1208,11 +1211,38 @@ export default function GeneratePaperPage() {
       mcqToAttempt: 0,
       shortToAttempt: 0,
       longToAttempt: 0,
-      title:'BISE LAHORE',
+      title: '', // Start with empty string - will be populated from profile
       shuffleQuestions: true,
       dateOfPaper: new Date().toISOString().split('T')[0],
     },
   });
+
+  // Fetch profile and initialize form - do this once
+  useEffect(() => {
+    const initializeFormWithProfile = async () => {
+      try {
+       
+const response = await axios.get('/api/instituteName');
+console.log('Instituite  response:', response.data.profile.institution);          
+let titleValue = 'BISE LAHORE';
+          if (response) {
+            titleValue = response.data.profile.institution;
+          // Set the title in the form
+          setValue('title', titleValue);
+            
+          }
+
+          setIsFormInitialized(true);
+        }
+       catch (error) {
+        console.error('Error fetching profile:', error);
+        setValue('title', 'BISE LAHORE');
+        setIsFormInitialized(true);
+      }
+    };
+
+    initializeFormWithProfile();
+  }, [setValue]);
 
   const watchedClassId = watch('classId');
   const watchedSubjectId = watch('subjectId');
@@ -1222,6 +1252,7 @@ export default function GeneratePaperPage() {
   const watchedShortCount = watch('shortCount');
   const watchedLongCount = watch('longCount');
   const watchedPaperType = watch('paperType');
+  const watchedTitle = watch('title'); // Watch the title
 
   // Use debounced values to prevent rapid reloading
   const debouncedSubjectId = useDebounce(watchedSubjectId, 500);
@@ -1863,7 +1894,6 @@ export default function GeneratePaperPage() {
       }
     }
   };
-
   // FIXED: onSubmit with comprehensive auth error handling
   const onSubmit = async (formData: PaperFormData) => {
     // Validate two_papers layout before anything else
@@ -5585,8 +5615,7 @@ export default function GeneratePaperPage() {
             </form>
           )}
         </div>
-
-        {!canGeneratePaper() && trialStatus && isAuthenticated && (
+{!canGeneratePaper() && trialStatus && isAuthenticated && (
           <div className="card mt-4 border-0 shadow-sm">
             <div className="card-body text-center py-5">
               <i className="bi bi-stars display-1 text-primary mb-3"></i>

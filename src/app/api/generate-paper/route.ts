@@ -716,6 +716,78 @@ function loadImageAsBase64(imageFileName: string): string {
   }
 }
 
+// Function to calculate section marks based on "to attempt" values
+function calculateSectionMarks(
+  questions: any[],
+  sectionType: 'mcq' | 'subjective' | 'short' | 'long',
+  mcqToAttempt: number,
+  shortToAttempt: number,
+  longToAttempt: number,
+  mcqMarks: number,
+  shortMarks: number,
+  longMarks: number,
+  customMarksMap: Map<string, number>
+): number {
+  let totalMarks = 0;
+  
+  if (sectionType === 'mcq') {
+    // Calculate marks for MCQ section
+    const mcqQuestions = questions.filter((pq: any) => pq.question_type === 'mcq');
+    const attemptedMcqQuestions = mcqQuestions.slice(0, mcqToAttempt);
+    
+    totalMarks = attemptedMcqQuestions.reduce((sum, pq) => {
+      const customMark = customMarksMap.get(pq.question_id) || mcqMarks;
+      return sum + customMark;
+    }, 0);
+    
+    console.log(`📊 MCQ Section marks: ${totalMarks} (${attemptedMcqQuestions.length} questions attempted)`);
+    
+  } else if (sectionType === 'subjective') {
+    // Calculate marks for subjective section (short + long)
+    const shortQuestions = questions.filter((pq: any) => pq.question_type === 'short');
+    const longQuestions = questions.filter((pq: any) => pq.question_type === 'long');
+    
+    const attemptedShortQuestions = shortQuestions.slice(0, shortToAttempt);
+    const attemptedLongQuestions = longQuestions.slice(0, longToAttempt);
+    
+    const shortTotal = attemptedShortQuestions.reduce((sum, pq) => {
+      const customMark = customMarksMap.get(pq.question_id) || shortMarks;
+      return sum + customMark;
+    }, 0);
+    
+    const longTotal = attemptedLongQuestions.reduce((sum, pq) => {
+      const customMark = customMarksMap.get(pq.question_id) || longMarks;
+      return sum + customMark;
+    }, 0);
+    
+    totalMarks = shortTotal + longTotal;
+    
+    console.log(`📊 Subjective Section marks: ${totalMarks} (Short: ${shortTotal}, Long: ${longTotal})`);
+    
+  } else if (sectionType === 'short') {
+    // Calculate marks for short questions only
+    const shortQuestions = questions.filter((pq: any) => pq.question_type === 'short');
+    const attemptedShortQuestions = shortQuestions.slice(0, shortToAttempt);
+    
+    totalMarks = attemptedShortQuestions.reduce((sum, pq) => {
+      const customMark = customMarksMap.get(pq.question_id) || shortMarks;
+      return sum + customMark;
+    }, 0);
+    
+  } else if (sectionType === 'long') {
+    // Calculate marks for long questions only
+    const longQuestions = questions.filter((pq: any) => pq.question_type === 'long');
+    const attemptedLongQuestions = longQuestions.slice(0, longToAttempt);
+    
+    totalMarks = attemptedLongQuestions.reduce((sum, pq) => {
+      const customMark = customMarksMap.get(pq.question_id) || longMarks;
+      return sum + customMark;
+    }, 0);
+  }
+  
+  return totalMarks;
+}
+
 // Function to create paper record
 async function createPaperRecord(requestData: PaperGenerationRequest, userId: string) {
   const { 
@@ -1114,6 +1186,42 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     throw new Error('No questions found for the generated paper');
   }
 
+  // Calculate section marks
+  const mcqToAttempt = paper.mcq_to_attempt || requestData.mcqToAttempt || requestData.mcqCount || 0;
+  const shortToAttempt = paper.short_to_attempt || requestData.shortToAttempt || requestData.shortCount || 0;
+  const longToAttempt = paper.long_to_attempt || requestData.longToAttempt || requestData.longCount || 0;
+  
+  const mcqSectionMarks = calculateSectionMarks(
+    finalQuestions,
+    'mcq',
+    mcqToAttempt,
+    shortToAttempt,
+    longToAttempt,
+    mcqMarks,
+    shortMarks,
+    longMarks,
+    customMarksMap
+  );
+  
+  const subjectiveSectionMarks = calculateSectionMarks(
+    finalQuestions,
+    'subjective',
+    mcqToAttempt,
+    shortToAttempt,
+    longToAttempt,
+    mcqMarks,
+    shortMarks,
+    longMarks,
+    customMarksMap
+  );
+  
+  console.log('📊 Section marks calculated:', {
+    mcqSectionMarks,
+    subjectiveSectionMarks,
+    totalMarks: paper.total_marks,
+    mcqPlacement
+  });
+
   // FIXED: Determine time values based on MCQ placement
   const getTimeValues = () => {
     const placement = mcqPlacement || 'separate';
@@ -1227,7 +1335,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   // FIXED: Get formatted time display
   const mcqTimeDisplayEng = formatTimeForDisplay(timeValues.mcqTime,'eng');
   const subjectiveTimeDisplayEng = formatTimeForDisplay(timeValues.subjectiveTime, 'eng');
- const mcqTimeDisplayUrdu = formatTimeForDisplay(timeValues.mcqTime, 'urdu');
+  const mcqTimeDisplayUrdu = formatTimeForDisplay(timeValues.mcqTime, 'urdu');
   const subjectiveTimeDisplayUrdu = formatTimeForDisplay(timeValues.subjectiveTime, 'urdu');
 
   // Build HTML content
@@ -1414,12 +1522,18 @@ if (mcqPlacement === 'separate') {
 }
 
     htmlContent+=`<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : ''}
+      ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' ? 
+        (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${mcqSectionMarks}</span>` : '') : 
+        (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : '')
+      }
+      ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' ? 
+        (isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${mcqSectionMarks}</span>` : '') : 
+        (isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : '')
+      }
     </td>
    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
    ${mcqPlacement==="separate" ||mcqPlacement==="two_papers" ? (isUrdu || isBilingual ? `<span class="metaUrdu">حصہ معروضی</span>` : '') :  isUrdu || isBilingual ? `<span class="metaUrdu">حصہ معروضی/انشائیہ</span>` : ''} 
-   ${mcqPlacement==="separate" ||mcqPlacement==="two_papers" ? (isEnglish || isBilingual ? `<span class="metaEng">Subjective Part</span>` : '') : isEnglish || isBilingual ? `<span class="metaEng">Subjective/Objective Part</span>` : ''} 
+   ${mcqPlacement==="separate" ||mcqPlacement==="two_papers" ? (isEnglish || isBilingual ? `<span class="metaEng">Objective Part</span>` : '') : isEnglish || isBilingual ? `<span class="metaEng">Objective/Subjective Part</span>` : ''} 
    </td>
   </tr>
 </table>
@@ -1528,7 +1642,6 @@ ${mcqPlacement==="separate" || mcqPlacement==="two_papers" ? `
 
 
 if(mcqPlacement==="two_papers"){
-  //htmlContent += `  <div style="margin:20px; border-top:1px solid black; border-style: dotted;"></div>`;
   htmlContent += ` <div style="display:flex; align-items:center;">
   <span style="font-size:18px; margin-right:6px;">✂</span>
   <hr style="flex:1; border-top: 2px dotted black;" />
@@ -1543,8 +1656,8 @@ htmlContent += ` ${mcqPlacement==="separate" || mcqPlacement==="two_papers"  ? `
 
 
   // Determine attempt counts once (available to both short and long sections)
-  const shortToAttempt = Number(paper.short_to_attempt ?? requestData.shortToAttempt ?? requestData.shortCount ?? 0);
-  const longToAttempt = Number(paper.long_to_attempt ?? requestData.longToAttempt ?? requestData.longCount ?? 0);
+  //const shortToAttempt = Number(paper.short_to_attempt ?? requestData.shortToAttempt ?? requestData.shortCount ?? 0);
+  //const longToAttempt = Number(paper.long_to_attempt ?? requestData.longToAttempt ?? requestData.longCount ?? 0);
  
   // Helper: Convert number to roman style (i, ii, iii …)
   function toRoman(num: number): string {
@@ -1601,8 +1714,14 @@ let subjectiveContent = ``;
     ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${subjectiveTimeDisplayEng}</span>` : ''}
   </td>
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : ''}
+      ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' ? 
+        (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${subjectiveSectionMarks}</span>` : '') : 
+        (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : '')
+      }
+      ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' ? 
+        (isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${subjectiveSectionMarks}</span>` : '') : 
+        (isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : '')
+      }
     </td>
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
 
@@ -2276,8 +2395,7 @@ console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(
       }
     } else {
       await supabaseAdmin.from('papers').delete().eq('id', paper.id);
-     
-      return NextResponse.json(
+     return NextResponse.json(
         { 
           error: 'No questions found matching your criteria. Please try different filters.'
         },
