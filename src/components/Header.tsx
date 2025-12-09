@@ -212,6 +212,15 @@ export default function Header() {
                 </li>
                 <li className="nav-item">
                   <Link
+                    className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/dashboard/generate-paper') ? 'active' : ''}`}
+                    href="/dashboard/generate-paper"
+                    onClick={() => setOpen(false)}
+                  >
+                   Make Test
+                  </Link>
+                </li>
+                  <li className="nav-item">
+                  <Link
                     className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/quiz') ? 'active' : ''}`}
                     href="/quiz"
                     onClick={() => setOpen(false)}
@@ -225,7 +234,7 @@ export default function Header() {
                     href="/how-examly-works"
                     onClick={() => setOpen(false)}
                   >
-                    How Examly Works
+                    How Examly<sub>.pk</sub> Works
                   </Link>
                 </li>
                 <li className="nav-item">

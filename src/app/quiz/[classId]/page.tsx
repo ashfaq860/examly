@@ -1,3 +1,4 @@
+// examly/src/app/quiz/[classId]/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
