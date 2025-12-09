@@ -701,7 +701,7 @@ function ManualQuestionSelection({
         <div className="card bg-light mb-4">
           <div className="card-body">
             <div className="d-flex justify-content-between align-items-center mb-3">
-              <h3 className="h6 card-title mb-0">Selection Progress</h3>
+              <h3 className="h6 card-title mb-0">Selection <span className="d-none d-sm-inline"></span>Progress</h3>
               <button 
                 className="btn btn-outline-primary btn-sm"
                 onClick={shuffleAll}
@@ -713,9 +713,9 @@ function ManualQuestionSelection({
             <div className="row">
               <div className="col">
                 <div className="d-flex justify-content-between align-items-center">
-                  <p className="fw-bold mb-1">MCQs</p>
+                  <p className="fw-bold mb-1">MCQs</p> 
                   <button 
-                    className="btn btn-outline-secondary btn-sm"
+                    className="btn btn-outline-secondary btn-sm d-none d-sm-inline"
                     onClick={() => shuffleQuestions('mcq')}
                     disabled={isLoading || getCompletionStatus('mcq').completed || isShuffling}
                   >
@@ -728,15 +728,15 @@ function ManualQuestionSelection({
                     {getCompletionStatus('mcq').progress}
                   </span>
                   {currentStep === 'mcq' && !getCompletionStatus('mcq').completed && (
-                    <small className="text-muted">{getCompletionStatus('mcq').remaining} more needed</small>
-                  )}
+                    <small className="text-muted d-none d-sm-inline">{getCompletionStatus('mcq').remaining} more needed</small>
+                  )} 
                 </div>
               </div>
               <div className="col">
                 <div className="d-flex justify-content-between align-items-center">
-                  <p className="fw-bold mb-1">Short Questions</p>
+                  <p className="fw-bold mb-1">Short <span className="d-none d-sm-inline">Questions</span></p>
                   <button 
-                    className="btn btn-outline-secondary btn-sm"
+                    className="btn btn-outline-secondary btn-sm d-none d-sm-inline"
                     onClick={() => shuffleQuestions('short')}
                     disabled={isLoading || getCompletionStatus('short').completed || isShuffling}
                   >
@@ -755,9 +755,9 @@ function ManualQuestionSelection({
               </div>
               <div className="col">
                 <div className="d-flex justify-content-between align-items-center">
-                  <p className="fw-bold mb-1">Long Questions</p>
+                  <p className="fw-bold mb-1">Long <span className="d-none d-sm-inline">Questions</span></p>
                   <button 
-                    className="btn btn-outline-secondary btn-sm"
+                    className="btn btn-outline-secondary btn-sm d-none d-sm-inline"
                     onClick={() => shuffleQuestions('long')}
                     disabled={isLoading || getCompletionStatus('long').completed || isShuffling}
                   >
@@ -1427,40 +1427,58 @@ let titleValue = 'BISE LAHORE';
   };
 
   // Load manual selected questions
-  const loadManualSelectedQuestions = async () => {
-    try {
-      // Fetch details for each selected question
-      const mcqPromises = selectedQuestions.mcq.map(questionId => 
-        axios.get(`/api/questions/${questionId}`)
-      );
-      const shortPromises = selectedQuestions.short.map(questionId => 
-        axios.get(`/api/questions/${questionId}`)
-      );
-      const longPromises = selectedQuestions.long.map(questionId => 
-        axios.get(`/api/questions/${questionId}`)
-      );
-
-      const [mcqResponses, shortResponses, longResponses] = await Promise.all([
-        Promise.all(mcqPromises),
-        Promise.all(shortPromises),
-        Promise.all(longPromises)
-      ]);
-
-      const language = watch('language');
-      
-      // Use the fixed translation function
-      const result = {
-        mcq: handleLanguageTranslation(mcqResponses.map(response => response.data), language),
-        short: handleLanguageTranslation(shortResponses.map(response => response.data), language),
-        long: handleLanguageTranslation(longResponses.map(response => response.data), language),
-      };
-
-      return result;
-    } catch (error) {
-      console.error('Error loading manual questions:', error);
-      throw error;
+const loadManualSelectedQuestions = async () => {
+  try {
+    // Fetch all questions in bulk with IDs filter
+    const questionIds = [
+      ...selectedQuestions.mcq,
+      ...selectedQuestions.short,
+      ...selectedQuestions.long
+    ];
+    
+    if (questionIds.length === 0) {
+      return { mcq: [], short: [], long: [] };
     }
-  };
+
+    // Use the same endpoint as ManualQuestionSelection but with IDs filter
+    const response = await axios.get(`/api/questions`, {
+      params: {
+        questionIds: questionIds.join(','),
+        language: watch('language'),
+        includeUrdu: watch('language') !== 'english',
+        subjectId: watchedSubjectId,
+        classId: watchedClassId
+      },
+    });
+
+    const allQuestions = response.data || [];
+    
+    // Group questions by type
+    const mcqQuestions = allQuestions.filter(q => 
+      selectedQuestions.mcq.includes(q.id) && q.question_type === 'mcq'
+    );
+    const shortQuestions = allQuestions.filter(q => 
+      selectedQuestions.short.includes(q.id) && q.question_type === 'short'
+    );
+    const longQuestions = allQuestions.filter(q => 
+      selectedQuestions.long.includes(q.id) && q.question_type === 'long'
+    );
+
+    const language = watch('language');
+    
+    // Use the fixed translation function
+    const result = {
+      mcq: handleLanguageTranslation(mcqQuestions, language),
+      short: handleLanguageTranslation(shortQuestions, language),
+      long: handleLanguageTranslation(longQuestions, language),
+    };
+
+    return result;
+  } catch (error) {
+    console.error('Error loading manual questions:', error);
+    throw error;
+  }
+};
 
   // FIXED: Load auto selected questions - Randomly from all chapters
   const loadAutoSelectedQuestions = async (chapterIds: string[], formValues: PaperFormData) => {
@@ -3129,7 +3147,7 @@ let titleValue = 'BISE LAHORE';
               {/* Custom Paper Settings */}
               {watch("paperType") === "custom" && (
                 <div className="custom-settings mt-5 p-4 border rounded bg-light step-transition" id="custom-settings">
-                  <h6 className="fw-bold mb-3">⚙️ Customize Paper Settings</h6>
+                  <h6 className="fw-bold mb-3">⚙️ Customize <span className="d-none d-sm-inline">Paper</span> Settings</h6>
 
                   {/* TOP ROW: MCQ Placement Cards */}
                   <div className="row mb-4">
@@ -3177,11 +3195,11 @@ let titleValue = 'BISE LAHORE';
                                 <div className="position-relative" style={{ height: '60px' }}>
                                   <div className="position-absolute start-0 top-0 bg-info rounded p-2" style={{ width: '45%', height: '100%' }}>
                                     <div className="text-white small">MCQs</div>
-                                    <div className="text-white fw-bold">Max 15</div>
+                                    <div className="text-white fw-bold"><span className="d-none d-sm-inline">Max</span> 15</div>
                                   </div>
                                   <div className="position-absolute end-0 top-0 bg-success rounded p-2" style={{ width: '45%', height: '100%' }}>
-                                    <div className="text-white small">Subjective</div>
-                                    <div className="text-white fw-bold">Max 30</div>
+                                    <div className="text-white small">Subj<span className="d-none d-sm-inline">ective</span></div>
+                                    <div className="text-white fw-bold"><span className="d-none d-sm-inline">Max</span> 30</div>
                                   </div>
                                 </div>
                               </div>
@@ -3238,13 +3256,13 @@ let titleValue = 'BISE LAHORE';
                                 <div className="bg-light rounded p-2" style={{ height: '60px' }}>
                                   <div className="d-flex justify-content-between align-items-center h-100">
                                     <div className="text-center">
-                                      <div className="text-primary fw-bold">MCQs: Max 5</div>
-                                      <small className="text-muted">Subjective: Max 15</small>
+                                      <div className="text-primary fw-bold">MCQs:<span className="d-none d-sm-inline">Max </span>5</div>
+                                      <small className="text-muted">Subj<span className="d-none d-sm-inline">ective:</span><span className="d-none d-sm-inline">Max </span> 15</small>
                                     </div>
                                     <div className="vr"></div>
                                     <div className="text-center">
                                       <div className="text-success fw-bold">Single Page</div>
-                                      <small className="text-muted">Combined layout</small>
+                                      <small className="text-muted d-none d-sm-inline ">Combined layout</small>
                                     </div>
                                   </div>
                                 </div>
@@ -3297,41 +3315,47 @@ let titleValue = 'BISE LAHORE';
                               minHeight: '180px'
                             }}
                           >
-                            <div className="card-body text-center">
-                              <div className="mb-2">
-                                <div className="position-relative" style={{ height: '60px' }}>
-                                  {/* Front side */}
-                                  <div className="position-absolute start-0 top-0 border rounded p-2" style={{ 
-                                    width: '45%', 
-                                    height: '100%',
-                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                    color: 'white'
-                                  }}>
-                                    <div className="small">MCQs</div>
-                                    <div className="fw-bold">Max 5</div>
-                                  </div>
-                                  {/* Back side */}
-                                  <div className="position-absolute end-0 top-0 border rounded p-2" style={{ 
-                                    width: '45%', 
-                                    height: '100%',
-                                    background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                                    color: 'white'
-                                  }}>
-                                    <div className="small">Subjective</div>
-                                    <div className="fw-bold">Max 10</div>
-                                  </div>
-                                </div>
-                              </div>
-                              <h6 className="fw-bold mb-1">Two Papers Layout</h6>
-                              <p className="small text-muted mb-0">
-                                Optimized for printing two papers per page
-                              </p>
-                              <div className="mt-2">
-                                <span className="badge bg-purple">MCQs: Max 5</span>
-                                <span className="badge bg-pink ms-1">Subjective: Max 10</span>
-                              </div>
-                            </div>
-                          </div>
+                           
+  <div className="card-body text-center">
+    <div className="mb-2">
+      <div className="position-relative" style={{ height: '60px' }}>
+        {/* Front side */}
+        <div className="position-absolute start-0 top-0 border rounded p-2" style={{ 
+          width: '45%', 
+          height: '100%',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white'
+        }}>
+          <div className="small">MCQs</div>
+          <div className="fw-bold"><span className="d-none d-sm-inline">Max </span>5</div>
+        </div>
+        {/* Back side */}
+        <div className="position-absolute end-0 top-0 border rounded p-2" style={{ 
+          width: '45%', 
+          height: '100%',
+          background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+          color: 'white'
+        }}>
+          <div className="small">Subj<span className="d-none d-sm-inline">ective</span></div>
+          <div className="fw-bold"><span className="d-none d-sm-inline">Max</span> 10</div>
+        </div>
+      </div>
+    </div>
+    
+    <h6 className="fw-bold mb-1">Two Papers Layout</h6>
+    <p className="small text-muted mb-0">
+      Optimized for printing two papers per page.
+   
+    </p>
+    
+    <div className="mt-2">
+      {/* Using text-bg- classes for Bootstrap 5 */}
+      <span className="badge text-bg-purple" style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'}}>MCQs: Max 5</span>
+      <span className="badge text-bg-pink" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>Subjective: Max 10</span>
+    </div>
+  </div>
+</div>
+                     
                         </div>
                       </div>
                       
@@ -3822,7 +3846,7 @@ let titleValue = 'BISE LAHORE';
                         </div>
                       </div>
                       <div className="col-4">
-                        <div className="fw-bold text-success small">🎯 Subjective</div>
+                        <div className="fw-bold text-success small">🎯 Subj<span className="d-none d-sm-inline">ective</span></div>
                         <div className="fs-6 fw-bold">
                           {(watch("shortToAttempt") || 0) + (watch("longToAttempt") || 0)}/
                           {(watch("shortCount") || 0) + (watch("longCount") || 0)}
@@ -3839,7 +3863,7 @@ let titleValue = 'BISE LAHORE';
                            ((watch("shortToAttempt") || 0) * (watch("shortMarks") || 0)) +
                            ((watch("longToAttempt") || 0) * (watch("longMarks") || 0))}
                         </div>
-                        <small className="text-muted">Based on To Attempt</small>
+                      <span className="d-none d-sm-inline">  <small className="text-muted">Based on To Attempt</small></span>
                       </div>
                     </div>
                   </div>
@@ -3900,7 +3924,7 @@ let titleValue = 'BISE LAHORE';
                         setStep(5);
                       }}
                     >
-                      Continue to Selection Method <i className="bi bi-arrow-right ms-2"></i>
+                      Continue<span className="d-none d-sm-inline"> to Selection Method</span> <i className="bi bi-arrow-right ms-2"></i>
                     </button>
                     
                     <div className="mt-2">

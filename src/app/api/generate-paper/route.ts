@@ -1408,19 +1408,19 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     .note {  padding: 0px; margin:0 0; font-size: 12px; line-height: 1.1; }
     table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 14px; ${isEnglish? ' direction:ltr' : ' direction:rtl'}}
     table, th, td { border: 1px solid #000; }
-    td { padding: 3px; vertical-align: top; }
+    td { padding: 4px; vertical-align: top; }
     hr{color:black}
     .qnum { width: 20px; text-align: center; font-weight: bold; }
     .question { display: flex;
     justify-content: space-between;
     align-items: center;
     margin: 0 0;
-     font-size:11px; 
+     font-size:12px; 
     }
     ol li{ font-size:9px; }
     .student-info{ margin-top: 10px; margin-bottom:10px; display: flex; justify-content: space-between;  flex-direction: ${isEnglish ? 'row-reverse' : 'row'}; }
   
-    .options { margin-top: 0px; display: flex; justify-content: space-between; font-size: 11px; }
+    .options { margin-top: 2px; display: flex; justify-content: space-between; font-size: 12px; }
     .footer { 
       text-align: left; 
       margin-top: 10px; 
@@ -1899,11 +1899,11 @@ let subjectiveContent = ``;
       if (isEnglish) {
           longQuestionDisplayHtml += `<div class="eng" style="width:100%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
       } else if (isUrdu) {
-          longQuestionDisplayHtml += `<div class="urdu" style="width:100%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
+          longQuestionDisplayHtml += `<div class="urdu" style="width:100%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion}<span class="marks-display">(${questionMarks})</span></div>`;
       } else { // bilingual
           longQuestionDisplayHtml += `<div class="eng" style="width:48%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
           if (hasUrduQuestion) {
-              longQuestionDisplayHtml += `<div class="urdu" style="width:48%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
+              longQuestionDisplayHtml += `<div class="urdu" style="width:48%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong>${urduQuestion}<span class="marks-display">(${questionMarks})</span></div>`;
           }
       }
       longQuestionDisplayHtml += `</div>${subQsHTML}</div>`;
