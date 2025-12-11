@@ -130,7 +130,7 @@ export default function QuestionBank() {
 
   const fetchChapters = async () => {
     try {
-      const { data, error } = await supabase.from('chapters').select('*').order('name');
+      const { data, error } = await supabase.from('chapters').select('*').order('chapterNo');
       if (error) throw error;
       setChapters(data as Chapter[]);
     } catch (error) {
@@ -505,14 +505,14 @@ export default function QuestionBank() {
   };
 
   const filteredQuestions = questions
-    .filter(q => activeTab === 'all' || q.question_type === activeTab)
+    .filter(q => activeTab === 'all' || q?.question_type === activeTab)
     .filter(q =>
-      q.question_text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (q.question_text_ur && q.question_text_ur.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (q.class && q.class.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (q.subject?.name && q.subject.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (q.chapter?.name && q.chapter.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (q.topic?.name && q.topic.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      q?.question_text?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (q?.question_text_ur && q?.question_text_ur.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (q?.class && q?.class?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (q?.subject?.name && q?.subject?.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (q?.chapter?.name && q?.chapter?.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (q?.topic?.name && q?.topic?.name.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
   const clearAllFilters = () => {
@@ -663,7 +663,7 @@ export default function QuestionBank() {
                 >
                   <option value="">All Chapters</option>
                   {getFilteredChapters().map(chapter => (
-                    <option key={chapter.id} value={chapter.id}>{chapter.name}</option>
+                    <option key={chapter?.id} value={chapter?.id}>{chapter?.name}</option>
                   ))}
                 </select>
               </div>
@@ -678,7 +678,7 @@ export default function QuestionBank() {
                 >
                   <option value="">All Topics</option>
                   {getFilteredTopics().map(topic => (
-                    <option key={topic.id} value={topic.id}>{topic.name}</option>
+                    <option key={topic?.id} value={topic?.id}>{topic?.name}</option>
                   ))}
                 </select>
               </div>
@@ -766,37 +766,37 @@ export default function QuestionBank() {
                 </thead>
                 <tbody>
                   {filteredQuestions.length > 0 ? filteredQuestions.map((q, i) => (
-                    <tr key={q.id}>
+                    <tr key={q?.id}>
                       <td>{i + 1}</td>
-                      <td className="text-truncate" style={{maxWidth: '300px'}} title={q.question_text}>
-                        {q.question_text}
-                        {q.question_text_ur && (
-                          <div className="text-muted small" style={{direction: 'rtl'}}>
-                            {q.question_text_ur}
+                      <td className="text-truncate" style={{maxWidth: '300px'}} title={q?.question_text}>
+                        {q?.question_text}
+                        {q?.question_text_ur && (
+                          <div className="text-muted small urdu-text" style={{direction: 'rtl'}}>
+                            {q?.question_text_ur}
                           </div>
                         )}
                       </td>
-                      <td>{q.class || '-'}-{q.class_description || '-'} </td>
-                      <td>{q.subject?.name || '-'}</td>
-                      <td>{q.chapter?.name || '-'}</td>
-                      <td>{q.topic?.name || '-'}</td>
+                      <td>{q?.class || '-'}-{q?.class_description || '-'} </td>
+                      <td>{q?.subject?.name || '-'}</td>
+                      <td>{q?.chapter?.name || '-'}</td>
+                      <td>{q?.topic?.name || '-'}</td>
                       <td>
                         <span className={`badge ${q.question_type === 'mcq' ? 'bg-primary' : 'bg-info'}`}>
-                          {q.question_type.toUpperCase()}
+                          {q?.question_type.toUpperCase()}
                         </span>
                       </td>
                       <td>
                         <span className={`badge ${
-                          q.difficulty === 'easy' ? 'bg-success' : 
-                          q.difficulty === 'medium' ? 'bg-warning' : 'bg-danger'
+                          q?.difficulty === 'easy' ? 'bg-success' : 
+                          q?.difficulty === 'medium' ? 'bg-warning' : 'bg-danger'
                         }`}>
-                          {q.difficulty}
+                          {q?.difficulty}
                         </span>
                       </td>
                       <td>
                         <span className="badge bg-secondary">
-                          {q.source_type.replace('_', ' ')}
-                          {q.source_year ? ` ${q.source_year}` : ''}
+                          {q?.source_type.replace('_', ' ')}
+                          {q?.source_year ? ` ${q.source_year}` : ''}
                         </span>
                       </td>
                       <td>
@@ -810,7 +810,7 @@ export default function QuestionBank() {
                           </button>
                           <button 
                             className="btn btn-sm btn-outline-danger" 
-                            onClick={() => handleDelete(q.id)}
+                            onClick={() => handleDelete(q?.id)}
                             title="Delete"
                           >
                             <FiTrash2 />

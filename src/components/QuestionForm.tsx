@@ -15,6 +15,20 @@ interface QuestionFormProps {
   onClose: () => void;
 }
 
+// Define question types based on database schema
+type QuestionType = 
+  | 'mcq' 
+  | 'short' 
+  | 'long' 
+  | 'translate_urdu' 
+  | 'translate_english' 
+  | 'idiom_phrases' 
+  | 'passage' 
+  | 'poetry_explanation' 
+  | 'prose_explanation' 
+  | 'sentence_correction' 
+  | 'sentence_completion';
+
 export default function QuestionForm({
   question,
   classes,
@@ -40,7 +54,16 @@ export default function QuestionForm({
     option_d_ur: '',
     answer_text: '',
     answer_text_ur: '',
-    source_year: ''
+    source_year: '',
+    // Note: These are form-only fields, not database columns
+    passage_text: '',
+    translation_english: '',
+    translation_urdu: '',
+    idiom_phrase: '',
+    idiom_phrase_explanation: '',
+    poetry_text: '',
+    prose_text: '',
+    sentence_text: '',
   };
 
   const [formData, setFormData] = useState({
@@ -51,8 +74,9 @@ export default function QuestionForm({
     chapter_id: '',
     topic_id: '',
     difficulty: 'medium',
-    question_type: 'mcq' as 'mcq' | 'short' | 'long',
+    question_type: 'mcq' as QuestionType,
     source_type: 'book' as 'book' | 'past_paper' | 'model_paper' | 'custom',
+    passage_questions_count: 1,
   });
 
   const [filteredSubjects, setFilteredSubjects] = useState<any[]>([]);
@@ -60,30 +84,46 @@ export default function QuestionForm({
   const [filteredTopics, setFilteredTopics] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
+  
+  // Check if selected subject is English
+  const isEnglishSubject = () => {
+    const selectedSubject = subjects.find(s => toId(s.id) === formData.subject_id);
+    return selectedSubject?.name?.toLowerCase().includes('english') || false;
+  };
+
+  // Check if selected subject is Urdu
+  const isUrduSubject = () => {
+    const selectedSubject = subjects.find(s => toId(s.id) === formData.subject_id);
+    return selectedSubject?.name?.toLowerCase().includes('urdu') || false;
+  };
 
   // Function to reset only text fields
   const resetTextFields = () => {
     setFormData(prev => ({
-     // ...prev,
-     // ...initialTextFields,
-      // Keep the correct_option reset only if it's an MCQ
-     // correct_option: prev.question_type === 'mcq' ? '' : prev.correct_option
-       ...prev,
-    // Reset only the text content fields
-    question_text: '',
-    question_text_ur: '',
-    option_a: '',
-    option_b: '',
-    option_c: '',
-    option_d: '',
-    option_a_ur: '',
-    option_b_ur: '',
-    option_c_ur: '',
-    option_d_ur: '',
-    answer_text: '',
-    answer_text_ur: '',
-    // Reset correct_option only for MCQ questions
-    correct_option: prev.question_type === 'mcq' ? '' : prev.correct_option
+      ...prev,
+      question_text: '',
+      question_text_ur: '',
+      option_a: '',
+      option_b: '',
+      option_c: '',
+      option_d: '',
+      option_a_ur: '',
+      option_b_ur: '',
+      option_c_ur: '',
+      option_d_ur: '',
+      answer_text: '',
+      answer_text_ur: '',
+      // Form-only fields
+      passage_text: '',
+      translation_english: '',
+      translation_urdu: '',
+      idiom_phrase: '',
+      idiom_phrase_explanation: '',
+      poetry_text: '',
+      prose_text: '',
+      sentence_text: '',
+      correct_option: (prev.question_type === 'mcq') ? '' : prev.correct_option,
+      passage_questions_count: 1,
     }));
   };
 
@@ -92,7 +132,6 @@ export default function QuestionForm({
     if (!text) return '';
     
     try {
-      // Using MyMemory Translation API
       const response = await fetch(
         `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ur`
       );
@@ -108,67 +147,110 @@ export default function QuestionForm({
       }
       
       console.warn('Translation API returned unexpected format:', data);
-      return text; // Fallback to original text
+      return text;
       
     } catch (err) {
       console.error('Translation error:', err);
-      return text; // Fallback to original text
+      return text;
     }
   };
 
-  // Manual translation function
+  // Manual translation function (only for non-English/Urdu subjects)
   const handleTranslateAll = async () => {
-    setIsTranslating(true);
-    try {
-      const updates: any = {};
-      
-      // Translate question text
-      if (formData.question_text && !formData.question_text_ur) {
-        updates.question_text_ur = await translateToUrdu(formData.question_text);
-      }
-      
-      // Translate options if it's an MCQ
-      if (formData.question_type === 'mcq') {
-        if (formData.option_a && !formData.option_a_ur) {
-          updates.option_a_ur = await translateToUrdu(formData.option_a);
+    if (!isEnglishSubject() && !isUrduSubject()) {
+      setIsTranslating(true);
+      try {
+        const updates: any = {};
+        
+        // Translate question text
+        if (formData.question_text && !formData.question_text_ur) {
+          updates.question_text_ur = await translateToUrdu(formData.question_text);
         }
-        if (formData.option_b && !formData.option_b_ur) {
-          updates.option_b_ur = await translateToUrdu(formData.option_b);
+        
+        // Translate options if it's an MCQ
+        if (formData.question_type === 'mcq') {
+          if (formData.option_a && !formData.option_a_ur) {
+            updates.option_a_ur = await translateToUrdu(formData.option_a);
+          }
+          if (formData.option_b && !formData.option_b_ur) {
+            updates.option_b_ur = await translateToUrdu(formData.option_b);
+          }
+          if (formData.option_c && !formData.option_c_ur) {
+            updates.option_c_ur = await translateToUrdu(formData.option_c);
+          }
+          if (formData.option_d && !formData.option_d_ur) {
+            updates.option_d_ur = await translateToUrdu(formData.option_d);
+          }
         }
-        if (formData.option_c && !formData.option_c_ur) {
-          updates.option_c_ur = await translateToUrdu(formData.option_c);
+        
+        // Translate answer text for non-MCQ questions
+        if (formData.question_type !== 'mcq' && formData.answer_text && !formData.answer_text_ur) {
+          updates.answer_text_ur = await translateToUrdu(formData.answer_text);
         }
-        if (formData.option_d && !formData.option_d_ur) {
-          updates.option_d_ur = await translateToUrdu(formData.option_d);
+        
+        // Update form data
+        if (Object.keys(updates).length > 0) {
+          setFormData(prev => ({ ...prev, ...updates }));
+          toast.success('Translation completed');
+        } else {
+          toast('No fields need translation');
         }
+      } catch (error) {
+        console.error('Translation error:', error);
+        toast.error('Failed to translate');
+      } finally {
+        setIsTranslating(false);
       }
-      
-      // Translate answer text for non-MCQ questions
-      if (formData.question_type !== 'mcq' && formData.answer_text && !formData.answer_text_ur) {
-        updates.answer_text_ur = await translateToUrdu(formData.answer_text);
-      }
-      
-      // Update form data
-      if (Object.keys(updates).length > 0) {
-        setFormData(prev => ({ ...prev, ...updates }));
-        toast.success('Translation completed');
-      } else {
-        toast('No fields need translation');
-      }
-    } catch (error) {
-      console.error('Translation error:', error);
-      toast.error('Failed to translate');
-    } finally {
-      setIsTranslating(false);
     }
   };
 
   // Check if we're in edit mode
   const isEditMode = Boolean(question);
 
-  // ---- Initialize form (Edit mode) ----
+  // Initialize form (Edit mode)
   useEffect(() => {
     if (!question) return;
+
+    // Extract data from existing question
+    // For specialized fields, we need to parse them from the stored text
+    let poetryText = '';
+    let proseText = '';
+    let sentenceText = '';
+    let passageText = '';
+    let idiomPhrase = '';
+    let idiomPhraseExplanation = '';
+    let translationEnglish = '';
+    let translationUrdu = '';
+
+    // Parse specialized fields from stored text
+    if (question.question_type === 'poetry_explanation' && question.question_text_ur) {
+      // Extract poetry text from question_text_ur
+      const match = question.question_text_ur.match(/اس شعر کی تشریح کریں: (.*)/);
+      poetryText = match ? match[1] : question.question_text_ur;
+    } else if (question.question_type === 'prose_explanation' && question.question_text_ur) {
+      // Extract prose text from question_text_ur
+      const match = question.question_text_ur.match(/اس نثر پارے کی تشریح کریں: (.*)/);
+      proseText = match ? match[1] : question.question_text_ur;
+    } else if ((question.question_type === 'sentence_correction' || question.question_type === 'sentence_completion') && question.question_text_ur) {
+      // Extract sentence text from question_text_ur
+      const match = question.question_text_ur.match(/(درج ذیل جملے کو درست کریں|درج ذیل جملے کو مکمل کریں): (.*)/);
+      sentenceText = match ? match[2] : question.question_text_ur;
+    } else if (question.question_type === 'idiom_phrases' && question.question_text) {
+      // Extract idiom from question_text
+      const match = question.question_text.match(/Idiom\/Phrase: (.*)/);
+      idiomPhrase = match ? match[1] : question.question_text;
+      idiomPhraseExplanation = question.answer_text || '';
+    } else if (question.question_type === 'translate_urdu' && question.question_text) {
+      // Extract translation text
+      const match = question.question_text.match(/Translate into Urdu: (.*)/);
+      translationEnglish = match ? match[1] : question.question_text.replace('Translate into Urdu: ', '');
+      translationUrdu = question.answer_text_ur || '';
+    } else if (question.question_type === 'translate_english' && question.question_text) {
+      // Extract translation text
+      const match = question.question_text.match(/Translate into English: (.*)/);
+      translationUrdu = match ? match[1] : question.question_text.replace('Translate into English: ', '');
+      translationEnglish = question.answer_text || '';
+    }
 
     // Prefer deriving class via class_subject_id (authoritative)
     const fromClassSubjectLink = classSubjects.find(
@@ -205,15 +287,25 @@ export default function QuestionForm({
       chapter_id: toId(question.chapter_id) || '',
       topic_id: toId(question.topic_id) || '',
       difficulty: question.difficulty || 'medium',
-      question_type: (question.question_type || 'mcq') as 'mcq' | 'short' | 'long',
+      question_type: (question.question_type || 'mcq') as QuestionType,
       answer_text: question.answer_text || '',
       answer_text_ur: question.answer_text_ur || '',
       source_type: (question.source_type || 'book') as 'book' | 'past_paper' | 'model_paper' | 'custom',
-      source_year: question.source_year ? String(question.source_year) : ''
+      source_year: question.source_year ? String(question.source_year) : '',
+      // Form-only fields (parsed from existing data)
+      passage_text: passageText,
+      translation_english: translationEnglish,
+      translation_urdu: translationUrdu,
+      idiom_phrase: idiomPhrase,
+      idiom_phrase_explanation: idiomPhraseExplanation,
+      poetry_text: poetryText,
+      prose_text: proseText,
+      sentence_text: sentenceText,
+      passage_questions_count: 1, // Default for form
     });
   }, [question, classSubjects]);
 
-  // ---- Filter subjects when class changes ----
+  // Filter subjects when class changes
   useEffect(() => {
     const classId = formData.class_id;
 
@@ -239,19 +331,17 @@ export default function QuestionForm({
     }
   }, [formData.class_id, subjects, classSubjects]);
 
-  // ---- Filter chapters when class and subject change ----
+  // Filter chapters when class and subject change
   useEffect(() => {
     const classId = formData.class_id;
     const subjectId = formData.subject_id;
 
     if (classId && subjectId) {
-      // Find the class_subject_id for the selected class and subject
       const classSubject = classSubjects.find(
         cs => toId(cs.class_id) === classId && toId(cs.subject_id) === subjectId
       );
       
       if (classSubject) {
-        // Filter chapters by class_subject_id
         const chaptersForClassSubject = chapters.filter(
           chapter => toId(chapter.class_subject_id) === toId(classSubject.id)
         );
@@ -277,7 +367,7 @@ export default function QuestionForm({
     }
   }, [formData.class_id, formData.subject_id, chapters, classSubjects]);
 
-  // ---- Filter topics when chapter changes ----
+  // Filter topics when chapter changes
   useEffect(() => {
     const chapterId = formData.chapter_id;
 
@@ -301,7 +391,7 @@ export default function QuestionForm({
     }
   }, [formData.chapter_id, topics]);
 
-  // ---- Submit ----
+  // Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -327,30 +417,310 @@ export default function QuestionForm({
         .eq('id', user?.id)
         .single();
 
-      const payload = {
-        question_text: formData.question_text,
-        question_text_ur: formData.question_text_ur,
-        option_a: formData.question_type === 'mcq' ? formData.option_a : null,
-        option_b: formData.question_type === 'mcq' ? formData.option_b : null,
-        option_c: formData.question_type === 'mcq' ? formData.option_c : null,
-        option_d: formData.question_type === 'mcq' ? formData.option_d : null,
-        option_a_ur: formData.question_type === 'mcq' ? formData.option_a_ur : null,
-        option_b_ur: formData.question_type === 'mcq' ? formData.option_b_ur : null,
-        option_c_ur: formData.question_type === 'mcq' ? formData.option_c_ur : null,
-        option_d_ur: formData.question_type === 'mcq' ? formData.option_d_ur : null,
-        correct_option: formData.question_type === 'mcq' ? formData.correct_option : null,
+      // Build payload based on question type and subject
+      const basePayload = {
         subject_id: formData.subject_id || null,
         chapter_id: formData.chapter_id || null,
         topic_id: formData.topic_id || null,
         difficulty: formData.difficulty,
         question_type: formData.question_type,
-        answer_text: formData.question_type !== 'mcq' ? formData.answer_text : null,
-        answer_text_ur: formData.question_type !== 'mcq' ? formData.answer_text_ur : null,
         source_type: formData.source_type,
         source_year: formData.source_year ? parseInt(formData.source_year) : null,
         class_subject_id: classSubject.id,
         created_by: profile?.id,
       };
+
+      let typeSpecificPayload = {};
+
+      // Handle English subject questions
+      if (isEnglishSubject()) {
+        switch (formData.question_type) {
+          case 'mcq':
+            typeSpecificPayload = {
+              question_text: formData.question_text,
+              question_text_ur: null,
+              option_a: formData.option_a,
+              option_b: formData.option_b,
+              option_c: formData.option_c || null,
+              option_d: formData.option_d || null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: formData.correct_option,
+              answer_text: null,
+              answer_text_ur: null,
+            };
+            break;
+
+          case 'short':
+          case 'long':
+            typeSpecificPayload = {
+              question_text: formData.question_text,
+              question_text_ur: null,
+              answer_text: formData.answer_text,
+              answer_text_ur: null,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'translate_urdu':
+            typeSpecificPayload = {
+              question_text: `Translate into Urdu: ${formData.question_text}`,
+              question_text_ur: null,
+              answer_text: null,
+              answer_text_ur: formData.translation_urdu,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'translate_english':
+            typeSpecificPayload = {
+              question_text: `Translate into English: ${formData.question_text}`,
+              question_text_ur: null,
+              answer_text: formData.translation_english,
+              answer_text_ur: null,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'idiom_phrases':
+            typeSpecificPayload = {
+              question_text: `Idiom/Phrase: ${formData.idiom_phrase}`,
+              question_text_ur: null,
+              answer_text: formData.idiom_phrase_explanation,
+              answer_text_ur: null,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'passage':
+            // Combine passage and question into question_text
+            typeSpecificPayload = {
+              question_text: `PASSAGE: ${formData.passage_text}\n\nQUESTION: ${formData.question_text}`,
+              question_text_ur: null,
+              answer_text: formData.answer_text,
+              answer_text_ur: null,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+        }
+      }
+      // Handle Urdu subject questions
+      else if (isUrduSubject()) {
+        switch (formData.question_type) {
+          case 'mcq':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: formData.question_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: formData.option_a_ur,
+              option_b_ur: formData.option_b_ur,
+              option_c_ur: formData.option_c_ur || null,
+              option_d_ur: formData.option_d_ur || null,
+              correct_option: formData.correct_option,
+              answer_text: null,
+              answer_text_ur: null,
+            };
+            break;
+
+          case 'poetry_explanation':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: `اس شعر کی تشریح کریں: ${formData.poetry_text}`,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'prose_explanation':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: `اس نثر پارے کی تشریح کریں: ${formData.prose_text}`,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'short':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: formData.question_text_ur,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'long':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: formData.question_text_ur,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'sentence_correction':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: `درج ذیل جملے کو درست کریں: ${formData.sentence_text}`,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'sentence_completion':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: `درج ذیل جملے کو مکمل کریں: ${formData.sentence_text}`,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+        }
+      }
+      // Handle other subjects (bilingual)
+      else {
+        switch (formData.question_type) {
+          case 'mcq':
+            typeSpecificPayload = {
+              question_text: formData.question_text,
+              question_text_ur: formData.question_text_ur,
+              option_a: formData.option_a,
+              option_b: formData.option_b,
+              option_c: formData.option_c || null,
+              option_d: formData.option_d || null,
+              option_a_ur: formData.option_a_ur || null,
+              option_b_ur: formData.option_b_ur || null,
+              option_c_ur: formData.option_c_ur || null,
+              option_d_ur: formData.option_d_ur || null,
+              correct_option: formData.correct_option,
+              answer_text: null,
+              answer_text_ur: null,
+            };
+            break;
+
+          case 'short':
+          case 'long':
+            typeSpecificPayload = {
+              question_text: formData.question_text,
+              question_text_ur: formData.question_text_ur,
+              answer_text: formData.answer_text,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+        }
+      }
+
+      const payload = { ...basePayload, ...typeSpecificPayload };
+
+      console.log('Saving payload:', payload);
 
       if (question) {
         const { error } = await supabase
@@ -363,11 +733,9 @@ export default function QuestionForm({
         const { error } = await supabase.from('questions').insert([payload]);
         if (error) throw error;
         toast.success('Question added successfully');
-        // Reset only text fields after successful save (for new questions only)
         resetTextFields();
       }
       
-     // onClose();
     } catch (error: any) {
       console.error('Error saving question:', error);
       toast.error(error.message || 'Failed to save question');
@@ -381,35 +749,320 @@ export default function QuestionForm({
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Get available question types based on subject
+  const getAvailableQuestionTypes = () => {
+    if (isEnglishSubject()) {
+      return [
+        { value: 'mcq', label: 'Multiple Choice' },
+        { value: 'short', label: 'Short Answer' },
+        { value: 'long', label: 'Long Answer' },
+        { value: 'translate_urdu', label: 'Translate into Urdu' },
+        { value: 'translate_english', label: 'Translate into English' },
+        { value: 'idiom_phrases', label: 'Idiom/Phrases' },
+        { value: 'passage', label: 'Passage and Questions' },
+      ];
+    } else if (isUrduSubject()) {
+      return [
+        { value: 'mcq', label: 'MCQ (اردو)' },
+        { value: 'poetry_explanation', label: 'اشعار کی تشریح' },
+        { value: 'prose_explanation', label: 'نثرپاروں کی تشریح' },
+        { value: 'short', label: 'مختصر سوالات' },
+        { value: 'long', label: 'تفصیلی جوابات' },
+        { value: 'sentence_correction', label: 'جملوں کی درستگی' },
+        { value: 'sentence_completion', label: 'جملوں کی تکمیل' },
+      ];
+    } else {
+      return [
+        { value: 'mcq', label: 'Multiple Choice' },
+        { value: 'short', label: 'Short Answer' },
+        { value: 'long', label: 'Long Answer' },
+      ];
+    }
+  };
+
+  // Helper function to determine which fields to show based on question type
+  const shouldShowQuestionTextField = () => {
+    if (isEnglishSubject()) {
+      return !['translate_urdu', 'translate_english', 'idiom_phrases'].includes(formData.question_type);
+    } else if (isUrduSubject()) {
+      return ['mcq', 'short', 'long'].includes(formData.question_type);
+    } else {
+      return true;
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit}>
       <div className="modal-body">
         <div className="row g-3">
-          {/* Question text */}
-          <div className="col-md-12">
-            <label className="form-label">Question Text (English) *</label>
-            <textarea
-              className="form-control"
-              rows={3}
-              name="question_text"
-              value={formData.question_text}
-              onChange={handleChange}
-              required
-            />
-          </div>
+          {/* Question fields based on subject */}
+          {isEnglishSubject() && (
+            <>
+              {/* English Question text - all types except specific ones */}
+              {shouldShowQuestionTextField() && (
+                <div className="col-md-12">
+                  <label className="form-label">
+                    {formData.question_type === 'passage' ? 'Question (English) *' : 'Question Text (English) *'}
+                  </label>
+                  <textarea
+                    className="form-control"
+                    rows={3}
+                    name="question_text"
+                    value={formData.question_text}
+                    onChange={handleChange}
+                    required={formData.question_type !== 'passage'}
+                  />
+                </div>
+              )}
 
-          {/* Urdu Question text */}
-          <div className="col-md-12">
-            <label className="form-label">Question Text (Urdu)</label>
-            <textarea
-              className="form-control urdu-text"
-              rows={3}
-              name="question_text_ur"
-              value={formData.question_text_ur}
-              onChange={handleChange}
-              style={{ direction: 'rtl' }}
-            />
-          </div>
+              {/* Text to translate for translate_urdu */}
+              {formData.question_type === 'translate_urdu' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label">English Text to Translate *</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      name="question_text"
+                      value={formData.question_text}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter English text to translate into Urdu"
+                    />
+                  </div>
+                  <div className="col-md-12">
+                    <label className="form-label">Urdu Translation *</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      name="translation_urdu"
+                      value={formData.translation_urdu}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter Urdu translation"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Text to translate for translate_english */}
+              {formData.question_type === 'translate_english' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label">Urdu Text to Translate *</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      name="question_text"
+                      value={formData.question_text}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter Urdu text to translate into English"
+                    />
+                  </div>
+                  <div className="col-md-12">
+                    <label className="form-label">English Translation *</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      name="translation_english"
+                      value={formData.translation_english}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter English translation"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Idiom/Phrase fields */}
+              {formData.question_type === 'idiom_phrases' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label">Idiom/Phrase (English) *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      name="idiom_phrase"
+                      value={formData.idiom_phrase}
+                      onChange={handleChange}
+                      required
+                      placeholder="e.g., 'Break a leg'"
+                    />
+                  </div>
+                  <div className="col-md-12">
+                    <label className="form-label">Explanation (English) *</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      name="idiom_phrase_explanation"
+                      value={formData.idiom_phrase_explanation}
+                      onChange={handleChange}
+                      required
+                      placeholder="Explain the meaning and usage"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Passage fields */}
+              {formData.question_type === 'passage' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label">Passage Text (English) *</label>
+                    <textarea
+                      className="form-control"
+                      rows={5}
+                      name="passage_text"
+                      value={formData.passage_text}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter the passage text in English"
+                    />
+                  </div>
+                  <div className="col-md-12">
+                    <label className="form-label">Question about Passage (English) *</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      name="question_text"
+                      value={formData.question_text}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter the question about the passage"
+                    />
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {isUrduSubject() && (
+            <>
+              {/* Urdu MCQ */}
+              {formData.question_type === 'mcq' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">سوال (اردو) *</label>
+                    <textarea
+                      className="form-control urdu-text"
+                      rows={4}
+                      name="question_text_ur"
+                      value={formData.question_text_ur}
+                      onChange={handleChange}
+                      required
+                      placeholder="سوال درج کریں"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Urdu Poetry Explanation */}
+              {formData.question_type === 'poetry_explanation' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">شعر *</label>
+                    <textarea
+                      className="form-control urdu-text"
+                      rows={4}
+                      name="poetry_text"
+                      value={formData.poetry_text}
+                      onChange={handleChange}
+                      required
+                      placeholder="شعر درج کریں"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Urdu Prose Explanation */}
+              {formData.question_type === 'prose_explanation' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">نثر پارہ *</label>
+                    <textarea
+                      className="form-control urdu-text"
+                      rows={4}
+                      name="prose_text"
+                      value={formData.prose_text}
+                      onChange={handleChange}
+                      required
+                      placeholder="نثر پارہ درج کریں"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Short and Long Questions */}
+              {(formData.question_type === 'short' || formData.question_type === 'long') && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">سوال *</label>
+                    <textarea
+                      className="form-control urdu-text"
+                      rows={4}
+                      name="question_text_ur"
+                      value={formData.question_text_ur}
+                      onChange={handleChange}
+                      required
+                      placeholder="سوال درج کریں"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Sentence Correction/Completion */}
+              {(formData.question_type === 'sentence_correction' || formData.question_type === 'sentence_completion') && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">
+                      {formData.question_type === 'sentence_correction' ? 'جملہ (درستگی کے لیے) *' : 'جملہ (تکمیل کے لیے) *'}
+                    </label>
+                    <textarea
+                      className="form-control urdu-text"
+                      rows={3}
+                      name="sentence_text"
+                      value={formData.sentence_text}
+                      onChange={handleChange}
+                      required
+                      placeholder="جملہ درج کریں"
+                    />
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* For other subjects (bilingual) */}
+          {!isEnglishSubject() && !isUrduSubject() && (
+            <>
+              {/* English Question text */}
+              <div className="col-md-12">
+                <label className="form-label">Question Text (English) *</label>
+                <textarea
+                  className="form-control"
+                  rows={3}
+                  name="question_text"
+                  value={formData.question_text}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+
+              {/* Urdu Question text */}
+              <div className="col-md-12">
+                <label className="form-label">Question Text (Urdu)</label>
+                <textarea
+                  className="form-control urdu-text"
+                  rows={3}
+                  name="question_text_ur"
+                  value={formData.question_text_ur}
+                  onChange={handleChange}
+                  placeholder="سوال درج کریں"
+                />
+              </div>
+            </>
+          )}
 
           {/* Class */}
           <div className="col-md-6">
@@ -456,16 +1109,16 @@ export default function QuestionForm({
           <div className="col-md-6">
             <label className="form-label">Chapter</label>
             <select
-              className="form-select"
+              className={`form-select ${isUrduSubject() ? 'urdu-text' : ''}`}
               name="chapter_id"
               value={formData.chapter_id}
               onChange={handleChange}
               disabled={!formData.class_id || !formData.subject_id}
             >
-              <option value="">Select Chapter</option>
-              {filteredChapters.map((chapter) => (
+              <option value="">{isUrduSubject()?'چیپٹر کا انتخاب کریں':'Select Chapter'}</option>
+              {filteredChapters.map((chapter,index) => (
                 <option key={toId(chapter.id)} value={toId(chapter.id)}>
-                  {chapter.name}
+                 {index+1}-{chapter.name}
                   {chapter.description ? ` — ${chapter.description}` : ''}
                 </option>
               ))}
@@ -476,13 +1129,13 @@ export default function QuestionForm({
           <div className="col-md-6">
             <label className="form-label">Topic</label>
             <select
-              className="form-select"
+              className={`form-select ${isUrduSubject() ? 'urdu-text' : ''}`}
               name="topic_id"
               value={formData.topic_id}
               onChange={handleChange}
               disabled={!formData.chapter_id}
             >
-              <option value="">Select Topic</option>
+              <option value="">{isUrduSubject()?'موضوع کا انتخاب کریں':'Select Topic'}</option>
               {filteredTopics.map((topic) => (
                 <option key={toId(topic.id)} value={toId(topic.id)}>
                   {topic.name}
@@ -496,16 +1149,29 @@ export default function QuestionForm({
           <div className="col-md-6">
             <label className="form-label">Question Type *</label>
             <select
-              className="form-select"
+              className={`form-select ${isUrduSubject() ? 'urdu-text' : ''}`}
               name="question_type"
               value={formData.question_type}
               onChange={handleChange}
               required
             >
-              <option value="mcq">Multiple Choice</option>
-              <option value="short">Short Answer</option>
-              <option value="long">Long Answer</option>
+              <option value="">Select Question Type</option>
+              {getAvailableQuestionTypes().map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
             </select>
+            {isEnglishSubject() && (
+              <small className="text-muted d-block mt-1">
+                English subject supports specialized question types
+              </small>
+            )}
+            {isUrduSubject() && (
+              <small className="text-muted d-block mt-1">
+                Urdu subject supports specialized question types
+              </small>
+            )}
           </div>
 
           {/* Difficulty */}
@@ -557,8 +1223,8 @@ export default function QuestionForm({
             </div>
           )}
 
-          {/* MCQ Options */}
-          {formData.question_type === 'mcq' && (
+          {/* English and Other Subjects MCQ Options */}
+          {(formData.question_type === 'mcq' && (isEnglishSubject() || (!isEnglishSubject() && !isUrduSubject()))) && (
             <>
               <div className="col-md-6">
                 <label className="form-label">Option A (English) *</label>
@@ -569,17 +1235,6 @@ export default function QuestionForm({
                   value={formData.option_a}
                   onChange={handleChange}
                   required
-                />
-              </div>
-              <div className="col-md-6">
-                <label className="form-label">Option A (Urdu)</label>
-                <input
-                  type="text"
-                  className="form-control urdu-text"
-                  name="option_a_ur"
-                  value={formData.option_a_ur}
-                  onChange={handleChange}
-                  style={{ direction: 'rtl' }}
                 />
               </div>
 
@@ -594,17 +1249,6 @@ export default function QuestionForm({
                   required
                 />
               </div>
-              <div className="col-md-6">
-                <label className="form-label">Option B (Urdu)</label>
-                <input
-                  type="text"
-                  className="form-control urdu-text"
-                  name="option_b_ur"
-                  value={formData.option_b_ur}
-                  onChange={handleChange}
-                  style={{ direction: 'rtl' }}
-                />
-              </div>
 
               <div className="col-md-6">
                 <label className="form-label">Option C (English)</label>
@@ -614,17 +1258,6 @@ export default function QuestionForm({
                   name="option_c"
                   value={formData.option_c}
                   onChange={handleChange}
-                />
-              </div>
-              <div className="col-md-6">
-                <label className="form-label">Option C (Urdu)</label>
-                <input
-                  type="text"
-                  className="form-control urdu-text"
-                  name="option_c_ur"
-                  value={formData.option_c_ur}
-                  onChange={handleChange}
-                  style={{ direction: 'rtl' }}
                 />
               </div>
 
@@ -638,17 +1271,59 @@ export default function QuestionForm({
                   onChange={handleChange}
                 />
               </div>
-              <div className="col-md-6">
-                <label className="form-label">Option D (Urdu)</label>
-                <input
-                  type="text"
-                  className="form-control urdu-text"
-                  name="option_d_ur"
-                  value={formData.option_d_ur}
-                  onChange={handleChange}
-                  style={{ direction: 'rtl' }}
-                />
-              </div>
+
+              {/* Urdu options for other subjects only */}
+              {!isEnglishSubject() && !isUrduSubject() && (
+                <>
+                  <div className="col-md-6">
+                    <label className="form-label">Option A (Urdu)</label>
+                    <input
+                      type="text"
+                      className="form-control urdu-text"
+                      name="option_a_ur"
+                      value={formData.option_a_ur}
+                      onChange={handleChange}
+                      placeholder="آپشن اے درج کریں"
+                    />
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label">Option B (Urdu)</label>
+                    <input
+                      type="text"
+                      className="form-control urdu-text"
+                      name="option_b_ur"
+                      value={formData.option_b_ur}
+                      onChange={handleChange}
+                      placeholder="آپشن بی درج کریں"
+                    />
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label">Option C (Urdu)</label>
+                    <input
+                      type="text"
+                      className="form-control urdu-text"
+                      name="option_c_ur"
+                      value={formData.option_c_ur}
+                      onChange={handleChange}
+                      placeholder="آپشن سی درج کریں"
+                    />
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label">Option D (Urdu)</label>
+                    <input
+                      type="text"
+                      className="form-control urdu-text"
+                      name="option_d_ur"
+                      value={formData.option_d_ur}
+                      onChange={handleChange}
+                      placeholder="آپشن ڈی درج کریں"
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="col-md-12">
                 <label className="form-label">Correct Option *</label>
@@ -669,9 +1344,112 @@ export default function QuestionForm({
             </>
           )}
 
-          {/* Short/Long Answer */}
-          {(formData.question_type === 'short' ||
-            formData.question_type === 'long') && (
+          {/* Urdu Subject MCQ Options */}
+          {formData.question_type === 'mcq' && isUrduSubject() && (
+            <>
+              <div className="col-md-6">
+                <label className="form-label urdu-label">آپشن اے (اردو) *</label>
+                <input
+                  type="text"
+                  className="form-control urdu-text"
+                  name="option_a_ur"
+                  value={formData.option_a_ur}
+                  onChange={handleChange}
+                  required
+                  placeholder="آپشن اے درج کریں"
+                />
+              </div>
+
+              <div className="col-md-6">
+                <label className="form-label urdu-label">آپشن بی (اردو) *</label>
+                <input
+                  type="text"
+                  className="form-control urdu-text"
+                  name="option_b_ur"
+                  value={formData.option_b_ur}
+                  onChange={handleChange}
+                  required
+                  placeholder="آپشن بی درج کریں"
+                />
+              </div>
+
+              <div className="col-md-6">
+                <label className="form-label urdu-label">آپشن سی (اردو)</label>
+                <input
+                  type="text"
+                  className="form-control urdu-text"
+                  name="option_c_ur"
+                  value={formData.option_c_ur}
+                  onChange={handleChange}
+                  placeholder="آپشن سی درج کریں"
+                />
+              </div>
+
+              <div className="col-md-6">
+                <label className="form-label urdu-label">آپشن ڈی (اردو)</label>
+                <input
+                  type="text"
+                  className="form-control urdu-text"
+                  name="option_d_ur"
+                  value={formData.option_d_ur}
+                  onChange={handleChange}
+                  placeholder="آپشن ڈی درج کریں"
+                />
+              </div>
+
+              <div className="col-md-12">
+                <label className="form-label urdu-text" style={{float:'right'}} >صحیح آپشن منتخب کریں *</label>
+                <select
+                  className="form-select urdu-text"
+                  name="correct_option"
+                  value={formData.correct_option}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="">صحیح آپشن منتخب کریں</option>
+                  <option value="A">آپشن اے</option>
+                  <option value="B">آپشن بی</option>
+                  {formData.option_c_ur && <option value="C">آپشن سی</option>}
+                  {formData.option_d_ur && <option value="D">آپشن ڈی</option>}
+                </select>
+              </div>
+            </>
+          )}
+
+          {/* Answer fields */}
+          {/* English Subject Answer */}
+          {isEnglishSubject() && (formData.question_type === 'short' || formData.question_type === 'long' || formData.question_type === 'passage') && (
+            <div className="col-md-12">
+              <label className="form-label">Answer Text (English) *</label>
+              <textarea
+                className="form-control"
+                rows={3}
+                name="answer_text"
+                value={formData.answer_text}
+                onChange={handleChange}
+                required
+              />
+            </div>
+          )}
+
+          {/* Urdu Subject Answer */}
+          {isUrduSubject() && formData.question_type !== 'mcq' && (
+            <div className="col-md-12">
+              <label className="form-label urdu-label">جواب *</label>
+              <textarea
+                className="form-control urdu-text"
+                rows={4}
+                name="answer_text_ur"
+                value={formData.answer_text_ur}
+                onChange={handleChange}
+                required
+                placeholder="جواب درج کریں"
+              />
+            </div>
+          )}
+
+          {/* Other Subjects Answer (bilingual) */}
+          {!isEnglishSubject() && !isUrduSubject() && (formData.question_type === 'short' || formData.question_type === 'long') && (
             <>
               <div className="col-md-12">
                 <label className="form-label">Answer Text (English) *</label>
@@ -693,7 +1471,7 @@ export default function QuestionForm({
                   name="answer_text_ur"
                   value={formData.answer_text_ur}
                   onChange={handleChange}
-                  style={{ direction: 'rtl' }}
+                  placeholder="جواب درج کریں"
                 />
               </div>
             </>
@@ -711,14 +1489,17 @@ export default function QuestionForm({
           Cancel
         </button>
         
-        <button 
-          type="button" 
-          className="btn btn-outline-primary"
-          onClick={handleTranslateAll}
-          disabled={isTranslating || loading}
-        >
-          {isTranslating ? 'Translating...' : 'Translate to Urdu'}
-        </button>
+        {/* Show translation button only for non-English/Urdu subjects */}
+        {!isEnglishSubject() && !isUrduSubject() && (
+          <button 
+            type="button" 
+            className="btn btn-outline-primary"
+            onClick={handleTranslateAll}
+            disabled={isTranslating || loading}
+          >
+            {isTranslating ? 'Translating...' : 'Translate to Urdu'}
+          </button>
+        )}
         
         <button type="submit" className="btn btn-primary" disabled={loading || isTranslating}>
           {loading ? 'Saving...' : 'Save Question'}

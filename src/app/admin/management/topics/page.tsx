@@ -78,8 +78,7 @@ const router= useRouter();
         *,
         classes (*),
         subjects (*)
-      `)
-      .order('name');
+      `).order('chapterNo');
     
     if (error) {
       toast.error(error.message);
@@ -322,9 +321,9 @@ const router= useRouter();
               disabled={!filters.subjectId && !filters.classId}
             >
               <option value="">All Chapters</option>
-              {filteredChapters.map((ch) => (
+              {filteredChapters.map((ch,i) => (
                 <option key={ch.id} value={ch.id}>
-                  {ch.name}
+                 {i+1}-{ch.name}
                 </option>
               ))}
             </select>
@@ -354,7 +353,7 @@ const router= useRouter();
                   }
                 >
                   <option value="">Select Class (Optional)</option>
-                  {classes.map((c) => (
+                  {classes.map((c,i) => (
                     <option key={c.id} value={c.id}>
                       {c.name} - {c.description}
                     </option>
@@ -374,7 +373,7 @@ const router= useRouter();
                     })
                   }
                 >
-                  <option value="">Select Subject (Optional)</option>
+                  <option value="">Select Subject</option>
                   {formFilterSubjects.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -396,9 +395,9 @@ const router= useRouter();
                   required
                 >
                   <option value="">Select Chapter</option>
-                  {formChapters.map((ch) => (
+                  {formChapters.map((ch,index) => (
                     <option key={ch.id} value={ch.id}>
-                      {ch.name} {ch.class_id ? `(Class: ${classes.find(c => c.id === ch.class_id)?.name})` : ''} {ch.subject_id ? `(Subject: ${subjects.find(s => s.id === ch.subject_id)?.name})` : ''}
+                      {index+1}-{ch.name}
                     </option>
                   ))}
                 </select>

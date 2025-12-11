@@ -375,3 +375,42 @@ body{
   -ms-transform: rotate(3deg) translate(0px, -4px);
   transform: rotate(3deg) translate(0px, -4px);
 }
+/** style to include norinastialq urdu font for admin  styles */
+/* Add this to your global CSS file */
+@font-face {
+  font-family: 'Norinastaliq';
+  src: url('/fonts/JameelNooriNastaleeqKasheeda.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.urdu-text {
+  font-family: 'Norinastaliq', 'Jameel Noori Nastaleeq', 'Urdu Typesetting', 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 1.25rem;
+  line-height: 1.8;
+  text-align: right;
+  direction: rtl;
+}
+
+textarea.urdu-text {
+  min-height: 100px;
+  font-size: 1.3rem;
+  line-height: 2;
+  resize: vertical;
+}
+
+input.urdu-text {
+  height: 45px;
+  font-size: 1.3rem;
+}
+
+.urdu-label {
+  font-family: 'Norinastaliq', 'Jameel Noori Nastaleeq', sans-serif;
+  font-size: 1.1rem;
+  direction: rtl;
+  text-align: right;
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
