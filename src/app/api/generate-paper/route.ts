@@ -123,18 +123,11 @@ async function getPuppeteerBrowser() {
           '--disable-renderer-backgrounding',
           '--disable-features=TranslateUI',
           '--disable-ipc-flooding-protection',
-          '--disable-hang-monitor',
-          '--disable-prompt-on-repost',
           '--mute-audio',
           '--disable-extensions',
           '--disable-default-apps',
-          '--disable-translate',
-          '--disable-sync',
-          '--disable-web-security',
-          '--disable-features=VizDisplayCompositor',
           '--no-first-run',
-          '--disable-crash-reporter',
-          '--window-size=1920,1080'
+          '--disable-crash-reporter'
         ],
         headless: true,
         ignoreHTTPSErrors: true,
@@ -145,11 +138,24 @@ async function getPuppeteerBrowser() {
       if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
         console.log('🔧 Configuring Chromium for production...');
         
-        // Configure Chromium for Vercel
-        launchOptions.executablePath = await chromium.executablePath();
-        launchOptions.defaultViewport = chromium.defaultViewport;
-        
-        console.log('✅ Using @sparticuz/chromium for production');
+        try {
+          // Configure Chromium for Vercel
+          const executablePath = await chromium.executablePath();
+          if (executablePath) {
+            launchOptions.executablePath = executablePath;
+            launchOptions.defaultViewport = chromium.defaultViewport;
+            console.log('✅ Using @sparticuz/chromium for production');
+          } else {
+            console.warn('⚠️ chromium.executablePath() returned null, trying without executablePath');
+            // Remove executablePath to let Puppeteer find it automatically
+            delete launchOptions.executablePath;
+          }
+        } catch (chromiumError) {
+          console.warn('⚠️ Failed to get chromium executable path:', chromiumError);
+          console.log('🔄 Falling back to system Chromium');
+          // Remove executablePath to let Puppeteer find it automatically
+          delete launchOptions.executablePath;
+        }
       } else {
         console.log('🔧 Configuring for development...');
         const chromePath = getChromePath();
@@ -3566,7 +3572,11 @@ async function generatePDFFromHTML(htmlContent: string) {
           await page.setRequestInterception(true);
           page.on('request', (req) => {
             const resourceType = req.resourceType();
-            if (resourceType === 'image' || resourceType === 'font' || resourceType === 'stylesheet') {
+            const url = req.url();
+            // Allow data URLs (base64 images/fonts) and abort external resources
+            if (resourceType === 'image' && !url.startsWith('data:') || 
+                resourceType === 'font' && !url.startsWith('data:') || 
+                resourceType === 'stylesheet') {
               req.abort();
             } else {
               req.continue();
@@ -3600,6 +3610,7 @@ async function generatePDFFromHTML(htmlContent: string) {
     }
 
     console.log('🔄 Setting HTML content...');
+    console.log(`📊 HTML content length: ${htmlContent.length} characters`);
     
     // Check if page is still valid
     if (!page || page.isClosed()) {
@@ -3607,10 +3618,16 @@ async function generatePDFFromHTML(htmlContent: string) {
     }
     
     // Use setContent with simpler wait conditions
-    await page.setContent(htmlContent, {
-      waitUntil: 'domcontentloaded',
-      timeout: 60000
-    });
+    try {
+      await page.setContent(htmlContent, {
+        waitUntil: 'domcontentloaded',
+        timeout: 60000
+      });
+      console.log('✅ HTML content set successfully');
+    } catch (contentError) {
+      console.error('❌ Failed to set HTML content:', contentError);
+      throw new Error(`Failed to set page content: ${contentError instanceof Error ? contentError.message : 'Unknown error'}`);
+    }
 
     console.log('✅ HTML content set, waiting for fonts...');
     
@@ -3626,7 +3643,6 @@ async function generatePDFFromHTML(htmlContent: string) {
       format: 'A4',
       printBackground: true,
       margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
-      preferCSSPageSize: true,
       timeout: 60000
     });
 
