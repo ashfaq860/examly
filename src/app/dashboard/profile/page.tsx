@@ -161,12 +161,12 @@ export default function ProfilePage() {
 
   return (
     <AcademyLayout>
-      <div className="container px-4 py-2">
+      <div className="container px-0 px-md-3 py-2">
         <motion.h1 
           initial={{ opacity: 0, y: -20 }} 
           animate={{ opacity: 1, y: 0 }} 
           transition={{ duration: 0.5 }} 
-          className="text-center mb-5 fw-bold"
+          className="text-center mb-2 fw-bold"
           style={{ 
             fontSize: '2.5rem', 
             background: 'linear-gradient(to right, #0d6efd, #6f42c1)',
@@ -182,7 +182,7 @@ export default function ProfilePage() {
             initial={{ opacity: 0, scale: 0.95 }} 
             animate={{ opacity: 1, scale: 1 }} 
             transition={{ duration: 0.4 }} 
-            className="rounded-3 shadow-lg p-4 mb-5"
+            className="rounded-3 shadow-lg p-2 p-md-4 mb-5"
             style={{ background: 'linear-gradient(to right, #eef2ff, #eff6ff)' }}
           >
             <div className="d-flex flex-column flex-md-row align-items-center gap-4 mb-4">

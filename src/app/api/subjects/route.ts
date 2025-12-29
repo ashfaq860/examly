@@ -1,7 +1,7 @@
 // src/app/api/subjects/route.ts
 import { NextResponse } from 'next/server';
 
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { supabase } from '@/lib/supabaseClient';
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const classId = searchParams.get('classId');
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from('class_subjects')
       .select('subject_id')
       .eq('class_id', classId);
@@ -22,7 +22,12 @@ export async function GET(request: Request) {
     if (error) throw error;
 
     const subjectIds = data.map(item => item.subject_id);
-    const { data: subjects, error: subjectsError } = await supabaseAdmin
+    
+    if (subjectIds.length === 0) {
+      return NextResponse.json([]);
+    }
+    
+    const { data: subjects, error: subjectsError } = await supabase
       .from('subjects')
       .select('*')
       .in('id', subjectIds);
@@ -31,6 +36,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(subjects);
   } catch (error) {
+    console.error('Error fetching subjects:', error);
     return NextResponse.json(
       { error: 'Failed to fetch subjects' },
       { status: 500 }

@@ -27,7 +27,9 @@ type QuestionType =
   | 'poetry_explanation' 
   | 'prose_explanation' 
   | 'sentence_correction' 
-  | 'sentence_completion';
+  | 'sentence_completion'
+  | 'directInDirect'
+  | 'activePassive';
 
 export default function QuestionForm({
   question,
@@ -57,6 +59,7 @@ export default function QuestionForm({
     source_year: '',
     // Note: These are form-only fields, not database columns
     passage_text: '',
+    passage_text_ur: '',
     translation_english: '',
     translation_urdu: '',
     idiom_phrase: '',
@@ -64,6 +67,11 @@ export default function QuestionForm({
     poetry_text: '',
     prose_text: '',
     sentence_text: '',
+    // New fields for direct/indirect and active/passive
+    direct_sentence: '',
+    indirect_sentence: '',
+    active_sentence: '',
+    passive_sentence: '',
   };
 
   const [formData, setFormData] = useState({
@@ -115,6 +123,7 @@ export default function QuestionForm({
       answer_text_ur: '',
       // Form-only fields
       passage_text: '',
+      passage_text_ur: '',
       translation_english: '',
       translation_urdu: '',
       idiom_phrase: '',
@@ -122,6 +131,10 @@ export default function QuestionForm({
       poetry_text: '',
       prose_text: '',
       sentence_text: '',
+      direct_sentence: '',
+      indirect_sentence: '',
+      active_sentence: '',
+      passive_sentence: '',
       correct_option: (prev.question_type === 'mcq') ? '' : prev.correct_option,
       passage_questions_count: 1,
     }));
@@ -212,44 +225,65 @@ export default function QuestionForm({
     if (!question) return;
 
     // Extract data from existing question
-    // For specialized fields, we need to parse them from the stored text
     let poetryText = '';
     let proseText = '';
     let sentenceText = '';
     let passageText = '';
+    let passageTextUr = '';
     let idiomPhrase = '';
     let idiomPhraseExplanation = '';
     let translationEnglish = '';
     let translationUrdu = '';
+    let directSentence = '';
+    let indirectSentence = '';
+    let activeSentence = '';
+    let passiveSentence = '';
+    let passageQuestionText = '';
+    let passageQuestionTextUr = '';
 
     // Parse specialized fields from stored text
     if (question.question_type === 'poetry_explanation' && question.question_text_ur) {
-      // Extract poetry text from question_text_ur
       const match = question.question_text_ur.match(/اس شعر کی تشریح کریں: (.*)/);
       poetryText = match ? match[1] : question.question_text_ur;
     } else if (question.question_type === 'prose_explanation' && question.question_text_ur) {
-      // Extract prose text from question_text_ur
       const match = question.question_text_ur.match(/اس نثر پارے کی تشریح کریں: (.*)/);
       proseText = match ? match[1] : question.question_text_ur;
     } else if ((question.question_type === 'sentence_correction' || question.question_type === 'sentence_completion') && question.question_text_ur) {
-      // Extract sentence text from question_text_ur
       const match = question.question_text_ur.match(/(درج ذیل جملے کو درست کریں|درج ذیل جملے کو مکمل کریں): (.*)/);
       sentenceText = match ? match[2] : question.question_text_ur;
     } else if (question.question_type === 'idiom_phrases' && question.question_text) {
-      // Extract idiom from question_text
       const match = question.question_text.match(/Idiom\/Phrase: (.*)/);
       idiomPhrase = match ? match[1] : question.question_text;
       idiomPhraseExplanation = question.answer_text || '';
     } else if (question.question_type === 'translate_urdu' && question.question_text) {
-      // Extract translation text
       const match = question.question_text.match(/Translate into Urdu: (.*)/);
       translationEnglish = match ? match[1] : question.question_text.replace('Translate into Urdu: ', '');
       translationUrdu = question.answer_text_ur || '';
     } else if (question.question_type === 'translate_english' && question.question_text) {
-      // Extract translation text
       const match = question.question_text.match(/Translate into English: (.*)/);
       translationUrdu = match ? match[1] : question.question_text.replace('Translate into English: ', '');
       translationEnglish = question.answer_text || '';
+    } else if (question.question_type === 'directInDirect' && question.question_text) {
+      const match = question.question_text.match(/Convert the following direct speech into indirect speech: (.*)/);
+      directSentence = match ? match[1] : question.question_text.replace('Convert the following direct speech into indirect speech: ', '');
+      indirectSentence = question.answer_text || '';
+    } else if (question.question_type === 'activePassive' && question.question_text) {
+      const match = question.question_text.match(/Convert the following active voice into passive voice: (.*)/);
+      activeSentence = match ? match[1] : question.question_text.replace('Convert the following active voice into passive voice: ', '');
+      passiveSentence = question.answer_text || '';
+    } else if (question.question_type === 'passage') {
+      // Parse passage and question from stored text
+      if (question.question_text) {
+        // English passage
+        const parts = question.question_text.split('\n\nQUESTION: ');
+        passageText = parts[0] || '';
+        passageQuestionText = parts[1] || '';
+      } else if (question.question_text_ur) {
+        // Urdu passage
+        const parts = question.question_text_ur.split('\n\nQUESTION: ');
+        passageTextUr = parts[0] || '';
+        passageQuestionTextUr = parts[1] || '';
+      }
     }
 
     // Prefer deriving class via class_subject_id (authoritative)
@@ -271,8 +305,8 @@ export default function QuestionForm({
       '';
 
     setFormData({
-      question_text: question.question_text || '',
-      question_text_ur: question.question_text_ur || '',
+      question_text: passageQuestionText || question.question_text || '',
+      question_text_ur: passageQuestionTextUr || question.question_text_ur || '',
       option_a: question.option_a || '',
       option_b: question.option_b || '',
       option_c: question.option_c || '',
@@ -294,6 +328,7 @@ export default function QuestionForm({
       source_year: question.source_year ? String(question.source_year) : '',
       // Form-only fields (parsed from existing data)
       passage_text: passageText,
+      passage_text_ur: passageTextUr,
       translation_english: translationEnglish,
       translation_urdu: translationUrdu,
       idiom_phrase: idiomPhrase,
@@ -301,7 +336,11 @@ export default function QuestionForm({
       poetry_text: poetryText,
       prose_text: proseText,
       sentence_text: sentenceText,
-      passage_questions_count: 1, // Default for form
+      direct_sentence: directSentence,
+      indirect_sentence: indirectSentence,
+      active_sentence: activeSentence,
+      passive_sentence: passiveSentence,
+      passage_questions_count: 1,
     });
   }, [question, classSubjects]);
 
@@ -474,7 +513,7 @@ export default function QuestionForm({
 
           case 'translate_urdu':
             typeSpecificPayload = {
-              question_text: `Translate into Urdu: ${formData.question_text}`,
+              question_text: `${formData.question_text}`,
               question_text_ur: null,
               answer_text: null,
               answer_text_ur: formData.translation_urdu,
@@ -492,7 +531,7 @@ export default function QuestionForm({
 
           case 'translate_english':
             typeSpecificPayload = {
-              question_text: `Translate into English: ${formData.question_text}`,
+              question_text: `${formData.question_text}`,
               question_text_ur: null,
               answer_text: formData.translation_english,
               answer_text_ur: null,
@@ -510,7 +549,7 @@ export default function QuestionForm({
 
           case 'idiom_phrases':
             typeSpecificPayload = {
-              question_text: `Idiom/Phrase: ${formData.idiom_phrase}`,
+              question_text: `${formData.idiom_phrase}`,
               question_text_ur: null,
               answer_text: formData.idiom_phrase_explanation,
               answer_text_ur: null,
@@ -527,11 +566,46 @@ export default function QuestionForm({
             break;
 
           case 'passage':
-            // Combine passage and question into question_text
             typeSpecificPayload = {
-              question_text: `PASSAGE: ${formData.passage_text}\n\nQUESTION: ${formData.question_text}`,
+              question_text: `${formData.passage_text}\n\nQUESTION: ${formData.question_text}`,
               question_text_ur: null,
               answer_text: formData.answer_text,
+              answer_text_ur: null,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'directInDirect':
+            typeSpecificPayload = {
+              question_text: `${formData.direct_sentence}`,
+              question_text_ur: null,
+              answer_text: formData.indirect_sentence,
+              answer_text_ur: null,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'activePassive':
+            typeSpecificPayload = {
+              question_text: `${formData.active_sentence}`,
+              question_text_ur: null,
+              answer_text: formData.passive_sentence,
               answer_text_ur: null,
               option_a: null,
               option_b: null,
@@ -570,7 +644,7 @@ export default function QuestionForm({
           case 'poetry_explanation':
             typeSpecificPayload = {
               question_text: null,
-              question_text_ur: `اس شعر کی تشریح کریں: ${formData.poetry_text}`,
+              question_text_ur: `${formData.poetry_text}`,
               answer_text: null,
               answer_text_ur: formData.answer_text_ur,
               option_a: null,
@@ -588,7 +662,7 @@ export default function QuestionForm({
           case 'prose_explanation':
             typeSpecificPayload = {
               question_text: null,
-              question_text_ur: `اس نثر پارے کی تشریح کریں: ${formData.prose_text}`,
+              question_text_ur: `${formData.prose_text}`,
               answer_text: null,
               answer_text_ur: formData.answer_text_ur,
               option_a: null,
@@ -642,7 +716,7 @@ export default function QuestionForm({
           case 'sentence_correction':
             typeSpecificPayload = {
               question_text: null,
-              question_text_ur: `درج ذیل جملے کو درست کریں: ${formData.sentence_text}`,
+              question_text_ur: `${formData.sentence_text}`,
               answer_text: null,
               answer_text_ur: formData.answer_text_ur,
               option_a: null,
@@ -660,7 +734,25 @@ export default function QuestionForm({
           case 'sentence_completion':
             typeSpecificPayload = {
               question_text: null,
-              question_text_ur: `درج ذیل جملے کو مکمل کریں: ${formData.sentence_text}`,
+              question_text_ur: `${formData.sentence_text}`,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'passage':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: `${formData.passage_text_ur}\n\nQUESTION: ${formData.question_text_ur}`,
               answer_text: null,
               answer_text_ur: formData.answer_text_ur,
               option_a: null,
@@ -760,6 +852,8 @@ export default function QuestionForm({
         { value: 'translate_english', label: 'Translate into English' },
         { value: 'idiom_phrases', label: 'Idiom/Phrases' },
         { value: 'passage', label: 'Passage and Questions' },
+        { value: 'directInDirect', label: 'Direct In Direct' },
+        { value: 'activePassive', label: 'Active Voice / Passive Voice' },
       ];
     } else if (isUrduSubject()) {
       return [
@@ -770,6 +864,7 @@ export default function QuestionForm({
         { value: 'long', label: 'تفصیلی جوابات' },
         { value: 'sentence_correction', label: 'جملوں کی درستگی' },
         { value: 'sentence_completion', label: 'جملوں کی تکمیل' },
+        { value: 'passage', label: 'نثر پارہ اور سوالات' },
       ];
     } else {
       return [
@@ -783,7 +878,7 @@ export default function QuestionForm({
   // Helper function to determine which fields to show based on question type
   const shouldShowQuestionTextField = () => {
     if (isEnglishSubject()) {
-      return !['translate_urdu', 'translate_english', 'idiom_phrases'].includes(formData.question_type);
+      return !['translate_urdu', 'translate_english', 'idiom_phrases', 'directInDirect', 'activePassive', 'passage'].includes(formData.question_type);
     } else if (isUrduSubject()) {
       return ['mcq', 'short', 'long'].includes(formData.question_type);
     } else {
@@ -802,7 +897,7 @@ export default function QuestionForm({
               {shouldShowQuestionTextField() && (
                 <div className="col-md-12">
                   <label className="form-label">
-                    {formData.question_type === 'passage' ? 'Question (English) *' : 'Question Text (English) *'}
+                    Question Text (English) *
                   </label>
                   <textarea
                     className="form-control"
@@ -932,6 +1027,78 @@ export default function QuestionForm({
                       placeholder="Enter the question about the passage"
                     />
                   </div>
+                  <div className="col-md-12">
+                    <label className="form-label">Answer (English) *</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      name="answer_text"
+                      value={formData.answer_text}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter the answer to the passage question"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Direct/Indirect Speech fields */}
+              {formData.question_type === 'directInDirect' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label">Direct Speech Sentence *</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      name="direct_sentence"
+                      value={formData.direct_sentence}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter the direct speech sentence (e.g., 'She said, 'I am going to the market.'')"
+                    />
+                  </div>
+                  <div className="col-md-12">
+                    <label className="form-label">Indirect Speech Sentence *</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      name="indirect_sentence"
+                      value={formData.indirect_sentence}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter the indirect speech sentence (e.g., 'She said that she was going to the market.')"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Active/Passive Voice fields */}
+              {formData.question_type === 'activePassive' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label">Active Voice Sentence *</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      name="active_sentence"
+                      value={formData.active_sentence}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter the active voice sentence (e.g., 'The cat chased the mouse.')"
+                    />
+                  </div>
+                  <div className="col-md-12">
+                    <label className="form-label">Passive Voice Sentence *</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      name="passive_sentence"
+                      value={formData.passive_sentence}
+                      onChange={handleChange}
+                      required
+                      placeholder="Enter the passive voice sentence (e.g., 'The mouse was chased by the cat.')"
+                    />
+                  </div>
                 </>
               )}
             </>
@@ -1026,6 +1193,48 @@ export default function QuestionForm({
                       onChange={handleChange}
                       required
                       placeholder="جملہ درج کریں"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Urdu Passage fields */}
+              {formData.question_type === 'passage' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">نثر پارہ (پاسج) *</label>
+                    <textarea
+                      className="form-control urdu-text"
+                      rows={5}
+                      name="passage_text_ur"
+                      value={formData.passage_text_ur}
+                      onChange={handleChange}
+                      required
+                      placeholder="نثر پارہ درج کریں"
+                    />
+                  </div>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">سوال (پاسج کے بارے میں) *</label>
+                    <textarea
+                      className="form-control urdu-text"
+                      rows={3}
+                      name="question_text_ur"
+                      value={formData.question_text_ur}
+                      onChange={handleChange}
+                      required
+                      placeholder="سوال درج کریں"
+                    />
+                  </div>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">جواب (اردو) *</label>
+                    <textarea
+                      className="form-control urdu-text"
+                      rows={3}
+                      name="answer_text_ur"
+                      value={formData.answer_text_ur}
+                      onChange={handleChange}
+                      required
+                      placeholder="جواب درج کریں"
                     />
                   </div>
                 </>
@@ -1416,64 +1625,64 @@ export default function QuestionForm({
             </>
           )}
 
-          {/* Answer fields */}
-          {/* English Subject Answer */}
-          {isEnglishSubject() && (formData.question_type === 'short' || formData.question_type === 'long' || formData.question_type === 'passage') && (
-            <div className="col-md-12">
-              <label className="form-label">Answer Text (English) *</label>
-              <textarea
-                className="form-control"
-                rows={3}
-                name="answer_text"
-                value={formData.answer_text}
-                onChange={handleChange}
-                required
-              />
-            </div>
-          )}
-
-          {/* Urdu Subject Answer */}
-          {isUrduSubject() && formData.question_type !== 'mcq' && (
-            <div className="col-md-12">
-              <label className="form-label urdu-label">جواب *</label>
-              <textarea
-                className="form-control urdu-text"
-                rows={4}
-                name="answer_text_ur"
-                value={formData.answer_text_ur}
-                onChange={handleChange}
-                required
-                placeholder="جواب درج کریں"
-              />
-            </div>
-          )}
-
-          {/* Other Subjects Answer (bilingual) */}
-          {!isEnglishSubject() && !isUrduSubject() && (formData.question_type === 'short' || formData.question_type === 'long') && (
+          {/* Answer fields for non-MCQ questions (except passage which has its own answer fields) */}
+          {formData.question_type !== 'mcq' && formData.question_type !== 'passage' && (
             <>
-              <div className="col-md-12">
-                <label className="form-label">Answer Text (English) *</label>
-                <textarea
-                  className="form-control"
-                  rows={3}
-                  name="answer_text"
-                  value={formData.answer_text}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              
-              <div className="col-md-12">
-                <label className="form-label">Answer Text (Urdu)</label>
-                <textarea
-                  className="form-control urdu-text"
-                  rows={3}
-                  name="answer_text_ur"
-                  value={formData.answer_text_ur}
-                  onChange={handleChange}
-                  placeholder="جواب درج کریں"
-                />
-              </div>
+              {isEnglishSubject() && (
+                <div className="col-md-12">
+                  <label className="form-label">Answer (English) *</label>
+                  <textarea
+                    className="form-control"
+                    rows={3}
+                    name="answer_text"
+                    value={formData.answer_text}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+              )}
+
+              {isUrduSubject() && (
+                <div className="col-md-12">
+                  <label className="form-label urdu-label">جواب (اردو) *</label>
+                  <textarea
+                    className="form-control urdu-text"
+                    rows={3}
+                    name="answer_text_ur"
+                    value={formData.answer_text_ur}
+                    onChange={handleChange}
+                    required
+                    placeholder="جواب درج کریں"
+                  />
+                </div>
+              )}
+
+              {!isEnglishSubject() && !isUrduSubject() && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label">Answer (English) *</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      name="answer_text"
+                      value={formData.answer_text}
+                      onChange={handleChange}
+                      required
+                    />
+                  </div>
+                  <div className="col-md-12">
+                    <label className="form-label">Answer (Urdu)</label>
+                    <textarea
+                      className="form-control urdu-text"
+                      rows={3}
+                      name="answer_text_ur"
+                      value={formData.answer_text_ur}
+                      onChange={handleChange}
+                      placeholder="جواب درج کریں"
+                    />
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

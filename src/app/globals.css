@@ -414,3 +414,28 @@ input.urdu-text {
   margin-bottom: 0.5rem;
   font-weight: 500;
 }
+
+/** Paper Preview edit or preview mode detail smoothly toggle */
+.edit-mode-alert {
+  transition: all 0.5s ease-in-out;
+  overflow: hidden;
+}
+
+.alert-enter {
+  opacity: 1;
+  max-height: 200px;
+  padding: 1rem;
+  margin: 1rem 1rem 0 1rem;
+}
+
+.alert-exit {
+  opacity: 0;
+  max-height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+/* profile setting remove number danger double icons */
+svg.lucide-circle-alert{
+  display: none;
+}

@@ -3,7 +3,8 @@ import { useState, useEffect, ChangeEvent } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  FiSearch, FiEdit, FiTrash2, FiDownload, FiPlus, FiUpload, FiX 
+  FiSearch, FiEdit, FiTrash2, FiDownload, FiPlus, FiUpload, FiX,
+  FiChevronLeft, FiChevronRight, FiChevronsLeft, FiChevronsRight
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -89,6 +90,12 @@ export default function QuestionBank() {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'mcq' | 'short' | 'long'>('all');
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  
   const router = useRouter();
 
   // ✅ Check admin
@@ -208,13 +215,18 @@ export default function QuestionBank() {
     return topics.filter(topic => topic.chapter_id === filters.chapter);
   };
 
-  const fetchQuestions = async () => {
+  const fetchQuestions = async (page = 1) => {
     setLoading(true);
     try {
       console.log('Fetching questions with filters:', filters);
       
-      // Build the base query
-      let query = supabase
+      // Build the base query for counting total
+      let countQuery = supabase
+        .from('questions')
+        .select('id', { count: 'exact', head: true });
+
+      // Build the base query for fetching data
+      let dataQuery = supabase
         .from('questions')
         .select(`
           id,
@@ -256,10 +268,12 @@ export default function QuestionBank() {
           .filter(cs => cs.class_id === filters.class)
           .map(cs => cs.id);
         if (classSubjectIds.length > 0) {
-          query = query.in('class_subject_id', classSubjectIds);
+          countQuery = countQuery.in('class_subject_id', classSubjectIds);
+          dataQuery = dataQuery.in('class_subject_id', classSubjectIds);
         } else {
           // No class subjects found for this class
           setQuestions([]);
+          setTotalQuestions(0);
           setLoading(false);
           return;
         }
@@ -271,10 +285,12 @@ export default function QuestionBank() {
           .filter(cs => cs.subject_id === filters.subject)
           .map(cs => cs.id);
         if (classSubjectIds.length > 0) {
-          query = query.in('class_subject_id', classSubjectIds);
+          countQuery = countQuery.in('class_subject_id', classSubjectIds);
+          dataQuery = dataQuery.in('class_subject_id', classSubjectIds);
         } else {
           // No class subjects found for this subject
           setQuestions([]);
+          setTotalQuestions(0);
           setLoading(false);
           return;
         }
@@ -282,22 +298,40 @@ export default function QuestionBank() {
 
       // Apply other filters
       if (filters.chapter) {
-        query = query.eq('chapter_id', filters.chapter);
+        countQuery = countQuery.eq('chapter_id', filters.chapter);
+        dataQuery = dataQuery.eq('chapter_id', filters.chapter);
       }
       if (filters.topic) {
-        query = query.eq('topic_id', filters.topic);
+        countQuery = countQuery.eq('topic_id', filters.topic);
+        dataQuery = dataQuery.eq('topic_id', filters.topic);
       }
       if (filters.difficulty) {
-        query = query.eq('difficulty', filters.difficulty);
+        countQuery = countQuery.eq('difficulty', filters.difficulty);
+        dataQuery = dataQuery.eq('difficulty', filters.difficulty);
       }
       if (filters.question_type) {
-        query = query.eq('question_type', filters.question_type);
+        countQuery = countQuery.eq('question_type', filters.question_type);
+        dataQuery = dataQuery.eq('question_type', filters.question_type);
       }
       if (filters.source_type) {
-        query = query.eq('source_type', filters.source_type);
+        countQuery = countQuery.eq('source_type', filters.source_type);
+        dataQuery = dataQuery.eq('source_type', filters.source_type);
       }
 
-      const { data, error } = await query;
+      // Get total count
+      const { count, error: countError } = await countQuery;
+      if (countError) {
+        console.error('Count query error:', countError);
+        throw countError;
+      }
+      setTotalQuestions(count || 0);
+
+      // Calculate pagination
+      const from = (page - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+      dataQuery = dataQuery.range(from, to);
+
+      const { data, error } = await dataQuery;
 
       if (error) {
         console.error('Supabase query error details:', error);
@@ -315,6 +349,7 @@ export default function QuestionBank() {
 
       console.log('Processed data:', processedData);
       setQuestions(processedData);
+      setCurrentPage(page);
 
     } catch (error: any) {
       console.error('Error fetching questions:', error);
@@ -375,16 +410,26 @@ export default function QuestionBank() {
   // Refetch questions when filters change
   useEffect(() => {
     if (classSubjects.length > 0) {
-      fetchQuestions();
+      setCurrentPage(1); // Reset to first page when filters change
+      fetchQuestions(1);
     }
   }, [filters, classSubjects]);
+
+  // Refetch questions when items per page changes
+  useEffect(() => {
+    if (classSubjects.length > 0) {
+      fetchQuestions(1);
+    }
+  }, [itemsPerPage]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this question?')) return;
     try {
       const { error } = await supabase.from('questions').delete().eq('id', id);
       if (error) throw error;
-      setQuestions(prev => prev.filter(q => q.id !== id));
+      
+      // Refetch questions to update the list and pagination
+      await fetchQuestions(currentPage);
       toast.success('Question deleted');
     } catch (error) {
       console.error('Error deleting question:', error);
@@ -395,7 +440,72 @@ export default function QuestionBank() {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const dataToExport = questions.map(q => ({
+      // Fetch all questions without pagination for export
+      let query = supabase
+        .from('questions')
+        .select(`
+          id,
+          question_text,
+          question_text_ur,
+          option_a,
+          option_b,
+          option_c,
+          option_d,
+          option_a_ur,
+          option_b_ur,
+          option_c_ur,
+          option_d_ur,
+          correct_option,
+          difficulty,
+          question_type,
+          source_type,
+          source_year,
+          answer_text,
+          answer_text_ur,
+          subject_id,
+          chapter_id,
+          topic_id,
+          class_subject_id,
+          subject:subjects(name),
+          chapter:chapters(name),
+          topic:topics(name),
+          class_subject:class_subjects!fk_questions_class_subjects(
+            class_id,
+            class:classes(name, description)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      // Apply filters if any
+      if (filters.class) {
+        const classSubjectIds = classSubjects
+          .filter(cs => cs.class_id === filters.class)
+          .map(cs => cs.id);
+        if (classSubjectIds.length > 0) {
+          query = query.in('class_subject_id', classSubjectIds);
+        }
+      }
+
+      if (filters.subject) {
+        const classSubjectIds = classSubjects
+          .filter(cs => cs.subject_id === filters.subject)
+          .map(cs => cs.id);
+        if (classSubjectIds.length > 0) {
+          query = query.in('class_subject_id', classSubjectIds);
+        }
+      }
+
+      if (filters.chapter) query = query.eq('chapter_id', filters.chapter);
+      if (filters.topic) query = query.eq('topic_id', filters.topic);
+      if (filters.difficulty) query = query.eq('difficulty', filters.difficulty);
+      if (filters.question_type) query = query.eq('question_type', filters.question_type);
+      if (filters.source_type) query = query.eq('source_type', filters.source_type);
+
+      const { data, error } = await query;
+      
+      if (error) throw error;
+
+      const dataToExport = (data as any[]).map(q => ({
         Question: q.question_text,
         'Question (Urdu)': q.question_text_ur,
         'Option A': q.option_a,
@@ -408,11 +518,11 @@ export default function QuestionBank() {
         'Option D (Urdu)': q.option_d_ur,
         'Correct Option': q.correct_option,
         'Class ID': classSubjects.find(cs => cs.subject_id === q.subject_id)?.class_id || '',
-        Class: q.class,
+        Class: q.class_subject?.class?.name || '-',
         'Subject ID': q.subject_id || '',
-        Subject: q.subject?.name,
-        Chapter: q.chapter?.name,
-        Topic: q.topic?.name,
+        Subject: q.subject?.name || '-',
+        Chapter: q.chapter?.name || '-',
+        Topic: q.topic?.name || '-',
         Difficulty: q.difficulty,
         'Question Type': q.question_type,
         'Source Type': q.source_type,
@@ -425,7 +535,7 @@ export default function QuestionBank() {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Questions');
       XLSX.writeFile(wb, 'question_bank_export.xlsx');
-      toast.success('Export completed successfully');
+      toast.success(`Exported ${dataToExport.length} questions successfully`);
     } catch (error) {
       console.error('Error exporting questions:', error);
       toast.error('Failed to export questions');
@@ -494,7 +604,8 @@ export default function QuestionBank() {
       const { error } = await supabase.from('questions').insert(insertData);
       if (error) throw error;
       toast.success(`${(rows as any[]).length} questions imported successfully`);
-      fetchQuestions();
+      // Refetch questions after import
+      await fetchQuestions(currentPage);
     } catch (error) {
       console.error('Error importing questions:', error);
       toast.error('Failed to import questions');
@@ -504,6 +615,12 @@ export default function QuestionBank() {
     }
   };
 
+  // Pagination calculations
+  const totalPages = Math.ceil(totalQuestions / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalQuestions);
+
+  // Filter questions based on active tab and search term (client-side filtering for displayed questions)
   const filteredQuestions = questions
     .filter(q => activeTab === 'all' || q?.question_type === activeTab)
     .filter(q =>
@@ -518,11 +635,24 @@ export default function QuestionBank() {
   const clearAllFilters = () => {
     setFilters({});
     setSearchTerm('');
+    setCurrentPage(1);
   };
 
   // Helper function to get nav link class
   const getNavLinkClass = (tab: string) => {
     return `nav-link ${activeTab === tab ? 'active' : ''}`;
+  };
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      fetchQuestions(page);
+    }
+  };
+
+  const handleItemsPerPageChange = (value: number) => {
+    setItemsPerPage(value);
+    setCurrentPage(1);
   };
 
   return (
@@ -558,7 +688,7 @@ export default function QuestionBank() {
             <button 
               className="btn btn-success" 
               onClick={handleExport}
-              disabled={isExporting || questions.length === 0}
+              disabled={isExporting || totalQuestions === 0}
             >
               <FiDownload className="me-1" /> 
               {isExporting ? 'Exporting...' : 'Export'}
@@ -739,6 +869,27 @@ export default function QuestionBank() {
           </div>
         </div>
 
+        {/* Results Info and Items Per Page */}
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <div className="text-muted">
+            Showing {startIndex + 1} to {endIndex} of {totalQuestions} questions
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <span className="text-muted">Items per page:</span>
+            <select 
+              className="form-select form-select-sm w-auto"
+              value={itemsPerPage}
+              onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+            >
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+
         {/* Table */}
         {loading ? (
           <div className="text-center py-5">
@@ -747,90 +898,162 @@ export default function QuestionBank() {
             </div>
           </div>
         ) : (
-          <div className="card">
-            <div className="card-body table-responsive">
-              <table className="table table-hover">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Question</th>
-                    <th>Class</th>
-                    <th>Subject</th>
-                    <th>Chapter</th>
-                    <th>Topic</th>
-                    <th>Type</th>
-                    <th>Difficulty</th>
-                    <th>Source</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredQuestions.length > 0 ? filteredQuestions.map((q, i) => (
-                    <tr key={q?.id}>
-                      <td>{i + 1}</td>
-                      <td className="text-truncate" style={{maxWidth: '300px'}} title={q?.question_text}>
-                        {q?.question_text}
-                        {q?.question_text_ur && (
-                          <div className="text-muted small urdu-text" style={{direction: 'rtl'}}>
-                            {q?.question_text_ur}
-                          </div>
-                        )}
-                      </td>
-                      <td>{q?.class || '-'}-{q?.class_description || '-'} </td>
-                      <td>{q?.subject?.name || '-'}</td>
-                      <td>{q?.chapter?.name || '-'}</td>
-                      <td>{q?.topic?.name || '-'}</td>
-                      <td>
-                        <span className={`badge ${q.question_type === 'mcq' ? 'bg-primary' : 'bg-info'}`}>
-                          {q?.question_type.toUpperCase()}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge ${
-                          q?.difficulty === 'easy' ? 'bg-success' : 
-                          q?.difficulty === 'medium' ? 'bg-warning' : 'bg-danger'
-                        }`}>
-                          {q?.difficulty}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="badge bg-secondary">
-                          {q?.source_type.replace('_', ' ')}
-                          {q?.source_year ? ` ${q.source_year}` : ''}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="d-flex gap-2">
-                          <button 
-                            className="btn btn-sm btn-outline-primary" 
-                            onClick={() => { setSelectedQuestion(q); setShowModal(true); }}
-                            title="Edit"
-                          >
-                            <FiEdit />
-                          </button>
-                          <button 
-                            className="btn btn-sm btn-outline-danger" 
-                            onClick={() => handleDelete(q?.id)}
-                            title="Delete"
-                          >
-                            <FiTrash2 />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )) : (
+          <>
+            <div className="card mb-4">
+              <div className="card-body table-responsive">
+                <table className="table table-hover">
+                  <thead>
                     <tr>
-                      <td colSpan={10} className="text-center py-4">
-                        <div className="alert alert-info mb-0">
-                          No questions found matching your criteria
-                        </div>
-                      </td>
+                      <th>#</th>
+                      <th>Question</th>
+                      <th>Class</th>
+                      <th>Subject</th>
+                      <th>Chapter</th>
+                      <th>Topic</th>
+                      <th>Type</th>
+                      <th>Difficulty</th>
+                      <th>Source</th>
+                      <th>Actions</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {filteredQuestions.length > 0 ? filteredQuestions.map((q, i) => (
+                      <tr key={q?.id}>
+                        <td>{startIndex + i + 1}</td>
+                        <td className="text-truncate" style={{maxWidth: '300px'}} title={q?.question_text}>
+                          {q?.question_text}
+                          {q?.question_text_ur && (
+                            <div className="text-muted small urdu-text" style={{direction: 'rtl'}}>
+                              {q?.question_text_ur}
+                            </div>
+                          )}
+                        </td>
+                        <td>{q?.class || '-'}-{q?.class_description || '-'} </td>
+                        <td>{q?.subject?.name || '-'}</td>
+                        <td>{q?.chapter?.name || '-'}</td>
+                        <td>{q?.topic?.name || '-'}</td>
+                        <td>
+                          <span className={`badge ${q.question_type === 'mcq' ? 'bg-primary' : 'bg-info'}`}>
+                            {q?.question_type.toUpperCase()}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`badge ${
+                            q?.difficulty === 'easy' ? 'bg-success' : 
+                            q?.difficulty === 'medium' ? 'bg-warning' : 'bg-danger'
+                          }`}>
+                            {q?.difficulty}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="badge bg-secondary">
+                            {q?.source_type.replace('_', ' ')}
+                            {q?.source_year ? ` ${q.source_year}` : ''}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="d-flex gap-2">
+                            <button 
+                              className="btn btn-sm btn-outline-primary" 
+                              onClick={() => { setSelectedQuestion(q); setShowModal(true); }}
+                              title="Edit"
+                            >
+                              <FiEdit />
+                            </button>
+                            <button 
+                              className="btn btn-sm btn-outline-danger" 
+                              onClick={() => handleDelete(q?.id)}
+                              title="Delete"
+                            >
+                              <FiTrash2 />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan={10} className="text-center py-4">
+                          <div className="alert alert-info mb-0">
+                            No questions found matching your criteria
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+
+            {/* Pagination Controls */}
+            {totalQuestions > 0 && (
+              <nav aria-label="Question pagination">
+                <ul className="pagination justify-content-center">
+                  <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                    <button 
+                      className="page-link" 
+                      onClick={() => handlePageChange(1)}
+                      disabled={currentPage === 1}
+                    >
+                      <FiChevronsLeft />
+                    </button>
+                  </li>
+                  <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                    <button 
+                      className="page-link" 
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                    >
+                      <FiChevronLeft />
+                    </button>
+                  </li>
+                  
+                  {/* Page numbers */}
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <li key={pageNum} className={`page-item ${currentPage === pageNum ? 'active' : ''}`}>
+                        <button 
+                          className="page-link" 
+                          onClick={() => handlePageChange(pageNum)}
+                        >
+                          {pageNum}
+                        </button>
+                      </li>
+                    );
+                  })}
+                  
+                  <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                    <button 
+                      className="page-link" 
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                    >
+                      <FiChevronRight />
+                    </button>
+                  </li>
+                  <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                    <button 
+                      className="page-link" 
+                      onClick={() => handlePageChange(totalPages)}
+                      disabled={currentPage === totalPages}
+                    >
+                      <FiChevronsRight />
+                    </button>
+                  </li>
+                </ul>
+              </nav>
+            )}
+          </>
         )}
 
         {/* Modal */}
@@ -863,7 +1086,7 @@ export default function QuestionBank() {
                     classSubjects={classSubjects}
                     chapters={chapters}
                     topics={topics}
-                    onClose={() => { setShowModal(false); fetchQuestions(); }}
+                    onClose={() => { setShowModal(false); fetchQuestions(currentPage); }}
                   />
                 </div>
               </div>

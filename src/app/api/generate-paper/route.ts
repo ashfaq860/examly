@@ -9,11 +9,13 @@ import { readFileSync, existsSync } from 'fs';
 import { join, extname } from 'path';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { supabase } from '@/lib/supabaseClient';
 import type { PaperGenerationRequest, QuestionType, Question } from '@/types/types';
 import { translate } from '@vitalets/google-translate-api';
 import type { Browser, Page } from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import PDFDocument from 'pdfkit';
 
 // --- Optimizations ---
 
@@ -21,6 +23,77 @@ import chromium from '@sparticuz/chromium';
 let browserPromise: Promise<Browser> | null = null;
 
 async function getPuppeteerBrowser() {
+  // For development, create a new browser each time to avoid connection issues
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔧 Development mode: Creating new browser instance');
+    const launchBrowser = async () => {
+      console.log('🚀 Launching Puppeteer browser...');
+      console.log('Environment:', process.env.NODE_ENV);
+      console.log('Vercel:', !!process.env.VERCEL);
+
+      try {
+        // Simplified Chromium configuration for better stability
+        const launchOptions: any = {
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-software-rasterizer',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-features=TranslateUI',
+            '--disable-ipc-flooding-protection',
+            '--disable-hang-monitor',
+            '--disable-prompt-on-repost',
+            '--mute-audio',
+            '--disable-extensions',
+            '--disable-default-apps',
+            '--disable-translate',
+            '--disable-sync',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor',
+            '--no-first-run',
+            '--disable-crash-reporter',
+            '--window-size=1920,1080'
+          ],
+          headless: true,
+          ignoreHTTPSErrors: true,
+          timeout: 60000,
+        };
+
+        // Use system Chrome in development
+        console.log('🔧 Configuring for development...');
+        const chromePath = getChromePath();
+        if (chromePath) {
+          launchOptions.executablePath = chromePath;
+          console.log('✅ Using local Chrome:', chromePath);
+        } else {
+          console.warn('⚠️ No local Chrome found, trying system default');
+          // Remove executablePath to let Puppeteer find it automatically
+          delete launchOptions.executablePath;
+        }
+
+        console.log('🔄 Launching browser with options...');
+        console.log('Executable path:', launchOptions.executablePath);
+
+        const browser = await puppeteer.launch(launchOptions);
+
+        console.log('✅ Browser launched successfully');
+        console.log('Browser version:', await browser.version());
+
+        return browser;
+      } catch (error) {
+        console.error('❌ Failed to launch puppeteer:', error);
+        throw new Error(`PDF generation unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    };
+
+    return launchBrowser();
+  }
+
+  // Production: Use singleton
   if (browserPromise) {
     try {
       const browser = await browserPromise;
@@ -37,17 +110,14 @@ async function getPuppeteerBrowser() {
     console.log('Vercel:', !!process.env.VERCEL);
 
     try {
-      // Enhanced Chromium configuration for serverless environment
+      // Simplified Chromium configuration for better stability
       const launchOptions: any = {
         args: [
-          ...chromium.args,
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
           '--disable-gpu',
-          '--single-process',
-          '--no-zygote',
-          '--no-first-run',
+          '--disable-software-rasterizer',
           '--disable-background-timer-throttling',
           '--disable-backgrounding-occluded-windows',
           '--disable-renderer-backgrounding',
@@ -55,26 +125,18 @@ async function getPuppeteerBrowser() {
           '--disable-ipc-flooding-protection',
           '--disable-hang-monitor',
           '--disable-prompt-on-repost',
-          '--disable-domain-reliability',
-          '--disable-component-extensions-with-background-pages',
-          '--disable-client-side-phishing-detection',
-          '--disable-crash-reporter',
           '--mute-audio',
           '--disable-extensions',
           '--disable-default-apps',
           '--disable-translate',
           '--disable-sync',
-          '--metrics-recording-only',
-          '--disable-default-apps',
-          '--window-size=1920,1080',
-          '--font-render-hinting=none',
-          '--disable-software-rasterizer',
-          '--disable-background-timer-throttling',
-          '--disable-renderer-backgrounding',
-          '--disable-field-trial-config',
-          '--disable-composited-antialiasing'
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor',
+          '--no-first-run',
+          '--disable-crash-reporter',
+          '--window-size=1920,1080'
         ],
-        headless: chromium.headless,
+        headless: true,
         ignoreHTTPSErrors: true,
         timeout: 60000,
       };
@@ -207,7 +269,7 @@ function mapSourceType(sourceType: string): string {
 // Function to get class_subject_id for filtering
 async function getClassSubjectId(classId: string, subjectId: string): Promise<string | null> {
   try {
-    const { data: classSubject, error } = await supabaseAdmin
+    const { data: classSubject, error } = await supabase
       .from('class_subjects')
       .select('id')
       .eq('class_id', classId)
@@ -719,14 +781,15 @@ function loadImageAsBase64(imageFileName: string): string {
 // Function to calculate section marks based on "to attempt" values
 function calculateSectionMarks(
   questions: any[],
-  sectionType: 'mcq' | 'subjective' | 'short' | 'long',
+  sectionType: 'mcq' | 'subjective' | 'short' | 'long' | string,
   mcqToAttempt: number,
   shortToAttempt: number,
   longToAttempt: number,
   mcqMarks: number,
   shortMarks: number,
   longMarks: number,
-  customMarksMap: Map<string, number>
+  customMarksMap: Map<string, number>,
+  additionalToAttemptMap?: Map<string, number> // NEW: Map for additional question types
 ): number {
   let totalMarks = 0;
   
@@ -743,26 +806,52 @@ function calculateSectionMarks(
     console.log(`📊 MCQ Section marks: ${totalMarks} (${attemptedMcqQuestions.length} questions attempted)`);
     
   } else if (sectionType === 'subjective') {
-    // Calculate marks for subjective section (short + long)
-    const shortQuestions = questions.filter((pq: any) => pq.question_type === 'short');
-    const longQuestions = questions.filter((pq: any) => pq.question_type === 'long');
+    // Calculate marks for subjective section (all non-mcq types)
+    const subjectiveQuestions = questions.filter((pq: any) => pq.question_type !== 'mcq');
     
-    const attemptedShortQuestions = shortQuestions.slice(0, shortToAttempt);
-    const attemptedLongQuestions = longQuestions.slice(0, longToAttempt);
+    // For known types, use attempt counts; for others, assume all attempted
+    const attemptedQuestions: any[] = [];
     
-    const shortTotal = attemptedShortQuestions.reduce((sum, pq) => {
-      const customMark = customMarksMap.get(pq.question_id) || shortMarks;
+    const shortQuestions = subjectiveQuestions.filter((pq: any) => pq.question_type === 'short');
+    const longQuestions = subjectiveQuestions.filter((pq: any) => pq.question_type === 'long');
+    const otherQuestions = subjectiveQuestions.filter((pq: any) => !['short', 'long'].includes(pq.question_type));
+    
+    attemptedQuestions.push(...shortQuestions.slice(0, shortToAttempt));
+    attemptedQuestions.push(...longQuestions.slice(0, longToAttempt));
+    
+    // Handle additional question types with their specific toAttempt values
+    if (additionalToAttemptMap) {
+      for (const [type, toAttempt] of additionalToAttemptMap) {
+        if (type === 'mcq' || type === 'short' || type === 'long') continue;
+        
+        const typeQuestions = subjectiveQuestions.filter((pq: any) => pq.question_type === type);
+        attemptedQuestions.push(...typeQuestions.slice(0, toAttempt));
+      }
+    } else {
+      // If no additional map, assume all other types are attempted
+      attemptedQuestions.push(...otherQuestions);
+    }
+    
+    totalMarks = attemptedQuestions.reduce((sum, pq) => {
+      let defaultMarks = shortMarks; // default
+      if (pq.question_type === 'long') defaultMarks = longMarks;
+      // For Urdu/English specific types, use appropriate marks
+      if (pq.question_type === 'translate_urdu') defaultMarks = 4;
+      if (pq.question_type === 'translate_english') defaultMarks = 5;
+      if (pq.question_type === 'idiom_phrases') defaultMarks = 1;
+      if (pq.question_type === 'poetry_explanation') defaultMarks = 2;
+      if (pq.question_type === 'prose_explanation') defaultMarks = 5;
+      if (pq.question_type === 'passage') defaultMarks = 10;
+      if (pq.question_type === 'sentence_correction') defaultMarks = 1;
+      if (pq.question_type === 'sentence_completion') defaultMarks = 1;
+      if (pq.question_type === 'activePassive') defaultMarks = 1;
+      if (pq.question_type === 'directInDirect') defaultMarks = 1;
+      
+      const customMark = customMarksMap.get(pq.question_id) || defaultMarks;
       return sum + customMark;
     }, 0);
     
-    const longTotal = attemptedLongQuestions.reduce((sum, pq) => {
-      const customMark = customMarksMap.get(pq.question_id) || longMarks;
-      return sum + customMark;
-    }, 0);
-    
-    totalMarks = shortTotal + longTotal;
-    
-    console.log(`📊 Subjective Section marks: ${totalMarks} (Short: ${shortTotal}, Long: ${longTotal})`);
+    console.log(`📊 Subjective Section marks: ${totalMarks} (${attemptedQuestions.length} questions attempted)`);
     
   } else if (sectionType === 'short') {
     // Calculate marks for short questions only
@@ -783,6 +872,31 @@ function calculateSectionMarks(
       const customMark = customMarksMap.get(pq.question_id) || longMarks;
       return sum + customMark;
     }, 0);
+  } else {
+    // Handle specific question types
+    const typeQuestions = questions.filter((pq: any) => pq.question_type === sectionType);
+    const toAttempt = additionalToAttemptMap?.get(sectionType) || typeQuestions.length;
+    const attemptedQuestions = typeQuestions.slice(0, toAttempt);
+    
+    totalMarks = attemptedQuestions.reduce((sum, pq) => {
+      // Determine default marks based on type
+      let defaultMarks = shortMarks;
+      if (sectionType === 'translate_urdu') defaultMarks = 4;
+      if (sectionType === 'translate_english') defaultMarks = 5;
+      if (sectionType === 'idiom_phrases') defaultMarks = 1;
+      if (sectionType === 'poetry_explanation') defaultMarks = 2;
+      if (sectionType === 'prose_explanation') defaultMarks = 5;
+      if (sectionType === 'passage') defaultMarks = 10;
+      if (sectionType === 'sentence_correction') defaultMarks = 1;
+      if (sectionType === 'sentence_completion') defaultMarks = 1;
+      if (sectionType === 'activePassive') defaultMarks = 1;
+      if (sectionType === 'directInDirect') defaultMarks = 1;
+      
+      const customMark = customMarksMap.get(pq.question_id) || defaultMarks;
+      return sum + customMark;
+    }, 0);
+    
+    console.log(`📊 ${sectionType} Section marks: ${totalMarks} (${attemptedQuestions.length} questions attempted)`);
   }
   
   return totalMarks;
@@ -810,14 +924,94 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
     shortMarks = 2,
     longMarks = 5,
     reorderedQuestions,
-    customMarksData
+    customMarksData,
+    toAttemptValues = {}, // Get toAttemptValues from request
+    
+    // Additional Urdu/English question type counts
+    poetry_explanationCount = 0,
+    prose_explanationCount = 0,
+    passageCount = 0,
+    sentence_correctionCount = 0,
+    sentence_completionCount = 0,
+    translate_urduCount = 0,
+    translate_englishCount = 0,
+    idiom_phrasesCount = 0,
+    activePassiveCount = 0,
+    directInDirectCount = 0,
+    
+    // Additional Urdu/English toAttempt values
+    poetry_explanationToAttempt,
+    prose_explanationToAttempt,
+    passageToAttempt,
+    sentence_correctionToAttempt,
+    sentence_completionToAttempt,
+    translate_urduToAttempt,
+    translate_englishToAttempt,
+    idiom_phrasesToAttempt,
+    activePassiveToAttempt,
+    directInDirectToAttempt,
+    
+    // Additional Urdu/English marks
+    poetry_explanationMarks = 2,
+    prose_explanationMarks = 5,
+    passageMarks = 10,
+    sentence_correctionMarks = 1,
+    sentence_completionMarks = 1,
+    translate_urduMarks = 4,
+    translate_englishMarks = 5,
+    idiom_phrasesMarks = 1,
+    activePassiveMarks = 1,
+    directInDirectMarks = 1
   } = requestData;
 
-  // CRITICAL FIX: Calculate total marks based on "to attempt" values
-  // If "to attempt" values are not provided, fall back to "count" values
-  const actualMcqToAttempt = mcqToAttempt !== undefined ? mcqToAttempt : mcqCount;
-  const actualShortToAttempt = shortToAttempt !== undefined ? shortToAttempt : shortCount;
-  const actualLongToAttempt = longToAttempt !== undefined ? longToAttempt : longCount;
+  // CRITICAL FIX: Calculate total marks based on "to attempt" values from toAttemptValues
+  // First, create a map of toAttempt values for all question types
+  const toAttemptMap = new Map<string, number>();
+  
+  // Add standard types
+  toAttemptMap.set('mcq', mcqToAttempt !== undefined ? mcqToAttempt : mcqCount);
+  toAttemptMap.set('short', shortToAttempt !== undefined ? shortToAttempt : shortCount);
+  toAttemptMap.set('long', longToAttempt !== undefined ? longToAttempt : longCount);
+  
+  // Add additional Urdu/English types
+  if (poetry_explanationToAttempt !== undefined) toAttemptMap.set('poetry_explanation', poetry_explanationToAttempt);
+  else toAttemptMap.set('poetry_explanation', poetry_explanationCount);
+  
+  if (prose_explanationToAttempt !== undefined) toAttemptMap.set('prose_explanation', prose_explanationToAttempt);
+  else toAttemptMap.set('prose_explanation', prose_explanationCount);
+  
+  if (passageToAttempt !== undefined) toAttemptMap.set('passage', passageToAttempt);
+  else toAttemptMap.set('passage', passageCount);
+  
+  if (sentence_correctionToAttempt !== undefined) toAttemptMap.set('sentence_correction', sentence_correctionToAttempt);
+  else toAttemptMap.set('sentence_correction', sentence_correctionCount);
+  
+  if (sentence_completionToAttempt !== undefined) toAttemptMap.set('sentence_completion', sentence_completionToAttempt);
+  else toAttemptMap.set('sentence_completion', sentence_completionCount);
+  
+  if (translate_urduToAttempt !== undefined) toAttemptMap.set('translate_urdu', translate_urduToAttempt);
+  else toAttemptMap.set('translate_urdu', translate_urduCount);
+  
+  if (translate_englishToAttempt !== undefined) toAttemptMap.set('translate_english', translate_englishToAttempt);
+  else toAttemptMap.set('translate_english', translate_englishCount);
+  
+  if (idiom_phrasesToAttempt !== undefined) toAttemptMap.set('idiom_phrases', idiom_phrasesToAttempt);
+  else toAttemptMap.set('idiom_phrases', idiom_phrasesCount);
+  
+  if (activePassiveToAttempt !== undefined) toAttemptMap.set('activePassive', activePassiveToAttempt);
+  else toAttemptMap.set('activePassive', activePassiveCount);
+  
+  if (directInDirectToAttempt !== undefined) toAttemptMap.set('directInDirect', directInDirectToAttempt);
+  else toAttemptMap.set('directInDirect', directInDirectCount);
+  
+  // Add other types from toAttemptValues
+  if (toAttemptValues && typeof toAttemptValues === 'object') {
+    Object.entries(toAttemptValues).forEach(([type, value]) => {
+      toAttemptMap.set(type, Number(value) || 0);
+    });
+  }
+  
+  console.log('📊 To Attempt Map:', Object.fromEntries(toAttemptMap.entries()));
 
   let totalMarks = 0;
   
@@ -826,63 +1020,76 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
     console.log('📊 Calculating total marks with custom marks...');
     
     // Calculate marks for each question type using custom marks
-    const mcqQuestions = reorderedQuestions.mcq || [];
-    const shortQuestions = reorderedQuestions.short || [];
-    const longQuestions = reorderedQuestions.long || [];
-    
-    // Calculate marks for questions that will be attempted (based on toAttempt values)
-    // For MCQs: if custom marks are provided, calculate based on toAttempt count
-    let mcqTotal = 0;
-    if (mcqQuestions.length > 0) {
-      // Get custom marks for the first 'actualMcqToAttempt' questions
-      const attemptedMcqQuestions = mcqQuestions.slice(0, actualMcqToAttempt);
-      mcqTotal = attemptedMcqQuestions.reduce((sum, q) => {
-        const customMark = customMarksData.mcq?.find((cm: any) => cm.questionId === q.id)?.marks;
-        return sum + (customMark || mcqMarks);
+    Object.entries(reorderedQuestions).forEach(([type, questions]) => {
+      if (!Array.isArray(questions)) return;
+      
+      const toAttemptForType = toAttemptMap.get(type) || questions.length;
+      const attemptedQuestions = questions.slice(0, toAttemptForType);
+      
+      const customMarksForType = customMarksData[type] || [];
+      const customMarksMap = new Map(customMarksForType.map((cm: any) => [cm.questionId, cm.marks]));
+      
+      let defaultMarks = 1; // default
+      if (type === 'mcq') defaultMarks = mcqMarks;
+      else if (type === 'short') defaultMarks = shortMarks;
+      else if (type === 'long') defaultMarks = longMarks;
+      else if (type === 'poetry_explanation') defaultMarks = poetry_explanationMarks;
+      else if (type === 'prose_explanation') defaultMarks = prose_explanationMarks;
+      else if (type === 'passage') defaultMarks = passageMarks;
+      else if (type === 'sentence_correction') defaultMarks = sentence_correctionMarks;
+      else if (type === 'sentence_completion') defaultMarks = sentence_completionMarks;
+      else if (type === 'translate_urdu') defaultMarks = translate_urduMarks;
+      else if (type === 'translate_english') defaultMarks = translate_englishMarks;
+      else if (type === 'idiom_phrases') defaultMarks = idiom_phrasesMarks;
+      else if (type === 'activePassive') defaultMarks = activePassiveMarks;
+      else if (type === 'directInDirect') defaultMarks = directInDirectMarks;
+      
+      const typeTotal = attemptedQuestions.reduce((sum: number, q: any) => {
+        const customMark = customMarksMap.get(q.id);
+        return sum + (customMark || q.marks || defaultMarks);
       }, 0);
-    }
+      
+      totalMarks += typeTotal;
+      console.log(`📊 ${type}: ${typeTotal} marks (${attemptedQuestions.length} attempted)`);
+    });
     
-    // For Short questions
-    let shortTotal = 0;
-    if (shortQuestions.length > 0) {
-      const attemptedShortQuestions = shortQuestions.slice(0, actualShortToAttempt);
-      shortTotal = attemptedShortQuestions.reduce((sum, q) => {
-        const customMark = customMarksData.short?.find((cm: any) => cm.questionId === q.id)?.marks;
-        return sum + (customMark || shortMarks);
-      }, 0);
-    }
-    
-    // For Long questions
-    let longTotal = 0;
-    if (longQuestions.length > 0) {
-      const attemptedLongQuestions = longQuestions.slice(0, actualLongToAttempt);
-      longTotal = attemptedLongQuestions.reduce((sum, q) => {
-        const customMark = customMarksData.long?.find((cm: any) => cm.questionId === q.id)?.marks;
-        return sum + (customMark || longMarks);
-      }, 0);
-    }
-    
-    totalMarks = mcqTotal + shortTotal + longTotal;
-    console.log(`📊 Total marks (custom): ${totalMarks} = MCQ:${mcqTotal} + Short:${shortTotal} + Long:${longTotal}`);
+    console.log(`📊 Total marks (custom): ${totalMarks}`);
   } else {
-    // Standard calculation based on "to attempt" counts
-    totalMarks = (actualMcqToAttempt || 0) * mcqMarks + 
-                (actualShortToAttempt || 0) * shortMarks + 
-                (actualLongToAttempt || 0) * longMarks;
-    console.log(`📊 Total marks (standard): ${totalMarks} = MCQ:${actualMcqToAttempt}×${mcqMarks} + Short:${actualShortToAttempt}×${shortMarks} + Long:${actualLongToAttempt}×${longMarks}`);
+    // Standard calculation based on "to attempt" counts and marks
+    const mcqToAttemptVal = toAttemptMap.get('mcq') || 0;
+    const shortToAttemptVal = toAttemptMap.get('short') || 0;
+    const longToAttemptVal = toAttemptMap.get('long') || 0;
+    const poetry_explanationToAttemptVal = toAttemptMap.get('poetry_explanation') || 0;
+    const prose_explanationToAttemptVal = toAttemptMap.get('prose_explanation') || 0;
+    const passageToAttemptVal = toAttemptMap.get('passage') || 0;
+    const sentence_correctionToAttemptVal = toAttemptMap.get('sentence_correction') || 0;
+    const sentence_completionToAttemptVal = toAttemptMap.get('sentence_completion') || 0;
+    const translate_urduToAttemptVal = toAttemptMap.get('translate_urdu') || 0;
+    const translate_englishToAttemptVal = toAttemptMap.get('translate_english') || 0;
+    const idiom_phrasesToAttemptVal = toAttemptMap.get('idiom_phrases') || 0;
+    const activePassiveToAttemptVal = toAttemptMap.get('activePassive') || 0;
+    const directInDirectToAttemptVal = toAttemptMap.get('directInDirect') || 0;
+    
+    totalMarks = (mcqToAttemptVal * mcqMarks) + 
+                (shortToAttemptVal * shortMarks) + 
+                (longToAttemptVal * longMarks) +
+                (poetry_explanationToAttemptVal * poetry_explanationMarks) +
+                (prose_explanationToAttemptVal * prose_explanationMarks) +
+                (passageToAttemptVal * passageMarks) +
+                (sentence_correctionToAttemptVal * sentence_correctionMarks) +
+                (sentence_completionToAttemptVal * sentence_completionMarks) +
+                (translate_urduToAttemptVal * translate_urduMarks) +
+                (translate_englishToAttemptVal * translate_englishMarks) +
+                (idiom_phrasesToAttemptVal * idiom_phrasesMarks) +
+                (activePassiveToAttemptVal * activePassiveMarks) +
+                (directInDirectToAttemptVal * directInDirectMarks);
+    
+    console.log(`📊 Total marks (standard): ${totalMarks}`);
   }
 
   // Log the calculation details for debugging
   console.log('📋 Marks calculation details:', {
-    mcqToAttempt: mcqToAttempt,
-    shortToAttempt: shortToAttempt,
-    longToAttempt: longToAttempt,
-    mcqCount: mcqCount,
-    shortCount: shortCount,
-    longCount: longCount,
-    actualMcqToAttempt,
-    actualShortToAttempt,
-    actualLongToAttempt,
+    toAttemptValues,
     totalMarks
   });
 
@@ -913,12 +1120,34 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
     difficulty: 'medium',
     total_marks: totalMarks,
     time_minutes: timeMinutes,
-    mcq_to_attempt: actualMcqToAttempt,  // Store the actual "to attempt" value
-    short_to_attempt: actualShortToAttempt,  // Store the actual "to attempt" value
-    long_to_attempt: actualLongToAttempt,  // Store the actual "to attempt" value
+    mcq_to_attempt: toAttemptMap.get('mcq') || mcqCount,
+    short_to_attempt: toAttemptMap.get('short') || shortCount,
+    long_to_attempt: toAttemptMap.get('long') || longCount,
     language: language,
     source_type: source_type
   };
+
+  // Add additional Urdu/English question type counts to paper data
+  const additionalTypes = [
+    'poetry_explanation', 'prose_explanation', 'passage', 
+    'sentence_correction', 'sentence_completion',
+    'translate_urdu', 'translate_english', 'idiom_phrases',
+    'activePassive', 'directInDirect'
+  ];
+
+  additionalTypes.forEach(type => {
+    const countField = `${type}Count`;
+    const toAttemptField = `${type}ToAttempt`;
+    
+    if (requestData[countField as keyof PaperGenerationRequest] !== undefined) {
+      paperData[`${type}_count`] = requestData[countField as keyof PaperGenerationRequest];
+    }
+    if (requestData[toAttemptField as keyof PaperGenerationRequest] !== undefined) {
+      paperData[`${type}_to_attempt`] = requestData[toAttemptField as keyof PaperGenerationRequest];
+    } else if (requestData[countField as keyof PaperGenerationRequest] !== undefined) {
+      paperData[`${type}_to_attempt`] = requestData[countField as keyof PaperGenerationRequest];
+    }
+  });
 
   try {
     const { data: paper, error: paperError } = await supabaseAdmin
@@ -974,7 +1203,6 @@ async function getUserLogoBase64(userId: string): Promise<string> {
     try {
       console.log('🔄 Fetching user logo from URL:', logoUrl);
       const response = await fetch(logoUrl);
-      
       if (!response.ok) {
         throw new Error(`Failed to fetch logo: ${response.status} ${response.statusText}`);
       }
@@ -1049,6 +1277,12 @@ function formatTimeForDisplay(minutes: number, lang: string = 'eng'): string {
   }
 }
 
+// Helper: Convert number to roman style (i, ii, iii …)
+function toRoman(num: number): string {
+  const romans = ['i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii','xiii','xiv','xv','xvi','xvii','xviii'];
+  return romans[num - 1] || num.toString();
+}
+
 // FIXED: Function to generate paper HTML with proper time handling
 async function generatePaperHTML(paper: any, userId: string, requestData: PaperGenerationRequest, logoBase64: string) {
   const {
@@ -1063,8 +1297,24 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     // Time values from frontend
     timeMinutes = 60,
     mcqTimeMinutes = 15,
-    subjectiveTimeMinutes = 45
+    subjectiveTimeMinutes = 45,
+    paperType = 'custom',
+    toAttemptValues = {}, // Get toAttemptValues from request
+    
+    // Additional Urdu/English marks
+    poetry_explanationMarks = 2,
+    prose_explanationMarks = 5,
+    passageMarks = 10,
+    sentence_correctionMarks = 1,
+    sentence_completionMarks = 1,
+    translate_urduMarks = 4,
+    translate_englishMarks = 5,
+    idiom_phrasesMarks = 1,
+    activePassiveMarks = 1,
+    directInDirectMarks = 1
   } = requestData;
+
+  console.log('📋 Received toAttemptValues:', toAttemptValues);
 
   // Create a map for quick custom marks lookup
   const customMarksMap = new Map();
@@ -1085,55 +1335,52 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   if (reorderedQuestions) {
     console.log('🔄 Using reordered questions from frontend preview');
     
-    // Use the reordered questions from frontend instead of database order
-    const { mcq = [], short = [], long = [] } = reorderedQuestions;
-    
     // Combine all questions in the correct order
     let orderNumber = 1;
     
-    // Process MCQs in reordered sequence WITH CUSTOM MARKS
-    mcq.forEach((question: any) => {
-      const customMark = customMarksMap.get(question.id) || question.marks || mcqMarks;
-      finalQuestions.push({
-        order_number: orderNumber++,
-        question_type: 'mcq',
-        question_id: question.id,
-        questions: {
-          ...question,
-          // Ensure marks are included
-          marks: customMark
-        },
-        custom_marks: customMark
-      });
-    });
-    
-    // Process Short questions in reordered sequence WITH CUSTOM MARKS
-    short.forEach((question: any) => {
-      const customMark = customMarksMap.get(question.id) || question.marks || shortMarks;
-      finalQuestions.push({
-        order_number: orderNumber++,
-        question_type: 'short',
-        question_id: question.id,
-        questions: {
-          ...question,
-          marks: customMark
-        },
-        custom_marks: customMark
-      });
-    });
-    
-    // Process Long questions in reordered sequence WITH CUSTOM MARKS
-    long.forEach((question: any) => {
-      const customMark = customMarksMap.get(question.id) || question.marks || longMarks;
-      finalQuestions.push({
-        order_number: orderNumber++,
-        question_type: 'long',
-        question_id: question.id,
-        questions: {
-          ...question,
-          marks: customMark
-        },
-        custom_marks: customMark
+    // Process all question types dynamically
+    Object.keys(reorderedQuestions).forEach(type => {
+      const questions = reorderedQuestions[type] || [];
+      
+      // FIX: Skip empty question types
+      if (questions.length === 0) {
+        console.log(`⏭️ Skipping ${type} questions (0 questions provided)`);
+        return;
+      }
+      
+      console.log(`🔍 Processing ${questions.length} reordered ${type} questions`);
+      
+      questions.forEach((question: any) => {
+        // Determine default marks based on type
+        let defaultMarks = mcqMarks;
+        if (type === 'short') defaultMarks = shortMarks;
+        if (type === 'long') defaultMarks = longMarks;
+        if (type === 'poetry_explanation') defaultMarks = poetry_explanationMarks;
+        if (type === 'prose_explanation') defaultMarks = prose_explanationMarks;
+        if (type === 'passage') defaultMarks = passageMarks;
+        if (type === 'sentence_correction') defaultMarks = sentence_correctionMarks;
+        if (type === 'sentence_completion') defaultMarks = sentence_completionMarks;
+        if (type === 'translate_urdu') defaultMarks = translate_urduMarks;
+        if (type === 'translate_english') defaultMarks = translate_englishMarks;
+        if (type === 'idiom_phrases') defaultMarks = idiom_phrasesMarks;
+        if (type === 'activePassive') defaultMarks = activePassiveMarks;
+        if (type === 'directInDirect') defaultMarks = directInDirectMarks;
+        // For other types, use shortMarks as default
+        if (!['mcq', 'short', 'long', 'poetry_explanation', 'prose_explanation', 'passage', 
+              'sentence_correction', 'sentence_completion', 'translate_urdu', 'translate_english',
+              'idiom_phrases', 'activePassive', 'directInDirect'].includes(type)) defaultMarks = shortMarks;
+        
+        const customMark = customMarksMap.get(question.id) || question.marks || defaultMarks;
+        finalQuestions.push({
+          order_number: orderNumber++,
+          question_type: type,
+          question_id: question.id,
+          questions: {
+            ...question,
+            marks: customMark
+          },
+          custom_marks: customMark
+        });
       });
     });
     
@@ -1177,20 +1424,93 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     console.log(`✅ Using ${finalQuestions.length} questions from database order`);
   }
 
-  console.log(`📊 Final question order for PDF generation:`);
-  finalQuestions.forEach((pq: any, index: number) => {
-    console.log(`   ${index + 1}. Type: ${pq.question_type}, Order: ${pq.order_number}, ID: ${pq.question_id}, Marks: ${pq.custom_marks}`);
-  });
-
+  // FIX: Check if we have any questions at all
   if (!finalQuestions || finalQuestions.length === 0) {
     throw new Error('No questions found for the generated paper');
   }
 
-  // Calculate section marks
-  const mcqToAttempt = paper.mcq_to_attempt || requestData.mcqToAttempt || requestData.mcqCount || 0;
-  const shortToAttempt = paper.short_to_attempt || requestData.shortToAttempt || requestData.shortCount || 0;
-  const longToAttempt = paper.long_to_attempt || requestData.longToAttempt || requestData.longCount || 0;
+  console.log(`📊 Final question order for PDF generation:`);
+  finalQuestions.forEach((pq: any, index: number) => {
+    console.log(`${index + 1}. Type: ${pq.question_type}, Order: ${pq.order_number}, ID: ${pq.question_id}, Marks: ${pq.custom_marks}`);
+  });
+
+  // CRITICAL FIX: Calculate section marks using toAttemptValues
+  const mcqToAttempt = toAttemptValues.mcq || paper.mcq_to_attempt || requestData.mcqToAttempt || requestData.mcqCount || 0;
+  const shortToAttempt = toAttemptValues.short || paper.short_to_attempt || requestData.shortToAttempt || requestData.shortCount || 0;
+  const longToAttempt = toAttemptValues.long || paper.long_to_attempt || requestData.longToAttempt || requestData.longCount || 0;
   
+  // Create additional toAttempt map for Urdu/English question types
+  const additionalToAttemptMap = new Map<string, number>();
+  
+  // Urdu types
+  additionalToAttemptMap.set('poetry_explanation', 
+    toAttemptValues.poetry_explanation || paper.poetry_explanation_to_attempt || requestData.poetry_explanationToAttempt || requestData.poetry_explanationCount || 0
+  );
+  additionalToAttemptMap.set('prose_explanation', 
+    toAttemptValues.prose_explanation || paper.prose_explanation_to_attempt || requestData.prose_explanationToAttempt || requestData.prose_explanationCount || 0
+  );
+  additionalToAttemptMap.set('passage', 
+    toAttemptValues.passage || paper.passage_to_attempt || requestData.passageToAttempt || requestData.passageCount || 0
+  );
+  additionalToAttemptMap.set('sentence_correction', 
+    toAttemptValues.sentence_correction || paper.sentence_correction_to_attempt || requestData.sentence_correctionToAttempt || requestData.sentence_correctionCount || 0
+  );
+  additionalToAttemptMap.set('sentence_completion', 
+    toAttemptValues.sentence_completion || paper.sentence_completion_to_attempt || requestData.sentence_completionToAttempt || requestData.sentence_completionCount || 0
+  );
+  
+  // English types
+  additionalToAttemptMap.set('translate_urdu', 
+    toAttemptValues.translate_urdu || paper.translate_urdu_to_attempt || requestData.translate_urduToAttempt || requestData.translate_urduCount || 0
+  );
+  additionalToAttemptMap.set('translate_english', 
+    toAttemptValues.translate_english || paper.translate_english_to_attempt || requestData.translate_englishToAttempt || requestData.translate_englishCount || 0
+  );
+  additionalToAttemptMap.set('idiom_phrases', 
+    toAttemptValues.idiom_phrases || paper.idiom_phrases_to_attempt || requestData.idiom_phrasesToAttempt || requestData.idiom_phrasesCount || 0
+  );
+  additionalToAttemptMap.set('activePassive', 
+    toAttemptValues.activePassive || paper.activePassive_to_attempt || requestData.activePassiveToAttempt || requestData.activePassiveCount || 0
+  );
+  additionalToAttemptMap.set('directInDirect', 
+    toAttemptValues.directInDirect || paper.directInDirect_to_attempt || requestData.directInDirectToAttempt || requestData.directInDirectCount || 0
+  );
+  
+  console.log('📊 Additional To Attempt Map:', Object.fromEntries(additionalToAttemptMap.entries()));
+
+  // Helper function to get toAttempt value for any question type
+  const getToAttemptForType = (type: string): number => {
+    // First check toAttemptValues
+    if (toAttemptValues[type] !== undefined) {
+      return toAttemptValues[type];
+    }
+    
+    // Then check paper record
+    if (type === 'mcq') return paper.mcq_to_attempt || 0;
+    if (type === 'short') return paper.short_to_attempt || 0;
+    if (type === 'long') return paper.long_to_attempt || 0;
+    if (type === 'poetry_explanation') return paper.poetry_explanation_to_attempt || 0;
+    if (type === 'prose_explanation') return paper.prose_explanation_to_attempt || 0;
+    if (type === 'passage') return paper.passage_to_attempt || 0;
+    if (type === 'sentence_correction') return paper.sentence_correction_to_attempt || 0;
+    if (type === 'sentence_completion') return paper.sentence_completion_to_attempt || 0;
+    if (type === 'translate_urdu') return paper.translate_urdu_to_attempt || 0;
+    if (type === 'translate_english') return paper.translate_english_to_attempt || 0;
+    if (type === 'idiom_phrases') return paper.idiom_phrases_to_attempt || 0;
+    if (type === 'activePassive') return paper.activePassive_to_attempt || 0;
+    if (type === 'directInDirect') return paper.directInDirect_to_attempt || 0;
+    
+    // For other types, check if we have counts in the request
+    const countField = `${type}Count` as keyof PaperGenerationRequest;
+    if (requestData[countField] !== undefined) {
+      return requestData[countField] as number;
+    }
+    
+    // Default to 0
+    return 0;
+  };
+
+  // Calculate section marks using helper function
   const mcqSectionMarks = calculateSectionMarks(
     finalQuestions,
     'mcq',
@@ -1200,7 +1520,8 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     mcqMarks,
     shortMarks,
     longMarks,
-    customMarksMap
+    customMarksMap,
+    additionalToAttemptMap
   );
   
   const subjectiveSectionMarks = calculateSectionMarks(
@@ -1212,7 +1533,8 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     mcqMarks,
     shortMarks,
     longMarks,
-    customMarksMap
+    customMarksMap,
+    additionalToAttemptMap
   );
   
   console.log('📊 Section marks calculated:', {
@@ -1256,11 +1578,15 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   // Generate HTML content for PDF
   const isUrdu = language === 'urdu';
   const isBilingual = language === 'bilingual';
-  const isEnglish = language === 'english';
+  const isEnglish   = language === 'english';
   const separateMCQ = mcqPlacement === 'separate';
   const paperLayout = mcqPlacement;  // 'single_page' or 'separate' or 'two_papers
   const englishTitle = `${paper.title}`;
   const urduTitle = paper.title;
+  
+  // Check if it's a board paper (model paper)
+  const isBoardPaper = paper.paper_type === 'model' || paperType === 'model';
+  console.log(`📋 Paper type: ${paper.paper_type}, isBoardPaper: ${isBoardPaper}`);
 
   // Load fonts
   const jameelNooriBase64 = loadFontAsBase64('JameelNooriNastaleeqKasheeda.ttf');
@@ -1324,13 +1650,45 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     pq.question_type !== 'mcq' && pq.questions
   );
 
-  const shortQuestions = subjectiveQuestions.filter((pq: any) => 
-    pq.question_type === 'short'
-  );
+  // Log the counts for debugging
+  console.log(`📊 Question counts for PDF generation:`);
+  console.log(`   - MCQ Questions: ${mcqQuestions.length}`);
+  console.log(`   - Subjective Questions: ${subjectiveQuestions.length}`);
+  console.log(`   - Total Questions: ${finalQuestions.length}`);
 
-  const longQuestions = subjectiveQuestions.filter((pq: any) => 
-    pq.question_type === 'long'
-  );
+  // Check if there are MCQs
+  const hasMCQs = mcqQuestions.length > 0;
+  
+  // Group subjective questions by type
+  const subjectiveQuestionsByType: Record<string, any[]> = {};
+  subjectiveQuestions.forEach((pq: any) => {
+    const type = pq.question_type;
+    if (!subjectiveQuestionsByType[type]) {
+      subjectiveQuestionsByType[type] = [];
+    }
+    subjectiveQuestionsByType[type].push(pq);
+  });
+
+  // For backward compatibility
+  const shortQuestions = subjectiveQuestionsByType['short'] || [];
+  const longQuestions = subjectiveQuestionsByType['long'] || [];
+  const poetryExplanationQuestions = subjectiveQuestionsByType['poetry_explanation'] || [];
+  const proseExplanationQuestions = subjectiveQuestionsByType['prose_explanation'] || [];
+  const passageQuestions = subjectiveQuestionsByType['passage'] || [];
+  const sentenceCorrectionQuestions = subjectiveQuestionsByType['sentence_correction'] || [];
+
+  const sentenceCompletionQuestions = subjectiveQuestionsByType['sentence_completion'] || [];
+  const translateUrduQuestions = subjectiveQuestionsByType['translate_urdu'] || [];
+  const translateEnglishQuestions = subjectiveQuestionsByType['translate_english'] || [];
+  const idiomPhrasesQuestions = subjectiveQuestionsByType['idiom_phrases'] || [];
+  const activePassiveQuestions = subjectiveQuestionsByType['activePassive'] || [];
+  const directInDirectQuestions = subjectiveQuestionsByType['directInDirect'] || [];
+
+  // Log subjective question types
+  console.log(`📊 Subjective question types:`, Object.keys(subjectiveQuestionsByType));
+  Object.entries(subjectiveQuestionsByType).forEach(([type, questions]) => {
+    console.log(`   - ${type}: ${questions.length} questions`);
+  });
 
   // FIXED: Get formatted time display
   const mcqTimeDisplayEng = formatTimeForDisplay(timeValues.mcqTime,'eng');
@@ -1367,14 +1725,14 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
       font-style: normal;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; padding: 0px; }
+    body { font-family: Times New Roman, sans-serif; padding: 0px; }
     .container { max-width: 900px; margin: 0 auto; background: white; padding: 0;  }
     .header {text-align:center; font-size: 13px;  }
     .header h1 { font-size: 14px; }
     .header h2 { font-size: 12px; }
     .institute{font-family:algerian; }
     .urdu { font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif; direction: rtl; }
-    .eng { font-family: "Times New Roman", serif; direction: ltr; }
+    .eng { font-family: "Times New Roman", serif; direction: ltr;  white-space: pre-line;}
      .options .urdu {
     font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu";
     direction: rtl;
@@ -1406,21 +1764,21 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
 }
 
     .note {  padding: 0px; margin:0 0; font-size: 12px; line-height: 1.1; }
-    table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 14px; ${isEnglish? ' direction:ltr' : ' direction:rtl'}}
+    table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 10px; ${isEnglish? ' direction:ltr' : ' direction:rtl'}}
     table, th, td { border: 1px solid #000; }
-    td { padding: 4px; vertical-align: top; }
+    td { padding: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '2px' : '4px'}; vertical-align: top; }
     hr{color:black}
     .qnum { width: 20px; text-align: center; font-weight: bold; }
     .question { display: flex;
     justify-content: space-between;
     align-items: center;
     margin: 0 0;
-     font-size:12px; 
+     font-size: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '10px' : '12px'}; 
     }
     ol li{ font-size:9px; }
     .student-info{ margin-top: 10px; margin-bottom:10px; display: flex; justify-content: space-between;  flex-direction: ${isEnglish ? 'row-reverse' : 'row'}; }
   
-    .options { margin-top: 2px; display: flex; justify-content: space-between; font-size: 12px; }
+    .options { margin-top: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '0px' : '2px'};  display: flex; justify-content: space-between; font-size:  ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '10px' : '12px'}; }
     .footer { 
       text-align: left; 
       margin-top: 10px; 
@@ -1455,36 +1813,54 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     }
   </style>
 </head>
-<body>
+<body>`;
 
-<div class="container" ${mcqPlacement === 'two_papers' ? 'style="height:525px; overflow:hidden"' : ''}>
+  // FIXED: Only generate MCQ section if there are MCQs
+  if (hasMCQs) {
+    htmlContent += `
+ 
+ 
+<div class="container" ${mcqPlacement === 'two_papers' ?  'style="height:525px; overflow:hidden"' : mcqPlacement==='three_papers' ? 'style="height:345px; overflow:hidden"' : ''}>
+<div class="header">
+      ${mcqPlacement==='three_papers' ? `
+      <h1 class="eng text-center">
+      ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="30" width="70"/>` : ''}<br/>
+   <span class="institute" style="font-size:12px; margin-top:-15px !important">   ${englishTitle} </span>
+    </h1>
 
-    <div class="header">
-     <h1 class="eng text-center">
-        ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="60" width="140"/>` : ''} <br/>
-     <span class="institute">   ${englishTitle}</span>
-      </h1>
+      ` :`
+      <h1 class="eng text-center">
+      ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="60" width="140"/>` : ''} <br/>
+   <span class="institute">   ${englishTitle} </span>
+    </h1>
+`}
      </div>
   
   <!-- Student Info Table -->
  <table style="width:100%; border-collapse:collapse; border:none !important; font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Noto Sans',Arial,sans-serif;">
   <!-- Row 1 -->
   <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Student Name:_________</span>` : ''}
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>` : ''}
+    ${mcqPlacement === "three_papers"?`<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>`: isEnglish || isBilingual ? `<span class="metaEng">Student Name:_________</span>` : ''}
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+  ${mcqPlacement === "three_papers"?`<span class="metaUrdu">مضمون: ${subject_ur}(${paperClass} کلاس)</span> <span class="metaUrdu">کل نمبر: ${subjectiveSectionMarks}</span>` :`
+  ${isUrdu || isBilingual ? `<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Roll No:_________</span>` : ''}
+  `
+  }
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+   ${mcqPlacement === "three_papers"?`<span class="metaUrdu">وقت: ${subjectiveTimeDisplayUrdu}</span><span class="metaUrdu">تاریخ:${formatPaperDate(dateOfPaper)}</span>` :`
+   
+  ${isUrdu || isBilingual ? `<span class="metaUrdu">سیکشن:۔۔۔۔۔۔</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Section:_______</span>` : ''}
+ `}
     </td>
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Roll No:_________</span>` : ''}
-    </td>
-    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-      ${isUrdu || isBilingual ? `<span class="metaUrdu">سیکشن:۔۔۔۔۔۔</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Section:_______</span>` : ''}
-    </td>
-  </tr>
+</tr>`;
+let htmlNoThreePapers = `  <!-- Row 2 -->
 
-  <!-- Row 2 -->
   <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
     <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
       ${isUrdu || isBilingual ? `<span class="metaUrdu"><strong>کلاس: ${paperClass}</strong></span>` : ''}
@@ -1503,25 +1879,25 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   <!-- Row 3 -->
   <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">`;
 
-   // For separate layout, show different times for objective and subjective
-if (mcqPlacement === 'separate') {
-  // Objective section time
-  htmlContent += `<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+    // For separate layout, show different times for objective and subjective
+    if (mcqPlacement === 'separate') {
+      // Objective section time
+      htmlContent += `<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
     ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${formatTimeForDisplay(timeValues.mcqTime,'ur')}</span>` : ''}
     ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${formatTimeForDisplay(timeValues.mcqTime,'eng')}</span>` : ''}
   </td>`;
-  
-  // Subjective section time (will be shown on separate page)
-  // This goes in the subjective section HTML
-} else {
-  // For same_page and two_papers, show total time
-  htmlContent += `<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+      
+      // Subjective section time (will be shown on separate page)
+      // This goes in the subjective section HTML
+    } else {
+      // For same_page and two_papers, show total time
+      htmlNoThreePapers += `<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
     ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${formatTimeForDisplay(timeValues.subjectiveTime,'urdu')}</span>` : ''}
     ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${formatTimeForDisplay(timeValues.subjectiveTime,'eng')}</span>` : ''}
   </td>`;
-}
+    }
 
-    htmlContent+=`<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+    htmlNoThreePapers += `<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
       ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' ? 
         (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${mcqSectionMarks}</span>` : '') : 
         (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : '')
@@ -1532,92 +1908,95 @@ if (mcqPlacement === 'separate') {
       }
     </td>
    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-   ${mcqPlacement==="separate" ||mcqPlacement==="two_papers" ? (isUrdu || isBilingual ? `<span class="metaUrdu">حصہ معروضی</span>` : '') :  isUrdu || isBilingual ? `<span class="metaUrdu">حصہ معروضی/انشائیہ</span>` : ''} 
-   ${mcqPlacement==="separate" ||mcqPlacement==="two_papers" ? (isEnglish || isBilingual ? `<span class="metaEng">Objective Part</span>` : '') : isEnglish || isBilingual ? `<span class="metaEng">Objective/Subjective Part</span>` : ''} 
+   ${mcqPlacement==="separate" || mcqPlacement==="two_papers" ? (isUrdu || isBilingual ? `<span class="metaUrdu">حصہ معروضی</span>` : '') :  isUrdu || isBilingual ? `<span class="metaUrdu">حصہ معروضی/انشائیہ</span>` : ''} 
+   ${mcqPlacement==="separate" || mcqPlacement==="two_papers" ? (isEnglish || isBilingual ? `<span class="metaEng">Objective Part</span>` : '') : isEnglish || isBilingual ? `<span class="metaEng">Objective/Subjective Part</span>` : ''} 
    </td>
   </tr>
+    `;
+if(mcqPlacement!=="three_papers"){
+
+  htmlContent += htmlNoThreePapers;
+}
+    htmlContent += `
 </table>
-<hr  style="color:black;"/> <br />`;
+<hr  style="color:black;"/> ${mcqPlacement !== 'three_papers' || mcqPlacement !== 'two_papers' ? '' : '<br/>'}`;
 
-  // Add MCQ questions if they exist
-  if (mcqQuestions.length > 0) {
-    htmlContent += `<div class="note">`;
-    if (isUrdu || isBilingual) {
-      htmlContent += `<p class="urdu">نوٹ: ہر سوال کے چار ممکنہ جوابات A,B,C اور D دیئے گئے ہیں۔ درست جواب کے مطابق دائرہ پُر کریں۔ ایک سے زیادہ دائروں کو پُر کرنے کی صورت میں جواب غلط تصور ہوگا۔</p>`;
-    }
-    if (isEnglish || isBilingual) {
-      htmlContent += `<p class="eng">Note: Four possible answers A, B, C and D to each question are given. Fill the correct option's circle. More than one filled circle will be treated wrong.</p>`;
-    }
-    htmlContent += `</div><table>`;
-
-    // Process MCQ questions in the final ordered sequence
-    mcqQuestions.forEach((pq: any, index: number) => {
-      const q = pq.questions;
-      const questionMarks = pq.custom_marks || mcqMarks;
-      
-      const { eng: englishQuestionRaw, ur: urduQuestionRaw } = extractEnglishAndUrdu(q.question_text, q.question_text_ur);
-      const englishQuestion = formatQuestionText(englishQuestionRaw || '');
-      const urduQuestion = formatQuestionText(urduQuestionRaw || '');
-      
-      let questionDisplayHtml = '<div class="question">';
-      if (isEnglish) {
-          questionDisplayHtml += `<span class="eng">${englishQuestion.trim()}</span>`;
-      } else if (isUrdu) {
-          questionDisplayHtml += `<span class="urdu">${urduQuestion.trim() || englishQuestion.trim()}</span>`;
-      } else { // bilingual
-          questionDisplayHtml += `<span class="urdu">${urduQuestion.trim()}</span><span class="eng">${englishQuestion.trim()}</span>`;
+    // FIX: Only add MCQ questions if they exist
+    if (mcqQuestions && mcqQuestions.length > 0) {
+      htmlContent += `<div class="note">`;
+      if (isUrdu || isBilingual) {
+        htmlContent += `<p class="urdu">نوٹ: ہر سوال کے چار ممکنہ جوابات A,B,C اور D دیئے گئے ہیں۔ درست جواب کے مطابق دائرہ پُر کریں۔ ایک سے زیادہ دائروں کو پُر کرنے کی صورت میں جواب غلط تصور ہوگا۔</p>`;
       }
-      
-      // ADD MARKS DISPLAY FOR MCQ
-      //questionDisplayHtml += `<span class="marks-display">[${questionMarks} mark${questionMarks !== 1 ? 's' : ''}]</span>`;
-      
-      questionDisplayHtml += '</div>';
+      if ((isEnglish || isBilingual)&& mcqPlacement !== 'three_papers') {
+        htmlContent += `<p class="eng">Note: Four possible answers A, B, C and D to each question are given. Fill the correct option's circle. More than one filled circle will be treated wrong.</p>`;
+      }
+      htmlContent += `</div><table>`;
 
-      const options = [
-        { 
-          letter: 'A', 
-          english: q.option_a || '', 
-          urdu: hasActualUrduText(q.option_a_ur) ? q.option_a_ur : '',
-          hasUrdu: hasActualUrduText(q.option_a_ur)
-        },
-        { 
-          letter: 'B', 
-          english: q.option_b || '', 
-          urdu: hasActualUrduText(q.option_b_ur) ? q.option_b_ur : '',
-          hasUrdu: hasActualUrduText(q.option_b_ur)
-        },
-        { 
-          letter: 'C', 
-          english: q.option_c || '', 
-          urdu: hasActualUrduText(q.option_c_ur) ? q.option_c_ur : '',
-          hasUrdu: hasActualUrduText(q.option_c_ur)
-        },
-        { 
-          letter: 'D', 
-          english: q.option_d || '', 
-          urdu: hasActualUrduText(q.option_d_ur) ? q.option_d_ur : '',
-          hasUrdu: hasActualUrduText(q.option_d_ur)
+      // Process MCQ questions in the final ordered sequence
+      mcqQuestions.forEach((pq: any, index: number) => {
+        const q = pq.questions;
+        const questionMarks = pq.custom_marks || mcqMarks;
+        
+        const { eng: englishQuestionRaw, ur: urduQuestionRaw } = extractEnglishAndUrdu(q.question_text, q.question_text_ur);
+        const englishQuestion = formatQuestionText(englishQuestionRaw || '');
+        const urduQuestion = formatQuestionText(urduQuestionRaw || '');
+        
+        let questionDisplayHtml = '<div class="question">';
+        if (isEnglish) {
+            questionDisplayHtml += `<span class="eng">${englishQuestion.trim()}</span>`;
+        } else if (isUrdu) {
+            questionDisplayHtml += `<span class="urdu">${urduQuestion.trim() || englishQuestion.trim()}</span>`;
+        } else { // bilingual
+            questionDisplayHtml += `<span class="urdu">${urduQuestion.trim()}</span><span class="eng">${englishQuestion.trim()}</span>`;
         }
-      ];
+        
+        questionDisplayHtml += '</div>';
 
-      let optionsHtml = '';
-      options.forEach(option => {
-        if (option.english || option.urdu) {
-          let optionDisplayHtml = `<span>(${option.letter}) `;
-          if (isEnglish) {
-              optionDisplayHtml += `<span class="eng">${option.english}</span>`;
-          } else if (isUrdu) {
-              optionDisplayHtml += `<span class="urdu">${option.urdu || option.english}</span>`;
-          } else { // bilingual
-              optionDisplayHtml += `<span><span class="urdu">${option.urdu}</span> <span class="eng">${option.english}</span></span>`;
+        const options = [
+          { 
+            letter: 'A', 
+            english: q.option_a || '', 
+            urdu: hasActualUrduText(q.option_a_ur) ? q.option_a_ur : '',
+            hasUrdu: hasActualUrduText(q.option_a_ur)
+          },
+          { 
+            letter: 'B', 
+            english: q.option_b || '', 
+            urdu: hasActualUrduText(q.option_b_ur) ? q.option_b_ur : '',
+            hasUrdu: hasActualUrduText(q.option_b_ur)
+          },
+          { 
+            letter: 'C', 
+            english: q.option_c || '', 
+            urdu: hasActualUrduText(q.option_c_ur) ? q.option_c_ur : '',
+            hasUrdu: hasActualUrduText(q.option_c_ur)
+          },
+          { 
+            letter: 'D', 
+            english: q.option_d || '', 
+            urdu: hasActualUrduText(q.option_d_ur) ? q.option_d_ur : '',
+            hasUrdu: hasActualUrduText(q.option_d_ur)
           }
-          optionDisplayHtml += '</span>';
-          optionsHtml += optionDisplayHtml;
-        }
-      });
+        ];
 
-      // Use the display index (1-based) for numbering - this respects the reordering
-      htmlContent += `
+        let optionsHtml = '';
+        options.forEach(option => {
+          if (option.english || option.urdu) {
+            let optionDisplayHtml = `<span>(${option.letter}) `;
+            if (isEnglish) {
+                optionDisplayHtml += `<span class="eng">${option.english}</span>`;
+            } else if (isUrdu) {
+                optionDisplayHtml += `<span class="urdu">${option.urdu || option.english}</span>`;
+            } else { // bilingual
+                optionDisplayHtml += `<span><span class="urdu">${option.urdu}</span> <span class="eng">${option.english}</span></span>`;
+            }
+            optionDisplayHtml += '</span>';
+            optionsHtml += optionDisplayHtml;
+          }
+        });
+
+        // Use the display index (1-based) for numbering - this respects the reordering
+        htmlContent += `
    <tr>
       <td class="qnum">${index + 1}</td>
       <td>
@@ -1626,72 +2005,104 @@ if (mcqPlacement === 'separate') {
       </td>
     </tr>
   `;
-    });
+      });
 
-    htmlContent += `
+      htmlContent += `
        </table>
-${mcqPlacement==="separate" || mcqPlacement==="two_papers" ? `
-    <div class="footer no-break" style="margin-top: 5px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #ccc; padding-top: 5px;">
-    <p class="english">Generated on ${new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time</p>
-    
-</div>
+${mcqPlacement==="separate" || mcqPlacement==="two_papers" || mcqPlacement==="three_papers" ? `
+    <div class="footer no-break" style="margin-top: ${mcqPlacement==='three_papers'?'0px;':'30px;'} text-align: center; font-size: 12px; color: #666;  padding-top: ${mcqPlacement==='three_papers'?'0px;':'5px;'}">
+    <p class="english">www.examly.pk | Generate papers Save Time | Generated on ${new Date().toLocaleDateString()} by www.examly.pk </p>
+  </div>
   </div>` : ``}
   
 </div>`;
+    } else {
+      console.log('⏭️ No MCQ questions to include in PDF');
+    }
+  } else {
+    // When there are no MCQs, don't generate the MCQ container at all
+    console.log('⏭️ No MCQs in this paper, skipping MCQ section entirely');
   }
 
-
-if(mcqPlacement==="two_papers"){
-  htmlContent += ` <div style="display:flex; align-items:center;">
+  // Handle page break or separation for two_papers layout
+  if (mcqPlacement === "two_papers" && hasMCQs) {
+    htmlContent += ` <div style="display:flex; align-items:center;">
   <span style="font-size:18px; margin-right:6px;">✂</span>
   <hr style="flex:1; border-top: 2px dotted black;" />
 </div>
-`+htmlContent;
-}
+` + (hasMCQs ? htmlContent : '');
+  }else if (mcqPlacement === "three_papers" && hasMCQs) {
 
-htmlContent += ` ${mcqPlacement==="separate" || mcqPlacement==="two_papers"  ? `
-    <!-- Page break before subjective section -->
-    <div style="page-break-before: always;"></div>` : ''}
-`;
-
-
-  // Determine attempt counts once (available to both short and long sections)
-  //const shortToAttempt = Number(paper.short_to_attempt ?? requestData.shortToAttempt ?? requestData.shortCount ?? 0);
-  //const longToAttempt = Number(paper.long_to_attempt ?? requestData.longToAttempt ?? requestData.longCount ?? 0);
- 
-  // Helper: Convert number to roman style (i, ii, iii …)
-  function toRoman(num: number): string {
-    const romans = ['i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii','xiii','xiv','xv','xvi','xvii','xviii'];
-    return romans[num - 1] || num.toString();
+    htmlContent += ` <div style="display:flex; align-items:center;">
+  <span style="font-size:18px; margin-right:6px;">✂</span>
+  <hr style="flex:1; border-top: 2px dotted black;" />
+</div>
+` + (hasMCQs ? htmlContent+`<div style="display:flex; align-items:center;">
+  <span style="font-size:18px; margin-right:6px;">✂</span>
+  <hr style="flex:1; border-top: 2px dotted black;" />
+</div>`+htmlContent : '');
+    
   }
-let subjectiveContent = ``;
-  subjectiveContent += ` <div class="container" ${mcqPlacement === 'two_papers' ? 'style="height:525px; overflow:hidden"' : ''}>
-  ${mcqPlacement==="separate" || mcqPlacement==="two_papers"  ? `
+
+  // FIXED: Always generate subjective section if there are subjective questions or no MCQs at all
+  if (subjectiveQuestions.length > 0 || !hasMCQs) {
+    // Page break logic - only add page break if there are MCQs and placement is separate or two_papers
+    if (hasMCQs && (mcqPlacement === "separate" || mcqPlacement === "two_papers" || mcqPlacement === "three_papers")) {
+      htmlContent += `
+    <!-- Page break before subjective section -->
+    <div style="page-break-before: always;"></div>`;
+    }
+    
+    let subjectiveContent = ``;
+    
+    // FIXED: Determine if we need to show student info table in subjective section
+    // Show student info table in subjective section when:
+    // 1. Placement is separate or two_papers
+    // 2. OR there are no MCQs (paper has only subjective questions)
+    const showSubjectiveStudentInfo = mcqPlacement === "separate" || mcqPlacement === "two_papers" || mcqPlacement === "three_papers" || !hasMCQs;
+    
+    subjectiveContent += ` <div class="container" ${mcqPlacement === 'two_papers' ?  'style="height:525px; overflow:hidden"' : mcqPlacement==='three_papers' ? 'style="height:345px; overflow:hidden"' : ''}>
+  ${showSubjectiveStudentInfo ? `
      <div class="header">
-   <h1 class="eng text-center">
+     ${mcqPlacement==='three_papers' ? `
+      <h1 class="eng text-center">
+      ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="30" width="70"/>` : ''}<br/>
+   <span class="institute" style="font-size:12px; margin-top:-15px !important">   ${englishTitle} </span>
+    </h1>
+
+      ` :`
+      <h1 class="eng text-center">
       ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="60" width="140"/>` : ''} <br/>
    <span class="institute">   ${englishTitle} </span>
     </h1>
-   </div>
+`}
+      </div>
     <!-- Student Info Table -->
 <table style="width:100%; border-collapse:collapse; border:none !important; font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Noto Sans',Arial,sans-serif;">
 <!-- Row 1 -->
 <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
     ${isUrdu || isBilingual ? `<span class="metaUrdu">نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>` : ''}
-    ${isEnglish || isBilingual ? `<span class="metaEng">Student Name:_________</span>` : ''}
+    ${mcqPlacement === "three_papers"?`<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>`: isEnglish || isBilingual ? `<span class="metaEng">Student Name:_________</span>` : ''}
   </td>
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-    ${isUrdu || isBilingual ? `<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>` : ''}
+  ${mcqPlacement === "three_papers"?`<span class="metaUrdu">مضمون: ${subject_ur}(${paperClass} کلاس)</span> <span class="metaUrdu">کل نمبر: ${subjectiveSectionMarks}</span>` :`
+  ${isUrdu || isBilingual ? `<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>` : ''}
     ${isEnglish || isBilingual ? `<span class="metaEng">Roll No:_________</span>` : ''}
+  `
+  }
   </td>
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-    ${isUrdu || isBilingual ? `<span class="metaUrdu">سیکشن:۔۔۔۔۔۔</span>` : ''}
+   ${mcqPlacement === "three_papers"?`<span class="metaUrdu">وقت: ${subjectiveTimeDisplayUrdu}</span><span class="metaUrdu">تاریخ:${formatPaperDate(dateOfPaper)}</span>` :`
+   
+  ${isUrdu || isBilingual ? `<span class="metaUrdu">سیکشن:۔۔۔۔۔۔</span>` : ''}
     ${isEnglish || isBilingual ? `<span class="metaEng">Section:_______</span>` : ''}
-  </td>
+ `}
+    </td>
 </tr>
 
 <!-- Row 2 -->
+${mcqPlacement === "three_papers"?``:`
 <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
     ${isUrdu || isBilingual ? `<span class="metaUrdu"><strong>کلاس: ${paperClass}</strong></span>` : ''}
@@ -1714,11 +2125,11 @@ let subjectiveContent = ``;
     ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${subjectiveTimeDisplayEng}</span>` : ''}
   </td>
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
-      ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' ? 
+      ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' || !hasMCQs ? 
         (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${subjectiveSectionMarks}</span>` : '') : 
         (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : '')
       }
-      ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' ? 
+      ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' || !hasMCQs ? 
         (isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${subjectiveSectionMarks}</span>` : '') : 
         (isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : '')
       }
@@ -1729,208 +2140,1328 @@ let subjectiveContent = ``;
       ${isEnglish || isBilingual ? `<span class="metaEng">Subjective Part</span>` : ''}
     </td>
 </tr>
+  
+  `}
 </table>
 <hr  style="color:black;"/>  `:``
   }    
   `;
 
-  // Add subjective questions
-  if (subjectiveQuestions.length > 0) {
-    subjectiveContent += `
+    // FIX: Only add subjective content if we have subjective questions
+    if (subjectiveQuestions && subjectiveQuestions.length > 0) {
+      // Get unique subjective types in order they appear
+      const subjectiveTypes = [...new Set(subjectiveQuestions.map(pq => pq.question_type))];
 
-   <div class="header" style="font-size:13px; font-weight:bold; display: flex; align-items: baseline; justify-content: center; gap: 5px;">
+      // Add subjective questions sections
+      // BOARD PAPER: Group short questions into 6 per group with "attempt 4" instructions
+      if (isBoardPaper) {
+        console.log('📋 Rendering board pattern paper (model paper) with grouped short questions');
+        let partNumber = 2; // Next part number after short questions
+        let questionNumber:number = 1;
+        // Part I - Short Questions (grouped)
+        if (shortQuestions.length > 0) {
+          // Marks per question (safe fallback)
+// ✅ Get marks per short question (global)
+const shortMarksPerQuestion = shortQuestions[0]?.custom_marks ?? shortMarks;
+// ✅ Attempt count for short questions
+const shortToAttemptValue = getToAttemptForType('short');
+// ✅ Total marks for short-question instruction
+const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
+
+
+  subjectiveContent += `<div class="header" style="font-size:13px; font-weight:bold; display: flex; align-items: baseline; justify-content: center; gap: 5px;">
     (
     ${(isEnglish || isBilingual) ? `<span class="english" style="vertical-align: baseline;">Part - I</span>` : ''}
     ${(isUrdu || isBilingual) ? `<span class="urdu" style="vertical-align: baseline; position: relative; top: 1px;">حصہ اول</span>` : ''}
     )
   </div>
-  
+  `;
+
+
+  // Poetry Explanation (Urdu)
+        if (poetryExplanationQuestions.length > 0) {
+          const toAttemptForType = getToAttemptForType('poetry_explanation');
+          const showAttemptAny = toAttemptForType > 0 && toAttemptForType < poetryExplanationQuestions.length;
+          // ✅ Marks per poetry explanation (safe global)
+// Ensure numbers
+const marksPerQuestion = Number(poetryExplanationQuestions[0]?.custom_marks ?? poetry_explanationMarks) || 0;
+const toAttempt = Number(toAttemptForType) || 0;
+const totalQuestions = poetryExplanationQuestions.length;
+const totalMarks = (showAttemptAny ? toAttempt : totalQuestions) * marksPerQuestion;
+questionNumber=questionNumber+1;
+subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+
+if (isUrdu || isBilingual) {
+  if (showAttemptAny) {
+    subjectiveContent += `
+  <div class="urdu" style="text-align:right; direction:rtl; font-size:14px; font-weight:bold;">
+    <span dir="ltr" style="font-weight:bold; margin-left:4px;">
+      .${questionNumber}
+    </span>
+    کوئی سے ${toAttempt} اشعار کی تشریح کریں۔
+  </div>
 `;
 
-    const isBoardPaper = (paper.paper_type === 'model' || requestData.paperType === 'model');
+  } else {
+    subjectiveContent += `<div class="urdu" style="text-align: right; direction: rtl;  font-size:14px; font-weight:bold;"> 
+     درج ذیل اشعار کی تشریح کریں۔<strong>${questionNumber}.</strong>
+    </div>`;
+  }
+}
 
-    if (shortQuestions.length > 0) {
-      if (isBoardPaper) {
-        // Board Paper: group short questions (e.g. 6 per group) and show per-group instruction with attempt count
-        const questionsPerGroup = 6;
-        const totalGroups = Math.ceil(shortQuestions.length / questionsPerGroup);
+subjectiveContent += `</div>`; // close instructions1
 
-        for (let g = 0; g < totalGroups; g++) {
-          const groupQuestions = shortQuestions.slice(
-            g * questionsPerGroup,
-            (g + 1) * questionsPerGroup
-          );
+          subjectiveContent += `</div>`;
+       for (let i = 0; i < poetryExplanationQuestions.length; i += 2) {
+  subjectiveContent += `<div class="question-row urdu" style="display:flex;  gap:10px; margin-bottom:5px; ">`;
 
-          // Q. numbering starts from 2 for Part I in board layout, keep group index as displayed number
-          const questionNumber = g + 2;
+  for (let j = i; j < i + 2 && j < poetryExplanationQuestions.length; j++) {
+    const pq = poetryExplanationQuestions[j];
+    const q = pq.questions;
+    const questionMarks = pq.custom_marks || poetry_explanationMarks;
+    const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+    const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+    const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
 
-          let instructionHtml = '<div style="display:flex; justify-content:space-between; margin-bottom:2px; margin-top:4px; font-weight:bold">';
-          if (isEnglish || isBilingual) {
-            instructionHtml += `<div class="eng"><strong>${questionNumber}.</strong> Write short answers to any ${isBoardPaper?'4': shortToAttempt} question(s).</div>`;
-          }
-          if (isUrdu || isBilingual) {
-            instructionHtml += `<div class="urdu" style="direction:rtl;"><strong><span>${questionNumber}.</span> جوابات میں سے ${isBoardPaper?'4': shortToAttempt}  سوالات کے مختصر جوابات لکھیں۔ </strong></div>`;
-          }
-          instructionHtml += '</div>';
+    let questionDisplayHtml = `<div class="long-question" style="flex:1; font-size:12px; line-height:1.4;">`;
 
-          subjectiveContent += `
-    
-    <div class="short-questions ${isUrdu ? 'urdu' : ''}" style="line-height:1.2; font-size:12px;">
-      ${instructionHtml}
-  `;
+  if (isUrdu) {
+      questionDisplayHtml += `
+        <div style="display:flex; align-items:flex-start; gap:5px; direction:rtl; text-align:right;">
+          <div style="flex-shrink:0; font-weight:bold;">
+            (${toRoman(j + 1)})
+          </div>
+          <div style="flex:1;" class="urdu">
+            ${urduQuestion} <span class="marks-display">(${questionMarks})</span>
+          </div>
+        </div>
+      `;
+    } 
 
-          groupQuestions.forEach((pq: any, idx: number) => {
-            const q = pq.questions;
-            const questionMarks = pq.custom_marks || shortMarks;
-            
-            const { eng: englishQuestionRaw, ur: urduQuestionRaw } = extractEnglishAndUrdu(q.question_text, q.question_text_ur);
-            const englishQuestion = formatQuestionText(englishQuestionRaw || '');
-            const urduQuestion = formatQuestionText(urduQuestionRaw || '');
-
-            let questionItemHtml = '<div class="short-question-item" style="display:flex; justify-content:space-between; margin-bottom:0px; line-height:1.5; font-size:12px;">';
-            if (isEnglish) {
-                questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
-            } else if (isUrdu) {
-                questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion || englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
-            } else { // bilingual
-                questionItemHtml += `<div class="eng">(${toRoman(idx + 1)}) ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
-                if (hasActualUrduText(urduQuestion)) {
-                    questionItemHtml += `<div class="urdu" style="direction:rtl;">(${toRoman(idx + 1)}) ${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
-                }
-            }
-            questionItemHtml += '</div>';
-
-            subjectiveContent += `
-       ${questionItemHtml}
-    `;
-          });
-
-          subjectiveContent += `
-     </div>
-  `;
-        }
-      } else {
-        // Custom Paper: single heading + flat list of all short questions
-        let instructionHtml = '<div style="display:flex;  justify-content:space-between; margin-bottom:0px; font-weight:bold">';
-        if (isEnglish || isBilingual) {
-          instructionHtml += `<div class="eng"> Write short answers of any ${shortToAttempt} question(s).</div>`;
-        }
-        if (isUrdu || isBilingual) {
-          instructionHtml += `<div class="urdu" style="direction:rtl;">  کوئی سے  ${shortToAttempt} سوالات کے مختصرجوابات تحریر کریں۔</div>`;
-        }
-        instructionHtml += '</div>';
-
-        subjectiveContent += `<div class="short-questions ${isUrdu ? 'urdu' : ''}"> ${instructionHtml}`;
-
-        shortQuestions.forEach((pq: any, idx: number) => {
-          const q = pq.questions;
-          const questionMarks = pq.custom_marks || shortMarks;
-          
-          const { eng: englishQuestionRaw, ur: urduQuestionRaw } = extractEnglishAndUrdu(q.question_text, q.question_text_ur);
-          const englishQuestion = formatQuestionText(englishQuestionRaw || '');
-          const urduQuestion = formatQuestionText(urduQuestionRaw || '');
-
-          let questionItemHtml = '<div class="short-question-item" style="display:flex; justify-content:space-between; margin-bottom:0px; line-height:1.5; font-size:12px;">';
-          if (isEnglish) {
-              questionItemHtml += `<div class="eng">(${idx + 1}) ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
-          } else if (isUrdu) {
-              questionItemHtml += `<div class="urdu" style="direction:rtl;">(${idx + 1}) ${urduQuestion || englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
-          } else { // bilingual
-              questionItemHtml += `<div class="eng">(${idx + 1}) ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
-              if (hasActualUrduText(urduQuestion)) {
-                  questionItemHtml += `<div class="urdu" style="direction:rtl;">(${idx + 1}) ${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
-              }
-          }
-          questionItemHtml += '</div>';
-
-          subjectiveContent += `
-          ${questionItemHtml}
-        `;
-        });
-
-        subjectiveContent += `</div>`;
-      }
-    }
+    questionDisplayHtml += `</div>`; // end question container
+    subjectiveContent += questionDisplayHtml;
   }
 
-  // Add long questions
-  if (longQuestions.length > 0) {
-    // Long Questions Section Header
+  subjectiveContent += `</div>`; // end row
+}
+
+          
+          partNumber++;
+        }
+        // Group short questions (6 per group)
+             let questionsPerGroup = 6;
+          if(subject==='urdu' || subject_ur==='اردو'|| subject==='English'|| subject==='english' || subject === 'tarjuma ul quran'){
+              questionsPerGroup=8;
+          }else if(subject==='Islamiyat'|| subject_ur==='اسلامیات'){
+              questionsPerGroup=9;
+          }
+          //const questionsPerGroup = 6;
+          const totalGroups = Math.ceil(shortQuestions.length / questionsPerGroup);
+        for (let g = 0; g < totalGroups; g++) {
+            const groupQuestions = shortQuestions.slice(
+              g * questionsPerGroup,
+              (g + 1) * questionsPerGroup
+            );
+
+            // Q. numbering starts from 2 for Part I in board layout
+             questionNumber = g + 2;
+ // Get toAttempt value for short questions
+            const shortToAttemptValue = getToAttemptForType('short');
+            const showAttemptAny = shortToAttemptValue < groupQuestions.length;
+ let instructionHtml = '<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">';
+            if (isEnglish || isBilingual) {
+              if (showAttemptAny) {
+                instructionHtml += `<div class="eng" style="vertical-align: baseline;"><strong>${questionNumber}.</strong> Write short answers to any ${shortToAttemptValue} question(s). (${shortToAttemptValue} x ${shortMarksPerQuestion} = ${shortTotalMarks})</div>`;
+              } else {
+                instructionHtml += `<div class="eng" style="vertical-align: baseline;"><strong>${questionNumber}.</strong> Write short answers to the following questions. (${shortTotalMarks})</div>`;
+              }
+            }
+            if (isUrdu || isBilingual) {
+              if (showAttemptAny) {
+                instructionHtml += `<div class="urdu" style="direction:rtl;"><strong><span>${subject==="urdu" ? questionNumber+1 :questionNumber}.</span> سوالات میں سے ${shortToAttemptValue}  سوالات کے مختصر جوابات لکھیں۔ </strong></div>`;
+              } else {
+                instructionHtml += `<div class="urdu" style="direction:rtl;"><strong><span>${subject==="urdu" ? questionNumber+1 :questionNumber}.</span> درج ذیل سوالات کے مختصر جوابات لکھیں۔ </strong></div>`;
+              }
+            }
+            instructionHtml += '</div>';
+           subjectiveContent += `
+              <div class="short-questions ${isUrdu ? 'urdu' : ''}" style="line-height:1.2; font-size:12px;">
+      ${instructionHtml}
+  `;
+if (subject === 'urdu') {
+  // For Urdu, two questions per row
+  for (let i = 0; i < groupQuestions.length; i += 2) {
+    subjectiveContent += `<div class="short-question-row" style="display:flex; gap:10px; margin-bottom:2px;">`;
+
+    for (let j = i; j < i + 2 && j < groupQuestions.length; j++) {
+      const pq = groupQuestions[j];
+      const q = pq.questions;
+      const questionMarks = pq.custom_marks || shortMarks;
+      const { eng: englishQuestionRaw, ur: urduQuestionRaw } = extractEnglishAndUrdu(q.question_text, q.question_text_ur);
+      const urduQuestion = formatQuestionText(urduQuestionRaw || englishQuestionRaw || '');
+
+      subjectiveContent += `
+        <div class="short-question-item" style="flex:1; line-height:1.5; font-size:12px;">
+          <div style="display:flex; align-items:flex-start; gap:5px; direction:rtl; text-align:right;">
+            <div style="flex-shrink:0; font-weight:bold;">(${toRoman(j + 1)})</div>
+            <div style="flex:1;">${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>
+          </div>
+        </div>
+      `;
+    }
+
+    subjectiveContent += `</div>`; // end row
+  }
+} else {
+  // For English or bilingual, one question per row
+  groupQuestions.forEach((pq: any, idx: number) => {
+    const q = pq.questions;
+    const questionMarks = pq.custom_marks || shortMarks;
+    const { eng: englishQuestionRaw, ur: urduQuestionRaw } = extractEnglishAndUrdu(q.question_text, q.question_text_ur);
+    const englishQuestion = formatQuestionText(englishQuestionRaw || '');
+    const urduQuestion = formatQuestionText(urduQuestionRaw || '');
+    const hasUrdu = hasActualUrduText(urduQuestion);
+
     subjectiveContent += `
+  <div class="short-question-item" style="line-height:1.0; font-size:12px; margin-bottom:0px;">
+    <div style="display:flex; align-items:flex-start; gap:5px;">
+      <!-- English question with number -->
+      <div style="flex-shrink:0; font-weight:bold;">(${toRoman(idx + 1)})</div>
+      <div style="flex:1;">
+        ${englishQuestion} <span class="marks-display">(${questionMarks})</span>
+      </div>
+    </div>
+
+    ${(!isEnglish && hasUrdu) ? `
+      <!-- Urdu question with its own number -->
+      <div style="display:flex; align-items:flex-start; gap:5px; direction:rtl; text-align:right; margin-top:0px;">
+        <div style="flex-shrink:0; font-weight:bold;" class="urdu">(${toRoman(idx + 1)})</div>
+        <div style="flex:1;" class="urdu">
+          ${urduQuestion} <span class="marks-display">(${questionMarks})</span>
+        </div>
+      </div>
+    ` : ''}
+  </div>
+`;
+
+  });
+}
+
+ subjectiveContent += `
+     </div>
+  `;
+          }
+        } else {
+          console.log('⏭️ No short questions for board paper');
+        }
+
+        
+   // Translate Urdu (English)
+        if (translateUrduQuestions.length > 0) {
+          const toAttemptForType = getToAttemptForType('translate_urdu');
+          const showAttemptAny = toAttemptForType > 0 && toAttemptForType < translateUrduQuestions.length;
+          // ✅ Marks per translation question (safe global)
+        const translateUrduMarksPerQuestion = translateUrduQuestions[0]?.custom_marks ?? translate_urduMarks;
+// ✅ Total marks for translation section
+        const translateUrduTotalMarks =(showAttemptAny ? toAttemptForType : translateUrduQuestions.length) * translateUrduMarksPerQuestion;
+
+ subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+         if (isEnglish || isBilingual) {
+            if (showAttemptAny) {
+              subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline;"><span>${Number(questionNumber)+1 }.</span> Translate any ${toAttemptForType} of the following paragraphs into Urdu. (${toAttemptForType} x ${translateUrduMarksPerQuestion} = ${translateUrduTotalMarks})</div>`;
+            } else {
+              subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline;"><span>${Number(questionNumber)+1 }.</span> Translate the following paragraphs into Urdu. (${toAttemptForType} x ${translateUrduMarksPerQuestion} = ${translateUrduTotalMarks})</div>`;
+            }
+          }
+          subjectiveContent += `</div>`;
+          translateUrduQuestions.forEach((pq: any, idx: number) => {
+            const q = pq.questions;
+            const questionMarks = pq.custom_marks || translate_urduMarks;
+            const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+            const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+            const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+            let questionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:5px;  line-height:1.4;">';
+            if (isEnglish) {
+                questionDisplayHtml += `<div class="eng" style="width:100%;">
+                 <div style="display:flex; align-items:flex-start; gap:6px;">
+                 <div style="flex-shrink:0; font-weight:bold;">(${toRoman(idx + 1)})</div>
+             <div style="flex:1;">${englishQuestion}
+                <span class="marks-display">(${questionMarks})</span>
+            </div></div>
+`;
+            
+            }
+            questionDisplayHtml += `</div></div>`;
+
+            subjectiveContent += `
+            ${questionDisplayHtml}
+         `;
+          });
+          
+          partNumber++;
+        }
+        // Part II - Long Questions
+        if (longQuestions.length > 0) {
+          if(subject==='urdu' || subject_ur==='اردو'|| subject==='English'|| subject==='english'){
+          subjectiveContent += `
   <div class="header" style="font-weight:bold; display: flex; align-items: baseline; justify-content: center; gap: 5px;">
     (
     ${(isEnglish || isBilingual) ? `<span class="english" style="vertical-align: baseline;">Part - II</span>` : ''}
     ${(isUrdu || isBilingual) ? `<span class="urdu" style="vertical-align: baseline; position: relative; top: 1px;">حصہ دوم</span>` : ''}
     )
-  </div>
-  <div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+  </div>`;
+          }
+          
+        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; margin-bottom: 2px; margin-top: 4px; display: flex; flex-direction: column;">`;
 
-    // use computed longToAttempt above (fallbacks already applied)
-    if (isEnglish || isBilingual) {
-      subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline;"><span>Note:</span> Attempt any ${longToAttempt} question(s) in detail.</div>`;
-    }
-    if (isUrdu || isBilingual) {
-      subjectiveContent += `<div class="instruction-text urdu" style="direction: rtl; vertical-align: baseline; position: relative; top: 1px;"><span>نوٹ:</span> کوئی ${longToAttempt} سوالات کے تفصیل سے جوابات تحریر کریں۔</div>`;
-    }
-    subjectiveContent += `</div>
-`;
-    longQuestions.forEach((pq: any, idx: number) => {
-      const q = pq.questions;
-      const questionMarks = pq.custom_marks || longMarks;
-      
-      const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
-      const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
-      const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+const longToAttemptValue = getToAttemptForType('long');
+const showAttemptAny = longToAttemptValue < longQuestions.length;
 
-      // Sub-questions (not implemented in current schema, but keeping for future)
-      const subQuestions: any[] = [];
-      let subQsHTML = '';
+// English
+if (isEnglish || isBilingual) {
+  if (showAttemptAny) {
+    subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline; text-align:left;"><span>Note:</span> Attempt any ${longToAttemptValue} question(s) in detail.</div>`;
+  } else {
+    subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline; text-align:left;"><span>Note:</span> Attempt the following questions in detail.</div>`;
+  }
+}
 
-      if (subQuestions.length > 0) {
-        subQsHTML += `
-      <div style="display: flex; justify-content:space-between; font-size:12px; margin-top:0px; line-height:1.5;">
-        ${isEnglish || isBilingual ? `<div class="eng" style="width: 48%;"><ol type="a">${subQuestions.map((sq: any) => `<li>${formatQuestionText(sq.question_text || '')}</li>`).join('')}</ol></div>` : ''}
-        ${isUrdu || isBilingual ? `<div class="urdu" style="width: 48%; direction: rtl; text-align: right;"><ol type="a">${subQuestions.map((sq: any) => `<li>${formatQuestionText(sq.question_text_ur || '')}</li>`).join('')}</ol></div>` : ''}
+// Urdu
+if (isUrdu || isBilingual) {
+  if (showAttemptAny) {
+    if(subject==='urdu'){
+    subjectiveContent += `<div class="instruction-text urdu" style="direction:rtl; text-align:right;"><span>نوٹ:</span>کوئی سے ${longToAttemptValue} سوالات کے جوابات تحریر کریں۔</div>`;
+  }else{
+ subjectiveContent += `<div class="instruction-text urdu" style="direction:rtl; text-align:right;"><span>نوٹ:</span>کوئی سے ${longToAttemptValue} سوالات کے تفصیل سے جوابات تحریر کریں۔</div>`;
+
+}  } else {
+    subjectiveContent += `<div class="instruction-text urdu" style="direction:rtl; text-align:right;"><span>نوٹ:</span> درج ذیل سوالات کے تفصیل سے جوابات تحریر کریں۔</div>`;
+  }
+}
+
+subjectiveContent += `</div>`; // end instructions1
+questionNumber=questionNumber+1;
+  longQuestions.forEach((pq: any, idx: number) => {
+  const q = pq.questions;
+  const questionMarks = pq.custom_marks || longMarks;
+  questionNumber = Number(questionNumber) + 1;
+  const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+  const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+  const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+
+  let longQuestionDisplayHtml = `<div class="long-question" style="margin-bottom:2px;">`;
+  longQuestionDisplayHtml += `<div style="display: flex; justify-content:space-between; font-size:11px; margin-top:0px; line-height:1.2;">`;
+
+  if (isEnglish) {
+    longQuestionDisplayHtml += `
+      <div class="eng" style="${subject==='urdu'||subject==='english'||subject==='English'?'vertical-align: baseline; line-height:1.6; font-weight:bold':''}; width:100%;">
+        <div style="display:flex; align-items:flex-start; gap:5px;">
+          <div style="flex-shrink:0;"><strong>${subject==='urdu'||subject==='english'||subject==='English' ? questionNumber : `Q.${idx + 1}`}.</strong></div>
+          <div style="flex:1;">${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>
+        </div>
       </div>
     `;
-      }
-
-      let longQuestionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:0px;  line-height:1.2;">';
-      if (isEnglish) {
-          longQuestionDisplayHtml += `<div class="eng" style="width:100%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
-      } else if (isUrdu) {
-          longQuestionDisplayHtml += `<div class="urdu" style="width:100%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion}<span class="marks-display">(${questionMarks})</span></div>`;
-      } else { // bilingual
-          longQuestionDisplayHtml += `<div class="eng" style="width:48%;"><strong>Q.${idx + 1}.</strong> ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
-          if (hasUrduQuestion) {
-              longQuestionDisplayHtml += `<div class="urdu" style="width:48%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong>${urduQuestion}<span class="marks-display">(${questionMarks})</span></div>`;
-          }
-      }
-      longQuestionDisplayHtml += `</div>${subQsHTML}</div>`;
-
-      subjectiveContent += `
-    ${longQuestionDisplayHtml}
-  `;
-    });
+  } else if (isUrdu) {
+    longQuestionDisplayHtml += `
+      <div class="urdu" style="width:100%; direction:rtl; text-align:right;">
+        <div style="display:flex; align-items:flex-start; gap:5px; ${subject==='urdu'?' font-size:14px; font-weight:bold; line-height:1.6;':''}">
+          <div style="flex-shrink:0;"><strong>${subject==='urdu' ? questionNumber : `سوال ${idx + 1}`}.</strong></div>
+          <div style="flex:1;">${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>
+        </div>
+      </div>
+    `;
+  } else { // bilingual
+    longQuestionDisplayHtml += `
+      <div class="eng" style="width:48%;">
+        <div style="display:flex; align-items:flex-start; gap:5px;">
+          <div style="flex-shrink:0;"><strong>Q.${idx + 1}.</strong></div>
+          <div style="flex:1;">${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>
+        </div>
+      </div>
+    `;
+    if (hasUrduQuestion) {
+      longQuestionDisplayHtml += `
+        <div class="urdu" style="width:48%; direction:rtl; text-align:right;">
+          <div style="display:flex; align-items:flex-start; gap:5px;">
+            <div style="flex-shrink:0;"><strong>سوال ${idx + 1}:</strong></div>
+            <div style="flex:1;">${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>
+          </div>
+        </div>
+      `;
+    }
   }
 
+  longQuestionDisplayHtml += `</div></div>`; // close inner flex + long-question container
+  subjectiveContent += longQuestionDisplayHtml;
+});
+
+        } else {
+          console.log('⏭️ No long questions for board paper');
+        }
+        
+        // Additional Urdu/English question types for board paper
+        // Start from Part III for additional types
+        
+        
+        
+        // Prose Explanation (Urdu)
+        if (proseExplanationQuestions.length > 0) {
+          const toAttemptForType = getToAttemptForType('prose_explanation');
+          const showAttemptAny = toAttemptForType > 0 && toAttemptForType < proseExplanationQuestions.length;
+          // Marks per prose explanation (safe global)
+const proseExplanationMarksPerQuestion =
+  proseExplanationQuestions[0]?.custom_marks ?? prose_explanationMarks;
+questionNumber  = questionNumber+1;
+// Total marks
+const proseExplanationTotalMarks =
+  (showAttemptAny ? toAttemptForType : proseExplanationQuestions.length) *
+  proseExplanationMarksPerQuestion;
+
+   subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+          if (isUrdu || isBilingual) {
+            if (showAttemptAny) {
+              subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;">  <span dir="ltr" style="font-weight:bold; margin-left:4px;">
+      .${questionNumber}
+    </span>
+    کوئی سے ${toAttemptForType} نثرپاروں کی تشریح کریں۔سبق کا نام اورمصنف کا نام بھی لکھیں۔</div>`;
+            } else {
+              subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;">  <span dir="ltr" style="font-weight:bold; margin-left:4px;">
+      .${questionNumber}
+    </span>
+    درج ذیل نثرپاروں کی تشریح کریں۔سبق کا نام اورمصنف کا نام بھی لکھیں۔</div>`;
+            }
+          }
+          subjectiveContent += `</div>`;
+          
+         proseExplanationQuestions.forEach((pq: any, idx: number) => {
+  const q = pq.questions;
+  const questionMarks = pq.custom_marks || prose_explanationMarks;
+  
+  const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+  const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+  const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+
+  let questionDisplayHtml = `<div class="long-question" style="margin-bottom:2px;">`;
+
+
+   if (isUrdu) {
+    questionDisplayHtml += `
+      <div class="urdu" style="width:100%; direction:rtl; text-align:justify;">
+        <div style="display:flex; align-items:flex-start; gap:5px; font-size:12px; line-height:1.4;">
+          <div style="flex-shrink:0;"><strong>(${toRoman(idx + 1)})</strong></div>
+          <div style="flex:1;">${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>
+        </div>
+      </div>
+    `;
+  }
+
+  questionDisplayHtml += `</div>`; // end long-question
+  subjectiveContent += questionDisplayHtml;
+});
+
+          
+          partNumber++;
+        }
+
+   // sentence correction jumlo ki darustgi. (urdu subject)
+        if (sentenceCorrectionQuestions.length > 0) {
+          const toAttemptForType = getToAttemptForType('sentence_correction');
+          const showAttemptAny = toAttemptForType > 0 && toAttemptForType < sentenceCorrectionQuestions.length;
+          // ✅ Marks per translation question (safe global)
+         questionNumber  = questionNumber+1;
+        const translateUrduMarksPerQuestion = translateUrduQuestions[0]?.custom_marks ?? translate_urduMarks;
+// ✅ Total marks for translation section
+        const translateUrduTotalMarks =(showAttemptAny ? toAttemptForType : translateUrduQuestions.length) * translateUrduMarksPerQuestion;
+
+        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+         if (isUrdu || isBilingual) {
+            if (showAttemptAny) {
+              subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;">
+               <span dir="ltr" style="font-weight:bold; margin-left:4px;">
+      .${questionNumber}
+    </span>
+              کوئی سے ${toAttemptForType} جملوں کی درستی کیجئے۔</div>`;
+            } else {
+              subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;"> <span dir="ltr" style="font-weight:bold; margin-left:4px;">
+      .${questionNumber}
+    </span> درج ذیل جملوں کی درستی کیجئے۔</div>`;
+            }
+          }
+          subjectiveContent += `</div>`;
+         for (let i = 0; i < sentenceCorrectionQuestions.length; i += 3) {
+
   subjectiveContent += `
+        <div style="display:flex; gap:10px; margin-bottom:4px; direction:rtl;">
+
+  `;
+
+  for (let j = i; j < i + 3 && j < sentenceCorrectionQuestions.length; j++) {
+
+    const pq = sentenceCorrectionQuestions[j];
+    const q = pq.questions;
+    const questionMarks = pq.custom_marks || translate_urduMarks;
+    const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+
+    subjectiveContent += `
+      <div class="urdu" style="flex:1; font-size:12px; line-height:1.4;">
+        <div style="display:flex; align-items:flex-start; gap:5px; ">
+          
+          <!-- Question Number -->
+          <div style="flex-shrink:0; font-weight:bold;">
+            (${toRoman(j + 1)})
+          </div>
+
+          <!-- Question Text -->
+          <div style="flex:1;">
+            ${englishQuestion}
+            <span class="marks-display">(${questionMarks})</span>
+          </div>
+
+        </div>
+      </div>
+    `;
+  }
+
+  subjectiveContent += `</div>`;
+}
+
+          
+          partNumber++;
+        }
+
+         // sentence completeness jumlo ki Takmeel. (urdu subject)
+        if (sentenceCompletionQuestions.length > 0) {
+          const toAttemptForType = getToAttemptForType('sentence_completion');
+          const showAttemptAny = toAttemptForType > 0 && toAttemptForType < sentenceCompletionQuestions.length;
+          // ✅ Marks per translation question (safe global)
+          questionNumber  = questionNumber+1;
+         console.log('📝 sentenceCompletionQuestions:', sentenceCompletionQuestions);
+        const translateUrduMarksPerQuestion = translateUrduQuestions[0]?.custom_marks ?? translate_urduMarks;
+// ✅ Total marks for translation section
+        const translateUrduTotalMarks =(showAttemptAny ? toAttemptForType : translateUrduQuestions.length) * translateUrduMarksPerQuestion;
+
+        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+         if (isUrdu || isBilingual) {
+            if (showAttemptAny) {
+              subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;"> 
+               <span dir="ltr" style="font-weight:bold; margin-left:4px;">
+      .${questionNumber}
+    </span>
+              کوئی سے ${toAttemptForType} جملوں کی تکمیل کیجئے۔</div>`;
+            } else {
+              subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;"> 
+               <span dir="ltr" style="font-weight:bold; margin-left:4px;">
+      .${questionNumber}
+    </span>
+              درج ذیل جملوں کی تکمیل کیجئے۔</div>`;
+            }
+          }
+          subjectiveContent += `</div>`;
+         for (let i = 0; i < sentenceCompletionQuestions.length; i += 3) {
+
+  subjectiveContent += `
+    <div style="display:flex; gap:10px; margin-bottom:4px; direction:rtl;">
+  `;
+
+  for (let j = i; j < i + 3 && j < sentenceCompletionQuestions.length; j++) {
+
+    const pq = sentenceCompletionQuestions[j];
+    const q = pq.questions;
+    const questionMarks = pq.custom_marks || translate_urduMarks;
+    const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+
+    subjectiveContent += `
+      <div class="urdu" style="flex:1; font-size:11px; line-height:1.4;">
+        <div style="display:flex; align-items:flex-start; gap:5px;">
+          
+          <!-- Question Number -->
+          <div style="flex-shrink:0; font-weight:bold;">
+            (${toRoman(j + 1)})
+          </div>
+
+          <!-- Question Text -->
+          <div style="flex:1;">
+            ${englishQuestion}
+            <span class="marks-display">(${questionMarks})</span>
+          </div>
+
+        </div>
+      </div>
+    `;
+  }
+
+  subjectiveContent += `</div>`;
+}
+
+          
+          partNumber++;
+        }
+
+
+
+         // Passage (English)
+        if (passageQuestions.length > 0) {
+          const toAttemptForType = getToAttemptForType('passage');
+          const showAttemptAny = toAttemptForType > 0 && toAttemptForType < passageQuestions.length;
+          questionNumber  = questionNumber+1;  
+          // Marks per passage question
+const passageMarksPerQuestion =
+  passageQuestions[0]?.custom_marks ?? passageMarks;
+
+// Total marks
+const passageTotalMarks =(showAttemptAny ? toAttemptForType : passageQuestions.length) * passageMarksPerQuestion;
+
+        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+          if (isEnglish || isBilingual) {
+            if (showAttemptAny) {
+              subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline;"><span>${questionNumber}. </span>Read the following passage carefully and answer the questions given at the end. (${showAttemptAny ? toAttemptForType : passageQuestions.length}x${passageMarksPerQuestion}  = ${passageTotalMarks})</div>`;
+            } else {
+              subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline;"><span>${questionNumber}. </span>Read the following passage carefully and answer the questions given at the end. (${showAttemptAny ? toAttemptForType : passageQuestions.length}x${passageMarksPerQuestion} = ${passageTotalMarks})</div>`;
+            }
+          }
+          subjectiveContent += `</div>`;
+          
+          passageQuestions.forEach((pq: any, idx: number) => {
+            const q = pq.questions;
+            const questionMarks = pq.custom_marks || passageMarks;
+           const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+            const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+            const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+            let questionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:5px;  line-height:1.2;">';
+            if (isEnglish) {
+                questionDisplayHtml += `<div class="eng" style="width:100%;"> ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
+            } else if (isUrdu) {
+                questionDisplayHtml += `<div class="urdu" style="width:100%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion}<span class="marks-display">(${questionMarks})</span></div>`;
+            } else { // bilingual
+                questionDisplayHtml += `<div class="eng" style="width:48%;"> ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
+                if (hasUrduQuestion) {
+                questionDisplayHtml += `<div class="urdu" style="width:48%; direction:rtl; text-align:right;">${urduQuestion}<span class="marks-display">(${questionMarks})</span></div>`;
+                }
+            }
+            questionDisplayHtml += `</div></div>`;
+
+            subjectiveContent += `
+            ${questionDisplayHtml}
+         `;
+          });
+          
+          partNumber++;
+        }
+
+          // Translate into English (English)
+        if (translateEnglishQuestions.length > 0) {
+          const toAttemptForType = getToAttemptForType('translate_english');
+          const showAttemptAny = toAttemptForType > 0 && toAttemptForType < translateEnglishQuestions.length;
+          questionNumber  = questionNumber+1;
+          // Marks per translate English question
+          const translateEnglishMarksPerQuestion =
+          translateEnglishQuestions[0]?.custom_marks ?? translate_englishMarks;
+
+// Total marks
+const translateEnglishTotalMarks =(showAttemptAny ? toAttemptForType : translateEnglishQuestions.length) * translateEnglishMarksPerQuestion;
+
+          subjectiveContent += `
+ 
+  <div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+          
+          if (isEnglish || isBilingual) {
+            if (showAttemptAny) {
+              subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline;"><span>${questionNumber}. </span> Translate any ${toAttemptForType} of the following paragraphs into English.  <span class="marks-display">(${toAttemptForType} x ${translateEnglishMarksPerQuestion} = ${translateEnglishTotalMarks})</span>
+</div>`;
+            } else {
+              subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline;"><span>${questionNumber}. </span> Translate the following paragraphs into English.  <span class="marks-display">(${toAttemptForType} x ${translateEnglishMarksPerQuestion} = ${translateEnglishTotalMarks})</span>
+</div>`;
+            }
+          }
+          subjectiveContent += `</div>`;
+          
+          translateEnglishQuestions.forEach((pq: any, idx: number) => {
+            const q = pq.questions;
+            const questionMarks = pq.custom_marks || translate_englishMarks;
+           const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+            const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+            const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+
+            let questionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:5px;  line-height:1.2;">';
+            if (isEnglish) {
+                questionDisplayHtml += `<div class="urdu" style="width:100%;"><strong></strong> ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
+            } else if (isUrdu) {
+                questionDisplayHtml += `<div class="urdu" style="width:100%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong> ${urduQuestion}<span class="marks-display">(${questionMarks})</span></div>`;
+            } else { // bilingual
+                questionDisplayHtml += `<div class="eng" style="width:48%;"><strong></strong> ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
+                if (hasUrduQuestion) {
+                questionDisplayHtml += `<div class="urdu" style="width:48%; direction:rtl; text-align:right;"><strong>سوال ${idx + 1}:</strong>${urduQuestion}<span class="marks-display">(${questionMarks})</span></div>`;
+                }
+            }
+            questionDisplayHtml += `</div></div>`;
+
+            subjectiveContent += `
+            ${questionDisplayHtml}
+         `;
+          });
+          
+          partNumber++;
+        }
+
+          // make sentences of these idiom/phrases/words(English)
+      if (idiomPhrasesQuestions.length > 0) {
+  const toAttemptForType = getToAttemptForType('idiom_phrases');
+  const showAttemptAny = toAttemptForType > 0 && toAttemptForType < idiomPhrasesQuestions.length;
+  questionNumber  = questionNumber + 1;
+
+  // Marks per idiom/phrase question
+  const idiomPhrasesMarksPerQuestion =
+    idiomPhrasesQuestions[0]?.custom_marks ?? idiom_phrasesMarks;
+
+  // Total marks: use number of questions correctly
+  const numQuestionsToUse = showAttemptAny ? toAttemptForType : idiomPhrasesQuestions.length;
+  const idiomPhrasesTotalMarks = numQuestionsToUse * idiomPhrasesMarksPerQuestion;
+
+  subjectiveContent += `
+    <div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">
+  `;
+
+  if (isEnglish || isBilingual) {
+    if (showAttemptAny) {
+      subjectiveContent += `
+        <div class="instruction-text eng" style="vertical-align: baseline;">
+          <span>${questionNumber}. </span>
+          Use any ${toAttemptForType} of the following Words/Phrases/Idioms in your sentences.
+          <span class="marks-display">(${idiomPhrasesMarksPerQuestion} x ${toAttemptForType} = ${idiomPhrasesTotalMarks})</span>
+        </div>
+      `;
+    } else {
+      subjectiveContent += `
+        <div class="instruction-text eng" style="vertical-align: baseline;">
+          <span>${questionNumber}. </span>
+          Translate all of the following Words/Phrases/Idioms.
+          <span class="marks-display">(${idiomPhrasesMarksPerQuestion} x ${idiomPhrasesQuestions.length} = ${idiomPhrasesTotalMarks})</span>
+        </div>
+      `;
+    }
+  }
+
+  subjectiveContent += `</div>`;
+
+  idiomPhrasesQuestions.forEach((pq: any, idx: number) => {
+    const q = pq.questions;
+    const questionMarks = pq.custom_marks || idiom_phrasesMarks;
+    const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+    const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+    const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+
+    // Open a new row every 3 questions
+    if (idx % 3 === 0) {
+      subjectiveContent += `<div class="idiom-row" style="display:flex; gap:10px; margin-bottom:6px;">`;
+    }
+
+    let questionDisplayHtml = `
+      <div class="idiom-col" style="flex:1; font-size:11px; line-height:1.2;">
+        <div class="long-question">
+    `;
+
+    if (isEnglish) {
+      questionDisplayHtml += `
+        <div class="eng">
+          <strong>(${toRoman(idx + 1)}).</strong> ${englishQuestion}
+          <span class="marks-display">(${questionMarks})</span>
+        </div>
+      `;
+    }
+
+    questionDisplayHtml += `
+        </div>
+      </div>
+    `;
+
+    subjectiveContent += questionDisplayHtml;
+
+    // Close row after 3 columns OR last item
+    if (idx % 3 === 2 || idx === idiomPhrasesQuestions.length - 1) {
+      subjectiveContent += `</div>`;
+    }
+  });
+
+  partNumber++;
+}
+
+    if (activePassiveQuestions.length > 0) {
+  const toAttemptForType = getToAttemptForType('active_passive');
+  const showAttemptAny = toAttemptForType > 0 && toAttemptForType < activePassiveQuestions.length;
+  questionNumber = questionNumber + 1;
+
+  // Marks per active/passive question
+  const activePassiveMarksPerQuestion =
+    activePassiveQuestions[0]?.custom_marks ?? activePassiveMarks;
+
+  // Total marks
+  const numQuestionsToUse = showAttemptAny ? toAttemptForType : activePassiveQuestions.length;
+  const activePassiveTotalMarks = numQuestionsToUse * activePassiveMarksPerQuestion;
+
+  subjectiveContent += `
+    <div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">
+  `;
+
+  if (isEnglish || isBilingual) {
+    if (showAttemptAny) {
+      subjectiveContent += `
+        <div class="instruction-text eng" style="vertical-align: baseline;">
+          <span>${questionNumber}. </span> Use any ${toAttemptForType} of the following sentences.
+          <span class="marks-display">(${activePassiveMarksPerQuestion} x ${toAttemptForType} = ${activePassiveTotalMarks})</span>
+        </div>
+      `;
+    } else {
+      subjectiveContent += `
+        <div class="instruction-text eng" style="vertical-align: baseline;">
+          <span>${questionNumber}. </span> Complete all the following sentences.
+          <span class="marks-display">(${activePassiveMarksPerQuestion} x ${activePassiveQuestions.length} = ${activePassiveTotalMarks})</span>
+        </div>
+      `;
+    }
+  }
+
+  subjectiveContent += `</div>`;
+
+  activePassiveQuestions.forEach((pq: any, idx: number) => {
+    const q = pq.questions;
+    const questionMarks = pq.custom_marks || activePassiveMarks;
+    const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+    const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+    const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+
+    // Open a new row every 2 questions
+    if (idx % 2 === 0) {
+      subjectiveContent += `<div class="ap-row" style="display:flex; gap:12px; margin-bottom:6px;">`;
+    }
+
+    let questionDisplayHtml = `
+      <div class="ap-col" style="flex:1; font-size:11px; line-height:1.2;">
+        <div class="long-question">
+          <div style="display:flex; justify-content:space-between; margin-top:5px;">
+    `;
+
+    if (isEnglish) {
+      questionDisplayHtml += `
+        <div class="eng" style="width:100%;">
+          <strong>(${toRoman(idx + 1)}).</strong> ${englishQuestion}
+          <span class="marks-display">(${questionMarks})</span>
+        </div>
+      `;
+    } else if (isUrdu) {
+      questionDisplayHtml += `
+        <div class="urdu" style="width:100%; direction:rtl; text-align:right;">
+          <strong>سوال ${idx + 1}:</strong> ${urduQuestion}
+          <span class="marks-display">(${questionMarks})</span>
+        </div>
+      `;
+    } else { // bilingual
+      questionDisplayHtml += `
+        <div class="eng" style="width:48%;">
+          <strong>Q.${idx + 1}.</strong> ${englishQuestion}
+          <span class="marks-display">(${questionMarks})</span>
+        </div>
+      `;
+      if (hasUrduQuestion) {
+        questionDisplayHtml += `
+          <div class="urdu" style="width:48%; direction:rtl; text-align:right;">
+            <strong>سوال ${idx + 1}:</strong> ${urduQuestion}
+            <span class="marks-display">(${questionMarks})</span>
+          </div>
+        `;
+      }
+    }
+
+    questionDisplayHtml += `
+          </div>
+        </div>
+      </div>
+    `;
+
+    subjectiveContent += questionDisplayHtml;
+
+    // Close row after 2 columns OR last item
+    if (idx % 2 === 1 || idx === activePassiveQuestions.length - 1) {
+      subjectiveContent += `</div>`;
+    }
+  });
+
+  partNumber++;
+}
+
+        
+        // Add more additional types as needed (translate_english, idiom_phrases, passage, etc.)
+        
+      } else {
+        // REGULAR (NON-BOARD) PAPER: Render subjective questions by type
+        let partNumber = 1;
+          let itemsPerRow = 1;
+        for (const type of subjectiveTypes) {
+          const typeQuestions = subjectiveQuestionsByType[type] || [];
+          if (typeQuestions.length === 0) continue;
+
+          // Determine if this type should be rendered as long or short style
+          const isLongStyle = type === 'long' || type === 'passage';
+          
+          // Get toAttempt value for this type
+          const toAttemptForType = getToAttemptForType(type);
+          const showAttemptAny = toAttemptForType > 0 && toAttemptForType < typeQuestions.length;
+
+          // Part header
+          if(subject==="urdu" || subject==="English" || mcqPlacement==="three_papers"){}else{  
+                subjectiveContent += `
+      <div class="header" style="font-weight:bold; display: flex; align-items: baseline; justify-content: center; gap: 5px;">
+        (
+        ${(isEnglish || isBilingual) ? `<span class="english" style="vertical-align: baseline;">Part - ${partNumber} </span>` : ''}
+        ${(isUrdu || isBilingual) ? `<span class="urdu" style="vertical-align: baseline; position: relative; top: 1px;">حصہ ${partNumber}</span>` : ''}
+        )
+      </div>
+      `;
+          }
+          
+          if (isLongStyle) {
+            // Render as long questions
+           
+           
+            if(subject==="urdu" || subject==="English"){
+              console.log(`📝 Rendering long questions for URDU subject`);
+              
+            } else {
+             
+              subjectiveContent += `
+        <div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+              
+              if (isEnglish || isBilingual) {
+                if (showAttemptAny) {
+                  subjectiveContent += `<div class="instruction-text eng" style="${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':'vertical-align: baseline;'}"><span>Note:</span> Attempt any ${toAttemptForType} question(s) in detail.</div>`;
+                } else {
+                  subjectiveContent += `<div class="instruction-text eng" style="${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':'vertical-align: baseline;'}"><span>Note:</span> Attempt the following questions in detail.</div>`;
+                }
+              }
+              if (isUrdu || isBilingual) {
+                if (showAttemptAny) {
+                  subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl; ${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}">  کوئی سے  ${toAttemptForType} سوالات کے  تفصیل سے جوابات تحریر کریں۔</div>
+                `;
+                } else {
+                  subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl; ${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}">  درج ذیل سوالات کے تفصیل سے جوابات تحریر کریں۔</div>
+                `;
+                }
+              }
+              subjectiveContent += `</div>`;
+            }
+            
+    // For long questionsDecide items per row
+let itemsPerRow = 1;
+
+if (mcqPlacement === 'three_papers'&& subject==="urdu" || subject==="english") {
+  itemsPerRow = 2;
+}
+
+let rowOpen = false;
+
+typeQuestions.forEach((pq: any, idx: number) => {
+  const q = pq.questions;
+  const questionMarks = pq.custom_marks || longMarks;
+
+  const englishQuestion = formatQuestionText(
+    q.question_text || 'No question text available'
+  );
+
+  const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+  const urduQuestion = hasUrduQuestion
+    ? formatQuestionText(q.question_text_ur)
+    : '';
+
+  // ─── OPEN ROW ─────────────────────────────
+  if (itemsPerRow > 1 && idx % itemsPerRow === 0) {
+    subjectiveContent += `
+      <div class="long-row"
+        style="
+          display:flex;
+          gap:8px;
+          margin-bottom:4px;
+        ">
+    `;
+  }
+
+  // ─── QUESTION BLOCK ───────────────────────
+  let longQuestionDisplayHtml = `
+    <div class="long-question"
+      style="
+        flex:1;
+        width:${itemsPerRow > 1 ? `${100 / itemsPerRow}%` : '100%'};
+        margin-bottom:2px;
+      ">
+  `;
+
+  // ─── ENGLISH ONLY ─────────────────────────
+  if (isEnglish) {
+    longQuestionDisplayHtml += `
+      <div style="display:flex; align-items:flex-start; font-size:11px; line-height:1.15;">
+        <div style="width:26px; flex-shrink:0;">
+          <strong>Q.${idx + 1}</strong>
+        </div>
+        <div style="flex:1;">
+          ${englishQuestion}
+          <span class="marks-display">(${questionMarks})</span>
+        </div>
+      </div>`;
+  }
+
+  // ─── URDU ONLY ────────────────────────────
+  else if (isUrdu) {
+    longQuestionDisplayHtml += `
+      <div class="urdu" style="display:flex; align-items:flex-start; font-size:11px; line-height:1.2; direction:rtl;">
+        <div style="width:30px; flex-shrink:0; text-align:right;">
+          <strong>سوال ${idx + 1}</strong>
+        </div>
+        <div style="flex:1; text-align:right;">
+          ${urduQuestion}
+          <span class="marks-display">(${questionMarks})</span>
+        </div>
+      </div>`;
+  }
+
+  // ─── BILINGUAL ────────────────────────────
+  else {
+    longQuestionDisplayHtml += `
+      <div  style="display:flex; gap:6px;">
+        
+        <div style="display:flex; align-items:flex-start; width:50%; font-size:11px; line-height:1.15;">
+          <div style="width:26px; flex-shrink:0;">
+            <strong>Q.${idx + 1}</strong>
+          </div>
+          <div style="flex:1;">
+            ${englishQuestion}
+            <span class="marks-display">(${questionMarks})</span>
+          </div>
+        </div>
+    `;
+
+    if (hasUrduQuestion) {
+      longQuestionDisplayHtml += `
+        <div class="urdu" style="display:flex; align-items:flex-start; margin-right:0px; padding-right:0px; width:50%; font-size:11px; line-height:1.2;">
+          <div style="width:30px; flex-shrink:0;">
+            <strong>سوال ${idx + 1}</strong>
+          </div>
+          <div style="flex:1;">
+            ${urduQuestion}
+            <span class="marks-display">(${questionMarks})</span>
+          </div>
+        </div>
+      `;
+    }
+
+    longQuestionDisplayHtml += `</div>`;
+  }
+
+  longQuestionDisplayHtml += `</div>`;
+  subjectiveContent += longQuestionDisplayHtml;
+
+  // ─── CLOSE ROW ────────────────────────────
+  if (
+    itemsPerRow > 1 &&
+    (idx % itemsPerRow === itemsPerRow - 1 ||
+      idx === typeQuestions.length - 1)
+  ) {
+    subjectiveContent += `</div>`;
+  }
+});
+
+// end long questionsDecide items per row
+          } else {
+            // Render as short questions and all other types of questions
+            console.log(`📝 Rendering ${type} questions with toAttempt: ${toAttemptForType}`);
+            
+            let instructionHtml = '<div style="display:flex;  justify-content:space-between; margin-bottom:0px; font-weight:bold">';
+            
+            // Get default marks for this type
+            let defaultMarks = shortMarks;
+            if (type === 'mcq') defaultMarks = mcqMarks;
+            if (type === 'long') defaultMarks = longMarks;
+          
+            // Determine instruction text based on question type and toAttempt value
+            switch(type) {
+              case 'short': {
+                if (!isBilingual) {
+                  if(mcqPlacement==='three_papers'){
+                  
+                    itemsPerRow = 3;
+                  }else{
+                    itemsPerRow = 2;
+                  }
+                                    
+                            }else{
+itemsPerRow = mcqPlacement==='three_papers'? 2:1;
+                            }
+                
+                if (isEnglish || isBilingual) {
+                  if (showAttemptAny) {
+                    instructionHtml += `<div class="eng" style="${mcqPlacement==='three_papers'?'font-size:12px;':''}"> Write short answers of any ${toAttemptForType} question(s). </div>`;
+                  } else {
+                    instructionHtml += `<div class="eng" style="${mcqPlacement==='three_papers'?'font-size:12px;':''}"> Write short answers of the following questions. </div>`;
+                  }
+                }
+                if (isUrdu || isBilingual) {
+                  if (showAttemptAny) {
+                    instructionHtml += `<div class="urdu" style="direction:rtl; ${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}">
+                      کوئی سے ${toAttemptForType} سوالات کے مختصر جوابات تحریر کریں۔
+                    </div>`;
+                  } else {
+                    instructionHtml += `<div class="urdu" style="direction:rtl; ${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}">
+                      درج ذیل سوالات کے مختصر جوابات تحریر کریں۔
+                    </div>`;
+                  }
+                }
+                break;
+              }
+              case 'translate_urdu': {
+                if (isEnglish || isBilingual) {
+                  if (showAttemptAny) {
+                    instructionHtml += `<div class="eng" style="${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}"> Translate any ${toAttemptForType} of the following paragraphs into Urdu.</div>`;
+                  } else {
+                    instructionHtml += `<div class="eng" style="${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}"> Translate the following paragraphs into Urdu.</div>`;
+                  }
+                }
+                break;
+              }
+              case 'translate_english': {
+                instructionHtml += `<div class="eng"> Translate into English.</div>`;
+                break;
+              }
+              case 'idiom_phrases': {
+                  itemsPerRow = 4;
+                if (isEnglish || isBilingual) {
+                  if (showAttemptAny) {
+                    instructionHtml += `<div class="eng" style="${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}"> Use any ${toAttemptForType} of the following words/idioms/phrases in your sentences.</div>`;
+                  } else {
+                    instructionHtml += `<div class="eng" style="${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}"> Use the following words/idioms/phrases in your sentences.</div>`;
+                  }
+                }
+                break;
+              }
+              case 'activePassive': {
+                if (isEnglish || isBilingual) {
+                  if (showAttemptAny) {
+                    instructionHtml += `<div class="eng" style="${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}"> Change the voice of any ${toAttemptForType} of the following.</div>`;
+                  } else {
+                    instructionHtml += `<div class="eng" style="${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}"> Change the voice of the following.</div>`;
+                  }
+                }
+                break;
+              }
+              case 'directInDirect': {
+                if (isEnglish || isBilingual) {
+                  if (showAttemptAny) {
+                    instructionHtml += `<div class="eng"> Change any ${toAttemptForType} of the following sentence into Indirect Form.</div>`;
+                  } else {
+                    instructionHtml += `<div class="eng"> Change the following sentence into Indirect Form.</div>`;
+                  }
+                }
+                break;
+              }
+              case 'poetry_explanation': {
+                  itemsPerRow = 2;
+                if (isUrdu || isBilingual) {
+                  if (showAttemptAny) {
+                    instructionHtml += `<div class="urdu" style="direction:rtl; ${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}"> کوئی سے ${toAttemptForType} اشعار کی تشریح کریں۔</div>`;
+                  } else {
+                    instructionHtml += `<div class="urdu" style="direction:rtl; ${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}"> درج ذیل اشعار کی تشریح کریں۔</div>`;
+                  }
+                }
+                break;
+              }
+              case 'prose_explanation': {
+                if (isUrdu || isBilingual) {
+                  if (showAttemptAny) {
+                    instructionHtml += `<div class="urdu" style="direction:rtl; ${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}">  کوئی سے ${toAttemptForType} نثرپاروں کی تشریح کریں۔سبق کا نام اورمصنف کا نام بھی لکھیں۔</div>`;
+                  } else {
+                    instructionHtml += `<div class="urdu" style="direction:rtl; ${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}">  درج ذیل نثرپاروں کی تشریح کریں۔سبق کا نام اورمصنف کا نام بھی لکھیں۔</div>`;
+                  }
+                }
+                break;
+              }
+              case 'sentence_correction': {
+                 itemsPerRow = mcqPlacement==='three_papers'? 5:3;
+                if (isUrdu || isBilingual) {
+                  if (showAttemptAny) {
+                    instructionHtml += `<div class="urdu" style="direction:rtl; ${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}">  کوئی سے ${toAttemptForType} جملوں کی درستگی کریں۔</div>`;
+                  } else {
+                    instructionHtml += `<div class="urdu" style="direction:rtl; ${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}">  درج ذیل جملوں کی درستگی کریں۔</div>`;
+                  }
+                }
+                break;
+              }
+              case 'sentence_completion': {
+                                  itemsPerRow = mcqPlacement==='three_papers'? 4:3;
+                if (isUrdu || isBilingual) {
+                  if (showAttemptAny) {
+                    instructionHtml += `<div class="urdu" style="direction:rtl; ${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}">  کوئی سے ${toAttemptForType} جملوں کی تکمیل کریں ۔</div>`;
+                  } else {
+                    instructionHtml += `<div class="urdu" style="direction:rtl; ${mcqPlacement==='three_papers' || mcqPlacement==='two_papers'?'font-size:12px;':''}">  درج ذیل جملوں کی تکمیل کریں ۔</div>`;
+                  }
+                }
+                break;
+              }
+              default:
+                console.warn("Unknown type:", type);
+            }
+            instructionHtml += '</div>';
+
+            subjectiveContent += `<div class="short-questions ${isUrdu ? 'urdu' : ''}"> ${instructionHtml}`;
+
+           // Decide how many questions per row
+
+
+
+
+
+
+let rowOpen = false;
+
+typeQuestions.forEach((pq: any, idx: number) => {
+  const q = pq.questions;
+  const questionMarks = pq.custom_marks || defaultMarks;
+
+  const { eng: englishQuestionRaw, ur: urduQuestionRaw } =
+    extractEnglishAndUrdu(q.question_text, q.question_text_ur);
+
+  const englishQuestion = formatQuestionText(englishQuestionRaw || '');
+  const urduQuestion = formatQuestionText(urduQuestionRaw || '');
+
+  // ─── OPEN ROW ─────────────────────────────
+  if (itemsPerRow > 1 && idx % itemsPerRow === 0) {
+    subjectiveContent += `
+      <div class="urdu-row"
+        style="
+          display:flex;
+          gap:15px;
+          margin-bottom:0px;
+          direction:${isUrdu ? 'rtl' : 'ltr'};
+          font-size:${mcqPlacement === 'three_papers' ? '10px' : '12px'};
+          ${mcqPlacement === 'three_papers' ? 'letter-spacing:-0.5px;' : ''}
+        ">
+    `;
+  }
+
+  // ─── QUESTION ITEM ────────────────────────
+  let questionItemHtml = `
+    <div class="short-question-item"
+      style="
+        flex:1;
+        width:${itemsPerRow > 1 ? `${100 / itemsPerRow}%` : '100%'};
+        font-size:${mcqPlacement === 'three_papers' ? '10px' : '12px'};
+        line-height:${isBilingual  ? '0.9' : '1.3'};
+        ${mcqPlacement === 'three_papers' ? 'letter-spacing:-0.5px;' : ''}
+      ">
+  `;
+
+  // ─── ENGLISH ONLY ─────────────────────────
+  if (isEnglish) {
+    questionItemHtml += `
+      <div style="display:flex; align-items:flex-start;">
+        <div style="width:22px; flex-shrink:0;">
+          (${toRoman(idx + 1)})
+        </div>
+        <div style="flex:1;">
+          ${englishQuestion}
+          <span class="marks-display">(${questionMarks})</span>
+        </div>
+      </div>`;
+  }
+
+  // ─── URDU ONLY ────────────────────────────
+  else if (isUrdu) {
+    questionItemHtml += `
+      <div class="urdu" style="display:flex; align-items:flex-start; direction:rtl;">
+        <div style="width:24px; flex-shrink:0; text-align:right;">
+          (${toRoman(idx + 1)})
+        </div>
+        <div style="flex:1; text-align:right;">
+          ${urduQuestion || englishQuestion}
+          <span class="marks-display">(${questionMarks})</span>
+        </div>
+      </div>`;
+  }
+
+  // ─── BILINGUAL ────────────────────────────
+  else {
+    // English
+    questionItemHtml += `
+      <div style="display:flex; align-items:flex-start;">
+        <div style="width:22px; flex-shrink:0;">
+          (${toRoman(idx + 1)})
+        </div>
+        <div style="flex:1;">
+          ${englishQuestion}
+          <span class="marks-display">(${questionMarks})</span>
+        </div>
+      </div>`;
+
+    // Urdu
+    if (hasActualUrduText(urduQuestion)) {
+      questionItemHtml += `
+        <div class="urdu" style="display:flex; align-items:flex-start; direction:rtl; margin-top:1px;">
+          <div style="width:24px; flex-shrink:0; text-align:right;">
+            (${toRoman(idx + 1)})
+          </div>
+          <div style="flex:1; text-align:right;">
+            ${urduQuestion}
+            <span class="marks-display">(${questionMarks})</span>
+          </div>
+        </div>`;
+    }
+  }
+
+  questionItemHtml += `</div>`;
+  subjectiveContent += questionItemHtml;
+
+  // ─── CLOSE ROW ────────────────────────────
+  if (
+    itemsPerRow > 1 &&
+    (idx % itemsPerRow === itemsPerRow - 1 ||
+      idx === typeQuestions.length - 1)
+  ) {
+    subjectiveContent += `</div>`;
+  }
+});
+
+
+
+            subjectiveContent += `</div>`;
+          }
+
+          partNumber++;
+        }
+      }
+      
+    } else {
+      console.log('⏭️ No subjective questions to include in PDF');
+      // If no subjective questions, still add a message or minimal content
+      subjectiveContent += `
+      <div style="text-align: center; padding: 40px 0; font-size: 14px; color: #666;">
+        ${isEnglish || isBilingual ? '<p>No subjective questions in this paper.</p>' : ''}
+        ${isUrdu || isBilingual ? '<p class="urdu" style="direction:rtl;">اس پیپر میں کوئی انشائیہ سوالات نہیں ہیں۔</p>' : ''}
+      </div>
+    `;
+    }
+
+    subjectiveContent += `
   
 `;
 
-  // Footer
-  subjectiveContent += `
-  <div class="footer no-break" style="margin-top: 30px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 5px;">
-    <p class="english">Generated on ${new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time</p>
+    // Footer
+    subjectiveContent += `
+  <div class="footer no-break" style="margin-top: ${mcqPlacement==='three_papers'?'5px;':'30px;'} text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: ${mcqPlacement==='three_papers'?'0px;':'5px;'}">
+    <p class="english">www.examly.pk | Generate papers Save Time | Generated on ${new Date().toLocaleDateString()} by www.examly.pk </p>
   </div>
 </div>
 </div>
 `;
 
-  // Check if user is on trial for watermark
-  const isTrialUser = await checkUserSubscription(userId);
-  if (isTrialUser) {
-    subjectiveContent += `
+    // Check if user is on trial for watermark
+    const isTrialUser = await checkUserSubscription(userId);
+    if (isTrialUser) {
+      subjectiveContent += `
 <div class="watermark">
   <div class="watermark-text">
     www.examly.pk  
@@ -1940,24 +3471,59 @@ let subjectiveContent = ``;
 </div>
 
 `;
-  }
+    }
 
-  if(mcqPlacement==="two_papers"){
-    subjectiveContent +=  `<div style="display:flex; align-items:center;">
+    if (mcqPlacement === "two_papers") {
+      subjectiveContent += `<div style="display:flex; align-items:center;">
   <span style="font-size:18px; margin-right:6px;">✂</span>
   <hr style="flex:1; border-top: 2px dotted black;" />
 </div>
-`+subjectiveContent;
-    htmlContent += subjectiveContent;
-  }else
-{
-  htmlContent += subjectiveContent;
-}
+` + subjectiveContent;
+      htmlContent += subjectiveContent;
+    } else if( mcqPlacement === "three_papers") {
+
+    subjectiveContent += `<div style="display:flex; align-items:center;">
+  <span style="font-size:18px; margin-right:6px;">✂</span>
+  <hr style="flex:1; border-top: 2px dotted black;" />
+</div>
+` + subjectiveContent+`<div style="display:flex; align-items:center;">
+  <span style="font-size:18px; margin-right:6px;">✂</span>
+  <hr style="flex:1; border-top: 2px dotted black;" />
+</div>
+` + subjectiveContent;
+      htmlContent += subjectiveContent;
+    }
+    
+    
+    else {
+      htmlContent += subjectiveContent;
+    }
+  } else {
+    console.log('⏭️ No subjective questions and no MCQs - generating empty paper');
+    // If there are no questions at all, generate minimal content
+    htmlContent += `
+<div class="container">
+  <div class="header">
+    <h1 class="eng text-center">
+      ${logoBase64 ? `<img src="${logoBase64}" class="header-img" height="60" width="140"/>` : ''} <br/>
+      <span class="institute">${englishTitle}</span>
+    </h1>
+  </div>
+  <div style="text-align: center; padding: 100px 0; font-size: 16px; color: #666;">
+    ${isEnglish || isBilingual ? '<p>No questions found for this paper.</p>' : ''}
+    ${isUrdu || isBilingual ? '<p class="urdu" style="direction:rtl;">اس پیپر میں کوئی سوالات نہیں ہیں۔</p>' : ''}
+  </div>
+  <div class="footer no-break" style="margin-top: 30px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 5px;">
+    <p class="english">Generated on ${new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time</p>
+  </div>
+</div>`;
+  }
+
   htmlContent += `
 </body>
 </html>
 `;
-// Simplify and optimize HTML content
+  // Simplify and optimize HTML content
   return optimizeHtmlForPuppeteer(simplifyHtmlContent(htmlContent));
 }
 
@@ -1971,28 +3537,74 @@ async function generatePDFFromHTML(htmlContent: string) {
     browser = await getPuppeteerBrowser();
     console.log('✅ Browser instance obtained');
     
-    page = await browser.newPage();
-    console.log('✅ New page created');
+    // Create page with retry logic
+    let retryCount = 0;
+    const maxRetries = 3;
     
-    // Set reasonable timeouts
-    page.setDefaultTimeout(120000);
-    page.setDefaultNavigationTimeout(120000);
-    
-    // Optimize page for performance
-    await page.setViewport({ width: 1920, height: 1080 });
-    
-    // Disable unnecessary resources for faster loading
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      const resourceType = req.resourceType();
-      if (resourceType === 'image' || resourceType === 'font' || resourceType === 'stylesheet') {
-        req.abort();
-      } else {
-        req.continue();
+    while (retryCount < maxRetries) {
+      try {
+        page = await browser.newPage();
+        console.log('✅ New page created');
+        
+        // Check if page is ready
+        if (!page || page.isClosed()) {
+          throw new Error('Page is closed immediately after creation');
+        }
+        
+        // Small delay to ensure page is stable
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Set reasonable timeouts
+        page.setDefaultTimeout(120000);
+        page.setDefaultNavigationTimeout(120000);
+        
+        // Optimize page for performance
+        await page.setViewport({ width: 1920, height: 1080 });
+        
+        // Disable unnecessary resources for faster loading (optional)
+        try {
+          await page.setRequestInterception(true);
+          page.on('request', (req) => {
+            const resourceType = req.resourceType();
+            if (resourceType === 'image' || resourceType === 'font' || resourceType === 'stylesheet') {
+              req.abort();
+            } else {
+              req.continue();
+            }
+          });
+        } catch (interceptionError) {
+          console.warn('Request interception failed, continuing without it:', interceptionError);
+        }
+        
+        break; // Success, exit retry loop
+        
+      } catch (error) {
+        console.warn(`Page creation/setup failed (attempt ${retryCount + 1}/${maxRetries}):`, error);
+        if (page && !page.isClosed()) {
+          try {
+            await page.close();
+          } catch (closeError) {
+            console.warn('Error closing failed page:', closeError);
+          }
+        }
+        page = null;
+        retryCount++;
+        
+        if (retryCount >= maxRetries) {
+          throw new Error(`Failed to create and setup page after ${maxRetries} attempts: ${error}`);
+        }
+        
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-    });
+    }
 
     console.log('🔄 Setting HTML content...');
+    
+    // Check if page is still valid
+    if (!page || page.isClosed()) {
+      throw new Error('Page became invalid before setting content');
+    }
     
     // Use setContent with simpler wait conditions
     await page.setContent(htmlContent, {
@@ -2042,7 +3654,45 @@ async function generatePDFFromHTML(htmlContent: string) {
   }
 }
 
-// FAST RPC helper - prefer server-side random sampling
+// Fallback PDF generation for development when Puppeteer fails
+async function createFallbackPDF(htmlContent: string, title: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument();
+      const buffers: Buffer[] = [];
+
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => {
+        const pdfBuffer = Buffer.concat(buffers);
+        resolve(pdfBuffer);
+      });
+
+      // Add content to PDF
+      doc.fontSize(20).text(title, { align: 'center' });
+      doc.moveDown();
+      
+      doc.fontSize(14).text('Generated by Examly', { align: 'center' });
+      doc.moveDown();
+      
+      doc.fontSize(12).fillColor('red').text('⚠️ DEVELOPMENT MODE: PDF generation failed. This is a fallback version.', { align: 'center' });
+      doc.moveDown();
+      
+      doc.fillColor('black').fontSize(10);
+      doc.text('The paper content could not be rendered properly due to PDF generation issues.');
+      doc.moveDown();
+      doc.text('Please check the server logs for more details.');
+      doc.moveDown();
+      doc.text(`HTML Content Length: ${htmlContent.length} characters`);
+      doc.moveDown();
+      doc.text('Paper generation completed with fallback PDF.');
+
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 async function tryRpcRandomQuestions(
   qtype: string,
   subjectId: string,
@@ -2140,7 +3790,7 @@ export async function POST(request: Request) {
   try {
     // Use the enhanced token extraction
     const token = extractToken(request);
-console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(-6)}` : 'none');
+    console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(-6)}` : 'none');
     if (!token) {
       console.warn('No authorization token found in headers or cookies');
       return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
@@ -2188,13 +3838,27 @@ console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(
       chapterOption: requestData.chapterOption,
       selectionMethod: requestData.selectionMethod,
       randomSeed: requestData.randomSeed,
+      paperType: requestData.paperType,
+      isBoardPaper: requestData.paperType === 'model',
       hasReorderedQuestions: !!requestData.reorderedQuestions,
       hasCustomMarksData: !!requestData.customMarksData,
+      hasToAttemptValues: !!requestData.toAttemptValues,
       // Log time values
       timeMinutes: requestData.timeMinutes,
       mcqTimeMinutes: requestData.mcqTimeMinutes,
       subjectiveTimeMinutes: requestData.subjectiveTimeMinutes,
-      mcqPlacement: requestData.mcqPlacement
+      mcqPlacement: requestData.mcqPlacement,
+      // Log additional Urdu/English question types
+      poetry_explanationCount: requestData.poetry_explanationCount,
+      prose_explanationCount: requestData.prose_explanationCount,
+      passageCount: requestData.passageCount,
+      sentence_correctionCount: requestData.sentence_correctionCount,
+      sentence_completionCount: requestData.sentence_completionCount,
+      translate_urduCount: requestData.translate_urduCount,
+      translate_englishCount: requestData.translate_englishCount,
+      idiom_phrasesCount: requestData.idiom_phrasesCount,
+      activePassiveCount: requestData.activePassiveCount,
+      directInDirectCount: requestData.directInDirectCount
     });
 
     const { 
@@ -2230,7 +3894,31 @@ console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(
       selectedQuestions,
       reorderedQuestions,
       randomSeed = Date.now(),
-      shuffleQuestions = true
+      shuffleQuestions = true,
+      
+      // Additional Urdu/English question types
+      poetry_explanationCount = 0,
+      prose_explanationCount = 0,
+      passageCount = 0,
+      sentence_correctionCount = 0,
+      sentence_completionCount = 0,
+      translate_urduCount = 0,
+      translate_englishCount = 0,
+      idiom_phrasesCount = 0,
+      activePassiveCount = 0,
+      directInDirectCount = 0,
+      
+      // Additional Urdu/English difficulties
+      poetry_explanationDifficulty = 'any',
+      prose_explanationDifficulty = 'any',
+      passageDifficulty = 'any',
+      sentence_correctionDifficulty = 'any',
+      sentence_completionDifficulty = 'any',
+      translate_urduDifficulty = 'any',
+      translate_englishDifficulty = 'any',
+      idiom_phrasesDifficulty = 'any',
+      activePassiveDifficulty = 'any',
+      directInDirectDifficulty = 'any'
     } = requestData;
 
     // Determine chapters to include
@@ -2262,93 +3950,112 @@ console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(
         let orderNumber = 1;
         
         // Process questions in the exact order from preview
-        const questionTypes = ['mcq', 'short', 'long'] as QuestionType[];
-        
-        for (const qType of questionTypes) {
-          const questions = reorderedQuestions[qType] || [];
-          if (questions.length > 0) {
-            console.log(`🔍 Processing ${questions.length} reordered ${qType} questions`);
-            
-            for (const question of questions) {
-              questionInserts.push({
-                paper_id: paper.id,
-                question_id: question.id,
-                order_number: orderNumber++,
-                question_type: qType
-              });
-            }
-            
-            console.log(`✅ Added ${questions.length} reordered ${qType} questions`);
+        Object.keys(reorderedQuestions).forEach(type => {
+          const questions = reorderedQuestions[type] || [];
+          
+          // FIX: Skip empty question types
+          if (questions.length === 0) {
+            console.log(`⏭️ Skipping ${type} questions (0 questions provided)`);
+            return;
           }
-        }
+          
+          console.log(`🔍 Processing ${questions.length} reordered ${type} questions`);
+          
+          for (const question of questions) {
+            questionInserts.push({
+              paper_id: paper.id,
+              question_id: question.id,
+              order_number: orderNumber++,
+              question_type: type
+            });
+          }
+          
+          console.log(`✅ Added ${questions.length} reordered ${type} questions`);
+        });
       } else {
         // Fallback to original manual selection logic
         console.log('📝 Using original manual selection (no reordering data)');
         
-        const questionTypes = [
-          { type: 'mcq' as const, questions: selectedQuestions.mcq || [] },
-          { type: 'short' as const, questions: selectedQuestions.short || [] },
-          { type: 'long' as const, questions: selectedQuestions.long || [] }
-        ];
+        const questionTypes = Object.keys(selectedQuestions).map(type => ({
+          type: type as QuestionType,
+          questions: selectedQuestions[type] || []
+        }));
 
         let orderNumber = 1;
         
         for (const qType of questionTypes) {
           const qList = Array.isArray(qType.questions) ? qType.questions : [];
           
-          if (qList.length > 0) {
-            console.log(`🔍 Verifying ${qList.length} manually selected ${qType.type} questions`);
-            
-            // Verify these questions exist and belong to the correct subject/class
-           
-            const { data: existingQuestions, error: verifyError } = await supabaseAdmin
-              .from('questions')
-              .select('id, subject_id, chapter_id')
-              .in('id', qList)
-              .eq('subject_id', subjectId);
-
-            if (verifyError) {
-              console.error('Error verifying questions:', verifyError);
-              continue;
-            }
-
-            if (!existingQuestions || existingQuestions.length === 0) {
-              console.warn(`⚠️ No valid ${qType.type} questions found for manual selection`);
-              continue;
-            }
-
-            console.log(`✅ Found ${existingQuestions.length} valid ${qType.type} questions`);
-
-            // Insert the valid questions in the order they were selected
-            for (const questionId of qList) {
-              const questionExists = existingQuestions.find(q => q.id === questionId);
-              if (questionExists) {
-                questionInserts.push({
-                  paper_id: paper.id,
-                  question_id: questionId,
-                  order_number: orderNumber++,
-                  question_type: qType.type
-                });
-              }
-            }
-
-            console.log(`✅ Added ${existingQuestions.length} manually selected ${qType.type} questions`);
+          // FIX: Skip if no questions of this type
+          if (qList.length === 0) {
+            console.log(`⏭️ Skipping ${qType.type} questions (0 questions provided)`);
+            continue;
           }
+          
+          console.log(`🔍 Verifying ${qList.length} manually selected ${qType.type} questions`);
+          
+          // Verify these questions exist and belong to the correct subject/class
+          const { data: existingQuestions, error: verifyError } = await supabaseAdmin
+            .from('questions')
+            .select('id, subject_id, chapter_id')
+            .in('id', qList)
+            .eq('subject_id', subjectId);
+
+          if (verifyError) {
+            console.error('Error verifying questions:', verifyError);
+            continue;
+          }
+
+          if (!existingQuestions || existingQuestions.length === 0) {
+            console.warn(`⚠️ No valid ${qType.type} questions found for manual selection`);
+            continue;
+          }
+
+          console.log(`✅ Found ${existingQuestions.length} valid ${qType.type} questions`);
+
+          // Insert the valid questions in the order they were selected
+          for (const questionId of qList) {
+            const questionExists = existingQuestions.find(q => q.id === questionId);
+            if (questionExists) {
+              questionInserts.push({
+                paper_id: paper.id,
+                question_id: questionId,
+                order_number: orderNumber++,
+                question_type: qType.type
+              });
+            }
+          }
+
+          console.log(`✅ Added ${existingQuestions.length} manually selected ${qType.type} questions`);
         }
       }
     } else {
-      // Auto selection logic
+      // Auto selection logic - FIXED to include Urdu/English question types
       console.log('🤖 Using auto question selection');
       
+      // Define all question types including Urdu/English specific ones
       const questionTypes = [
         { type: 'mcq' as const, count: mcqCount, difficulty: mcqDifficulty },
         { type: 'short' as const, count: shortCount, difficulty: shortDifficulty },
-        { type: 'long' as const, count: longCount, difficulty: longDifficulty }
+        { type: 'long' as const, count: longCount, difficulty: longDifficulty },
+        // Urdu specific types
+        { type: 'poetry_explanation' as const, count: poetry_explanationCount, difficulty: poetry_explanationDifficulty },
+        { type: 'prose_explanation' as const, count: prose_explanationCount, difficulty: prose_explanationDifficulty },
+        { type: 'passage' as const, count: passageCount, difficulty: passageDifficulty },
+        { type: 'sentence_correction' as const, count: sentence_correctionCount, difficulty: sentence_correctionDifficulty },
+        { type: 'sentence_completion' as const, count: sentence_completionCount, difficulty: sentence_completionDifficulty },
+        // English specific types
+        { type: 'translate_urdu' as const, count: translate_urduCount, difficulty: translate_urduDifficulty },
+        { type: 'translate_english' as const, count: translate_englishCount, difficulty: translate_englishDifficulty },
+        { type: 'idiom_phrases' as const, count: idiom_phrasesCount, difficulty: idiom_phrasesDifficulty },
+        { type: 'activePassive' as const, count: activePassiveCount, difficulty: activePassiveDifficulty },
+        { type: 'directInDirect' as const, count: directInDirectCount, difficulty: directInDirectDifficulty }
       ];
 
       let orderNumber = 1;
 
       for (const qType of questionTypes) {
+        // FIX: Only process if count > 0
         if (qType.count > 0) {
           console.log(`🔍 Finding ${qType.count} ${qType.type} questions...`);
           
@@ -2376,26 +4083,16 @@ console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(
           } else {
             console.warn(`⚠️ No ${qType.type} questions found`);
           }
+        } else {
+          console.log(`⏭️ Skipping ${qType.type} questions (count is 0)`);
         }
       }
     }
 
-    // Insert paper questions
-    if (questionInserts.length > 0) {
-      console.log(`📝 Inserting ${questionInserts.length} questions into paper_questions`);
-      
-      const { error: insertError } = await supabaseAdmin
-        .from('paper_questions')
-        .insert(questionInserts);
-
-      if (insertError) {
-        console.error('Error inserting paper questions:', insertError);
-        await supabaseAdmin.from('papers').delete().eq('id', paper.id);
-        throw insertError;
-      }
-    } else {
+    // FIX: Check if we have any questions at all
+    if (questionInserts.length === 0) {
       await supabaseAdmin.from('papers').delete().eq('id', paper.id);
-     return NextResponse.json(
+      return NextResponse.json(
         { 
           error: 'No questions found matching your criteria. Please try different filters.'
         },
@@ -2403,12 +4100,40 @@ console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(
       );
     }
 
+    // Insert paper questions
+    console.log(`📝 Inserting ${questionInserts.length} questions into paper_questions`);
+    
+    const { error: insertError } = await supabaseAdmin
+      .from('paper_questions')
+      .insert(questionInserts);
+
+    if (insertError) {
+      console.error('Error inserting paper questions:', insertError);
+      await supabaseAdmin.from('papers').delete().eq('id', paper.id);
+      throw insertError;
+    }
+
     // Generate PDF
     console.log('🔄 Generating HTML content...');
     const htmlContent = await generatePaperHTML(paper, user.id, requestData, logoBase64);
 
     console.log('🔄 Creating PDF from HTML...');
-    const pdfBuffer = await generatePDFFromHTML(htmlContent);
+    
+    let pdfBuffer: Buffer;
+    try {
+      pdfBuffer = await generatePDFFromHTML(htmlContent);
+    } catch (pdfError) {
+      console.error('❌ PDF generation failed:', pdfError);
+      
+      // Fallback for development: create a simple PDF
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Using fallback PDF generation for development...');
+        pdfBuffer = await createFallbackPDF(htmlContent, paper.title || 'Paper');
+        console.log('✅ Fallback PDF generated successfully');
+      } else {
+        throw pdfError;
+      }
+    }
 
     // Increment user's papers_generated counter (best-effort)
     try {

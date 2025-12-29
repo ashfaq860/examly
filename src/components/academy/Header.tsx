@@ -24,7 +24,7 @@ const Header = ({ sidebarOpen, setSidebarOpen }: any) => {
       {/* Left mobile toggle and logo */}
       <div className="d-flex align-items-center">
         <button
-          className="btn d-lg-none me-2"
+          className="btn d-lg-none me-0 p-0"
           onClick={() => setSidebarOpen(true)}
         >
           <Menu size={26} />

@@ -2,8 +2,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import AcademyLayout from "@/components/AcademyLayout";
-import { User, Phone, University, Mail, Save, Upload, X, Calendar, CheckCircle, AlertCircle } from "lucide-react";
+import { User, Phone, University, Mail, Save, Upload, X, Calendar, CheckCircle, AlertCircle, Package, FileText, Clock, Crown } from "lucide-react";
 import { motion } from "framer-motion";
+import { useUser } from "@/app/context/userContext"; // Import the user context
 
 type Profile = {
   id: string;
@@ -29,6 +30,9 @@ export default function ProfileSettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [cellnoStatus, setCellnoStatus] = useState<'valid' | 'invalid' | 'checking' | null>(null);
+
+  // Use the user context for package/trial status
+  const { trialStatus, isLoading: trialLoading } = useUser();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -139,7 +143,7 @@ export default function ProfileSettingsPage() {
         formattedValue = formattedValue.slice(0, 11);
       }
       
-      // Format as 0345-4336603
+      // Format as 0300-3245632
       if (formattedValue.length > 4) {
         formattedValue = `${formattedValue.slice(0, 4)}-${formattedValue.slice(4)}`;
       }
@@ -164,7 +168,7 @@ export default function ProfileSettingsPage() {
     
     // Validate phone number format
     if (formData.cellno && !validatePhoneNumber(formData.cellno)) {
-      setError("Please enter a valid 11-digit phone number starting with 03 (e.g., 03454336603)");
+      setError("Please enter a valid 11-digit phone number starting with 03 (e.g., 0300-3245632)");
       setSaving(false);
       return;
     }
@@ -307,6 +311,100 @@ export default function ProfileSettingsPage() {
     }
   };
 
+  // Helper function to get package status alert
+  const renderPackageStatus = () => {
+    if (trialLoading || !trialStatus) {
+      return null;
+    }
+
+    const { 
+      isTrial, 
+      trialEndsAt, 
+      hasActiveSubscription, 
+      papersRemaining, 
+      subscriptionName,
+      subscriptionType,
+      subscriptionEndDate,
+      message
+    } = trialStatus;
+
+    // Determine alert type and content
+    let alertType = "info";
+    let icon = <Package size={18} />;
+    let title = "Package Status";
+    let content = null;
+
+    if (message) {
+      // If there's a message from the API, use it
+      content = <div>{message}</div>;
+    } else if (isTrial && trialEndsAt) {
+      alertType = "success";
+      icon = <Crown size={18} />;
+      title = "Free Trial Active";
+      content = (
+        <>
+          <div>Your trial ends on {new Date(trialEndsAt).toLocaleDateString()}</div>
+          <small className="text-muted">You have unlimited paper generation during your trial period</small>
+        </>
+      );
+    } else if (hasActiveSubscription) {
+      alertType = "warning";
+      icon = <Crown size={18} />;
+      title = subscriptionName || "Active Subscription";
+      
+      content = (
+        <>
+          <div>
+            {subscriptionType === 'paper_pack' ? (
+              <>
+                <FileText size={16} className="me-1" />
+                Paper Pack: {papersRemaining === 'unlimited' ? 'Unlimited' : `${papersRemaining} papers remaining`}
+              </>
+            ) : (
+              <>
+                <Clock size={16} className="me-1" />
+                Subscription ends on {subscriptionEndDate ? new Date(subscriptionEndDate).toLocaleDateString() : 'N/A'}
+              </>
+            )}
+          </div>
+          {papersRemaining !== 'unlimited' && subscriptionType === 'paper_pack' && (
+            <small className="text-muted">
+              Papers generated: {trialStatus.papersGenerated || 0}
+            </small>
+          )}
+        </>
+      );
+    } else {
+      alertType = "secondary";
+      icon = <FileText size={18} />;
+      title = "Free Plan";
+      content = (
+        <>
+          <div>You are currently on the free plan</div>
+          <small className="text-muted">
+            {papersRemaining === 0 ? 
+              "You have no papers remaining. Upgrade to generate more papers." : 
+              `You have ${papersRemaining} papers remaining`}
+          </small>
+        </>
+      );
+    }
+
+    return (
+      <div className={`alert alert-${alertType} mb-4`}>
+        <div className="d-flex align-items-center">
+          <div className="me-2">
+            {icon}
+          </div>
+          <div>
+            <strong>{title}</strong>
+            {content}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <AcademyLayout>
@@ -322,7 +420,7 @@ export default function ProfileSettingsPage() {
   if (error && !profile) {
     return (
       <AcademyLayout>
-        <div className="container px-4 py-3">
+        <div className="container px-1 px-md-3 py-3">
           <div className="alert alert-danger d-flex align-items-center" role="alert">
             <div>
               <strong>Error: </strong>
@@ -349,12 +447,12 @@ export default function ProfileSettingsPage() {
 
   return (
     <AcademyLayout>
-      <div className="container px-4 py-3">
+      <div className="container px-2 px-md-3 py-0 py-md-3">
         <motion.h1 
           initial={{ opacity: 0, y: -20 }} 
           animate={{ opacity: 1, y: 0 }} 
           transition={{ duration: 0.5 }} 
-          className="text-center mb-5 fw-bold"
+          className="text-center mb-2 mb-md-3 fw-bold"
           style={{ 
             fontSize: '2.5rem', 
             background: 'linear-gradient(to right, #0d6efd, #6f42c1)',
@@ -393,7 +491,7 @@ export default function ProfileSettingsPage() {
                 <div className="card-header bg-primary text-white py-3">
                   <h5 className="card-title mb-0">Edit Your Profile</h5>
                 </div>
-                <div className="card-body p-4">
+                <div className="card-body p-1 p-md-4">
                   <form onSubmit={handleSubmit}>
                     {/* Profile Picture Upload */}
                     <div className="row mb-4">
@@ -525,7 +623,7 @@ export default function ProfileSettingsPage() {
                             name="cellno"
                             value={formData.cellno}
                             onChange={handleInputChange}
-                            placeholder="0345-4336603"
+                            placeholder=" 0300-1234567"
                             maxLength={12}
                           />
                           {cellnoStatus === 'checking' && (
@@ -549,24 +647,13 @@ export default function ProfileSettingsPage() {
                         <div className="form-text">
                           {cellnoStatus === 'invalid' ? "Phone number is invalid or already registered" : 
                            cellnoStatus === 'valid' ? "Phone number is available" :
-                           "11-digit number starting with 03 (e.g., 03454336603)"}
+                           "11-digit number starting with 03 (e.g., 03001234567)"}
                         </div>
                       </div>
                     </div>
 
-                    {/* Trial Status Information */}
-                    {profile.cellno && profile.trial_given && profile.trial_ends_at && (
-                      <div className="alert alert-info mb-4">
-                        <div className="d-flex align-items-center">
-                          <Calendar className="me-2" size={18} />
-                          <div>
-                            <strong>Free Trial Active</strong>
-                            <div>Your trial ends on {new Date(profile.trial_ends_at).toLocaleDateString()}</div>
-                            <small className="text-muted">You have unlimited paper generation during your trial period</small>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    {/* Package Status Information */}
+                    {renderPackageStatus()}
 
                     <div className="mt-4">
                       <button 
