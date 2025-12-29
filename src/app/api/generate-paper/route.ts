@@ -23,17 +23,23 @@ import PDFDocument from 'pdfkit';
 let browserPromise: Promise<Browser> | null = null;
 
 async function getPuppeteerBrowser() {
-  // For development, create a new browser each time to avoid connection issues
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔧 Development mode: Creating new browser instance');
-    const launchBrowser = async () => {
-      console.log('🚀 Launching Puppeteer browser...');
-      console.log('Environment:', process.env.NODE_ENV);
-      console.log('Vercel:', !!process.env.VERCEL);
+  if (browserPromise) {
+    try {
+      const browser = await browserPromise;
+      if (browser.isConnected()) return browser;
+    } catch (error) {
+      console.warn('Existing browser instance failed, creating new one:', error);
+      browserPromise = null;
+    }
+  }
 
-      try {
-        // Simplified Chromium configuration for better stability
-              // Enhanced Chromium configuration for serverless environment
+  const launchBrowser = async () => {
+    console.log('🚀 Launching Puppeteer browser...');
+    console.log('Environment:', process.env.NODE_ENV);
+    console.log('Vercel:', !!process.env.VERCEL);
+
+    try {
+      // Enhanced Chromium configuration for serverless environment
       const launchOptions: any = {
         args: [
           ...chromium.args,
@@ -71,84 +77,6 @@ async function getPuppeteerBrowser() {
           '--disable-composited-antialiasing'
         ],
         headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-        timeout: 60000,
-      };
-
-        // Use system Chrome in development
-        console.log('🔧 Configuring for development...');
-        const chromePath = getChromePath();
-        if (chromePath) {
-          launchOptions.executablePath = chromePath;
-          console.log('✅ Using local Chrome:', chromePath);
-        } else {
-          console.warn('⚠️ No local Chrome found, trying system default');
-          // Remove executablePath to let Puppeteer find it automatically
-          delete launchOptions.executablePath;
-        }
-
-        console.log('🔄 Launching browser with options...');
-        console.log('Executable path:', launchOptions.executablePath);
-
-        const browser = await puppeteer.launch(launchOptions);
-
-        console.log('✅ Browser launched successfully');
-        console.log('Browser version:', await browser.version());
-
-        return browser;
-      } catch (error) {
-        console.error('❌ Failed to launch puppeteer:', error);
-        throw new Error(`PDF generation unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    };
-
-    return launchBrowser();
-  }
-
-  // Production: Use singleton
-  if (browserPromise) {
-    try {
-      const browser = await browserPromise;
-      if (browser.isConnected()) return browser;
-    } catch (error) {
-      console.warn('Existing browser instance failed, creating new one:', error);
-      browserPromise = null;
-    }
-  }
-
-  const launchBrowser = async () => {
-    console.log('🚀 Launching Puppeteer browser...');
-    console.log('Environment:', process.env.NODE_ENV);
-    console.log('Vercel:', !!process.env.VERCEL);
-
-    try {
-      // Simplified Chromium configuration for better stability
-      const launchOptions: any = {
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--disable-software-rasterizer',
-          '--disable-background-timer-throttling',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding',
-          '--disable-features=TranslateUI',
-          '--disable-ipc-flooding-protection',
-          '--disable-hang-monitor',
-          '--disable-prompt-on-repost',
-          '--mute-audio',
-          '--disable-extensions',
-          '--disable-default-apps',
-          '--disable-translate',
-          '--disable-sync',
-          '--disable-web-security',
-          '--disable-features=VizDisplayCompositor',
-          '--no-first-run',
-          '--disable-crash-reporter',
-          '--window-size=1920,1080'
-        ],
-        headless: true,
         ignoreHTTPSErrors: true,
         timeout: 60000,
       };
@@ -197,7 +125,6 @@ async function getPuppeteerBrowser() {
   browserPromise = launchBrowser();
   return browserPromise;
 }
-
 // Get Chrome executable path for different environments
 function getChromePath() {
   if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
