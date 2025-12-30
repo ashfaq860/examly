@@ -3403,7 +3403,7 @@ typeQuestions.forEach((pq: any, idx: number) => {
       subjectiveContent += `
 <div class="watermark">
   <div class="watermark-text">
-    www.examly.pk  
+    <img src="${loadImageAsBase64('examly.jpg')}" alt="Watermark" style="opacity:0.1; width:200px; height:60px;"/>
   
     
   </div>
