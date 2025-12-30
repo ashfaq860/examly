@@ -3400,11 +3400,14 @@ typeQuestions.forEach((pq: any, idx: number) => {
     // Check if user is on trial for watermark
     const isTrialUser = await checkUserSubscription(userId);
     if (isTrialUser) {
-       
+      
       subjectiveContent += `
 <div class="watermark1">
   <div class="watermark-tex1">
     <img src="${loadImageAsBase64('examly.jpg')}" alt="Watermark" style="opacity:0.1;
+     position: absolute;
+     top: 50%;
+      left: 50%;
      transform: translate(-50%, -50%) rotate(-45deg);
     width:200px; height:60px;"/>
   
