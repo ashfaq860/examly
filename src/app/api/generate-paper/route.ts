@@ -125,6 +125,7 @@ async function getPuppeteerBrowser() {
   browserPromise = launchBrowser();
   return browserPromise;
 }
+
 // Get Chrome executable path for different environments
 function getChromePath() {
   if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
@@ -600,72 +601,32 @@ async function incrementPapersGenerated(userId: string) {
 // Function to check user subscription
 async function checkUserSubscription(userId: string): Promise<boolean> {
   try {
+    const now = new Date().toISOString();
+
     const { data: subscription, error } = await supabaseAdmin
       .from('user_packages')
-      .select('is_active, is_trial, expires_at')
+      .select('id')
       .eq('user_id', userId)
       .eq('is_active', true)
-      .gte('expires_at', new Date().toISOString())
+      .eq('is_trial', false) // ❗ exclude trial packages
+      .gt('expires_at', now)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      console.warn('Error fetching subscription:', error);
-      // Check if user has trial in profile
-      const { data: profile } = await supabaseAdmin
-        .from('profiles')
-        .select('trial_ends_at, trial_given')
-        .eq('id', userId)
-        .single();
-      
-      if (profile?.trial_ends_at && new Date(profile.trial_ends_at) > new Date()) {
-        return true;
-      }
-      
-      if (profile?.trial_given === false) {
-        return true;
-      }
-      
+      console.warn('Subscription check error:', error);
       return false;
     }
 
-    return subscription?.is_active === true || subscription?.is_trial === true;
-  } catch (error) {
-    console.warn('Error checking subscription:', error);
+    return !!subscription; // true only if paid subscription exists
+  } catch (err) {
+    console.warn('Error checking subscription:', err);
     return false;
   }
 }
 
-// Watermark CSS
-function getWatermarkStyle(): string {
-  return `
-    .watermark {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 9999;
-      pointer-events: none;
-      overflow: hidden;
-    }
 
-    .watermark-text {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(-45deg);
-      font-size: 42px;
-      line-height: 1.4;
-      text-align: center;
-      color: rgba(200, 0, 0, 0.08);
-      font-weight: bold;
-      font-family: Arial, sans-serif;
-      white-space: pre-line;
-    }
-  `;
-}
 
 // Function to optimize HTML for Puppeteer
 function optimizeHtmlForPuppeteer(html: string): string {
@@ -1634,7 +1595,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   const subjectiveTimeDisplayEng = formatTimeForDisplay(timeValues.subjectiveTime, 'eng');
   const mcqTimeDisplayUrdu = formatTimeForDisplay(timeValues.mcqTime, 'urdu');
   const subjectiveTimeDisplayUrdu = formatTimeForDisplay(timeValues.subjectiveTime, 'urdu');
-
+ const isPaidUser = await checkUserSubscription(userId);
   // Build HTML content
   let htmlContent = `
 <!DOCTYPE html>
@@ -1643,7 +1604,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   <meta charset="UTF-8">
   <title>${isUrdu ? subject_ur : subject} </title>
    <style>
-  ${getWatermarkStyle()}
+ 
    @font-face {
       font-family: 'Jameel Noori Nastaleeq';
       src: url('data:font/truetype;charset=utf-8;base64,${jameelNooriBase64}') format('truetype');
@@ -1703,7 +1664,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
 }
 
     .note {  padding: 0px; margin:0 0; font-size: 12px; line-height: 1.1; }
-    table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 10px; ${isEnglish? ' direction:ltr' : ' direction:rtl'}}
+    table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 10px; ${isEnglish&&mcqPlacement!=='three_papers'? ' direction:ltr' : ' direction:rtl'}}
     table, th, td { border: 1px solid #000; }
     td { padding: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '2px' : '4px'}; vertical-align: top; }
     hr{color:black}
@@ -1757,8 +1718,6 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   // FIXED: Only generate MCQ section if there are MCQs
   if (hasMCQs) {
     htmlContent += `
- 
- 
 <div class="container" ${mcqPlacement === 'two_papers' ?  'style="height:525px; overflow:hidden"' : mcqPlacement==='three_papers' ? 'style="height:345px; overflow:hidden"' : ''}>
 <div class="header">
       ${mcqPlacement==='three_papers' ? `
@@ -1780,7 +1739,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   <!-- Row 1 -->
   <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
-    ${isUrdu || isBilingual ? `<span class="metaUrdu">نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>` : ''}
+    ${isUrdu || isBilingual || mcqPlacement==="three_papers"? `<span class="metaUrdu">نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>` : ''}
     ${mcqPlacement === "three_papers"?`<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>`: isEnglish || isBilingual ? `<span class="metaEng">Student Name:_________</span>` : ''}
   </td>
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
@@ -1799,8 +1758,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     </td>
 </tr>`;
 let htmlNoThreePapers = `  <!-- Row 2 -->
-
-  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+ <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
     <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
       ${isUrdu || isBilingual ? `<span class="metaUrdu"><strong>کلاس: ${paperClass}</strong></span>` : ''}
       ${isEnglish || isBilingual ? `<span class="metaEng">Class: ${paperClass}</span>` : ''}
@@ -1814,29 +1772,15 @@ let htmlNoThreePapers = `  <!-- Row 2 -->
       ${isEnglish || isBilingual ? `<span class="metaEng">Date:${formatPaperDate(dateOfPaper)}</span>` : ''}
     </td>
   </tr>
-
-  <!-- Row 3 -->
-  <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">`;
-
-    // For separate layout, show different times for objective and subjective
-    if (mcqPlacement === 'separate') {
-      // Objective section time
-      htmlContent += `<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
-    ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${formatTimeForDisplay(timeValues.mcqTime,'ur')}</span>` : ''}
-    ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${formatTimeForDisplay(timeValues.mcqTime,'eng')}</span>` : ''}
-  </td>`;
-      
-      // Subjective section time (will be shown on separate page)
-      // This goes in the subjective section HTML
-    } else {
-      // For same_page and two_papers, show total time
-      htmlNoThreePapers += `<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
-    ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${formatTimeForDisplay(timeValues.subjectiveTime,'urdu')}</span>` : ''}
-    ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${formatTimeForDisplay(timeValues.subjectiveTime,'eng')}</span>` : ''}
-  </td>`;
-    }
-
-    htmlNoThreePapers += `<td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
+`;
+// For separate layout, show different times for objective and subjective
+    // Objective section time
+      htmlNoThreePapers += `<!-- Row 3 --> <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
+      <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
+    ${isUrdu || isBilingual ? `<span class="metaUrdu">وقت: ${mcqPlacement==='separate'?formatTimeForDisplay(timeValues.mcqTime,'ur'):formatTimeForDisplay(timeValues.subjectiveTime,'urdu')}</span>` : ''}
+    ${isEnglish || isBilingual ? `<span class="metaEng">Time Allowed: ${mcqPlacement==='separate'?formatTimeForDisplay(timeValues.mcqTime,'eng'):formatTimeForDisplay(timeValues.subjectiveTime,'eng')}</span>` : ''}
+  </td>
+  <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
       ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' ? 
         (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${mcqSectionMarks}</span>` : '') : 
         (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : '')
@@ -1963,23 +1907,59 @@ ${mcqPlacement==="separate" || mcqPlacement==="two_papers" || mcqPlacement==="th
     console.log('⏭️ No MCQs in this paper, skipping MCQ section entirely');
   }
 
+
   // Handle page break or separation for two_papers layout
   if (mcqPlacement === "two_papers" && hasMCQs) {
-    htmlContent += ` <div style="display:flex; align-items:center;">
+    htmlContent += `
+    <div class="watermark-1" style="position: fixed; top: 20%; left: 35%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg); ">
+ 
+    ${isPaidUser?`  
+       <img src="${logoBase64}" alt="Examly Logo" style="width: 250px; height: auto;" />
+ `:
+ `<img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: 250px; height: auto;" />  <br/>  <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>`} </div>
+ <div style="display:flex; align-items:center;">
   <span style="font-size:18px; margin-right:6px;">✂</span>
   <hr style="flex:1; border-top: 2px dotted black;" />
 </div>
-` + (hasMCQs ? htmlContent : '');
+` + (hasMCQs ? htmlContent : '')+` <div class="watermark-2" style="position: fixed; bottom: 20%; left: 35%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg);">
+${isPaidUser?`
+        <img src="${logoBase64}" alt="Examly Logo" style="width:250px; height: auto;" />  
+
+`:`
+<img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width:250px; height: auto;" /><br/>
+    <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>  
+`}  </div>`;
   }else if (mcqPlacement === "three_papers" && hasMCQs) {
 
-    htmlContent += ` <div style="display:flex; align-items:center;">
+    htmlContent += `
+    <div class="watermark-1" style="position: fixed; top: 13%; left: 30%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg);">
+    ${isPaidUser?`
+     <img src="${logoBase64}" alt="Examly Logo" style="width: 300px; height: auto; " />
+` : 
+` <img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: 300px; height: auto; " /><br/>
+    <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>
+`}</div> <div style="display:flex; align-items:center;">
   <span style="font-size:18px; margin-right:6px;">✂</span>
   <hr style="flex:1; border-top: 2px dotted black;" />
 </div>
-` + (hasMCQs ? htmlContent+`<div style="display:flex; align-items:center;">
+` + (hasMCQs ? htmlContent+`
+   <div class="watermark-2" style="position: fixed; top: 47%; left: 30%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg);">
+  ${isPaidUser?`
+    <img src="${logoBase64}" alt="Examly Logo" style="width: 300px; height: auto; " />
+`:` 
+<img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: 300px; height: auto; " /><br/>
+    <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>
+`}</div><div style="display:flex; align-items:center;">
   <span style="font-size:18px; margin-right:6px;">✂</span>
   <hr style="flex:1; border-top: 2px dotted black;" />
-</div>`+htmlContent : '');
+</div>`+htmlContent+`
+ <div class="watermark-3" style="position: fixed; bottom: 10%; left: 35%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg); ">
+${isPaidUser?`
+   <img src="${logoBase64}" alt="Examly Logo" style="width: 300px; height: auto; " />
+  
+`:`   <img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: 300px; height: auto; " /><br/>
+    <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>
+`}</div>` : '');
     
   }
 
@@ -2021,7 +2001,7 @@ ${mcqPlacement==="separate" || mcqPlacement==="two_papers" || mcqPlacement==="th
 <!-- Row 1 -->
 <tr style="border:none !important; display:flex; justify-content:space-between; align-items:center;">
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1.5;">
-    ${isUrdu || isBilingual ? `<span class="metaUrdu">نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>` : ''}
+    ${isUrdu || isBilingual ||mcqPlacement==="three_papers"? `<span class="metaUrdu">نام طالبعلم:۔۔۔۔۔۔۔۔۔۔</span>` : ''}
     ${mcqPlacement === "three_papers"?`<span class="metaUrdu">رول نمبر:۔۔۔۔۔۔</span>`: isEnglish || isBilingual ? `<span class="metaEng">Student Name:_________</span>` : ''}
   </td>
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
@@ -2631,14 +2611,9 @@ const proseExplanationTotalMarks =
 
   subjectiveContent += `</div>`;
 }
-
-          
-          partNumber++;
+         partNumber++;
         }
-
-
-
-         // Passage (English)
+  // Passage (English)
         if (passageQuestions.length > 0) {
           const toAttemptForType = getToAttemptForType('passage');
           const showAttemptAny = toAttemptForType > 0 && toAttemptForType < passageQuestions.length;
@@ -2929,8 +2904,7 @@ const translateEnglishTotalMarks =(showAttemptAny ? toAttemptForType : translate
 
         
         // Add more additional types as needed (translate_english, idiom_phrases, passage, etc.)
-        
-      } else {
+     } else {
         // REGULAR (NON-BOARD) PAPER: Render subjective questions by type
         let partNumber = 1;
           let itemsPerRow = 1;
@@ -3130,7 +3104,7 @@ typeQuestions.forEach((pq: any, idx: number) => {
                   }
                                     
                             }else{
-itemsPerRow = mcqPlacement==='three_papers'? 2:1;
+                  itemsPerRow = mcqPlacement==='three_papers'? 2:1;
                             }
                 
                 if (isEnglish || isBilingual) {
@@ -3396,27 +3370,8 @@ typeQuestions.forEach((pq: any, idx: number) => {
 </div>
 </div>
 `;
-
     // Check if user is on trial for watermark
-    const isTrialUser = await checkUserSubscription(userId);
-    if (isTrialUser) {
-      
-      subjectiveContent += `
-<div class="watermark1">
-  <div class="watermark-tex1">
-    <img src="${loadImageAsBase64('examly.jpg')}" alt="Watermark" style="opacity:0.1;
-     position: absolute;
-     top: 50%;
-      left: 50%;
-     transform: translate(-50%, -50%) rotate(-45deg);
-    width:200px; height:60px;"/>
-  
-    
-  </div>
-</div>
 
-`;
-    }
 
     if (mcqPlacement === "two_papers") {
       subjectiveContent += `<div style="display:flex; align-items:center;">
@@ -3441,7 +3396,13 @@ typeQuestions.forEach((pq: any, idx: number) => {
     
     
     else {
-      htmlContent += subjectiveContent;
+      htmlContent += subjectiveContent+`
+      <div class="watermark-text-9" style="position: fixed; top: 40%; left: 25%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg); ">
+      ${isPaidUser?`
+   <img src="${logoBase64}" alt="Examly Logo" style="width: 400px; height: auto;" /><br/>
+`:`<img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: 400px; height: auto;" /><br/>
+    <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>
+  `};</div>`;
     }
   } else {
     console.log('⏭️ No subjective questions and no MCQs - generating empty paper');
@@ -3465,6 +3426,7 @@ typeQuestions.forEach((pq: any, idx: number) => {
   }
 
   htmlContent += `
+
 </body>
 </html>
 `;

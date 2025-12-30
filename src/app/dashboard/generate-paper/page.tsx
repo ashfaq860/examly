@@ -1676,7 +1676,7 @@ const onSubmit = async (formData: PaperFormData) => {
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h1 className="h2 mb-0">Generate <span className='d-none d-sm-inline'>New</span> Paper</h1>
             {step > 1 && (
-              <button className="btn btn-outline-primary btn-lg" onClick={prevStep}>
+              <button className="btn btn-outline-primary btn-sm" onClick={prevStep}>
                 <i className="bi bi-arrow-left me-2"></i>
                 <span className="d-inline d-sm-none">Back</span>
                 <span className="d-none d-sm-inline">
