@@ -3983,14 +3983,21 @@ export async function POST(request: Request) {
       try {
         const updateData: any = {};
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        console.log('Supabase URL:', supabaseUrl);
         if (pdfPath) updateData.paperPdf = `${supabaseUrl}/storage/v1/object/public/generated-papers/${pdfPath}`;
         if (keyPath) updateData.paperKey = `${supabaseUrl}/storage/v1/object/public/key/${keyPath}`;
 
-        await supabaseAdmin
+        console.log('Updating paper with:', updateData);
+
+        const { error } = await supabaseAdmin
           .from('papers')
           .update(updateData)
           .eq('id', paper.id);
-        console.log('✅ Updated paper record with PDF and key URLs');
+        if (error) {
+          console.error('Update error:', error);
+        } else {
+          console.log('✅ Updated paper record with PDF and key URLs');
+        }
       } catch (updateErr) {
         console.warn('Failed to update paper with PDF/key URLs:', updateErr);
       }

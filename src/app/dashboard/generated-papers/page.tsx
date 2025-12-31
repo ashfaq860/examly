@@ -29,67 +29,23 @@ export default function GeneratedPapersPage() {
         return;
       }
 
-      console.log('User authenticated:', user.id);
-
-      const { data: role, error: roleError } = await supabase.rpc('get_user_role', {
-        user_id: user.id
-      });
-
-      if (roleError) {
-        console.error('RPC get_user_role error:', roleError);
-        throw new Error(`Failed to get user role: ${roleError.message}`);
-      }
-
-      console.log('User role:', role);
-
-      if (role !== 'teacher') {
-        router.push('/');
-        return;
-      }
-
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      console.log('Fetching papers for user:', user.id, 'range:', from, 'to:', to);
-
       const { data, error, count } = await supabase
         .from('papers')
-        .select(`
-          id,
-          title,
-          paper_type,
-          is_trial,
-          created_at,
-          total_marks,
-          time_minutes,
-          pdf_path,
-          classes ( name ),
-          subjects ( name )
-        `, { count: 'exact' })
+        .select(`id, title, created_at, "paperPdf", "paperKey"`, { count: 'exact' })
         .eq('created_by', user.id)
         .order('created_at', { ascending: false })
         .range(from, to);
 
-      if (error) {
-        console.error('Papers query error:', error);
-        throw error;
-      }
-
-      console.log('Papers fetched successfully:', data?.length || 0, 'total:', count);
+      if (error) throw error;
 
       setPapers(data || []);
       setTotal(count || 0);
 
     } catch (err) {
       console.error('Error loading papers:', err);
-      console.error('Error details:', {
-        message: err?.message,
-        name: err?.name,
-        stack: err?.stack,
-        code: (err as any)?.code,
-        details: (err as any)?.details
-      });
-      // Show user-friendly error message
       alert('Failed to load papers. Please try again.');
     } finally {
       setLoading(false);
@@ -101,33 +57,71 @@ export default function GeneratedPapersPage() {
   }, [page]);
 
   /* ================= DOWNLOAD PDF ================= */
-  const handleDownload = async (paper: any) => {
-    if (!paper.pdf_path) {
-      alert('PDF not found.');
+const handleDownloadPDF = async (paper: any) => {
+  if (!paper.paperPdf) {
+    alert('PDF not found.');
+    return;
+  }
+
+  try {
+    setDownloadingId(paper.id);
+
+    console.log('Downloading PDF from URL:', paper.paperPdf);
+
+    // Use fetch to download directly from the stored URL
+    const response = await fetch(paper.paperPdf);
+    console.log('Fetch response status:', response.status, response.statusText);
+    if (!response.ok) throw new Error(`Failed to download PDF: ${response.status} ${response.statusText}`);
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${paper.title}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+
+  } catch (err) {
+    console.error('Error downloading PDF:', err);
+    alert('Failed to download PDF');
+  } finally {
+    setDownloadingId(null);
+  }
+};
+
+
+  /* ================= DOWNLOAD KEY ================= */
+  const handleDownloadKey = async (paper: any) => {
+    if (!paper.paperKey) {
+      alert('Key not found.');
       return;
     }
 
     try {
       setDownloadingId(paper.id);
 
-      // Since pdf_path is now a full URL, use fetch to download
-      const response = await fetch(paper.pdf_path);
-      if (!response.ok) throw new Error('Failed to download PDF');
+      console.log('Downloading key from URL:', paper.paperKey);
+
+      // Use fetch to download directly from the stored URL
+      const response = await fetch(paper.paperKey);
+      console.log('Fetch response status:', response.status, response.statusText);
+      if (!response.ok) throw new Error(`Failed to download key: ${response.status} ${response.statusText}`);
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${paper.title}.pdf`;
+      a.download = `${paper.title}_key.pdf`;
       document.body.appendChild(a);
       a.click();
-
       URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
     } catch (err) {
-      console.error(err);
-      alert('Failed to download PDF');
+      console.error('Error downloading key:', err);
+      alert('Failed to download key');
     } finally {
       setDownloadingId(null);
     }
@@ -139,23 +133,25 @@ export default function GeneratedPapersPage() {
 
     try {
       // delete PDF from storage
-      if (paper.pdf_path) {
-        // Extract path from URL: remove the base URL part
-        const urlParts = paper.pdf_path.split('/storage/v1/object/public/generated-papers/');
+      if (paper.paperPdf) {
+        const urlParts = paper.paperPdf.split('/storage/v1/object/public/generated-papers/');
         const pdfPath = urlParts[1];
         if (pdfPath) {
-          await supabase.storage
-            .from('generated-papers')
-            .remove([pdfPath]);
+          await supabase.storage.from('generated-papers').remove([pdfPath]);
+        }
+      }
+
+      // delete key from storage
+      if (paper.paperKey) {
+        const urlParts = paper.paperKey.split('/storage/v1/object/public/key/');
+        const keyPath = urlParts[1];
+        if (keyPath) {
+          await supabase.storage.from('key').remove([keyPath]);
         }
       }
 
       // delete DB record
-      const { error } = await supabase
-        .from('papers')
-        .delete()
-        .eq('id', paper.id);
-
+      const { error } = await supabase.from('papers').delete().eq('id', paper.id);
       if (error) throw error;
 
       fetchPapers();
@@ -199,11 +195,8 @@ export default function GeneratedPapersPage() {
               <thead className="table-light">
                 <tr>
                   <th>Title</th>
-                  <th>Class</th>
-                  <th>Subject</th>
-                  <th>Type</th>
-                  <th>Marks</th>
-                  <th>Time</th>
+                  <th>Download PDF</th>
+                  <th>Paper Key</th>
                   <th>Created</th>
                   <th className="text-end">Actions</th>
                 </tr>
@@ -212,7 +205,7 @@ export default function GeneratedPapersPage() {
 
                 {papers.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-center py-4 text-muted">
+                    <td colSpan={5} className="text-center py-4 text-muted">
                       No papers found
                     </td>
                   </tr>
@@ -220,34 +213,41 @@ export default function GeneratedPapersPage() {
 
                 {papers.map(paper => (
                   <tr key={paper.id}>
+                    <td><strong>{paper.title}</strong></td>
+
+                    {/* PDF Download */}
                     <td>
-                      <strong>{paper.title}</strong>
-                      {paper.is_trial && (
-                        <span className="badge bg-warning ms-2">Trial</span>
-                      )}
+                      {paper.paperPdf ? (
+                        <button
+                          className="btn btn-sm btn-outline-success"
+                          disabled={downloadingId === paper.id}
+                          onClick={() => handleDownloadPDF(paper)}
+                        >
+                          {downloadingId === paper.id
+                            ? <span className="spinner-border spinner-border-sm" />
+                            : 'Download PDF'}
+                        </button>
+                      ) : '—'}
                     </td>
-                    <td>Grade {paper.classes?.name ?? '—'}</td>
-                    <td>{paper.subjects?.name ?? '—'}</td>
-                    <td className="text-capitalize">
-                      {paper.paper_type?.replace('_', ' ')}
+
+                    {/* Paper Key */}
+                    <td>
+                      {paper.paperKey ? (
+                        <button
+                          className="btn btn-sm btn-outline-primary"
+                          disabled={downloadingId === paper.id}
+                          onClick={() => handleDownloadKey(paper)}
+                        >
+                          {downloadingId === paper.id
+                            ? <span className="spinner-border spinner-border-sm" />
+                            : 'Download Key'}
+                        </button>
+                      ) : '—'}
                     </td>
-                    <td>{paper.total_marks}</td>
-                    <td>{paper.time_minutes} min</td>
+
                     <td>{new Date(paper.created_at).toLocaleDateString()}</td>
+
                     <td className="text-end">
-
-                      {/* Download */}
-                      <button
-                        className="btn btn-sm btn-outline-success me-2"
-                        title="Download PDF"
-                        disabled={downloadingId === paper.id}
-                        onClick={() => handleDownload(paper)}
-                      >
-                        {downloadingId === paper.id
-                          ? <span className="spinner-border spinner-border-sm" />
-                          : <i className="bi bi-download" />}
-                      </button>
-
                       {/* Delete */}
                       <button
                         className="btn btn-sm btn-outline-danger"
@@ -256,7 +256,6 @@ export default function GeneratedPapersPage() {
                       >
                         <i className="bi bi-trash" />
                       </button>
-
                     </td>
                   </tr>
                 ))}
