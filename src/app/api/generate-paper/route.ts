@@ -962,14 +962,33 @@ function calculateSectionMarks(
 async function createPaperRecord(requestData: PaperGenerationRequest, userId: string) {
   const {
     title,
-   
+    subjectId,
+    classId
   } = requestData;
+
+  // Fetch subject and class names
+  const { data: subject } = await supabaseAdmin
+    .from('subjects')
+    .select('name')
+    .eq('id', subjectId)
+    .single();
+
+  const { data: classData } = await supabaseAdmin
+    .from('classes')
+    .select('name')
+    .eq('id', classId)
+    .single();
+
+  const subjectName = subject?.name || 'Unknown Subject';
+  const className = classData?.name || 'Unknown Class';
 
   // CRITICAL FIX: Calculate total marks based on "to attempt" values from toAttemptValues
   // Create paper record with new schema
   const paperData: any = {
     title: title,
-    created_by: userId
+    created_by: userId,
+    class_name: className,
+    subject_name: subjectName
   };
 
   try {
@@ -987,7 +1006,9 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
     console.log(`✅ Paper created with ID: ${paper.id}`);
     console.log(`📊 Paper details:`, {
       title: paper.title,
-      created_by: paper.created_by
+      created_by: paper.created_by,
+      class_name: paper.class_name,
+      subject_name: paper.subject_name
     });
     return paper;
   } catch (error) {

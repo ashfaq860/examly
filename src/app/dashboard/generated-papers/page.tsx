@@ -13,6 +13,7 @@ export default function GeneratedPapersPage() {
   const [papers, setPapers] = useState<any[]>([]);
   const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
   const [downloadingKeyId, setDownloadingKeyId] = useState<string | null>(null);
+  const [isTrial, setIsTrial] = useState(false);
 
   /* ================= FETCH PAPERS ================= */
   const fetchPapers = async () => {
@@ -24,12 +25,36 @@ export default function GeneratedPapersPage() {
         return;
       }
 
+      // Check subscription status
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('subscription_status')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        alert('Failed to check subscription status.');
+        return;
+      }
+
+      console.log('Subscription status:', profile.subscription_status);
+
+      if (profile.subscription_status !== 'paid') {
+        setPapers([]);
+        setIsTrial(true);
+        setLoading(false);
+        return;
+      }
+
+      setIsTrial(false);
+
       const { data, error } = await supabase
         .from('papers')
-        .select(`id, title, created_at, "paperPdf", "paperKey"`)
+        .select(`id, title, created_at, "paperPdf", "paperKey", class_name, subject_name`)
         .eq('created_by', user.id)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(5);
 
       if (error) throw error;
 
@@ -163,6 +188,22 @@ const handleDownloadPDF = async (paper: any) => {
     );
   }
 
+  /* ================= TRIAL MESSAGE ================= */
+  if (isTrial) {
+    return (
+      <AcademyLayout>
+        <div className="container-fluid text-center py-5">
+          <div className="alert alert-warning" role="alert">
+            <h4 className="alert-heading">Trial Period</h4>
+            <p>This feature is only for paid users.</p>
+            <hr />
+            <p className="mb-0">Please upgrade your subscription to access generated papers.</p>
+          </div>
+        </div>
+      </AcademyLayout>
+    );
+  }
+
   /* ================= UI ================= */
   return (
     <AcademyLayout>
@@ -185,8 +226,10 @@ const handleDownloadPDF = async (paper: any) => {
             <table className="table table-hover mb-0">
               <thead className="table-light">
                 <tr>
-                  <th>Title</th>
-                  <th>Download PDF</th>
+                  <th>Title</th>                 
+                   <th>Class</th>
+                  <th>Subject</th>
+                  <th>Download Paper</th>
                   <th>Paper Key</th>
                   <th>Created</th>
                   <th className="text-end">Actions</th>
@@ -196,7 +239,7 @@ const handleDownloadPDF = async (paper: any) => {
 
                 {papers.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="text-center py-4 text-muted">
+                    <td colSpan={7} className="text-center py-4 text-muted">
                       No papers found
                     </td>
                   </tr>
@@ -205,6 +248,8 @@ const handleDownloadPDF = async (paper: any) => {
                 {papers.map(paper => (
                   <tr key={paper.id}>
                     <td><strong>{paper.title}</strong></td>
+                    <td>{paper.class_name || '—'}</td>
+                    <td>{paper.subject_name || '—'}</td>
 
                     {/* PDF Download */}
                     <td>
