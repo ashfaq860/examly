@@ -5,19 +5,14 @@ import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import AcademyLayout from '@/components/AcademyLayout';
 
-const PAGE_SIZE = 10;
-
 export default function GeneratedPapersPage() {
   const supabase = createClientComponentClient();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [papers, setPapers] = useState<any[]>([]);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
+  const [downloadingKeyId, setDownloadingKeyId] = useState<string | null>(null);
 
   /* ================= FETCH PAPERS ================= */
   const fetchPapers = async () => {
@@ -29,20 +24,16 @@ export default function GeneratedPapersPage() {
         return;
       }
 
-      const from = (page - 1) * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-
-      const { data, error, count } = await supabase
+      const { data, error } = await supabase
         .from('papers')
-        .select(`id, title, created_at, "paperPdf", "paperKey"`, { count: 'exact' })
+        .select(`id, title, created_at, "paperPdf", "paperKey"`)
         .eq('created_by', user.id)
         .order('created_at', { ascending: false })
-        .range(from, to);
+        .limit(10);
 
       if (error) throw error;
 
       setPapers(data || []);
-      setTotal(count || 0);
 
     } catch (err) {
       console.error('Error loading papers:', err);
@@ -54,7 +45,7 @@ export default function GeneratedPapersPage() {
 
   useEffect(() => {
     fetchPapers();
-  }, [page]);
+  }, []);
 
   /* ================= DOWNLOAD PDF ================= */
 const handleDownloadPDF = async (paper: any) => {
@@ -64,7 +55,7 @@ const handleDownloadPDF = async (paper: any) => {
   }
 
   try {
-    setDownloadingId(paper.id);
+    setDownloadingPdfId(paper.id);
 
     console.log('Downloading PDF from URL:', paper.paperPdf);
 
@@ -87,7 +78,7 @@ const handleDownloadPDF = async (paper: any) => {
     console.error('Error downloading PDF:', err);
     alert('Failed to download PDF');
   } finally {
-    setDownloadingId(null);
+    setDownloadingKeyId(null);
   }
 };
 
@@ -100,7 +91,7 @@ const handleDownloadPDF = async (paper: any) => {
     }
 
     try {
-      setDownloadingId(paper.id);
+      setDownloadingKeyId(paper.id);
 
       console.log('Downloading key from URL:', paper.paperKey);
 
@@ -220,12 +211,12 @@ const handleDownloadPDF = async (paper: any) => {
                       {paper.paperPdf ? (
                         <button
                           className="btn btn-sm btn-outline-success"
-                          disabled={downloadingId === paper.id}
+                          disabled={downloadingPdfId === paper.id}
                           onClick={() => handleDownloadPDF(paper)}
                         >
-                          {downloadingId === paper.id
+                          {downloadingPdfId === paper.id
                             ? <span className="spinner-border spinner-border-sm" />
-                            : 'Download PDF'}
+                            : 'Download Paper PDF'}
                         </button>
                       ) : '—'}
                     </td>
@@ -235,12 +226,12 @@ const handleDownloadPDF = async (paper: any) => {
                       {paper.paperKey ? (
                         <button
                           className="btn btn-sm btn-outline-primary"
-                          disabled={downloadingId === paper.id}
+                          disabled={downloadingKeyId === paper.id}
                           onClick={() => handleDownloadKey(paper)}
                         >
-                          {downloadingId === paper.id
+                          {downloadingKeyId === paper.id
                             ? <span className="spinner-border spinner-border-sm" />
-                            : 'Download Key'}
+                            : 'Download Key PDF'}
                         </button>
                       ) : '—'}
                     </td>
@@ -254,7 +245,7 @@ const handleDownloadPDF = async (paper: any) => {
                         title="Delete Paper"
                         onClick={() => handleDelete(paper)}
                       >
-                        <i className="bi bi-trash" />
+                        Delete
                       </button>
                     </td>
                   </tr>
@@ -264,30 +255,7 @@ const handleDownloadPDF = async (paper: any) => {
           </div>
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="d-flex justify-content-between align-items-center">
-            <div className="text-muted">
-              Page {page} of {totalPages}
-            </div>
-            <div>
-              <button
-                className="btn btn-outline-secondary btn-sm me-2"
-                disabled={page === 1}
-                onClick={() => setPage(p => p - 1)}
-              >
-                ← Previous
-              </button>
-              <button
-                className="btn btn-outline-secondary btn-sm"
-                disabled={page === totalPages}
-                onClick={() => setPage(p => p + 1)}
-              >
-                Next →
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Pagination removed - showing only last 5 papers */}
 
       </div>
     </AcademyLayout>

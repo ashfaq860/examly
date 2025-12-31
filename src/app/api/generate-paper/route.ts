@@ -691,11 +691,27 @@ async function saveUserPDF(userId: string, pdfBuffer: Buffer, title: string): Pr
 }
 
 // Function to generate MCQ paper key and save to key bucket
-async function generateAndSaveMCQKey(userId: string, paperId: string, mcqQuestions: any[]): Promise<string> {
+async function generateAndSaveMCQKey(userId: string, paperId: string, mcqQuestions: any[], subjectId: string, classId: string): Promise<string> {
   try {
     const bucketName = 'key';
     const timestamp = Date.now();
     const fileName = `${userId}/${timestamp}_${paperId}_key.pdf`;
+
+    // Fetch subject and class names
+    const { data: subject } = await supabaseAdmin
+      .from('subjects')
+      .select('name')
+      .eq('id', subjectId)
+      .single();
+
+    const { data: classData } = await supabaseAdmin
+      .from('classes')
+      .select('name')
+      .eq('id', classId)
+      .single();
+
+    const subjectName = subject?.name || 'Unknown Subject';
+    const className = classData?.name || 'Unknown Class';
 
     // Generate HTML for the key
     let htmlContent = `
@@ -710,6 +726,8 @@ async function generateAndSaveMCQKey(userId: string, paperId: string, mcqQuestio
         <body>
           <h1>MCQ Paper Key</h1>
           <p><strong>Paper ID:</strong> ${paperId}</p>
+          <p><strong>Class:</strong> ${className}</p>
+          <p><strong>Subject:</strong> ${subjectName}</p>
           <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
           <br>
     `;
@@ -3970,7 +3988,7 @@ export async function POST(request: Request) {
       if (mcqQuestions.length > 0) {
         try {
           console.log('🔑 Generating MCQ key for paid user...');
-          keyPath = await generateAndSaveMCQKey(user.id, paper.id, mcqQuestions);
+          keyPath = await generateAndSaveMCQKey(user.id, paper.id, mcqQuestions, requestData.subjectId, requestData.classId);
           console.log('✅ MCQ key saved to storage successfully');
         } catch (keyErr) {
           console.warn('Failed to generate and save MCQ key:', keyErr);
