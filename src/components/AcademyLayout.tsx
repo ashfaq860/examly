@@ -340,6 +340,7 @@ export default function AcademyLayout({ children }: any) {
               { path: "/dashboard/profile", icon: "bi-person", label: "Profile" },
               { path: "/dashboard/settings", icon: "bi-gear", label: "Settings" },
               { path: "/dashboard/packages", icon: "bi-box-seam", label: "Best Packages" },
+              { path: "/dashboard/generated-papers", icon: "bi-box-seam", label: "Your Papers" },
             ].map((item) => (
               <li key={item.path} className="mb-2">
                 <Link
@@ -391,6 +392,7 @@ export default function AcademyLayout({ children }: any) {
                 { path: "/dashboard/profile", icon: "bi-person", label: "Profile" },
                 { path: "/dashboard/settings", icon: "bi-gear", label: "Settings" },
                 { path: "/dashboard/packages", icon: "bi-box-seam", label: "Best Packages" },
+                { path: "/dashboard/generated-papers", icon: "bi-box-seam", label: "Generated Papers" },
               ].map((item) => (
                 <li key={item.path} className="mb-2">
                   <Link

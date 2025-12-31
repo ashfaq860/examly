@@ -626,6 +626,70 @@ async function checkUserSubscription(userId: string): Promise<boolean> {
   }
 }
 
+// Function to save user's PDF to storage and maintain last 5 PDFs
+async function saveUserPDF(userId: string, pdfBuffer: Buffer, title: string): Promise<void> {
+  try {
+    const bucketName = 'generated-papers';
+    const timestamp = Date.now();
+    const sanitizedTitle = title.replace(/[^a-z0-9_\-\.]/gi, '_');
+    const fileName = `${userId}/${timestamp}_${sanitizedTitle}.pdf`;
+
+    // Upload the new PDF
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(bucketName)
+      .upload(fileName, pdfBuffer, {
+        contentType: 'application/pdf',
+        cacheControl: '3600',
+        upsert: false // Don't overwrite existing files
+      });
+
+    if (uploadError) {
+      console.error('Error uploading PDF:', uploadError);
+      throw uploadError;
+    }
+
+    // List all PDFs for this user
+    const { data: files, error: listError } = await supabaseAdmin.storage
+      .from(bucketName)
+      .list(userId, {
+        limit: 100 // Get all files, should be manageable
+      });
+
+    if (listError) {
+      console.warn('Error listing user PDFs:', listError);
+      // Don't throw here, the upload succeeded
+      return;
+    }
+
+    // Filter to get only PDF files and sort by filename (newest first due to timestamp prefix)
+    const pdfFiles = (files || [])
+      .filter(file => file.name.endsWith('.pdf'))
+      .sort((a, b) => b.name.localeCompare(a.name)); // Sort by name descending (newest first)
+
+    // If more than 5 PDFs, delete the oldest ones
+    if (pdfFiles.length > 5) {
+      const filesToDelete = pdfFiles.slice(5).map(file => `${userId}/${file.name}`);
+      
+      const { error: deleteError } = await supabaseAdmin.storage
+        .from(bucketName)
+        .remove(filesToDelete);
+
+      if (deleteError) {
+        console.warn('Error deleting old PDFs:', deleteError);
+        // Don't throw, the new upload succeeded
+      } else {
+        console.log(`🗑️ Deleted ${filesToDelete.length} old PDF(s) for user ${userId}`);
+      }
+    }
+
+    console.log(`📄 Saved PDF: ${fileName} for user ${userId}`);
+  } catch (error) {
+    console.error('Error in saveUserPDF:', error);
+    throw error;
+  }
+}
+
+
 
 
 // Function to optimize HTML for Puppeteer
@@ -1024,7 +1088,8 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
     short_to_attempt: toAttemptMap.get('short') || shortCount,
     long_to_attempt: toAttemptMap.get('long') || longCount,
     language: language,
-    source_type: source_type
+    source_type: source_type,
+    generation_data: requestData
   };
 
   // Add additional Urdu/English question type counts to paper data
@@ -4039,6 +4104,19 @@ export async function POST(request: Request) {
         console.log('✅ Fallback PDF generated successfully');
       } else {
         throw pdfError;
+      }
+    }
+
+    // Check if user is non-trial (paid user) and save PDF to storage
+    const isPaidUser = await checkUserSubscription(user.id);
+    if (isPaidUser) {
+      try {
+        console.log('💾 Saving PDF to storage for paid user...');
+        await saveUserPDF(user.id, pdfBuffer, paper.title || 'Paper');
+        console.log('✅ PDF saved to storage successfully');
+      } catch (storageErr) {
+        console.warn('Failed to save PDF to storage:', storageErr);
+        // Don't fail the request if storage fails
       }
     }
 
