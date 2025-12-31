@@ -697,47 +697,49 @@ async function generateAndSaveMCQKey(userId: string, paperId: string, mcqQuestio
     const timestamp = Date.now();
     const fileName = `${userId}/${timestamp}_${paperId}_key.pdf`;
 
-    // Generate key content
-    let keyContent = `MCQ Paper Key\n\nPaper ID: ${paperId}\nGenerated: ${new Date().toISOString()}\n\n`;
+    // Generate HTML for the key
+    let htmlContent = `
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { text-align: center; }
+            p { margin: 5px 0; }
+          </style>
+        </head>
+        <body>
+          <h1>MCQ Paper Key</h1>
+          <p><strong>Paper ID:</strong> ${paperId}</p>
+          <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+          <br>
+    `;
 
     mcqQuestions.forEach((pq: any, index: number) => {
       const q = pq.questions;
       const correctOption = q.correct_option;
       const questionNumber = index + 1;
 
-      keyContent += `Q.${questionNumber}: ${correctOption}\n`;
+      htmlContent += `<p>Q.${questionNumber}: ${correctOption}</p>`;
     });
 
-    // Create PDF buffer from key content
-    const doc = new PDFDocument();
-    const buffers: Buffer[] = [];
+    htmlContent += `
+        </body>
+      </html>
+    `;
 
-    doc.on('data', buffers.push.bind(buffers));
-    doc.on('end', () => {});
+    // Get puppeteer browser
+    const browser = await getPuppeteerBrowser();
+    const page = await browser.newPage();
 
-    // Add content to PDF
-    doc.fontSize(16).text('MCQ Paper Key', { align: 'center' });
-    doc.moveDown();
-    doc.fontSize(12).text(`Paper ID: ${paperId}`);
-    doc.text(`Generated: ${new Date().toLocaleString()}`);
-    doc.moveDown();
-
-    mcqQuestions.forEach((pq: any, index: number) => {
-      const q = pq.questions;
-      const correctOption = q.correct_option;
-      const questionNumber = index + 1;
-
-      doc.text(`Q.${questionNumber}: ${correctOption}`);
+    // Set content and generate PDF
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
     });
 
-    doc.end();
-
-    // Wait for PDF to finish
-    await new Promise(resolve => {
-      doc.on('end', resolve);
-    });
-
-    const pdfBuffer = Buffer.concat(buffers);
+    await page.close();
 
     // Upload the key PDF
     const { error: uploadError } = await supabaseAdmin.storage
