@@ -627,7 +627,7 @@ async function checkUserSubscription(userId: string): Promise<boolean> {
 }
 
 // Function to save user's PDF to storage and maintain last 5 PDFs
-async function saveUserPDF(userId: string, pdfBuffer: Buffer, title: string): Promise<void> {
+async function saveUserPDF(userId: string, pdfBuffer: Buffer, title: string): Promise<string> {
   try {
     const bucketName = 'generated-papers';
     const timestamp = Date.now();
@@ -683,8 +683,81 @@ async function saveUserPDF(userId: string, pdfBuffer: Buffer, title: string): Pr
     }
 
     console.log(`📄 Saved PDF: ${fileName} for user ${userId}`);
+    return fileName;
   } catch (error) {
     console.error('Error in saveUserPDF:', error);
+    throw error;
+  }
+}
+
+// Function to generate MCQ paper key and save to key bucket
+async function generateAndSaveMCQKey(userId: string, paperId: string, mcqQuestions: any[]): Promise<string> {
+  try {
+    const bucketName = 'key';
+    const timestamp = Date.now();
+    const fileName = `${userId}/${timestamp}_${paperId}_key.pdf`;
+
+    // Generate key content
+    let keyContent = `MCQ Paper Key\n\nPaper ID: ${paperId}\nGenerated: ${new Date().toISOString()}\n\n`;
+
+    mcqQuestions.forEach((pq: any, index: number) => {
+      const q = pq.questions;
+      const correctOption = q.correct_option;
+      const questionNumber = index + 1;
+
+      keyContent += `Q.${questionNumber}: ${correctOption}\n`;
+    });
+
+    // Create PDF buffer from key content
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument();
+    const buffers: Buffer[] = [];
+
+    doc.on('data', buffers.push.bind(buffers));
+    doc.on('end', () => {});
+
+    // Add content to PDF
+    doc.fontSize(16).text('MCQ Paper Key', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(12).text(`Paper ID: ${paperId}`);
+    doc.text(`Generated: ${new Date().toLocaleString()}`);
+    doc.moveDown();
+
+    mcqQuestions.forEach((pq: any, index: number) => {
+      const q = pq.questions;
+      const correctOption = q.correct_option;
+      const questionNumber = index + 1;
+
+      doc.text(`Q.${questionNumber}: ${correctOption}`);
+    });
+
+    doc.end();
+
+    // Wait for PDF to finish
+    await new Promise(resolve => {
+      doc.on('end', resolve);
+    });
+
+    const pdfBuffer = Buffer.concat(buffers);
+
+    // Upload the key PDF
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(bucketName)
+      .upload(fileName, pdfBuffer, {
+        contentType: 'application/pdf',
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error('Error uploading MCQ key:', uploadError);
+      throw uploadError;
+    }
+
+    console.log(`🔑 Saved MCQ key: ${fileName} for user ${userId}`);
+    return fileName;
+  } catch (error) {
+    console.error('Error in generateAndSaveMCQKey:', error);
     throw error;
   }
 }
@@ -868,251 +941,17 @@ function calculateSectionMarks(
 
 // Function to create paper record
 async function createPaperRecord(requestData: PaperGenerationRequest, userId: string) {
-  const { 
+  const {
     title,
-    subjectId,
-    classId,
-    chapterOption = 'full_book',
-    selectedChapters = [],
-    source_type = 'all',
-    paperType = 'custom',
-    language = 'bilingual',
-    timeMinutes = 60,
-    mcqCount = 0,
-    shortCount = 0,
-    longCount = 0,
-    mcqToAttempt,
-    shortToAttempt,
-    longToAttempt,
-    mcqMarks = 1,
-    shortMarks = 2,
-    longMarks = 5,
-    reorderedQuestions,
-    customMarksData,
-    toAttemptValues = {}, // Get toAttemptValues from request
-    
-    // Additional Urdu/English question type counts
-    poetry_explanationCount = 0,
-    prose_explanationCount = 0,
-    passageCount = 0,
-    sentence_correctionCount = 0,
-    sentence_completionCount = 0,
-    translate_urduCount = 0,
-    translate_englishCount = 0,
-    idiom_phrasesCount = 0,
-    activePassiveCount = 0,
-    directInDirectCount = 0,
-    
-    // Additional Urdu/English toAttempt values
-    poetry_explanationToAttempt,
-    prose_explanationToAttempt,
-    passageToAttempt,
-    sentence_correctionToAttempt,
-    sentence_completionToAttempt,
-    translate_urduToAttempt,
-    translate_englishToAttempt,
-    idiom_phrasesToAttempt,
-    activePassiveToAttempt,
-    directInDirectToAttempt,
-    
-    // Additional Urdu/English marks
-    poetry_explanationMarks = 2,
-    prose_explanationMarks = 5,
-    passageMarks = 10,
-    sentence_correctionMarks = 1,
-    sentence_completionMarks = 1,
-    translate_urduMarks = 4,
-    translate_englishMarks = 5,
-    idiom_phrasesMarks = 1,
-    activePassiveMarks = 1,
-    directInDirectMarks = 1
+   
   } = requestData;
 
   // CRITICAL FIX: Calculate total marks based on "to attempt" values from toAttemptValues
-  // First, create a map of toAttempt values for all question types
-  const toAttemptMap = new Map<string, number>();
-  
-  // Add standard types
-  toAttemptMap.set('mcq', mcqToAttempt !== undefined ? mcqToAttempt : mcqCount);
-  toAttemptMap.set('short', shortToAttempt !== undefined ? shortToAttempt : shortCount);
-  toAttemptMap.set('long', longToAttempt !== undefined ? longToAttempt : longCount);
-  
-  // Add additional Urdu/English types
-  if (poetry_explanationToAttempt !== undefined) toAttemptMap.set('poetry_explanation', poetry_explanationToAttempt);
-  else toAttemptMap.set('poetry_explanation', poetry_explanationCount);
-  
-  if (prose_explanationToAttempt !== undefined) toAttemptMap.set('prose_explanation', prose_explanationToAttempt);
-  else toAttemptMap.set('prose_explanation', prose_explanationCount);
-  
-  if (passageToAttempt !== undefined) toAttemptMap.set('passage', passageToAttempt);
-  else toAttemptMap.set('passage', passageCount);
-  
-  if (sentence_correctionToAttempt !== undefined) toAttemptMap.set('sentence_correction', sentence_correctionToAttempt);
-  else toAttemptMap.set('sentence_correction', sentence_correctionCount);
-  
-  if (sentence_completionToAttempt !== undefined) toAttemptMap.set('sentence_completion', sentence_completionToAttempt);
-  else toAttemptMap.set('sentence_completion', sentence_completionCount);
-  
-  if (translate_urduToAttempt !== undefined) toAttemptMap.set('translate_urdu', translate_urduToAttempt);
-  else toAttemptMap.set('translate_urdu', translate_urduCount);
-  
-  if (translate_englishToAttempt !== undefined) toAttemptMap.set('translate_english', translate_englishToAttempt);
-  else toAttemptMap.set('translate_english', translate_englishCount);
-  
-  if (idiom_phrasesToAttempt !== undefined) toAttemptMap.set('idiom_phrases', idiom_phrasesToAttempt);
-  else toAttemptMap.set('idiom_phrases', idiom_phrasesCount);
-  
-  if (activePassiveToAttempt !== undefined) toAttemptMap.set('activePassive', activePassiveToAttempt);
-  else toAttemptMap.set('activePassive', activePassiveCount);
-  
-  if (directInDirectToAttempt !== undefined) toAttemptMap.set('directInDirect', directInDirectToAttempt);
-  else toAttemptMap.set('directInDirect', directInDirectCount);
-  
-  // Add other types from toAttemptValues
-  if (toAttemptValues && typeof toAttemptValues === 'object') {
-    Object.entries(toAttemptValues).forEach(([type, value]) => {
-      toAttemptMap.set(type, Number(value) || 0);
-    });
-  }
-  
-  console.log('📊 To Attempt Map:', Object.fromEntries(toAttemptMap.entries()));
-
-  let totalMarks = 0;
-  
-  // Use custom marks if available (for manual selection with custom marks)
-  if (reorderedQuestions && customMarksData) {
-    console.log('📊 Calculating total marks with custom marks...');
-    
-    // Calculate marks for each question type using custom marks
-    Object.entries(reorderedQuestions).forEach(([type, questions]) => {
-      if (!Array.isArray(questions)) return;
-      
-      const toAttemptForType = toAttemptMap.get(type) || questions.length;
-      const attemptedQuestions = questions.slice(0, toAttemptForType);
-      
-      const customMarksForType = customMarksData[type] || [];
-      const customMarksMap = new Map(customMarksForType.map((cm: any) => [cm.questionId, cm.marks]));
-      
-      let defaultMarks = 1; // default
-      if (type === 'mcq') defaultMarks = mcqMarks;
-      else if (type === 'short') defaultMarks = shortMarks;
-      else if (type === 'long') defaultMarks = longMarks;
-      else if (type === 'poetry_explanation') defaultMarks = poetry_explanationMarks;
-      else if (type === 'prose_explanation') defaultMarks = prose_explanationMarks;
-      else if (type === 'passage') defaultMarks = passageMarks;
-      else if (type === 'sentence_correction') defaultMarks = sentence_correctionMarks;
-      else if (type === 'sentence_completion') defaultMarks = sentence_completionMarks;
-      else if (type === 'translate_urdu') defaultMarks = translate_urduMarks;
-      else if (type === 'translate_english') defaultMarks = translate_englishMarks;
-      else if (type === 'idiom_phrases') defaultMarks = idiom_phrasesMarks;
-      else if (type === 'activePassive') defaultMarks = activePassiveMarks;
-      else if (type === 'directInDirect') defaultMarks = directInDirectMarks;
-      
-      const typeTotal = attemptedQuestions.reduce((sum: number, q: any) => {
-        const customMark = customMarksMap.get(q.id);
-        return sum + (customMark || q.marks || defaultMarks);
-      }, 0);
-      
-      totalMarks += typeTotal;
-      console.log(`📊 ${type}: ${typeTotal} marks (${attemptedQuestions.length} attempted)`);
-    });
-    
-    console.log(`📊 Total marks (custom): ${totalMarks}`);
-  } else {
-    // Standard calculation based on "to attempt" counts and marks
-    const mcqToAttemptVal = toAttemptMap.get('mcq') || 0;
-    const shortToAttemptVal = toAttemptMap.get('short') || 0;
-    const longToAttemptVal = toAttemptMap.get('long') || 0;
-    const poetry_explanationToAttemptVal = toAttemptMap.get('poetry_explanation') || 0;
-    const prose_explanationToAttemptVal = toAttemptMap.get('prose_explanation') || 0;
-    const passageToAttemptVal = toAttemptMap.get('passage') || 0;
-    const sentence_correctionToAttemptVal = toAttemptMap.get('sentence_correction') || 0;
-    const sentence_completionToAttemptVal = toAttemptMap.get('sentence_completion') || 0;
-    const translate_urduToAttemptVal = toAttemptMap.get('translate_urdu') || 0;
-    const translate_englishToAttemptVal = toAttemptMap.get('translate_english') || 0;
-    const idiom_phrasesToAttemptVal = toAttemptMap.get('idiom_phrases') || 0;
-    const activePassiveToAttemptVal = toAttemptMap.get('activePassive') || 0;
-    const directInDirectToAttemptVal = toAttemptMap.get('directInDirect') || 0;
-    
-    totalMarks = (mcqToAttemptVal * mcqMarks) + 
-                (shortToAttemptVal * shortMarks) + 
-                (longToAttemptVal * longMarks) +
-                (poetry_explanationToAttemptVal * poetry_explanationMarks) +
-                (prose_explanationToAttemptVal * prose_explanationMarks) +
-                (passageToAttemptVal * passageMarks) +
-                (sentence_correctionToAttemptVal * sentence_correctionMarks) +
-                (sentence_completionToAttemptVal * sentence_completionMarks) +
-                (translate_urduToAttemptVal * translate_urduMarks) +
-                (translate_englishToAttemptVal * translate_englishMarks) +
-                (idiom_phrasesToAttemptVal * idiom_phrasesMarks) +
-                (activePassiveToAttemptVal * activePassiveMarks) +
-                (directInDirectToAttemptVal * directInDirectMarks);
-    
-    console.log(`📊 Total marks (standard): ${totalMarks}`);
-  }
-
-  // Log the calculation details for debugging
-  console.log('📋 Marks calculation details:', {
-    toAttemptValues,
-    totalMarks
-  });
-
-  // Determine chapters to include
-  let chapterIds: string[] = [];
-  if (chapterOption === 'full_book') {
-    const { data: chapters } = await supabaseAdmin
-      .from('chapters')
-      .select('id')
-      .eq('subject_id', subjectId)
-      .eq('class_id', classId);
-    chapterIds = chapters?.map(c => c.id) || [];
-    console.log(`📚 Full book chapters found: ${chapterIds.length}`);
-  } else if ((chapterOption === 'custom' || chapterOption === 'single_chapter') && selectedChapters && selectedChapters.length > 0) {
-    // Handle both custom (multi) and single_chapter (single id in array)
-    chapterIds = selectedChapters;
-    console.log(`🎯 Chapters selected (${chapterOption}): ${chapterIds.length}`);
-  }
-
-  // Create paper record with corrected marks calculation
+  // Create paper record with new schema
   const paperData: any = {
     title: title,
-    subject_id: subjectId,
-    class_id: classId,
-    created_by: userId,
-    paper_type: paperType,
-    chapter_ids: chapterOption === 'custom' && selectedChapters.length > 0 ? selectedChapters : null,
-    difficulty: 'medium',
-    total_marks: totalMarks,
-    time_minutes: timeMinutes,
-    mcq_to_attempt: toAttemptMap.get('mcq') || mcqCount,
-    short_to_attempt: toAttemptMap.get('short') || shortCount,
-    long_to_attempt: toAttemptMap.get('long') || longCount,
-    language: language,
-    source_type: source_type,
-    generation_data: requestData
+    created_by: userId
   };
-
-  // Add additional Urdu/English question type counts to paper data
-  const additionalTypes = [
-    'poetry_explanation', 'prose_explanation', 'passage', 
-    'sentence_correction', 'sentence_completion',
-    'translate_urdu', 'translate_english', 'idiom_phrases',
-    'activePassive', 'directInDirect'
-  ];
-
-  additionalTypes.forEach(type => {
-    const countField = `${type}Count`;
-    const toAttemptField = `${type}ToAttempt`;
-    
-    if (requestData[countField as keyof PaperGenerationRequest] !== undefined) {
-      paperData[`${type}_count`] = requestData[countField as keyof PaperGenerationRequest];
-    }
-    if (requestData[toAttemptField as keyof PaperGenerationRequest] !== undefined) {
-      paperData[`${type}_to_attempt`] = requestData[toAttemptField as keyof PaperGenerationRequest];
-    } else if (requestData[countField as keyof PaperGenerationRequest] !== undefined) {
-      paperData[`${type}_to_attempt`] = requestData[countField as keyof PaperGenerationRequest];
-    }
-  });
 
   try {
     const { data: paper, error: paperError } = await supabaseAdmin
@@ -1129,10 +968,7 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
     console.log(`✅ Paper created with ID: ${paper.id}`);
     console.log(`📊 Paper details:`, {
       title: paper.title,
-      total_marks: paper.total_marks,
-      mcq_to_attempt: paper.mcq_to_attempt,
-      short_to_attempt: paper.short_to_attempt,
-      long_to_attempt: paper.long_to_attempt
+      created_by: paper.created_by
     });
     return paper;
   } catch (error) {
@@ -4061,28 +3897,35 @@ export async function POST(request: Request) {
       }
     }
 
-    // FIX: Check if we have any questions at all
-    if (questionInserts.length === 0) {
-      await supabaseAdmin.from('papers').delete().eq('id', paper.id);
-      return NextResponse.json(
-        { 
-          error: 'No questions found matching your criteria. Please try different filters.'
-        },
-        { status: 400 }
+    // Get MCQ questions for key generation
+    const mcqQuestions = [];
+    if (mcqCount > 0) {
+      console.log(`🔍 Finding ${mcqCount} MCQ questions for key generation...`);
+
+      const mcqResults = await findQuestionsWithFallback(
+        'mcq',
+        subjectId,
+        classId,
+        chapterIds,
+        source_type,
+        mcqDifficulty,
+        mcqCount,
+        randomSeed
       );
-    }
 
-    // Insert paper questions
-    console.log(`📝 Inserting ${questionInserts.length} questions into paper_questions`);
-    
-    const { error: insertError } = await supabaseAdmin
-      .from('paper_questions')
-      .insert(questionInserts);
-
-    if (insertError) {
-      console.error('Error inserting paper questions:', insertError);
-      await supabaseAdmin.from('papers').delete().eq('id', paper.id);
-      throw insertError;
+      if (mcqResults && mcqResults.length > 0) {
+        mcqResults.forEach((question, index) => {
+          mcqQuestions.push({
+            order_number: index + 1,
+            question_type: 'mcq',
+            question_id: question.id,
+            questions: question
+          });
+        });
+        console.log(`✅ Found ${mcqQuestions.length} MCQ questions for key generation`);
+      } else {
+        console.warn(`⚠️ No MCQ questions found for key generation`);
+      }
     }
 
     // Generate PDF
@@ -4090,13 +3933,13 @@ export async function POST(request: Request) {
     const htmlContent = await generatePaperHTML(paper, user.id, requestData, logoBase64);
 
     console.log('🔄 Creating PDF from HTML...');
-    
+
     let pdfBuffer: Buffer;
     try {
       pdfBuffer = await generatePDFFromHTML(htmlContent);
     } catch (pdfError) {
       console.error('❌ PDF generation failed:', pdfError);
-      
+
       // Fallback for development: create a simple PDF
       if (process.env.NODE_ENV === 'development') {
         console.log('🔄 Using fallback PDF generation for development...');
@@ -4109,14 +3952,47 @@ export async function POST(request: Request) {
 
     // Check if user is non-trial (paid user) and save PDF to storage
     const isPaidUser = await checkUserSubscription(user.id);
+    let pdfPath: string | null = null;
+    let keyPath: string | null = null;
+
     if (isPaidUser) {
       try {
         console.log('💾 Saving PDF to storage for paid user...');
-        await saveUserPDF(user.id, pdfBuffer, paper.title || 'Paper');
+        pdfPath = await saveUserPDF(user.id, pdfBuffer, paper.title || 'Paper');
         console.log('✅ PDF saved to storage successfully');
       } catch (storageErr) {
         console.warn('Failed to save PDF to storage:', storageErr);
         // Don't fail the request if storage fails
+      }
+
+      // Generate and save MCQ key if there are MCQ questions
+      if (mcqQuestions.length > 0) {
+        try {
+          console.log('🔑 Generating MCQ key for paid user...');
+          keyPath = await generateAndSaveMCQKey(user.id, paper.id, mcqQuestions);
+          console.log('✅ MCQ key saved to storage successfully');
+        } catch (keyErr) {
+          console.warn('Failed to generate and save MCQ key:', keyErr);
+          // Don't fail the request if key generation fails
+        }
+      }
+    }
+
+    // Update paper record with PDF and key URLs
+    if (pdfPath || keyPath) {
+      try {
+        const updateData: any = {};
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (pdfPath) updateData.paperPdf = `${supabaseUrl}/storage/v1/object/public/generated-papers/${pdfPath}`;
+        if (keyPath) updateData.paperKey = `${supabaseUrl}/storage/v1/object/public/key/${keyPath}`;
+
+        await supabaseAdmin
+          .from('papers')
+          .update(updateData)
+          .eq('id', paper.id);
+        console.log('✅ Updated paper record with PDF and key URLs');
+      } catch (updateErr) {
+        console.warn('Failed to update paper with PDF/key URLs:', updateErr);
       }
     }
 

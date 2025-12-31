@@ -1,5 +1,5 @@
-//dashboard/generated-papers/page.tsx
 'use client';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -15,9 +15,11 @@ export default function GeneratedPapersPage() {
   const [papers, setPapers] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
+  /* ================= FETCH PAPERS ================= */
   const fetchPapers = async () => {
     setLoading(true);
     try {
@@ -27,8 +29,19 @@ export default function GeneratedPapersPage() {
         return;
       }
 
-      /* 🔐 Role check */
-      const { data: role } = await supabase.rpc('get_user_role', { user_id: user.id });
+      console.log('User authenticated:', user.id);
+
+      const { data: role, error: roleError } = await supabase.rpc('get_user_role', {
+        user_id: user.id
+      });
+
+      if (roleError) {
+        console.error('RPC get_user_role error:', roleError);
+        throw new Error(`Failed to get user role: ${roleError.message}`);
+      }
+
+      console.log('User role:', role);
+
       if (role !== 'teacher') {
         router.push('/');
         return;
@@ -36,6 +49,8 @@ export default function GeneratedPapersPage() {
 
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
+
+      console.log('Fetching papers for user:', user.id, 'range:', from, 'to:', to);
 
       const { data, error, count } = await supabase
         .from('papers')
@@ -47,6 +62,7 @@ export default function GeneratedPapersPage() {
           created_at,
           total_marks,
           time_minutes,
+          pdf_path,
           classes ( name ),
           subjects ( name )
         `, { count: 'exact' })
@@ -55,15 +71,26 @@ export default function GeneratedPapersPage() {
         .range(from, to);
 
       if (error) {
-        console.error(error);
-        return;
+        console.error('Papers query error:', error);
+        throw error;
       }
+
+      console.log('Papers fetched successfully:', data?.length || 0, 'total:', count);
 
       setPapers(data || []);
       setTotal(count || 0);
 
     } catch (err) {
       console.error('Error loading papers:', err);
+      console.error('Error details:', {
+        message: err?.message,
+        name: err?.name,
+        stack: err?.stack,
+        code: (err as any)?.code,
+        details: (err as any)?.details
+      });
+      // Show user-friendly error message
+      alert('Failed to load papers. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -73,94 +100,72 @@ export default function GeneratedPapersPage() {
     fetchPapers();
   }, [page]);
 
-  const handleDelete = async (paperId: string) => {
+  /* ================= DOWNLOAD PDF ================= */
+  const handleDownload = async (paper: any) => {
+    if (!paper.pdf_path) {
+      alert('PDF not found.');
+      return;
+    }
+
+    try {
+      setDownloadingId(paper.id);
+
+      // Since pdf_path is now a full URL, use fetch to download
+      const response = await fetch(paper.pdf_path);
+      if (!response.ok) throw new Error('Failed to download PDF');
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${paper.title}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+    } catch (err) {
+      console.error(err);
+      alert('Failed to download PDF');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  /* ================= DELETE PAPER ================= */
+  const handleDelete = async (paper: any) => {
     if (!confirm('Are you sure you want to delete this paper?')) return;
 
     try {
+      // delete PDF from storage
+      if (paper.pdf_path) {
+        // Extract path from URL: remove the base URL part
+        const urlParts = paper.pdf_path.split('/storage/v1/object/public/generated-papers/');
+        const pdfPath = urlParts[1];
+        if (pdfPath) {
+          await supabase.storage
+            .from('generated-papers')
+            .remove([pdfPath]);
+        }
+      }
+
+      // delete DB record
       const { error } = await supabase
         .from('papers')
         .delete()
-        .eq('id', paperId);
+        .eq('id', paper.id);
 
-      if (error) {
-        console.error('Error deleting paper:', error);
-        alert('Failed to delete paper.');
-        return;
-      }
+      if (error) throw error;
 
-      // Refresh papers after deletion
       fetchPapers();
     } catch (err) {
       console.error(err);
-      alert('Something went wrong.');
+      alert('Failed to delete paper');
     }
   };
 
-  // NEW: Updated handleDownload function that uses the API endpoint
-  const handleDownload = async (paperId: string) => {
-    try {
-      // Show loading state on the button
-      const button = document.querySelector(`button[data-paper-id="${paperId}"]`);
-      if (button) {
-        const originalText = button.textContent;
-        button.textContent = 'Downloading...';
-        (button as HTMLButtonElement).disabled = true;
-
-        // Get session
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          router.push('/auth/login');
-          return;
-        }
-
-        // Call the download endpoint
-        const response = await fetch(`/api/download-paper/${paperId}`, {
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to download: ${response.status}`);
-        }
-
-        // Create blob and download
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        // Get filename from response or use default
-        const contentDisposition = response.headers.get('content-disposition');
-        let filename = 'paper.pdf';
-        if (contentDisposition) {
-          const match = contentDisposition.match(/filename="?(.+)"?/);
-          if (match) filename = match[1];
-        }
-        
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        
-        // Reset button
-        button.textContent = originalText;
-        (button as HTMLButtonElement).disabled = false;
-      }
-    } catch (error) {
-      console.error('Error downloading paper:', error);
-      alert('Failed to download paper. Please try again.');
-      
-      // Reset button on error
-      const button = document.querySelector(`button[data-paper-id="${paperId}"]`);
-      if (button) {
-        button.textContent = 'Download';
-        (button as HTMLButtonElement).disabled = false;
-      }
-    }
-  };
-
+  /* ================= LOADING ================= */
   if (loading) {
     return (
       <AcademyLayout>
@@ -171,6 +176,7 @@ export default function GeneratedPapersPage() {
     );
   }
 
+  /* ================= UI ================= */
   return (
     <AcademyLayout>
       <div className="container-fluid">
@@ -195,7 +201,7 @@ export default function GeneratedPapersPage() {
                   <th>Title</th>
                   <th>Class</th>
                   <th>Subject</th>
-                  <th>Paper Type</th>
+                  <th>Type</th>
                   <th>Marks</th>
                   <th>Time</th>
                   <th>Created</th>
@@ -203,6 +209,7 @@ export default function GeneratedPapersPage() {
                 </tr>
               </thead>
               <tbody>
+
                 {papers.length === 0 && (
                   <tr>
                     <td colSpan={8} className="text-center py-4 text-muted">
@@ -228,24 +235,28 @@ export default function GeneratedPapersPage() {
                     <td>{paper.time_minutes} min</td>
                     <td>{new Date(paper.created_at).toLocaleDateString()}</td>
                     <td className="text-end">
+
                       {/* Download */}
                       <button
                         className="btn btn-sm btn-outline-success me-2"
-                        title="Download Paper"
-                        onClick={() => handleDownload(paper.id)}
-                        data-paper-id={paper.id}
+                        title="Download PDF"
+                        disabled={downloadingId === paper.id}
+                        onClick={() => handleDownload(paper)}
                       >
-                        Download
+                        {downloadingId === paper.id
+                          ? <span className="spinner-border spinner-border-sm" />
+                          : <i className="bi bi-download" />}
                       </button>
 
                       {/* Delete */}
                       <button
                         className="btn btn-sm btn-outline-danger"
                         title="Delete Paper"
-                        onClick={() => handleDelete(paper.id)}
+                        onClick={() => handleDelete(paper)}
                       >
-                        Delete
+                        <i className="bi bi-trash" />
                       </button>
+
                     </td>
                   </tr>
                 ))}
