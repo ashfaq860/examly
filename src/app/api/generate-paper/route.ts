@@ -709,7 +709,6 @@ async function generateAndSaveMCQKey(userId: string, paperId: string, mcqQuestio
     });
 
     // Create PDF buffer from key content
-    const PDFDocument = require('pdfkit');
     const doc = new PDFDocument();
     const buffers: Buffer[] = [];
 
