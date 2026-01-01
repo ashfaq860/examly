@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Question, Chapter } from '@/types/types';
 import { useUser } from '@/app/context/userContext';
-
+import { PlusCircle,ArrowLeft  } from 'lucide-react';
 interface ReviewStepProps {
   watch: any;
   getValues: any;
@@ -55,7 +55,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
   const [draggedQuestion, setDraggedQuestion] = useState<{ id: string; type: string } | null>(null);
   const [removeWatermark, setRemoveWatermark] = useState(false);
   const [isAlertVisible, setIsAlertVisible] = useState(false);
-
+ 
   // Handle watermark checkbox change
   const handleWatermarkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const isPaidUser = trialStatus?.hasActiveSubscription;
@@ -249,20 +249,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
     }));
   };
 
-  const handleNewPaper = () => {
-    // Reset all states
-    setPreviewQuestions({});
-    setIsEditMode(false);
-    setRemoveWatermark(false);
-    
-    // Call resetForm if provided
-    if (resetForm) {
-      resetForm();
-    }
-    
-    // Navigate to initial step (step 1)
-    setStep(1);
-  };
+ 
 
   const renderQuestion = (question: Question, type: string, index: number) => {
     const marksPerQuestion = getMarksForQuestionType(type);
@@ -1317,15 +1304,11 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                 
                 <div className="row g-2 mb-3">
                   <div className="col-6">
-                    <button 
-                      className="btn btn-outline-primary w-100" 
-                      type="button" 
-                      onClick={handleNewPaper}
-                      disabled={isLoading}
-                    >
-                      <i className="bi bi-plus-circle me-2"></i>
-                      New Paper
-                    </button>
+                   
+                    <a href="/dashboard/generate-paper" className="btn btn-outline-primary w-100">
+  <PlusCircle className="me-2" size={20} />
+  New Paper
+</a>
                   </div>
                   <div className="col-6">
                     <button 
@@ -1334,50 +1317,64 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                       onClick={() => setStep(5)}
                       disabled={isLoading}
                     >
-                      <i className="bi bi-arrow-left me-2"></i>
+                       <ArrowLeft className="me-2" size={20} /> 
                       Back
                     </button>
                   </div>
                 </div>
               </div>
-
-              <div className="quick-stats mt-4 p-3 border rounded">
-                <h6 className="fw-bold text-primary mb-3">📈 Question Statistics</h6>
-                <div className="row text-center g-3">
-                  {getQuestionTypes().map((type) => {
-                    const questions = previewQuestions[type.value] || [];
-                    if (questions.length === 0) return null;
-                    
-                    const attemptField = `${type.fieldPrefix}ToAttempt`;
-                    const marksField = `${type.fieldPrefix}Marks`;
-                    
-                    const attemptValue = watch(attemptField) || 0;
-                    const marksValue = watch(marksField) || 1;
-                    
-                    const sectionMarks = questions.slice(0, attemptValue).reduce((sum, q) => {
-                      return sum + (q.customMarks || marksValue);
-                    }, 0);
-                    
-                    return (
-                      <div key={type.value} className="col-4">
-                        <div className="fw-bold text-primary">{type.label}</div>
-                        <div className="fw-bold">{attemptValue}/{questions.length}</div>
-                        <small className="text-muted">(Attempt/Total)</small>
-                        <div className="small text-success">
-                          = {sectionMarks} marks
-                        </div>
-                      </div>
-                    );
-                  })}
+            <div className="quick-stats mt-4 p-3 border rounded">
+              <h6 className="fw-bold text-primary mb-3">📈 Question Statistics</h6>
+              <div className="row text-center g-3">
+                {getQuestionTypes().map((type) => {
+                  const questions = previewQuestions[type.value] || [];
+                  if (questions.length === 0) return null;
                   
-                  <div className="col-12">
-                    <div className="fw-bold text-danger fs-5">
-                      Total: {calculateTotalMarksFromQuestions()} Marks
+                  const attemptField = `${type.fieldPrefix}ToAttempt`;
+                  const marksField = `${type.fieldPrefix}Marks`;
+                  
+                  const attemptValue = watch(attemptField) || 0;
+                  const marksValue = watch(marksField) || 1;
+                  
+                  const sectionMarks = questions.slice(0, attemptValue).reduce((sum, q) => {
+                    return sum + (q.customMarks || marksValue);
+                  }, 0);
+                  
+                  return (
+                    <div key={type.value} className="col-4">
+                      <div className="fw-bold text-primary">{type.label}</div>
+                      <div className="fw-bold">{attemptValue}/{questions.length}</div>
+                      <small className="text-muted">(Attempt/Total)</small>
+                      <div className="small text-success">
+                        = {sectionMarks} marks
+                      </div>
                     </div>
-                    <small className="text-muted">Based on "To Attempt" values</small>
+                  );
+                })}
+                
+                {/* Paper Type and MCQ Placement */}
+                <div className="col-6">
+                  <div className="fw-bold text-primary">Paper Type</div>
+                  <div className="fw-bold text-capitalize">
+                    {watch('paperType') || 'Standard'}
                   </div>
                 </div>
+                
+                <div className="col-6">
+                  <div className="fw-bold text-primary">Paper Layout</div>
+                  <div className="fw-bold text-capitalize">
+                    {watch('mcqPlacement') || 'Mixed'} per Page
+                  </div>
+                </div>
+                
+                <div className="col-12 mt-2 pt-2 border-top">
+                  <div className="fw-bold text-danger fs-5">
+                    Total: {calculateTotalMarksFromQuestions()} Marks
+                  </div>
+                  <small className="text-muted">Based on "To Attempt" values</small>
+                </div>
               </div>
+            </div>
 
               {isEditMode && (
                 <div className="edit-tips mt-3 p-3 bg-warning bg-opacity-10 rounded border">

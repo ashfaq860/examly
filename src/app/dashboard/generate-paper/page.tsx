@@ -11,8 +11,6 @@ import { useUser } from '@/app/context/userContext';
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 // Import components
-import { TrialStatusSection } from './components/TrialStatusSection';
-import { SubscriptionModal } from './components/SubscriptionModal';
 import { GenerationProgressModal } from './components/GenerationProgressModal';
 import { StepProgress } from './components/StepProgress';
 import { ClassSelectionStep } from './components/steps/ClassSelectionStep';
@@ -22,6 +20,7 @@ import { PaperTypeStep } from './components/steps/PaperTypeStep';
 import { SelectionMethodStep } from './components/steps/SelectionMethodStep';
 import { ReviewStep } from './components/steps/ReviewStep';
 import { ManualQuestionSelection } from './components/ManualQuestionSelection';
+import { ArrowLeft } from 'lucide-react';
 
 const supabase = createClientComponentClient();
 
@@ -1677,8 +1676,8 @@ const onSubmit = async (formData: PaperFormData) => {
             <h1 className="h2 mb-0">Generate <span className='d-none d-sm-inline'>New</span> Paper</h1>
             {step > 1 && (
               <button className="btn btn-outline-primary btn-sm" onClick={prevStep}>
-                <i className="bi bi-arrow-left me-2"></i>
-                <span className="d-inline d-sm-none">Back</span>
+                <ArrowLeft className="me-2" size={20} /> 
+                <span className="d-inline d-sm-none"><ArrowLeft className="me-2" size={20} />Back</span>
                 <span className="d-none d-sm-inline">
                   {step === 2 && 'Back to Class Selection'}
                   {step === 3 && 'Back to Subject Selection'}
