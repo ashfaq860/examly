@@ -1877,19 +1877,19 @@ function getCutLine() {
     </div>
   `;
 }
-
+let addThreeMCQ='';
   if (mcqPlacement === "two_papers") {
     htmlContent += getWatermarkHTML({ className: 'watermark-1', css: 'top: 20%; left: 35%;' }, 250, isPaidUser, removeWatermark, logoBase64);
    if(hasMCQs) htmlContent += getCutLine()+htmlContent;
     htmlContent += getWatermarkHTML({ className: 'watermark-2', css: 'bottom: 20%; left: 35%;' }, 250, isPaidUser, removeWatermark, logoBase64);
   } else if (mcqPlacement === "three_papers") {
-    htmlContent += getWatermarkHTML({ className: 'watermark-1', css: 'top: 13%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
-    if(hasMCQs) htmlContent += getCutLine()+htmlContent;
-    htmlContent += getWatermarkHTML({ className: 'watermark-2', css: 'top: 47%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
-    if(hasMCQs) htmlContent += getCutLine()+htmlContent;
-    htmlContent += getWatermarkHTML({ className: 'watermark-3', css: 'bottom: 10%; left: 35%;' }, 300, isPaidUser, removeWatermark, logoBase64);
+    addThreeMCQ += htmlContent+getWatermarkHTML({ className: 'watermark-1', css: 'top: 13%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
+    if(hasMCQs) addThreeMCQ += getCutLine()+htmlContent;
+    addThreeMCQ += getWatermarkHTML({ className: 'watermark-2', css: 'top: 47%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
+    if(hasMCQs) addThreeMCQ += getCutLine()+htmlContent;
+    addThreeMCQ += getWatermarkHTML({ className: 'watermark-3', css: 'bottom: 10%; left: 35%;' }, 300, isPaidUser, removeWatermark, logoBase64);
   }
-
+htmlContent = addThreeMCQ;
 
   // FIXED: Always generate subjective section if there are subjective questions or no MCQs at all
   if (subjectiveQuestions.length > 0 || !hasMCQs) {
