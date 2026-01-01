@@ -1267,14 +1267,12 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                     style={{ cursor: isPaidUser ? 'pointer' : 'not-allowed' }}
                   >
                     <div>
-                      <span className="fw-bold">Remove Watermark</span>
-                      <div className="small text-muted">
-                        Remove "Examly" watermark from generated PDF
-                      </div>
-                    </div>
-                    {!isPaidUser && (
+                      <span className="fw-bold">Remove Watermark  {!isPaidUser && (
                       <span className="badge bg-warning text-dark ms-2">Premium</span>
-                    )}
+                    )}</span>
+                     
+                    </div>
+                   
                   </label>
                 </div>
                 {!isPaidUser && (
