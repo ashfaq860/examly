@@ -1660,7 +1660,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   // FIXED: Only generate MCQ section if there are MCQs
   if (hasMCQs) {
     htmlContent += `
-<div class="container" ${mcqPlacement === 'two_papers' ?  'style="height:525px; overflow:hidden"' : mcqPlacement==='three_papers' ? 'style="height:344px; overflow:hidden"' : ''}>
+<div class="container" ${mcqPlacement === 'two_papers' ?  'style="height:525px; overflow:hidden"' : mcqPlacement==='three_papers' ? 'style="height:343px; overflow:hidden"' : ''}>
 <div class="header">
       ${mcqPlacement==='three_papers' ? `
       <h1 class="eng text-center">
@@ -1908,7 +1908,7 @@ htmlContent = addThreeMCQ;
     // 2. OR there are no MCQs (paper has only subjective questions)
     const showSubjectiveStudentInfo = mcqPlacement === "separate" || mcqPlacement === "two_papers" || mcqPlacement === "three_papers" || !hasMCQs;
     
-    subjectiveContent += ` <div class="container" ${mcqPlacement === 'two_papers' ?  'style="height:525px; overflow:hidden"' : mcqPlacement==='three_papers' ? 'style="height:344px; overflow:hidden"' : ''}>
+    subjectiveContent += ` <div class="container" ${mcqPlacement === 'two_papers' ?  'style="height:525px; overflow:hidden"' : mcqPlacement==='three_papers' ? 'style="height:343px; overflow:hidden"' : ''}>
   ${showSubjectiveStudentInfo ? `
      <div class="header">
      ${mcqPlacement==='three_papers' ? `
