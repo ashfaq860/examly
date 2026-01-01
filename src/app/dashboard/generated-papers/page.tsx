@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import AcademyLayout from '@/components/AcademyLayout';
 import { useUser } from '@/app/context/userContext';
-import { FileText,Download  } from 'lucide-react';
+import { FileText,Download ,Trash2  } from 'lucide-react';
 export default function GeneratedPapersPage() {
   const supabase = createClientComponentClient();
   const router = useRouter();
@@ -35,7 +35,7 @@ export default function GeneratedPapersPage() {
         .not('paperPdf', 'is', null)
         .not('paperKey', 'is', null)
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(10);
 
       if (error) throw error;
 
@@ -262,6 +262,7 @@ export default function GeneratedPapersPage() {
                           {deletingId === paper.id
                             ? <span className="spinner-border spinner-border-sm" />
                             : 'Delete'}
+                          <Trash2 color="red" size={20} />
                         </button>
                       </td>
                     </tr>
