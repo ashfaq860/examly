@@ -1251,7 +1251,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
             </div>
             <div className="card-body">
               {/* Watermark Removal Checkbox - ALWAYS VISIBLE */}
-              <div className="watermark-control mb-4 p-3 border rounded bg-light">
+              <div className="watermark-control mb-2">
                 <div className="form-check">
                   <input
                     className="form-check-input"
@@ -1275,14 +1275,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                    
                   </label>
                 </div>
-                {!isPaidUser && (
-                  <div className="mt-2">
-                    <small className="text-muted">
-                      <i className="bi bi-info-circle me-1"></i>
-                      Available for paid users only
-                    </small>
-                  </div>
-                )}
+                
               </div>
 
               <div className="action-buttons">
