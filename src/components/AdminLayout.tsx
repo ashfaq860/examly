@@ -2,14 +2,14 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-//import { supabase } from '../lib/supabaseClient';
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 const supabase = createClientComponentClient();
+
 import {
   FiHome, FiUsers, FiBook, FiFileText,
   FiSettings, FiMenu, FiLogOut, FiAward,
   FiLayers, FiBookOpen, FiGrid, FiFilePlus,
-  FiChevronDown, FiChevronRight, FiX,FiShoppingBag
+  FiChevronDown, FiChevronRight, FiX, FiShoppingBag
 } from 'react-icons/fi';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -21,8 +21,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { id: '', label: 'Dashboard', icon: <FiHome /> },
     { id: 'users', label: 'User Management', icon: <FiUsers /> },
-{ id: 'orders', label: 'Order Management', icon: <FiShoppingBag /> },
-
+    { id: 'orders', label: 'Order Management', icon: <FiShoppingBag /> },
     {
       id: 'management',
       label: 'System Management',
@@ -34,17 +33,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { id: 'management/topics', label: 'Topics', icon: <FiFilePlus /> },
         { id: 'management/questions', label: 'Question Bank', icon: <FiBook /> }
       ]
-    },
-   
+    }
   ];
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    
     router.push('/auth/login');
   };
 
-  // Active check (Dashboard only when exactly /admin)
+  // Check if nav item is active
   const isItemActive = (id: string) => {
     if (id === '') return pathname === '/admin';
     return pathname?.startsWith(`/admin/${id}`);
@@ -65,6 +62,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setOpenParents(prev =>
       prev.includes(parentId) ? prev.filter(id => id !== parentId) : [...prev, parentId]
     );
+  };
+
+  // Close sidebar only on mobile
+  const handleLinkClick = () => {
+    if (window.innerWidth < 992) setShowSidebar(false);
   };
 
   return (
@@ -127,7 +129,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                                   className={`nav-link d-flex align-items-center gap-2 rounded ${
                                     isItemActive(subItem.id) ? 'active-sub' : ''
                                   }`}
-                                  onClick={() => setShowSidebar(false)}
+                                  onClick={handleLinkClick}
                                 >
                                   {subItem.icon}
                                   {subItem.label}
@@ -143,7 +145,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         className={`nav-link d-flex align-items-center gap-2 rounded-pill fw-semibold ${
                           isItemActive(item.id) ? 'active' : ''
                         }`}
-                        onClick={() => setShowSidebar(false)}
+                        onClick={handleLinkClick}
                       >
                         {item.icon}
                         {item.label}
@@ -165,16 +167,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           transition: all 0.3s ease;
           color: #333;
         }
-
-        /* Parent / main active (uses :global to beat Bootstrap specificity/order) */
         .sidebar :global(.nav-link.active-parent),
         .sidebar :global(.nav-link.active) {
           background: linear-gradient(45deg, #0d6efd, #4dabf7) !important;
           color: #fff !important;
           font-weight: 700 !important;
         }
-
-        /* Submenu active styling — strong selector + !important so Bootstrap won't override */
         .sidebar :global(.nav-link.active-sub) {
           background: #e7f1ff !important;
           color: #0d6efd !important;
@@ -183,7 +181,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           border-left: 4px solid #0d6efd !important;
           padding-left: 0.75rem !important;
         }
-
         .sidebar {
           position: fixed;
           top: 0;

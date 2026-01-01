@@ -1,7 +1,8 @@
 // ReviewStep.tsx
 'use client';
-import React, { useState,useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Question, Chapter } from '@/types/types';
+import { useUser } from '@/app/context/userContext';
 
 interface ReviewStepProps {
   watch: any;
@@ -24,6 +25,7 @@ interface ReviewStepProps {
   setPreviewQuestions: (questions: any) => void;
   onDownloadKey: () => Promise<void>;
   resetForm?: () => void; // Added resetForm prop
+  showToast?: (message: string, type?: 'success' | 'error' | 'info' | 'warning') => void; // Add toast function prop
 }
 
 export const ReviewStep: React.FC<ReviewStepProps> = ({
@@ -46,9 +48,56 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
   getQuestionTypes,
   setPreviewQuestions,
   onDownloadKey,
-  resetForm
+  resetForm,
+  showToast
 }) => {
+  const { trialStatus, isLoading: isLoadingUser } = useUser();
   const [draggedQuestion, setDraggedQuestion] = useState<{ id: string; type: string } | null>(null);
+  const [removeWatermark, setRemoveWatermark] = useState(false);
+  const [isAlertVisible, setIsAlertVisible] = useState(false);
+
+  // Handle watermark checkbox change
+  const handleWatermarkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isPaidUser = trialStatus?.hasActiveSubscription;
+    
+    if (isPaidUser) {
+      setRemoveWatermark(e.target.checked);
+    } else {
+      // Show toast message for trial users
+      if (showToast) {
+        showToast('This feature is only available for paid users. Upgrade your plan to remove watermarks.', 'info');
+      } else {
+        // Fallback to alert if toast function is not provided
+        alert('This feature is only available for paid users. Upgrade your plan to remove watermarks.');
+      }
+      // Ensure checkbox remains unchecked
+      setRemoveWatermark(false);
+    }
+  };
+
+  // Handle form submission with watermark option
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const formData = getValues();
+    
+    // Add watermark removal option to form data
+    const submitData = {
+      ...formData,
+      removeWatermark: trialStatus?.hasActiveSubscription ? removeWatermark : false
+    };
+    
+    await onSubmit(submitData);
+  };
+
+  useEffect(() => {
+    if (isEditMode) {
+      requestAnimationFrame(() => {
+        setIsAlertVisible(true);
+      });
+    } else {
+      setIsAlertVisible(false);
+    }
+  }, [isEditMode]);
 
   const formatDateForDisplay = (dateString: string) => {
     if (!dateString) return '';
@@ -59,20 +108,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
       day: 'numeric'
     });
   };
-// Add this state at the top of your component
-const [isAlertVisible, setIsAlertVisible] = useState(false);
 
-// Add this useEffect to handle the alert visibility transition
-useEffect(() => {
-  if (isEditMode) {
-    // Trigger reflow to ensure transition works
-    requestAnimationFrame(() => {
-      setIsAlertVisible(true);
-    });
-  } else {
-    setIsAlertVisible(false);
-  }
-}, [isEditMode]);
   // Helper function to get marks for a specific question type
   const getMarksForQuestionType = (type: string) => {
     const questionTypes = getQuestionTypes();
@@ -217,6 +253,7 @@ useEffect(() => {
     // Reset all states
     setPreviewQuestions({});
     setIsEditMode(false);
+    setRemoveWatermark(false);
     
     // Call resetForm if provided
     if (resetForm) {
@@ -737,11 +774,23 @@ useEffect(() => {
     );
   };
 
+  // Show loading state while checking user subscription
+  if (isLoadingUser) {
+    return (
+      <div className="text-center py-5">
+        <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}}>
+          <span className="visually-hidden">Loading...</span>
+        </div>
+        <h5>Loading User Information...</h5>
+        <p className="text-muted">Checking your subscription status</p>
+      </div>
+    );
+  }
+
+  const isPaidUser = trialStatus?.hasActiveSubscription || false;
+
   return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      onSubmit(getValues());
-    }} className="step-transition">
+    <form onSubmit={handleSubmit} className="step-transition">
       <div className="d-lg-none mobile-action-buttons">
         <div className="container">
           <div className="row g-2">
@@ -782,8 +831,8 @@ useEffect(() => {
         <div className="col-12 mb-3">
           {isEditMode && (
             <div className={`alert alert-warning mt-4 mx-3 edit-mode-alert ${
-        isAlertVisible ? 'alert-enter' : 'alert-exit'
-      }`}>
+              isAlertVisible ? 'alert-enter' : 'alert-exit'
+            }`}>
               <h6 className="fw-bold mb-2">
                 <i className="bi bi-magic me-2"></i>
                 Paper Editing Mode - Active
@@ -878,7 +927,7 @@ useEffect(() => {
               </div>
 
               <div className="d-none d-lg-flex justify-content-between align-items-center">
-                <h2 className="h4 card-title mb-0">📋 Paper Preview - Final Review</h2>
+                <h2 className="h4 card-title mb-0">📋 Paper Final Review</h2>
                 <div className="d-flex align-items-center gap-3"  >
                   <div className="form-check form-switch" >
                     <input
@@ -914,7 +963,7 @@ useEffect(() => {
                     <span className="visually-hidden">Loading...</span>
                   </div>
                   <h5>Loading Questions...</h5>
-                  <p className="text-muted">Preparing your paper preview</p>
+                  <p className="text-muted">Preparing your paper Review</p>
                 </div>
               ) : (
                 <div 
@@ -1170,21 +1219,25 @@ useEffect(() => {
                     ) : null}
                   </div>
 
-                  <div className="footer no-break" style={{ 
-                    marginTop: '30px', 
-                    textAlign: 'center', 
-                    fontSize: '12px', 
-                    color: '#666', 
-                    borderTop: '1px solid #ccc', 
-                    paddingTop: '10px' 
-                  }}>
-                    <p style={{
-                      fontFamily: "'Times New Roman', serif",
-                      direction: 'ltr'
+                  {/* Conditionally show watermark footer */}
+                  {(!removeWatermark || !isPaidUser) && (
+                    <div className="footer no-break" style={{ 
+                      marginTop: '30px', 
+                      textAlign: 'center', 
+                      fontSize: '12px', 
+                      color: '#666', 
+                      borderTop: '1px solid #ccc', 
+                      paddingTop: '10px',
+                      opacity: removeWatermark && isPaidUser ? 0.5 : 1
                     }}>
-                      Generated on {new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time
-                    </p>
-                  </div>
+                      <p style={{
+                        fontFamily: "'Times New Roman', serif",
+                        direction: 'ltr'
+                      }}>
+                        Generated on {new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1197,6 +1250,42 @@ useEffect(() => {
               <h3 className="h5 card-title mb-0">🎯 Paper Controls</h3>
             </div>
             <div className="card-body">
+              {/* Watermark Removal Checkbox - ALWAYS VISIBLE */}
+              <div className="watermark-control mb-4 p-3 border rounded bg-light">
+                <div className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id="removeWatermark"
+                    checked={removeWatermark}
+                    onChange={handleWatermarkChange}
+                    style={{ cursor: isPaidUser ? 'pointer' : 'not-allowed' }}
+                  />
+                  <label 
+                    className="form-check-label d-flex align-items-center" 
+                    htmlFor="removeWatermark"
+                    style={{ cursor: isPaidUser ? 'pointer' : 'not-allowed' }}
+                  >
+                    <div>
+                      <span className="fw-bold">Remove Watermark</span>
+                      <div className="small text-muted">
+                        Remove "Examly" watermark from generated PDF
+                      </div>
+                    </div>
+                    {!isPaidUser && (
+                      <span className="badge bg-warning text-dark ms-2">Premium</span>
+                    )}
+                  </label>
+                </div>
+                {!isPaidUser && (
+                  <div className="mt-2">
+                    <small className="text-muted">
+                      <i className="bi bi-info-circle me-1"></i>
+                      Available for paid users only
+                    </small>
+                  </div>
+                )}
+              </div>
 
               <div className="action-buttons">
                 <button 

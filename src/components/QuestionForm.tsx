@@ -60,8 +60,6 @@ export default function QuestionForm({
     // Note: These are form-only fields, not database columns
     passage_text: '',
     passage_text_ur: '',
-    translation_english: '',
-    translation_urdu: '',
     idiom_phrase: '',
     idiom_phrase_explanation: '',
     poetry_text: '',
@@ -124,8 +122,6 @@ export default function QuestionForm({
       // Form-only fields
       passage_text: '',
       passage_text_ur: '',
-      translation_english: '',
-      translation_urdu: '',
       idiom_phrase: '',
       idiom_phrase_explanation: '',
       poetry_text: '',
@@ -232,8 +228,6 @@ export default function QuestionForm({
     let passageTextUr = '';
     let idiomPhrase = '';
     let idiomPhraseExplanation = '';
-    let translationEnglish = '';
-    let translationUrdu = '';
     let directSentence = '';
     let indirectSentence = '';
     let activeSentence = '';
@@ -255,14 +249,6 @@ export default function QuestionForm({
       const match = question.question_text.match(/Idiom\/Phrase: (.*)/);
       idiomPhrase = match ? match[1] : question.question_text;
       idiomPhraseExplanation = question.answer_text || '';
-    } else if (question.question_type === 'translate_urdu' && question.question_text) {
-      const match = question.question_text.match(/Translate into Urdu: (.*)/);
-      translationEnglish = match ? match[1] : question.question_text.replace('Translate into Urdu: ', '');
-      translationUrdu = question.answer_text_ur || '';
-    } else if (question.question_type === 'translate_english' && question.question_text) {
-      const match = question.question_text.match(/Translate into English: (.*)/);
-      translationUrdu = match ? match[1] : question.question_text.replace('Translate into English: ', '');
-      translationEnglish = question.answer_text || '';
     } else if (question.question_type === 'directInDirect' && question.question_text) {
       const match = question.question_text.match(/Convert the following direct speech into indirect speech: (.*)/);
       directSentence = match ? match[1] : question.question_text.replace('Convert the following direct speech into indirect speech: ', '');
@@ -329,8 +315,6 @@ export default function QuestionForm({
       // Form-only fields (parsed from existing data)
       passage_text: passageText,
       passage_text_ur: passageTextUr,
-      translation_english: translationEnglish,
-      translation_urdu: translationUrdu,
       idiom_phrase: idiomPhrase,
       idiom_phrase_explanation: idiomPhraseExplanation,
       poetry_text: poetryText,
@@ -513,10 +497,10 @@ export default function QuestionForm({
 
           case 'translate_urdu':
             typeSpecificPayload = {
-              question_text: `${formData.question_text}`,
+              question_text: formData.question_text,
               question_text_ur: null,
               answer_text: null,
-              answer_text_ur: formData.translation_urdu,
+              answer_text_ur: formData.answer_text_ur,
               option_a: null,
               option_b: null,
               option_c: null,
@@ -531,9 +515,9 @@ export default function QuestionForm({
 
           case 'translate_english':
             typeSpecificPayload = {
-              question_text: `${formData.question_text}`,
+              question_text: formData.question_text,
               question_text_ur: null,
-              answer_text: formData.translation_english,
+              answer_text: formData.answer_text,
               answer_text_ur: null,
               option_a: null,
               option_b: null,
@@ -549,9 +533,9 @@ export default function QuestionForm({
 
           case 'idiom_phrases':
             typeSpecificPayload = {
-              question_text: `${formData.idiom_phrase}`,
+              question_text: formData.idiom_phrase,
               question_text_ur: null,
-              answer_text: formData.idiom_phrase_explanation,
+              answer_text: formData.answer_text,
               answer_text_ur: null,
               option_a: null,
               option_b: null,
@@ -585,9 +569,9 @@ export default function QuestionForm({
 
           case 'directInDirect':
             typeSpecificPayload = {
-              question_text: `${formData.direct_sentence}`,
+              question_text: formData.direct_sentence,
               question_text_ur: null,
-              answer_text: formData.indirect_sentence,
+              answer_text: formData.answer_text,
               answer_text_ur: null,
               option_a: null,
               option_b: null,
@@ -603,9 +587,9 @@ export default function QuestionForm({
 
           case 'activePassive':
             typeSpecificPayload = {
-              question_text: `${formData.active_sentence}`,
+              question_text: formData.active_sentence,
               question_text_ur: null,
-              answer_text: formData.passive_sentence,
+              answer_text: formData.answer_text,
               answer_text_ur: null,
               option_a: null,
               option_b: null,
@@ -644,7 +628,7 @@ export default function QuestionForm({
           case 'poetry_explanation':
             typeSpecificPayload = {
               question_text: null,
-              question_text_ur: `${formData.poetry_text}`,
+              question_text_ur: formData.poetry_text,
               answer_text: null,
               answer_text_ur: formData.answer_text_ur,
               option_a: null,
@@ -662,7 +646,7 @@ export default function QuestionForm({
           case 'prose_explanation':
             typeSpecificPayload = {
               question_text: null,
-              question_text_ur: `${formData.prose_text}`,
+              question_text_ur: formData.prose_text,
               answer_text: null,
               answer_text_ur: formData.answer_text_ur,
               option_a: null,
@@ -716,7 +700,7 @@ export default function QuestionForm({
           case 'sentence_correction':
             typeSpecificPayload = {
               question_text: null,
-              question_text_ur: `${formData.sentence_text}`,
+              question_text_ur: formData.sentence_text,
               answer_text: null,
               answer_text_ur: formData.answer_text_ur,
               option_a: null,
@@ -734,7 +718,7 @@ export default function QuestionForm({
           case 'sentence_completion':
             typeSpecificPayload = {
               question_text: null,
-              question_text_ur: `${formData.sentence_text}`,
+              question_text_ur: formData.sentence_text,
               answer_text: null,
               answer_text_ur: formData.answer_text_ur,
               option_a: null,
@@ -925,18 +909,6 @@ export default function QuestionForm({
                       placeholder="Enter English text to translate into Urdu"
                     />
                   </div>
-                  <div className="col-md-12">
-                    <label className="form-label">Urdu Translation *</label>
-                    <textarea
-                      className="form-control"
-                      rows={3}
-                      name="translation_urdu"
-                      value={formData.translation_urdu}
-                      onChange={handleChange}
-                      required
-                      placeholder="Enter Urdu translation"
-                    />
-                  </div>
                 </>
               )}
 
@@ -955,18 +927,6 @@ export default function QuestionForm({
                       placeholder="Enter Urdu text to translate into English"
                     />
                   </div>
-                  <div className="col-md-12">
-                    <label className="form-label">English Translation *</label>
-                    <textarea
-                      className="form-control"
-                      rows={3}
-                      name="translation_english"
-                      value={formData.translation_english}
-                      onChange={handleChange}
-                      required
-                      placeholder="Enter English translation"
-                    />
-                  </div>
                 </>
               )}
 
@@ -983,18 +943,6 @@ export default function QuestionForm({
                       onChange={handleChange}
                       required
                       placeholder="e.g., 'Break a leg'"
-                    />
-                  </div>
-                  <div className="col-md-12">
-                    <label className="form-label">Explanation (English) *</label>
-                    <textarea
-                      className="form-control"
-                      rows={3}
-                      name="idiom_phrase_explanation"
-                      value={formData.idiom_phrase_explanation}
-                      onChange={handleChange}
-                      required
-                      placeholder="Explain the meaning and usage"
                     />
                   </div>
                 </>
@@ -1027,18 +975,6 @@ export default function QuestionForm({
                       placeholder="Enter the question about the passage"
                     />
                   </div>
-                  <div className="col-md-12">
-                    <label className="form-label">Answer (English) *</label>
-                    <textarea
-                      className="form-control"
-                      rows={3}
-                      name="answer_text"
-                      value={formData.answer_text}
-                      onChange={handleChange}
-                      required
-                      placeholder="Enter the answer to the passage question"
-                    />
-                  </div>
                 </>
               )}
 
@@ -1057,18 +993,6 @@ export default function QuestionForm({
                       placeholder="Enter the direct speech sentence (e.g., 'She said, 'I am going to the market.'')"
                     />
                   </div>
-                  <div className="col-md-12">
-                    <label className="form-label">Indirect Speech Sentence *</label>
-                    <textarea
-                      className="form-control"
-                      rows={3}
-                      name="indirect_sentence"
-                      value={formData.indirect_sentence}
-                      onChange={handleChange}
-                      required
-                      placeholder="Enter the indirect speech sentence (e.g., 'She said that she was going to the market.')"
-                    />
-                  </div>
                 </>
               )}
 
@@ -1085,18 +1009,6 @@ export default function QuestionForm({
                       onChange={handleChange}
                       required
                       placeholder="Enter the active voice sentence (e.g., 'The cat chased the mouse.')"
-                    />
-                  </div>
-                  <div className="col-md-12">
-                    <label className="form-label">Passive Voice Sentence *</label>
-                    <textarea
-                      className="form-control"
-                      rows={3}
-                      name="passive_sentence"
-                      value={formData.passive_sentence}
-                      onChange={handleChange}
-                      required
-                      placeholder="Enter the passive voice sentence (e.g., 'The mouse was chased by the cat.')"
                     />
                   </div>
                 </>
@@ -1223,18 +1135,6 @@ export default function QuestionForm({
                       onChange={handleChange}
                       required
                       placeholder="سوال درج کریں"
-                    />
-                  </div>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">جواب (اردو) *</label>
-                    <textarea
-                      className="form-control urdu-text"
-                      rows={3}
-                      name="answer_text_ur"
-                      value={formData.answer_text_ur}
-                      onChange={handleChange}
-                      required
-                      placeholder="جواب درج کریں"
                     />
                   </div>
                 </>
@@ -1625,8 +1525,8 @@ export default function QuestionForm({
             </>
           )}
 
-          {/* Answer fields for non-MCQ questions (except passage which has its own answer fields) */}
-          {formData.question_type !== 'mcq' && formData.question_type !== 'passage' && (
+          {/* Answer fields for non-MCQ questions */}
+          {formData.question_type !== 'mcq' && (
             <>
               {isEnglishSubject() && (
                 <div className="col-md-12">
@@ -1638,6 +1538,15 @@ export default function QuestionForm({
                     value={formData.answer_text}
                     onChange={handleChange}
                     required
+                    placeholder={
+                      formData.question_type === 'translate_urdu' 
+                        ? "Enter Urdu translation"
+                        : formData.question_type === 'translate_english'
+                        ? "Enter English translation"
+                        : formData.question_type === 'idiom_phrases'
+                        ? "Explain the meaning and usage"
+                        : "Enter answer"
+                    }
                   />
                 </div>
               )}

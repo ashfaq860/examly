@@ -1,3 +1,4 @@
+// src/components/Header.tsx
 'use client';
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
@@ -14,6 +15,8 @@ export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const menuRef = useRef(null);
+  const isNavigating = useRef(false);
+  const menuHeightRef = useRef(0);
 
   useEffect(() => setActiveLink(pathname), [pathname]);
 
@@ -92,27 +95,79 @@ export default function Header() {
     return false;
   };
 
+  // Handle link click with immediate navigation
+  const handleLinkClick = (e) => {
+    // For mobile, close menu immediately without animation
+    if (window.innerWidth < 992) {
+      isNavigating.current = true;
+      const menuEl = menuRef.current;
+      if (menuEl) {
+        // Immediately hide menu without animation
+        menuEl.style.transition = 'none';
+        menuEl.style.height = '0';
+        menuEl.style.opacity = '0';
+        menuEl.style.overflow = 'hidden';
+        
+        // Reset after a tiny delay
+        setTimeout(() => {
+          menuEl.style.transition = '';
+          menuEl.style.overflow = '';
+        }, 50);
+      }
+    }
+    setOpen(false);
+  };
+
   // 🎬 Smooth Curtain Animation (mobile only)
   useEffect(() => {
     const el = menuRef.current;
     if (!el) return;
 
+    // Store menu height for animation
+    if (open && menuHeightRef.current === 0) {
+      menuHeightRef.current = el.scrollHeight;
+    }
+
     if (window.innerWidth >= 992) {
-      // Desktop: menu always visible, reset animation
+      // Desktop: menu always visible
       el.classList.remove('curtain-open', 'curtain-close');
       el.style.height = 'auto';
       el.style.opacity = '1';
+      el.style.overflow = 'visible';
+      isNavigating.current = false;
     } else {
-      // Mobile: apply curtain animation
+      // Mobile: apply curtain animation only if not navigating
+      if (isNavigating.current) {
+        isNavigating.current = false;
+        return;
+      }
+
       if (open) {
         el.classList.add('curtain-open');
         el.classList.remove('curtain-close');
+        el.style.height = `${menuHeightRef.current}px`;
+        el.style.opacity = '1';
       } else {
         el.classList.add('curtain-close');
         el.classList.remove('curtain-open');
+        el.style.height = '0';
+        el.style.opacity = '0';
       }
     }
   }, [open]);
+
+  // Reset menu height on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      menuHeightRef.current = 0;
+      if (window.innerWidth >= 992) {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   return (
     <>
@@ -121,17 +176,17 @@ export default function Header() {
         @media (max-width: 991px) {
           .curtain-container {
             overflow: hidden;
-            transition: height 1.3s cubic-bezier(0.25, 1, 0.3, 1), opacity 1s ease;
+            transition: height 0.5s cubic-bezier(0.25, 1, 0.3, 1), opacity 0.4s ease;
             opacity: 0;
             height: 0;
           }
 
           .curtain-open {
-            animation: curtainDrop 1.3s ease forwards;
+            animation: curtainDrop 0.5s ease forwards;
           }
 
           .curtain-close {
-            animation: curtainLift 0.9s ease forwards;
+            animation: curtainLift 0.4s ease forwards;
           }
 
           @keyframes curtainDrop {
@@ -141,12 +196,11 @@ export default function Header() {
               transform: translateY(-10px);
             }
             60% {
-              height: var(--menuHeight);
               opacity: 0.7;
               transform: translateY(3px);
             }
             100% {
-              height: var(--menuHeight);
+              height: var(--menuHeight, auto);
               opacity: 1;
               transform: translateY(0);
             }
@@ -154,7 +208,6 @@ export default function Header() {
 
           @keyframes curtainLift {
             0% {
-              height: var(--menuHeight);
               opacity: 1;
             }
             100% {
@@ -163,7 +216,46 @@ export default function Header() {
             }
           }
         }
-          ul.TopMenus li a{ fontSize:16px;}
+        
+        ul.TopMenus li a {
+          font-size: 16px;
+          position: relative;
+        }
+        
+        ul.TopMenus li a.active::after {
+          content: '';
+          position: absolute;
+          bottom: -2px;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background-color: currentColor;
+          border-radius: 1px;
+        }
+        
+        /* Dark mode toggle button style */
+        .dark-toggle-btn {
+          background: none;
+          border: 1px solid #ddd;
+          border-radius: 20px;
+          padding: 5px 12px;
+          cursor: pointer;
+          font-size: 14px;
+          transition: all 0.3s;
+        }
+        
+        .dark-toggle-btn:hover {
+          background-color: #f0f0f0;
+        }
+        
+        .dark .dark-toggle-btn {
+          border-color: #555;
+          color: #fff;
+        }
+        
+        .dark .dark-toggle-btn:hover {
+          background-color: #333;
+        }
       `}</style>
 
       <header className="header-nav dark:bg-gray-900 transition-colors duration-300">
@@ -172,6 +264,7 @@ export default function Header() {
             <Link
               className={`navbar-brand me-3 dark:text-white ${isLinkActive('/') ? 'active' : ''}`}
               href="/"
+              onClick={handleLinkClick}
             >
               <img
                 src="/examly.jpg"
@@ -182,12 +275,22 @@ export default function Header() {
               />
             </Link>
 
+            {/* Dark Mode Toggle */}
+            <button
+              onClick={toggleDarkMode}
+              className="dark-toggle-btn me-3 d-lg-none"
+              aria-label="Toggle dark mode"
+            >
+              {darkMode ? '🌙 Dark' : '☀️ Light'}
+            </button>
+
             {/* Mobile Toggler */}
             <button
               className="navbar-toggler dark:text-white"
               type="button"
               onClick={() => setOpen((v) => !v)}
               aria-label="Toggle navigation"
+              aria-expanded={open}
             >
               <span className="navbar-toggler-icon"></span>
             </button>
@@ -197,56 +300,72 @@ export default function Header() {
               ref={menuRef}
               className="navbar-collapse curtain-container"
               style={{
-                '--menuHeight': menuRef.current?.scrollHeight + 'px',
+                '--menuHeight': `${menuHeightRef.current}px`,
               }}
             >
               <ul className="navbar-nav ms-auto align-items-lg-center TopMenus">
                 <li className="nav-item">
                   <Link
+                    prefetch={true}
                     className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/') ? 'active' : ''}`}
                     href="/"
-                    onClick={() => setOpen(false)}
+                    onClick={handleLinkClick}
                   >
                     Home
                   </Link>
                 </li>
                 <li className="nav-item">
                   <Link
+                    prefetch={true}
                     className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/dashboard/generate-paper') ? 'active' : ''}`}
                     href="/dashboard/generate-paper"
-                    onClick={() => setOpen(false)}
+                    onClick={handleLinkClick}
                   >
-                   Make Test
+                    Make Test
                   </Link>
                 </li>
-                  <li className="nav-item">
+                <li className="nav-item">
                   <Link
+                    prefetch={true}
                     className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/quiz') ? 'active' : ''}`}
                     href="/quiz"
-                    onClick={() => setOpen(false)}
+                    onClick={handleLinkClick}
                   >
                     Quiz
                   </Link>
                 </li>
                 <li className="nav-item">
                   <Link
+                    prefetch={true}
                     className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/how-examly-works') ? 'active' : ''}`}
                     href="/how-examly-works"
-                    onClick={() => setOpen(false)}
+                    onClick={handleLinkClick}
                   >
                     How Examly<sub>.pk</sub> Works
                   </Link>
                 </li>
                 <li className="nav-item">
                   <Link
+                    prefetch={true}
                     className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/packages') ? 'active' : ''}`}
                     href="/packages"
-                    onClick={() => setOpen(false)}
+                    onClick={handleLinkClick}
                   >
                     Packages
                   </Link>
                 </li>
 
+                {/* Dark Mode Toggle (Desktop) 
+                <li className="nav-item d-none d-lg-block">
+                  <button
+                    onClick={toggleDarkMode}
+                    className="dark-toggle-btn ms-2"
+                    aria-label="Toggle dark mode"
+                  >
+                    {darkMode ? '🌙 Dark' : '☀️ Light'}
+                  </button>
+                </li>
+*/}
                 {/* Auth UI */}
                 {user ? (
                   <>
@@ -254,7 +373,7 @@ export default function Header() {
                       <button
                         onClick={() => {
                           handleUserClick();
-                          setOpen(false);
+                          handleLinkClick();
                         }}
                         className={`nav-link btn btn-link dark:text-gray-300 pe-3 ${isUserLinkActive() ? 'active' : ''}`}
                       >
@@ -262,7 +381,13 @@ export default function Header() {
                       </button>
                     </li>
                     <li className="nav-item ms-2">
-                      <button onClick={handleLogout} className="btn btn-danger btn-sm">
+                      <button 
+                        onClick={() => {
+                          handleLogout();
+                          handleLinkClick();
+                        }} 
+                        className="btn btn-danger btn-sm"
+                      >
                         Logout
                       </button>
                     </li>
@@ -271,20 +396,22 @@ export default function Header() {
                   <>
                     <li className="nav-item">
                       <Link
+                        prefetch={true}
                         className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/auth/login') ? 'active' : ''}`}
                         href="/auth/login"
-                        onClick={() => setOpen(false)}
+                        onClick={handleLinkClick}
                       >
                         Login
                       </Link>
                     </li>
                     <li className="nav-item ms-2">
                       <Link
+                        prefetch={true}
                         className={`btn btn-light btn-sm dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 ${
                           isLinkActive('/auth/signup') ? 'active' : ''
                         }`}
                         href="/auth/signup"
-                        onClick={() => setOpen(false)}
+                        onClick={handleLinkClick}
                       >
                         Sign Up
                       </Link>

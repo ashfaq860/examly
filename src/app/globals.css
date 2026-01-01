@@ -439,3 +439,58 @@ input.urdu-text {
 svg.lucide-circle-alert{
   display: none;
 }
+
+/* Dashboard recent activity style */
+.activity-item {
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.activity-item:hover {
+  background-color: #f8f9fb;
+  transform: translateY(-1px);
+}
+
+.activity-icon {
+  width: 38px;
+  height: 38px;
+  font-size: 16px;
+}
+
+/* Home Page animation effect */
+.scroll-progress-bar {
+  position: fixed;
+  top: 70px;
+  width: 100%;
+  height: 3px;
+  z-index: 999;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.scroll-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1ba699, #159380);
+}
+
+.scroll-animate {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scroll-animate.in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.zoom-in {
+  transform: scale(0.92);
+}
+
+.zoom-in.in-view {
+  transform: scale(1);
+}
+
+.feature-card:hover {
+  transform: translateY(-10px) scale(1.02);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
+}

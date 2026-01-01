@@ -1,19 +1,22 @@
+//dashboard/generated-papers/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import AcademyLayout from '@/components/AcademyLayout';
-
+import { useUser } from '@/app/context/userContext';
+import { FileText,Download  } from 'lucide-react';
 export default function GeneratedPapersPage() {
   const supabase = createClientComponentClient();
   const router = useRouter();
+  const { trialStatus, isLoading: userLoading } = useUser();
 
   const [loading, setLoading] = useState(true);
   const [papers, setPapers] = useState<any[]>([]);
   const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
   const [downloadingKeyId, setDownloadingKeyId] = useState<string | null>(null);
-  const [isTrial, setIsTrial] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   /* ================= FETCH PAPERS ================= */
   const fetchPapers = async () => {
@@ -25,43 +28,27 @@ export default function GeneratedPapersPage() {
         return;
       }
 
-      // Check subscription status
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('subscription_status')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError) {
-        console.error('Profile fetch error:', profileError);
-        alert('Failed to check subscription status.');
-        return;
-      }
-
-      console.log('Subscription status:', profile.subscription_status);
-
-      if (profile.subscription_status !== 'paid') {
-        setPapers([]);
-        setIsTrial(true);
-        setLoading(false);
-        return;
-      }
-
-      setIsTrial(false);
-
       const { data, error } = await supabase
         .from('papers')
         .select(`id, title, created_at, "paperPdf", "paperKey", class_name, subject_name`)
         .eq('created_by', user.id)
+        .not('paperPdf', 'is', null)
+        .not('paperKey', 'is', null)
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(20);
 
       if (error) throw error;
 
-      setPapers(data || []);
+      const processed = (data || []).map(paper => ({
+        ...paper,
+        class_name: paper.class_name || '—',
+        subject_name: paper.subject_name || '—'
+      }));
+
+      setPapers(processed);
 
     } catch (err) {
-      console.error('Error loading papers:', err);
+      console.error('Error fetching papers:', err);
       alert('Failed to load papers. Please try again.');
     } finally {
       setLoading(false);
@@ -69,61 +56,47 @@ export default function GeneratedPapersPage() {
   };
 
   useEffect(() => {
-    fetchPapers();
-  }, []);
+    if (trialStatus && (trialStatus.hasActiveSubscription || trialStatus.isTrial)) {
+      fetchPapers();
+    } else if (trialStatus) {
+      setLoading(false);
+    }
+  }, [trialStatus]);
 
   /* ================= DOWNLOAD PDF ================= */
-const handleDownloadPDF = async (paper: any) => {
-  if (!paper.paperPdf) {
-    alert('PDF not found.');
-    return;
-  }
+  const handleDownloadPDF = async (paper: any) => {
+    if (!paper.paperPdf) return alert('PDF not found.');
 
-  try {
-    setDownloadingPdfId(paper.id);
+    try {
+      setDownloadingPdfId(paper.id);
+      const response = await fetch(paper.paperPdf);
+      if (!response.ok) throw new Error('Failed to download PDF');
 
-    console.log('Downloading PDF from URL:', paper.paperPdf);
-
-    // Use fetch to download directly from the stored URL
-    const response = await fetch(paper.paperPdf);
-    console.log('Fetch response status:', response.status, response.statusText);
-    if (!response.ok) throw new Error(`Failed to download PDF: ${response.status} ${response.statusText}`);
-
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${paper.title}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-
-  } catch (err) {
-    console.error('Error downloading PDF:', err);
-    alert('Failed to download PDF');
-  } finally {
-    setDownloadingKeyId(null);
-  }
-};
-
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${paper.title}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to download PDF');
+    } finally {
+      setDownloadingPdfId(null);
+    }
+  };
 
   /* ================= DOWNLOAD KEY ================= */
   const handleDownloadKey = async (paper: any) => {
-    if (!paper.paperKey) {
-      alert('Key not found.');
-      return;
-    }
+    if (!paper.paperKey) return alert('Key not found.');
 
     try {
       setDownloadingKeyId(paper.id);
-
-      console.log('Downloading key from URL:', paper.paperKey);
-
-      // Use fetch to download directly from the stored URL
       const response = await fetch(paper.paperKey);
-      console.log('Fetch response status:', response.status, response.statusText);
-      if (!response.ok) throw new Error(`Failed to download key: ${response.status} ${response.statusText}`);
+      if (!response.ok) throw new Error('Failed to download key');
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -134,51 +107,42 @@ const handleDownloadPDF = async (paper: any) => {
       a.click();
       URL.revokeObjectURL(url);
       document.body.removeChild(a);
-
     } catch (err) {
-      console.error('Error downloading key:', err);
+      console.error(err);
       alert('Failed to download key');
     } finally {
-      setDownloadingId(null);
+      setDownloadingKeyId(null);
     }
   };
 
   /* ================= DELETE PAPER ================= */
-  const handleDelete = async (paper: any) => {
-    if (!confirm('Are you sure you want to delete this paper?')) return;
+  const handleDeletePaper = async (paper: any) => {
+    if (!confirm('Are you sure you want to delete this paper and its files?')) return;
 
     try {
-      // delete PDF from storage
-      if (paper.paperPdf) {
-        const urlParts = paper.paperPdf.split('/storage/v1/object/public/generated-papers/');
-        const pdfPath = urlParts[1];
-        if (pdfPath) {
-          await supabase.storage.from('generated-papers').remove([pdfPath]);
-        }
-      }
+      setDeletingId(paper.id);
 
-      // delete key from storage
-      if (paper.paperKey) {
-        const urlParts = paper.paperKey.split('/storage/v1/object/public/key/');
-        const keyPath = urlParts[1];
-        if (keyPath) {
-          await supabase.storage.from('key').remove([keyPath]);
-        }
-      }
+      const res = await fetch('/api/papers/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paperId: paper.id })
+      });
 
-      // delete DB record
-      const { error } = await supabase.from('papers').delete().eq('id', paper.id);
-      if (error) throw error;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete paper');
 
+      alert('Paper deleted successfully');
       fetchPapers();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to delete paper');
+      alert(err.message || 'Error deleting paper');
+    } finally {
+      setDeletingId(null);
     }
   };
 
   /* ================= LOADING ================= */
-  if (loading) {
+  if (loading || userLoading) {
     return (
       <AcademyLayout>
         <div className="container-fluid text-center py-5">
@@ -188,16 +152,14 @@ const handleDownloadPDF = async (paper: any) => {
     );
   }
 
-  /* ================= TRIAL MESSAGE ================= */
-  if (isTrial) {
+  /* ================= RESTRICTED ACCESS ================= */
+  if (trialStatus && !trialStatus.hasActiveSubscription && !trialStatus.isTrial) {
     return (
       <AcademyLayout>
         <div className="container-fluid text-center py-5">
           <div className="alert alert-warning" role="alert">
-            <h4 className="alert-heading">Trial Period</h4>
-            <p>This feature is only for paid users.</p>
-            <hr />
-            <p className="mb-0">Please upgrade your subscription to access generated papers.</p>
+            <h4 className="alert-heading">Access Restricted</h4>
+            <p>This facility is only for paid users.</p>
           </div>
         </div>
       </AcademyLayout>
@@ -223,84 +185,92 @@ const handleDownloadPDF = async (paper: any) => {
         {/* Table */}
         <div className="card mb-3">
           <div className="card-body p-0">
-            <table className="table table-hover mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th>Title</th>                 
-                   <th>Class</th>
-                  <th>Subject</th>
-                  <th>Download Paper</th>
-                  <th>Paper Key</th>
-                  <th>Created</th>
-                  <th className="text-end">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-
-                {papers.length === 0 && (
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
+                <thead className="table-light">
                   <tr>
-                    <td colSpan={7} className="text-center py-4 text-muted">
-                      No papers found
-                    </td>
+                    <th>Title</th>
+                    <th>Class</th>
+                    <th>Subject</th>
+                    <th>Download Paper</th>
+                    <th>Paper Key</th>
+                    <th>Created</th>
+                    <th className="text-end">Actions</th>
                   </tr>
-                )}
+                </thead>
+                <tbody>
+                  {papers.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="text-center py-4 text-muted">
+                        No papers found
+                      </td>
+                    </tr>
+                  )}
 
-                {papers.map(paper => (
-                  <tr key={paper.id}>
-                    <td><strong>{paper.title}</strong></td>
-                    <td>{paper.class_name || '—'}</td>
-                    <td>{paper.subject_name || '—'}</td>
+                  {papers.map(paper => (
+                    <tr key={paper.id}>
+                      <td><strong>{paper.title}</strong></td>
+                      <td>{paper.class_name}</td>
+                      <td>{paper.subject_name}</td>
 
-                    {/* PDF Download */}
-                    <td>
-                      {paper.paperPdf ? (
-                        <button
-                          className="btn btn-sm btn-outline-success"
-                          disabled={downloadingPdfId === paper.id}
-                          onClick={() => handleDownloadPDF(paper)}
-                        >
-                          {downloadingPdfId === paper.id
-                            ? <span className="spinner-border spinner-border-sm" />
-                            : 'Download Paper PDF'}
-                        </button>
-                      ) : '—'}
-                    </td>
+                      {/* PDF Download */}
+                      <td>
+                        {paper.paperPdf ? (
+                          <button
+                            className="btn btn-sm btn-outline-success"
+                            disabled={downloadingPdfId === paper.id}
+                            onClick={() => handleDownloadPDF(paper)}
+                          > 
+                          
+                            {downloadingPdfId === paper.id
+                              ? <>Download Paper PDF <span className="spinner-border spinner-border-sm" /></>
+                              : 'Download Paper PDF '}
+                              <FileText color="green" size={20} />
+                              <Download color="green" size={20} />
+                          </button>
+                        ) : '—'}
+                      </td>
 
-                    {/* Paper Key */}
-                    <td>
-                      {paper.paperKey ? (
-                        <button
-                          className="btn btn-sm btn-outline-primary"
-                          disabled={downloadingKeyId === paper.id}
-                          onClick={() => handleDownloadKey(paper)}
-                        >
-                          {downloadingKeyId === paper.id
-                            ? <span className="spinner-border spinner-border-sm" />
-                            : 'Download Key PDF'}
-                        </button>
-                      ) : '—'}
-                    </td>
+                      {/* Paper Key */}
+                      <td>
+                        {paper.paperKey ? (
+                          <button
+                            className="btn btn-sm btn-outline-primary"
+                            disabled={downloadingKeyId === paper.id}
+                            onClick={() => handleDownloadKey(paper)}
+                          >
+                         
+                            {downloadingKeyId === paper.id
+                              ? <>Download Key <span className="spinner-border spinner-border-sm" /></>
+                              : 'Download Key '}
+                              <FileText color="blue" size={20} />
+                              <Download color="blue" size={20} />
+                          </button>
+                          
+                        ) : '—'}
+                      </td>
 
-                    <td>{new Date(paper.created_at).toLocaleDateString()}</td>
+                      <td>{new Date(paper.created_at).toLocaleDateString()}</td>
 
-                    <td className="text-end">
                       {/* Delete */}
-                      <button
-                        className="btn btn-sm btn-outline-danger"
-                        title="Delete Paper"
-                        onClick={() => handleDelete(paper)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <td className="text-end">
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          disabled={deletingId === paper.id}
+                          onClick={() => handleDeletePaper(paper)}
+                        >
+                          {deletingId === paper.id
+                            ? <span className="spinner-border spinner-border-sm" />
+                            : 'Delete'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-
-        {/* Pagination removed - showing only last 5 papers */}
 
       </div>
     </AcademyLayout>

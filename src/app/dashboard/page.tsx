@@ -5,9 +5,20 @@ import AcademyLayout from '@/components/AcademyLayout';
 import SubscriptionStatus from '@/components/academy/SubscriptionStatus';
 import StatCard from '@/components/academy/StatCard';
 import ChartCard from '@/components/academy/ChartCard';
-import DoughnutChart from '@/components/academy/DoughnutChart';
 import { useUser } from '../context/userContext';
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 export default function AcademyDashboard() {
   const supabase = createClientComponentClient();
@@ -21,15 +32,6 @@ export default function AcademyDashboard() {
     papersByClass: [] as any[],
     papersBySubject: [] as any[],
     recentActivity: [] as any[],
-    subscription: {
-      type: 'Trial',
-      status: 'inactive',
-      endDate: '',
-      papersLeft: 0,
-      isTrial: true,
-      trialDaysLeft: 0,
-      totalPapersInPlan: 0
-    }
   });
 
   /* 🚨 Redirect if missing required profile info */
@@ -49,106 +51,65 @@ export default function AcademyDashboard() {
         }
 
         /* 🔐 Role Check */
-        const { data: roleData, error: roleError } = await supabase
-          .rpc('get_user_role', { user_id: user.id });
+        const { data: roleData, error: roleError } = await supabase.rpc(
+          'get_user_role',
+          { user_id: user.id }
+        );
 
         if (roleError || roleData !== 'teacher') {
           router.push('/');
           return;
         }
 
-        const [
-          { count: totalPapers },
-          { count: totalQuestions },
-          { data: papersByClass },
-          { data: papersBySubject },
-          { data: recentActivity },
-          { data: subscriptionData }
-        ] = await Promise.all([
-
+        // Fetch papers and questions
+        const [{ count: totalQuestions }, { data: papers }] = await Promise.all([
+          supabase.from('questions').select('*', { count: 'exact', head: true }),
           supabase
             .from('papers')
-            .select('*', { count: 'exact', head: true })
+            .select('id, title, class_name, subject_name, created_at')
             .eq('created_by', user.id),
-
-          supabase
-            .from('questions')
-            .select('*', { count: 'exact', head: true }),
-
-          supabase.rpc('get_user_papers_by_class', { user_id: user.id }),
-
-          supabase.rpc('get_user_papers_by_subject', { user_id: user.id }),
-
-          /* ✅ FIXED QUERY (joins class + subject names) */
-          supabase
-            .from('papers')
-            .select(`
-              id,
-              title,
-              created_at,
-              classes ( name ),
-              subjects ( name )
-            `)
-            .eq('created_by', user.id)
-            .order('created_at', { ascending: false })
-            .limit(5),
-
-          supabase
-            .from('user_packages')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('is_active', true)
-            .single()
         ]);
 
-        const isTrial = trialStatus?.isTrial || false;
-        const papersLeft = trialStatus?.papersRemaining || 0;
-        const trialDaysLeft = trialStatus?.daysRemaining || 0;
+        // Calculate Papers by Class
+        const papersByClassMap: Record<string, number> = {};
+        const papersBySubjectMap: Record<string, number> = {};
 
-        let subscriptionType = 'Trial';
-        let subscriptionStatus = 'inactive';
-        let totalPapersInPlan = 5;
-
-        if (subscriptionData) {
-          subscriptionType = subscriptionData.is_trial ? 'Trial' : 'Premium';
-          subscriptionStatus = 'active';
-          totalPapersInPlan = subscriptionData.papers_remaining !== null
-            ? subscriptionData.papers_remaining + (totalPapers || 0)
-            : (subscriptionData.is_trial ? 5 : 100);
-        } else if (isTrial) {
-          subscriptionStatus = 'active';
-        }
-
-        setAnalytics({
-          totalPapers: totalPapers || 0,
-          totalQuestions: totalQuestions || 0,
-          papersByClass: papersByClass || [],
-          papersBySubject: papersBySubject || [],
-
-          /* ✅ FIXED MAPPING */
-          recentActivity: (recentActivity || []).map((paper: any) => ({
-            id: paper.id,
-            title: paper.title,
-            class: paper.classes?.name ?? 'N/A',
-            subject: paper.subjects?.name ?? 'N/A',
-            date: new Date(paper.created_at).toLocaleDateString()
-          })),
-
-          subscription: {
-            type: subscriptionType,
-            status: subscriptionStatus,
-            endDate: subscriptionData?.expires_at
-              ? new Date(subscriptionData.expires_at).toLocaleDateString()
-              : trialStatus?.trialEndsAt
-                ? new Date(trialStatus.trialEndsAt).toLocaleDateString()
-                : '',
-            papersLeft,
-            isTrial,
-            trialDaysLeft,
-            totalPapersInPlan
-          }
+        papers?.forEach((p: any) => {
+          const cls = p.class_name || 'N/A';
+          const subj = p.subject_name || 'N/A';
+          papersByClassMap[cls] = (papersByClassMap[cls] || 0) + 1;
+          papersBySubjectMap[subj] = (papersBySubjectMap[subj] || 0) + 1;
         });
 
+        const papersByClass = Object.keys(papersByClassMap).map((cls) => ({
+          class: cls,
+          count: papersByClassMap[cls],
+        }));
+
+        const papersBySubject = Object.keys(papersBySubjectMap).map((subj) => ({
+          subject: subj,
+          count: papersBySubjectMap[subj],
+        }));
+
+        // Recent Activity (latest 5 papers)
+        const recentActivity = (papers || [])
+          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 5)
+          .map((paper: any) => ({
+            id: paper.id,
+            title: paper.title,
+            class: paper.class_name || 'N/A',
+            subject: paper.subject_name || 'N/A',
+            date: paper.created_at,
+          }));
+
+        setAnalytics({
+          totalPapers: trialStatus?.papersGenerated || papers?.length || 0,
+          totalQuestions: totalQuestions || 0,
+          papersByClass,
+          papersBySubject,
+          recentActivity,
+        });
       } catch (error) {
         console.error('Error fetching academy dashboard:', error);
       } finally {
@@ -156,9 +117,7 @@ export default function AcademyDashboard() {
       }
     };
 
-    if (!trialLoading) {
-      fetchData();
-    }
+    if (!trialLoading) fetchData();
   }, [router, trialStatus, trialLoading, supabase]);
 
   if (loading || trialLoading) {
@@ -171,102 +130,233 @@ export default function AcademyDashboard() {
     );
   }
 
+  const subscriptionInfo = trialStatus
+    ? {
+        type: trialStatus.isTrial ? 'Trial' : trialStatus.subscriptionName || 'Premium',
+        status: trialStatus.hasActiveSubscription ? 'active' : 'inactive',
+        papersLeft:
+          trialStatus.papersRemaining === 'unlimited'
+            ? 'Unlimited'
+            : trialStatus.papersRemaining,
+        isTrial: trialStatus.isTrial,
+        trialDaysLeft: trialStatus.daysRemaining,
+      }
+    : null;
+
+  // Prepare data for horizontal bar chart
+  const barChartData = {
+    labels: analytics.papersBySubject.map((p: any) => p.subject),
+    datasets: [
+      {
+        label: 'Number of Papers',
+        data: analytics.papersBySubject.map((p: any) => p.count),
+        backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'],
+        borderRadius: 6,
+        barPercentage: 0.6,
+      },
+    ],
+  };
+
+  const barChartOptions = {
+    indexAxis: 'y' as const,
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: { enabled: true },
+      title: { display: false },
+    },
+    scales: {
+      x: { beginAtZero: true, ticks: { precision: 0 } },
+      y: { ticks: { autoSkip: false } },
+    },
+  };
+
   return (
     <AcademyLayout>
       <div className="container-fluid">
-
         {trialStatus?.message && (
-          <div className="alert alert-warning mb-4">
-            {trialStatus.message}
-          </div>
+          <div className="alert alert-warning mb-4">{trialStatus.message}</div>
         )}
 
-        <SubscriptionStatus subscription={analytics.subscription} />
+        <SubscriptionStatus />
 
-        {/* Stats */}
+        {/* 📊 Stats */}
         <div className="row g-4 mb-4">
           <div className="col-md-3">
-            <StatCard title="Total Papers" value={analytics.totalPapers} icon="file-text" color="primary" />
-          </div>
-          <div className="col-md-3">
             <StatCard
-              title={analytics.subscription.isTrial ? "Trial Papers Left" : "Papers Left"}
-              value={analytics.subscription.papersLeft}
-              icon="file-earmark-check"
-              color={analytics.subscription.isTrial ? "warning" : "success"}
-              subtitle={!analytics.subscription.isTrial ? `of ${analytics.subscription.totalPapersInPlan}` : ''}
+              title="Total Papers"
+              value={analytics.totalPapers}
+              icon="file-text"
+              color="primary"
             />
           </div>
           <div className="col-md-3">
-            <StatCard title="Questions" value={analytics.totalQuestions} icon="question-circle" color="info" />
+            <StatCard
+              title={subscriptionInfo?.isTrial ? 'Trial Papers Left' : 'Papers Left'}
+              value={subscriptionInfo?.papersLeft}
+              icon="file-earmark-check"
+              color={subscriptionInfo?.isTrial ? 'warning' : 'success'}
+            />
           </div>
           <div className="col-md-3">
             <StatCard
-              title={analytics.subscription.isTrial ? "Trial Days Left" : "Plan Status"}
-              value={analytics.subscription.isTrial ? analytics.subscription.trialDaysLeft : analytics.subscription.status}
-              icon={analytics.subscription.isTrial ? "clock" : "shield-check"}
-              color={analytics.subscription.isTrial ? "warning" : "success"}
+              title="Questions"
+              value={analytics.totalQuestions}
+              icon="question-circle"
+              color="info"
+            />
+          </div>
+          <div className="col-md-3">
+            <StatCard
+              title={subscriptionInfo?.isTrial ? 'Trial Days Left' : 'Plan Status'}
+              value={subscriptionInfo?.isTrial ? subscriptionInfo.trialDaysLeft : subscriptionInfo?.status}
+              icon={subscriptionInfo?.isTrial ? 'clock' : 'shield-check'}
+              color={subscriptionInfo?.isTrial ? 'warning' : 'success'}
             />
           </div>
         </div>
 
-        {/* Charts */}
+        {/* 📈 Charts */}
         <div className="row g-4 mb-4">
+
+          {/* Papers by Class */}
           <div className="col-lg-6">
             <ChartCard title="Papers by Class">
-              {analytics.papersByClass.map((item: any) => (
-                <div key={item.class} className="mb-3">
-                  <div className="d-flex justify-content-between">
-                    <span>{item.class}</span>
-                    <span>{item.count}</span>
-                  </div>
-                  <div className="progress" style={{ height: 20 }}>
-                    <div
-                      className="progress-bar bg-primary"
-                      style={{
-                        width: `${(item.count / Math.max(...analytics.papersByClass.map((i: any) => i.count))) * 100}%`
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </ChartCard>
-          </div>
+              <div className="row g-3">
+                {analytics.papersByClass.length === 0 ? (
+                  <div className="col-12 text-center text-muted py-3">No data available</div>
+                ) : (
+                  analytics.papersByClass.map((item: any, idx: number) => {
+                    const total = analytics.papersByClass.reduce((sum, i) => sum + i.count, 0);
+                    const percentage = total ? ((item.count / total) * 100).toFixed(1) : 0;
+                    const colors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'];
+                    const color = colors[idx % colors.length];
 
-          <div className="col-lg-6">
-            <ChartCard title="Papers by Subject">
-              <div className="d-flex align-items-center" style={{ height: 300 }}>
-                <div className="w-50">
-                  <DoughnutChart data={analytics.papersBySubject} />
-                </div>
-                <div className="w-50 ps-4">
-                  {analytics.papersBySubject.map((item: any) => (
-                    <div key={item.subject} className="mb-2">
-                      {item.subject} ({item.count})
-                    </div>
-                  ))}
-                </div>
+                    return (
+                      <div key={item.class} className="mb-3">
+                        <div className="d-flex justify-content-between fw-semibold mb-1">
+                          <span>{item.class}</span>
+                          <span>{item.count} ({percentage}%)</span>
+                        </div>
+                        <div className="progress rounded-pill" style={{ height: '20px', overflow: 'hidden' }}>
+                          <div
+                            className="progress-bar"
+                            style={{
+                              width: `${percentage}%`,
+                              backgroundColor: color,
+                              transition: 'width 0.6s ease',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </ChartCard>
           </div>
+
+         {/* Papers by Subject - Vertical Progress Bars */}
+<div className="col-lg-6">
+  <ChartCard title="Papers by Subject">
+    {analytics.papersBySubject.length === 0 ? (
+      <div className="text-center text-muted py-4">No data available</div>
+    ) : (
+      <div className="row g-3">
+        {analytics.papersBySubject.map((item: any, idx: number) => {
+          const total = analytics.papersBySubject.reduce((sum, i) => sum + i.count, 0);
+          const percentage = total ? ((item.count / total) * 100).toFixed(1) : 0;
+          const colors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'];
+          const color = colors[idx % colors.length];
+
+          return (
+            <div key={item.subject} className="mb-3">
+              <div className="d-flex justify-content-between fw-semibold mb-1">
+                <span>{item.subject}</span>
+                <span>{item.count} ({percentage}%)</span>
+              </div>
+              <div className="progress rounded-pill" style={{ height: '22px', overflow: 'hidden' }}>
+                <div
+                  className="progress-bar"
+                  style={{
+                    width: `${percentage}%`,
+                    backgroundColor: color,
+                    transition: 'width 0.6s ease',
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </ChartCard>
+</div>
+
         </div>
 
-        {/* Recent Activity */}
-        <div className="card">
-          <div className="card-header">
-            <h5 className="mb-0">Recent Activity</h5>
+        {/* 🕒 Recent Activity */}
+        <div className="card shadow-sm mt-4">
+          <div className="card-header bg-white d-flex align-items-center">
+            <i className="bi bi-activity me-2 text-primary fs-5"></i>
+            <h5 className="mb-0 fw-semibold">Recent Activity</h5>
           </div>
-          <div className="card-body">
-            {analytics.recentActivity.map((activity: any) => (
-              <div key={activity.id} className="d-flex justify-content-between mb-3">
-                <div>
-                  <h6 className="mb-1">{activity.title}</h6>
-                  <small className="text-muted">
-                    Paper Generated for Class {activity.class} • {activity.subject} subject • {activity.date}
-                  </small>
-                </div>
+
+          <div className="card-body p-0">
+            {analytics.recentActivity.length === 0 ? (
+              <div className="text-center text-muted py-5">
+                <i className="bi bi-file-earmark-x fs-1 mb-3 d-block"></i>
+                <p className="fw-semibold mb-1">No papers generated yet</p>
+                <small>Generate your first paper to see activity</small>
               </div>
-            ))}
+            ) : (
+              <ul className="list-group list-group-flush">
+                {analytics.recentActivity.map((activity: any) => (
+                  <li key={activity.id} className="list-group-item px-3 py-3 activity-item">
+                    <div className="row align-items-center g-3">
+
+                      <div className="col-auto">
+                        <div className="activity-icon bg-primary text-white rounded-circle d-flex align-items-center justify-content-center">
+                          <i className="bi bi-file-earmark-text"></i>
+                        </div>
+                      </div>
+
+                      <div className="col-12 col-lg-4">
+                        <div className="fw-semibold">Paper Generated</div>
+                        <small className="text-muted d-block text-truncate">
+                          Institute: {activity.title}
+                        </small>
+                      </div>
+
+                      <div className="col-12 col-lg-4">
+                        <div className="d-flex gap-2 flex-wrap">
+                          <span className="badge bg-info-subtle text-info rounded-pill">
+                            <i className="bi bi-mortarboard me-1"></i>
+                            Class {activity.class}
+                          </span>
+                          <span className="badge bg-success-subtle text-success rounded-pill">
+                            <i className="bi bi-book me-1"></i>
+                            {activity.subject}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="col-12 col-lg-3 text-lg-end">
+                        <small className="text-muted">
+                          <i className="bi bi-calendar-event me-1"></i>
+                          {new Date(activity.date).toLocaleDateString('en-US', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </small>
+                      </div>
+
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 
