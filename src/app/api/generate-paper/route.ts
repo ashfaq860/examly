@@ -1880,13 +1880,13 @@ function getCutLine() {
 
   if (mcqPlacement === "two_papers") {
     htmlContent += getWatermarkHTML({ className: 'watermark-1', css: 'top: 20%; left: 35%;' }, 250, isPaidUser, removeWatermark, logoBase64);
-   if(hasMCQs) htmlContent += getCutLine();
+   if(hasMCQs) htmlContent += getCutLine()+htmlContent;
     htmlContent += getWatermarkHTML({ className: 'watermark-2', css: 'bottom: 20%; left: 35%;' }, 250, isPaidUser, removeWatermark, logoBase64);
   } else if (mcqPlacement === "three_papers") {
     htmlContent += getWatermarkHTML({ className: 'watermark-1', css: 'top: 13%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
-    if(hasMCQs) htmlContent += getCutLine();
+    if(hasMCQs) htmlContent += getCutLine()+htmlContent;
     htmlContent += getWatermarkHTML({ className: 'watermark-2', css: 'top: 47%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
-    if(hasMCQs) htmlContent += getCutLine();
+    if(hasMCQs) htmlContent += getCutLine()+htmlContent;
     htmlContent += getWatermarkHTML({ className: 'watermark-3', css: 'bottom: 10%; left: 35%;' }, 300, isPaidUser, removeWatermark, logoBase64);
   }
 
@@ -3327,7 +3327,7 @@ typeQuestions.forEach((pq: any, idx: number) => {
       htmlContent += subjectiveContent+`
       <div class="watermark-text-9" style="position: fixed; top: 40%; left: 25%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg); ">
       ${isPaidUser?`
-  ${logoBase64 ? `<img src="${logoBase64}" alt="Examly Logo" style="width: 400px; height: auto;" /><br/>` : ''}
+  ${logoBase64 ? `${removeWatermark?'':`<img src="${logoBase64}" alt="Examly Logo" style="width: 400px; height: auto;" /><br/><span class="institute">${englishTitle}</span>`}` : `<span class="institute">${englishTitle}</span>`}
 `:`<img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: 400px; height: auto;" /><br/>
     <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>
   `};</div>`;
