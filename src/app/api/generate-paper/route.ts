@@ -1851,7 +1851,7 @@ ${mcqPlacement==="separate" || mcqPlacement==="two_papers" || mcqPlacement==="th
 
 
   // Handle page break or separation for two_papers layout
-  if (mcqPlacement === "two_papers" && hasMCQs) {
+  if (mcqPlacement === "two_papers") {
     htmlContent += `
     <div class="watermark-1" style="position: fixed; top: 20%; left: 35%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg); ">
  
@@ -1871,7 +1871,7 @@ ${isPaidUser?`
 <img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width:250px; height: auto;" /><br/>
     <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>  
 `}  </div>`;
-  }else if (mcqPlacement === "three_papers" && hasMCQs) {
+  }else if (mcqPlacement === "three_papers") {
 
     htmlContent += `
     <div class="watermark-1" style="position: fixed; top: 13%; left: 30%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg);">
