@@ -1750,7 +1750,7 @@ if(mcqPlacement!=="three_papers"){
     if (mcqQuestions && mcqQuestions.length > 0) {
       htmlContent += `<div class="note">`;
       if (isUrdu || isBilingual) {
-        htmlContent += `<p class="urdu">نوٹ: ہر سوال کے چار ممکنہ جوابات A,B,C اور D دیئے گئے ہیں۔ درست جواب کے مطابق دائرہ پُر کریں۔ ایک سے زیادہ دائروں کو پُر کرنے کی صورت میں جواب غلط تصور ہوگا۔</p>`;
+        htmlContent += `<p class="urdu">نوٹ: ہر سوال کے چار ممکنہ جوابات A,B,C اور D دیئے گئے ہیں۔ درست جواب کے مطابق دائرہ لگائیں۔ ایک سے زیادہ دائروں کو پُر کرنے کی صورت میں جواب غلط تصور ہوگا۔</p>`;
       }
       if ((isEnglish || isBilingual)&& mcqPlacement !== 'three_papers') {
         htmlContent += `<p class="eng">Note: Four possible answers A, B, C and D to each question are given. Fill the correct option's circle. More than one filled circle will be treated wrong.</p>`;
@@ -1835,7 +1835,7 @@ if(mcqPlacement!=="three_papers"){
       htmlContent += `
        </table>
 ${mcqPlacement==="separate" || mcqPlacement==="two_papers" || mcqPlacement==="three_papers" ? `
-    <div class="footer no-break" style="margin-top: ${mcqPlacement==='three_papers'?'0px;':'10px;'} text-align: center; font-size: 12px; color: #666;  padding-top: ${mcqPlacement==='three_papers'?'0px;':'5px;'}">
+    <div class="footer no-break" style="margin-top: ${mcqPlacement==='three_papers'?'0px;':'5px;'} text-align: center; font-size: 12px; color: #666;  padding-top: ${mcqPlacement==='three_papers'?'0px;':'5px;'}">
     <p class="english">www.examly.pk | Generate papers Save Time | Generated on ${new Date().toLocaleDateString()} by www.examly.pk </p>
   </div>
   </div>` : ``}
@@ -1871,8 +1871,8 @@ ${mcqPlacement==="separate" || mcqPlacement==="two_papers" || mcqPlacement==="th
 
 function getCutLine() {
   return `
-    <div style="display:flex; align-items:center; margin: 10px 0;">
-      <span style="font-size:18px; margin-right:6px;">✂</span>
+    <div style="display:flex; align-items:center; margin: 5px 0;">
+      <span style="font-size:12px; margin-right:6px;">✂</span>
       <hr style="flex:1; border-top: 2px dotted black;" />
     </div>
   `;
