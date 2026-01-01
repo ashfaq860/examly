@@ -1153,11 +1153,11 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     idiom_phrasesMarks = 1,
     activePassiveMarks = 1,
     directInDirectMarks = 1,
-    removeWatermark
+   removeWatermark
   } = requestData;
 
   console.log('📋 Received toAttemptValues:', toAttemptValues);
-console.log("REmove water mark detail coming here",removeWatermark);
+
   // Create a map for quick custom marks lookup
   const customMarksMap = new Map();
   if (customMarksData) {
@@ -1851,47 +1851,59 @@ ${mcqPlacement==="separate" || mcqPlacement==="two_papers" || mcqPlacement==="th
 
 
   // Handle page break or separation for two_papers layout
-function getWatermarkHTML(positionStyle, width, isPaidUser, removeWatermark, logoBase64) {
-  const trialHTML = `
-    <img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: ${width}px; height: auto;" />
-    <br/>
-    <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left: 60px;">
-      Trial version, get Package to set Your Water Mark.
-    </div>
-  `;
+  if (mcqPlacement === "two_papers" && hasMCQs) {
+    htmlContent += `
+    <div class="watermark-1" style="position: fixed; top: 20%; left: 35%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg); ">
+ 
+    ${isPaidUser?`  
+       <img src="${logoBase64}" alt="Examly Logo" style="width: 250px; height: auto;" />
+ `:
+ `<img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: 250px; height: auto;" />  <br/>  <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>`} </div>
+ <div style="display:flex; align-items:center;">
+  <span style="font-size:18px; margin-right:6px;">✂</span>
+  <hr style="flex:1; border-top: 2px dotted black;" />
+</div>
+` + (hasMCQs ? htmlContent : '')+` <div class="watermark-2" style="position: fixed; bottom: 20%; left: 35%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg);">
+${isPaidUser?`
+        <img src="${logoBase64}" alt="Examly Logo" style="width:250px; height: auto;" />  
 
-  const paidHTML = `<img src="${logoBase64}" alt="Examly Logo" style="width: ${width}px; height: auto;" />`;
+`:`
+<img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width:250px; height: auto;" /><br/>
+    <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>  
+`}  </div>`;
+  }else if (mcqPlacement === "three_papers" && hasMCQs) {
 
-  return `
-    <div class="${positionStyle.className}" style="position: fixed; ${positionStyle.css}; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg);">
-      ${removeWatermark ? '' : (isPaidUser ? paidHTML : trialHTML)}
-    </div>
-  `;
-}
-
-function getCutLine() {
-  return `
-    <div style="display:flex; align-items:center; margin: 10px 0;">
-      <span style="font-size:18px; margin-right:6px;">✂</span>
-      <hr style="flex:1; border-top: 2px dotted black;" />
-    </div>
-  `;
-}
-
-
-  if (mcqPlacement === "two_papers"||hasMCQs) {
-    htmlContent += getWatermarkHTML({ className: 'watermark-1', css: 'top: 20%; left: 35%;' }, 250, isPaidUser, removeWatermark, logoBase64);
-    htmlContent += getCutLine();
-    htmlContent += getWatermarkHTML({ className: 'watermark-2', css: 'bottom: 20%; left: 35%;' }, 250, isPaidUser, removeWatermark, logoBase64);
-  } else if (mcqPlacement === "three_papers" || hasMCQs) {
-    htmlContent += getWatermarkHTML({ className: 'watermark-1', css: 'top: 13%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
-    htmlContent += getCutLine();
-    htmlContent += getWatermarkHTML({ className: 'watermark-2', css: 'top: 47%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
-    htmlContent += getCutLine();
-    htmlContent += getWatermarkHTML({ className: 'watermark-3', css: 'bottom: 10%; left: 35%;' }, 300, isPaidUser, removeWatermark, logoBase64);
+    htmlContent += `
+    <div class="watermark-1" style="position: fixed; top: 13%; left: 30%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg);">
+    ${isPaidUser?`
+     <img src="${logoBase64}" alt="Examly Logo" style="width: 300px; height: auto; " />
+` : 
+` <img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: 300px; height: auto; " /><br/>
+    <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>
+`}</div> <div style="display:flex; align-items:center;">
+  <span style="font-size:18px; margin-right:6px;">✂</span>
+  <hr style="flex:1; border-top: 2px dotted black;" />
+</div>
+` + (hasMCQs ? htmlContent+`
+   <div class="watermark-2" style="position: fixed; top: 47%; left: 30%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg);">
+  ${isPaidUser?`
+    <img src="${logoBase64}" alt="Examly Logo" style="width: 300px; height: auto; " />
+`:` 
+<img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: 300px; height: auto; " /><br/>
+    <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>
+`}</div><div style="display:flex; align-items:center;">
+  <span style="font-size:18px; margin-right:6px;">✂</span>
+  <hr style="flex:1; border-top: 2px dotted black;" />
+</div>`+htmlContent+`
+ <div class="watermark-3" style="position: fixed; bottom: 10%; left: 35%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg); ">
+${isPaidUser?`
+   <img src="${logoBase64}" alt="Examly Logo" style="width: 300px; height: auto; " />
+  
+`:`   <img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: 300px; height: auto; " /><br/>
+    <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>
+`}</div>` : '');
+    
   }
-
-
 
   // FIXED: Always generate subjective section if there are subjective questions or no MCQs at all
   if (subjectiveQuestions.length > 0 || !hasMCQs) {
@@ -3329,9 +3341,9 @@ typeQuestions.forEach((pq: any, idx: number) => {
       htmlContent += subjectiveContent+`
       <div class="watermark-text-9" style="position: fixed; top: 40%; left: 25%; z-index: 0; opacity: 0.1; pointer-events: none; transform: rotate(-45deg); ">
       ${isPaidUser?`
-  ${removeWatermark?'':`<img src="${logoBase64}" alt="Examly Logo" style="width: 400px; height: auto;" /><br/>`}
-`:`${removeWatermark?'':`<img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: 400px; height: auto;" /><br/>
-    <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>`}
+   <img src="${logoBase64}" alt="Examly Logo" style="width: 400px; height: auto;" /><br/>
+`:`<img src="${loadImageAsBase64('examly.png')}" alt="Examly Logo" style="width: 400px; height: auto;" /><br/>
+    <div style="font-size: 16px; color: #000; text-align: center; margin-top: -25px; margin-left:60px">Trial version, get Package to set Your Water Mark.</div>
   `};</div>`;
     }
   } else {
@@ -3707,7 +3719,7 @@ export async function POST(request: Request) {
     // Validation
     if (!title || !subjectId || !classId) {
       return NextResponse.json(
-        { error: 'Title, subject ID, and class ID are required' },
+        { error: 'Complete your Profile to generate a paper!' },
         { status: 400 }
       );
     }
