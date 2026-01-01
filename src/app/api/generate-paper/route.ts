@@ -1886,7 +1886,7 @@ function getCutLine() {
     htmlContent += getWatermarkHTML({ className: 'watermark-1', css: 'top: 13%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
     if(hasMCQs) htmlContent += getCutLine()+htmlContent;
     htmlContent += getWatermarkHTML({ className: 'watermark-2', css: 'top: 47%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
-    if(hasMCQs) htmlContent += getCutLine();
+    if(hasMCQs) htmlContent += getCutLine()+htmlContent;
     htmlContent += getWatermarkHTML({ className: 'watermark-3', css: 'bottom: 10%; left: 35%;' }, 300, isPaidUser, removeWatermark, logoBase64);
   }
 
