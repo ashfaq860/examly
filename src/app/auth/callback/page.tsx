@@ -1,3 +1,4 @@
+//auth/callback/page.tsx
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -28,25 +29,20 @@ export default function AuthCallback() {
         console.log('✅ OAuth callback user:', user);
 
         // Ensure profile exists
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-
-        if (profileError || !profileData) {
-          console.log('🆕 Creating profile for first-time login...');
-          const { error: insertError } = await supabase.from('profiles').insert({
-            id: user.id,
-            email: user.email,
-            full_name: user.user_metadata?.name || 'New User',
-            role: user.user_metadata?.role || 'teacher',
-            trial_ends_at: new Date(Date.now() + 365*24*60*60*1000),
-            trial_given: false
-          });
-
-          if (insertError) console.error('❌ Failed to create profile:', insertError);
-        }
+        await supabase
+  .from('profiles')
+  .upsert(
+    {
+      id: user.id,
+      email: user.email,
+      full_name: user.user_metadata?.name ?? 'New User',
+      role: 'teacher',
+      login_method: 'google',
+      trial_ends_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      trial_given: false,
+    },
+    { onConflict: 'id' }
+  );
 
         // Get role via RPC
         const { data: roleData, error: rpcError } = await supabase.rpc('get_user_role', { user_id: user.id });
