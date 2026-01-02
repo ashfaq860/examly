@@ -1,5 +1,4 @@
 // Update the UserContext to handle unlimited papers
-// examly/src/app/context/userContext.tsx
 'use client';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
@@ -77,7 +76,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           return;
         }
-        throw new Error(`Failed to fetch trial status: ${response.statusText}`);
+         console.warn('Trial status unavailable');
+          return { active: false };
       }
 
       const trialData = await response.json();

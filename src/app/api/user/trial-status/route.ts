@@ -1,4 +1,3 @@
-// examly/src/app/api/user/trial-status/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -16,7 +15,7 @@ export async function GET(request: NextRequest) {
       .from('profiles')
       .select('id, created_at, papers_generated, trial_ends_at, trial_given, cellno, subscription_status')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     if (profileError || !profile) {
       console.error('Profile fetch error:', profileError);
@@ -90,7 +89,7 @@ export async function GET(request: NextRequest) {
   hasCellno, // Expose cell number status
   trialEligible: hasCellno && !hasActiveSubscription && !isTrial,
   message: !hasCellno
-    ? "Update your profile with a valid cell number to activate your 30-day free trial."
+    ? "Update your profile with a valid cell number to activate your 6 Months free trial."
     : null
 });
 

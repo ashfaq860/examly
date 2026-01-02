@@ -1,4 +1,3 @@
-//auth/callback/page.tsx
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -14,9 +13,7 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuth = async () => {
       try {
-        console.log('🔄 Handling Supabase OAuth callback...');
-
-        // ✅ Use onAuthStateChange or getSession
+        console.log('🔄 Checking Supabase session after OAuth redirect...');
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
         if (sessionError || !session) {
@@ -26,42 +23,30 @@ export default function AuthCallback() {
         }
 
         const user = session.user;
-        console.log('✅ OAuth callback user:', user);
+        console.log('✅ Auth callback user:', user);
 
-        // Ensure profile exists
-        await supabase
-  .from('profiles')
-  .upsert(
-    {
-      id: user.id,
-      email: user.email,
-      full_name: user.user_metadata?.name ?? 'New User',
-      role: 'teacher',
-      login_method: 'google',
-      trial_ends_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-      trial_given: false,
-    },
-    { onConflict: 'id' }
-  );
+        // ✅ Call server-side API to handle profile + role
+        const res = await fetch('/api/profile/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user }),
+        });
 
-        // Get role via RPC
-        const { data: roleData, error: rpcError } = await supabase.rpc('get_user_role', { user_id: user.id });
-
-        if (rpcError || !roleData) {
-          console.error('❌ Error fetching role:', rpcError);
-          toast.error('Unable to determine user role.');
+        const data = await res.json();
+        if (!res.ok) {
+          toast.error(data.error || 'Profile setup failed');
           await supabase.auth.signOut();
           router.replace('/auth/login');
           return;
         }
 
-        console.log('🎯 User role:', roleData);
+        console.log('🎯 Role returned from API:', data.role);
 
         // Set cookie
-        Cookies.set('role', roleData, { expires: 7, path: '/' });
+        Cookies.set('role', data.role, { expires: 7, path: '/' });
 
-        // Redirect
-        if (roleData === 'admin' || roleData === 'super_admin') {
+        // Redirect based on role
+        if (data.role === 'admin' || data.role === 'super_admin') {
           toast.success('Welcome back, Admin! 👑');
           router.replace('/admin');
         } else {
