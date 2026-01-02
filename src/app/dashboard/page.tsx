@@ -312,7 +312,7 @@ export default function AcademyDashboard() {
             ) : (
               <ul className="list-group list-group-flush">
                 {analytics.recentActivity.map((activity: any) => (
-                  <li key={activity.id} className="list-group-item px-3 py-3 activity-item">
+                  <li key={activity.id} className="list-group-item px-3 py-1 activity-item">
                     <div className="row align-items-center g-3">
 
                       <div className="col-auto">
