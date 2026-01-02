@@ -1,4 +1,4 @@
-'use client'; 
+'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -14,11 +14,11 @@ export default function AuthCallback() {
     const handleAuth = async () => {
       try {
         console.log('🔄 Handling Supabase OAuth callback...');
-        
-        // ✅ Use getSessionFromUrl for OAuth
-        const { data: { session }, error: urlSessionError } = await supabase.auth.getSessionFromUrl();
 
-        if (urlSessionError || !session) {
+        // ✅ Use onAuthStateChange or getSession
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError || !session) {
           toast.error('Login failed. Please try again.');
           router.replace('/auth/login');
           return;
