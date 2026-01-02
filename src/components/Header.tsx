@@ -11,12 +11,11 @@ export default function Header() {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [activeLink, setActiveLink] = useState('');
+  const [isAnimating, setIsAnimating] = useState(false);
   const supabase = createClientComponentClient();
   const router = useRouter();
   const pathname = usePathname();
   const menuRef = useRef(null);
-  const isNavigating = useRef(false);
-  const menuHeightRef = useRef(0);
 
   useEffect(() => setActiveLink(pathname), [pathname]);
 
@@ -95,128 +94,264 @@ export default function Header() {
     return false;
   };
 
-  // Handle link click with immediate navigation
-  const handleLinkClick = (e) => {
-    // For mobile, close menu immediately without animation
-    if (window.innerWidth < 992) {
-      isNavigating.current = true;
-      const menuEl = menuRef.current;
-      if (menuEl) {
-        // Immediately hide menu without animation
-        menuEl.style.transition = 'none';
-        menuEl.style.height = '0';
-        menuEl.style.opacity = '0';
-        menuEl.style.overflow = 'hidden';
-        
-        // Reset after a tiny delay
-        setTimeout(() => {
-          menuEl.style.transition = '';
-          menuEl.style.overflow = '';
-        }, 50);
-      }
+  // Handle menu toggle with smooth animation
+  const handleMenuToggle = () => {
+    if (isAnimating) return;
+    
+    if (window.innerWidth >= 992) {
+      setOpen(false);
+      return;
     }
-    setOpen(false);
+    
+    if (!open) {
+      // Opening animation - slower on mobile
+      setIsAnimating(true);
+      setOpen(true);
+      
+      // Force reflow to ensure transition starts
+      if (menuRef.current) {
+        menuRef.current.style.display = 'block';
+        menuRef.current.offsetHeight;
+      }
+      
+      setTimeout(() => {
+        setIsAnimating(false);
+      }, 600); // Increased duration for mobile
+    } else {
+      // Closing animation - slower on mobile
+      setIsAnimating(true);
+      
+      if (menuRef.current) {
+        menuRef.current.classList.add('closing');
+      }
+      
+      setTimeout(() => {
+        setOpen(false);
+        setIsAnimating(false);
+        if (menuRef.current) {
+          menuRef.current.classList.remove('closing');
+          menuRef.current.style.display = 'none';
+        }
+      }, 500); // Increased duration for mobile
+    }
   };
 
-  // 🎬 Smooth Curtain Animation (mobile only)
-  useEffect(() => {
-    const el = menuRef.current;
-    if (!el) return;
-
-    // Store menu height for animation
-    if (open && menuHeightRef.current === 0) {
-      menuHeightRef.current = el.scrollHeight;
-    }
-
-    if (window.innerWidth >= 992) {
-      // Desktop: menu always visible
-      el.classList.remove('curtain-open', 'curtain-close');
-      el.style.height = 'auto';
-      el.style.opacity = '1';
-      el.style.overflow = 'visible';
-      isNavigating.current = false;
-    } else {
-      // Mobile: apply curtain animation only if not navigating
-      if (isNavigating.current) {
-        isNavigating.current = false;
-        return;
-      }
-
-      if (open) {
-        el.classList.add('curtain-open');
-        el.classList.remove('curtain-close');
-        el.style.height = `${menuHeightRef.current}px`;
-        el.style.opacity = '1';
+  // Handle link click - close menu smoothly
+  const handleLinkClick = () => {
+    if (window.innerWidth < 992) {
+      if (menuRef.current) {
+        menuRef.current.classList.add('closing');
+        
+        setTimeout(() => {
+          setOpen(false);
+          if (menuRef.current) {
+            menuRef.current.classList.remove('closing');
+            menuRef.current.style.display = 'none';
+          }
+        }, 400);
       } else {
-        el.classList.add('curtain-close');
-        el.classList.remove('curtain-open');
-        el.style.height = '0';
-        el.style.opacity = '0';
+        setOpen(false);
       }
     }
+  };
+
+  // Close menu when clicking outside (mobile only)
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (window.innerWidth < 992 && 
+          menuRef.current && 
+          !menuRef.current.contains(event.target) &&
+          !event.target.closest('.navbar-toggler') &&
+          open) {
+        handleLinkClick();
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
   }, [open]);
 
-  // Reset menu height on window resize
+  // Close menu on window resize to desktop
   useEffect(() => {
     const handleResize = () => {
-      menuHeightRef.current = 0;
-      if (window.innerWidth >= 992) {
+      if (window.innerWidth >= 992 && open) {
         setOpen(false);
+        if (menuRef.current) {
+          menuRef.current.style.display = '';
+          menuRef.current.classList.remove('closing');
+        }
       }
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [open]);
 
   return (
     <>
       <style jsx>{`
-        /* Curtain Animation (mobile only) */
+        /* Smooth Curtain Animation with slower timing (mobile only) */
         @media (max-width: 991px) {
           .curtain-container {
-            overflow: hidden;
-            transition: height 0.5s cubic-bezier(0.25, 1, 0.3, 1), opacity 0.4s ease;
+            max-height: 0;
             opacity: 0;
-            height: 0;
+            overflow: hidden;
+            transform: translateY(-15px);
+            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); /* Slower, bouncier easing */
+            display: none;
           }
 
-          .curtain-open {
-            animation: curtainDrop 0.5s ease forwards;
+          .curtain-container.open {
+            max-height: 1200px; /* Large enough for menu */
+            opacity: 1;
+            transform: translateY(0);
+            display: block;
+            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); /* Slower opening */
           }
 
-          .curtain-close {
-            animation: curtainLift 0.4s ease forwards;
+          .curtain-container.closing {
+            max-height: 0 !important;
+            opacity: 0 !important;
+            transform: translateY(-15px) !important;
+            transition: all 0.5s cubic-bezier(0.36, 0, 0.66, -0.56) !important; /* Slower closing with bounce */
           }
 
-          @keyframes curtainDrop {
-            0% {
-              height: 0;
-              opacity: 0;
-              transform: translateY(-10px);
-            }
-            60% {
-              opacity: 0.7;
-              transform: translateY(3px);
-            }
-            100% {
-              height: var(--menuHeight, auto);
-              opacity: 1;
-              transform: translateY(0);
-            }
+          /* Enhanced hover effects for mobile menu items */
+          .curtain-container .navbar-nav {
+            padding: 1rem 0;
+            opacity: 1;
+            transition: opacity 0.3s ease;
           }
 
-          @keyframes curtainLift {
-            0% {
-              opacity: 1;
-            }
-            100% {
-              height: 0;
-              opacity: 0;
-            }
+          .curtain-container.closing .navbar-nav {
+            opacity: 0.8;
+          }
+
+          /* Mobile menu items styling */
+          .curtain-container .navbar-nav .nav-item {
+            margin: 4px 0;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+          }
+
+          .curtain-container .navbar-nav .nav-link {
+            padding: 12px 20px !important;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            display: block;
+            width: 100%;
+            text-align: left;
+            font-size: 16px;
+            position: relative;
+            color: #333;
+            background: transparent;
+          }
+
+          .dark .curtain-container .navbar-nav .nav-link {
+            color: #e5e7eb;
+          }
+
+          /* Hover effect for mobile menu items */
+          .curtain-container .navbar-nav .nav-item:hover .nav-link,
+          .curtain-container .navbar-nav .nav-item:active .nav-link,
+          .curtain-container .navbar-nav .nav-item:focus-within .nav-link {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: #2563eb;
+            transform: translateX(5px);
+          }
+
+          .dark .curtain-container .navbar-nav .nav-item:hover .nav-link,
+          .dark .curtain-container .navbar-nav .nav-item:active .nav-link,
+          .dark .curtain-container .navbar-nav .nav-item:focus-within .nav-link {
+            background-color: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+          }
+
+          /* Active link styling for mobile */
+          .curtain-container .navbar-nav .nav-link.active {
+            background-color: rgba(37, 99, 235, 0.15);
+            color: #2563eb;
+            font-weight: 600;
+          }
+
+          .dark .curtain-container .navbar-nav .nav-link.active {
+            background-color: rgba(96, 165, 250, 0.25);
+            color: #60a5fa;
+          }
+
+          /* Mobile button styling */
+          .curtain-container .btn {
+            padding: 10px 20px !important;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            text-align: center;
+            width: 100%;
+            margin: 8px 0;
+          }
+
+          .curtain-container .btn:hover,
+          .curtain-container .btn:active {
+            transform: scale(0.98);
+            opacity: 0.9;
+          }
+
+          /* Mobile auth button styling */
+          .curtain-container .navbar-nav .btn-link {
+            text-decoration: none;
+            padding: 12px 20px !important;
+            text-align: left;
+          }
+
+          .curtain-container .navbar-nav .btn-link:hover,
+          .curtain-container .navbar-nav .btn-link:active {
+            background-color: rgba(59, 130, 246, 0.1);
+            text-decoration: none;
+          }
+
+          .dark .curtain-container .navbar-nav .btn-link:hover,
+          .dark .curtain-container .navbar-nav .btn-link:active {
+            background-color: rgba(96, 165, 250, 0.2);
+          }
+        }
+
+        /* Desktop styles - keep original speed */
+        @media (min-width: 992px) {
+          .curtain-container {
+            display: flex !important;
+            max-height: none !important;
+            opacity: 1 !important;
+            transform: none !important;
+            transition: none !important;
+          }
+
+          /* Desktop hover effects */
+          .curtain-container .navbar-nav .nav-link {
+            transition: all 0.2s ease;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+          }
+
+          .curtain-container .navbar-nav .nav-link:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+            color: #2563eb;
+          }
+
+          .dark .curtain-container .navbar-nav .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #60a5fa;
+          }
+
+          .curtain-container .navbar-nav .nav-link.active {
+            color: #2563eb;
+            font-weight: 600;
+          }
+
+          .dark .curtain-container .navbar-nav .nav-link.active {
+            color: #60a5fa;
           }
         }
         
+        /* Common active link underline for desktop */
         ul.TopMenus li a {
           font-size: 16px;
           position: relative;
@@ -256,6 +391,50 @@ export default function Header() {
         .dark .dark-toggle-btn:hover {
           background-color: #333;
         }
+
+        /* Mobile toggler animation */
+        .navbar-toggler {
+          transition: all 0.3s;
+          position: relative;
+          z-index: 1000;
+        }
+
+        .navbar-toggler:focus {
+          box-shadow: none;
+          outline: none;
+        }
+
+        .navbar-toggler .navbar-toggler-icon {
+          transition: all 0.3s;
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%280, 0, 0, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+        }
+
+        .dark .navbar-toggler .navbar-toggler-icon {
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+        }
+
+        .navbar-toggler.open .navbar-toggler-icon {
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%280, 0, 0, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M6 6L24 24M6 24L24 6'/%3e%3c/svg%3e");
+          transform: rotate(180deg);
+        }
+
+        .dark .navbar-toggler.open .navbar-toggler-icon {
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M6 6L24 24M6 24L24 6'/%3e%3c/svg%3e");
+        }
+
+        /* Animation for hamburger to X */
+        @keyframes hamburgerToX {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(180deg);
+          }
+        }
+
+        .navbar-toggler.open .navbar-toggler-icon {
+          animation: hamburgerToX 0.3s ease forwards;
+        }
       `}</style>
 
       <header className="header-nav dark:bg-gray-900 transition-colors duration-300">
@@ -275,7 +454,7 @@ export default function Header() {
               />
             </Link>
 
-            {/* Dark Mode Toggle */}
+            {/* Dark Mode Toggle (Mobile) 
             <button
               onClick={toggleDarkMode}
               className="dark-toggle-btn me-3 d-lg-none"
@@ -283,31 +462,29 @@ export default function Header() {
             >
               {darkMode ? '🌙 Dark' : '☀️ Light'}
             </button>
-
-            {/* Mobile Toggler */}
+*/}
+            {/* Mobile Toggler with animation */}
             <button
-              className="navbar-toggler dark:text-white"
+              className={`navbar-toggler dark:text-white ${open ? 'open' : ''}`}
               type="button"
-              onClick={() => setOpen((v) => !v)}
+              onClick={handleMenuToggle}
               aria-label="Toggle navigation"
               aria-expanded={open}
+              disabled={isAnimating}
             >
               <span className="navbar-toggler-icon"></span>
             </button>
 
-            {/* 🌈 Smooth Curtain Drop Menu */}
+            {/* Smooth Curtain Menu */}
             <div
               ref={menuRef}
-              className="navbar-collapse curtain-container"
-              style={{
-                '--menuHeight': `${menuHeightRef.current}px`,
-              }}
+              className={`navbar-collapse curtain-container ${open ? 'open' : ''}`}
             >
               <ul className="navbar-nav ms-auto align-items-lg-center TopMenus">
                 <li className="nav-item">
                   <Link
                     prefetch={true}
-                    className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/') ? 'active' : ''}`}
+                    className={`nav-link dark:text-gray-300 ${isLinkActive('/') ? 'active' : ''}`}
                     href="/"
                     onClick={handleLinkClick}
                   >
@@ -317,7 +494,7 @@ export default function Header() {
                 <li className="nav-item">
                   <Link
                     prefetch={true}
-                    className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/dashboard/generate-paper') ? 'active' : ''}`}
+                    className={`nav-link dark:text-gray-300 ${isLinkActive('/dashboard/generate-paper') ? 'active' : ''}`}
                     href="/dashboard/generate-paper"
                     onClick={handleLinkClick}
                   >
@@ -327,7 +504,7 @@ export default function Header() {
                 <li className="nav-item">
                   <Link
                     prefetch={true}
-                    className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/quiz') ? 'active' : ''}`}
+                    className={`nav-link dark:text-gray-300 ${isLinkActive('/quiz') ? 'active' : ''}`}
                     href="/quiz"
                     onClick={handleLinkClick}
                   >
@@ -337,7 +514,7 @@ export default function Header() {
                 <li className="nav-item">
                   <Link
                     prefetch={true}
-                    className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/how-examly-works') ? 'active' : ''}`}
+                    className={`nav-link dark:text-gray-300 ${isLinkActive('/how-examly-works') ? 'active' : ''}`}
                     href="/how-examly-works"
                     onClick={handleLinkClick}
                   >
@@ -347,7 +524,7 @@ export default function Header() {
                 <li className="nav-item">
                   <Link
                     prefetch={true}
-                    className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/packages') ? 'active' : ''}`}
+                    className={`nav-link dark:text-gray-300 ${isLinkActive('/packages') ? 'active' : ''}`}
                     href="/packages"
                     onClick={handleLinkClick}
                   >
@@ -355,7 +532,7 @@ export default function Header() {
                   </Link>
                 </li>
 
-                {/* Dark Mode Toggle (Desktop) 
+                {/* Dark Mode Toggle (Desktop)
                 <li className="nav-item d-none d-lg-block">
                   <button
                     onClick={toggleDarkMode}
@@ -365,7 +542,7 @@ export default function Header() {
                     {darkMode ? '🌙 Dark' : '☀️ Light'}
                   </button>
                 </li>
-*/}
+ */}
                 {/* Auth UI */}
                 {user ? (
                   <>
@@ -380,13 +557,13 @@ export default function Header() {
                         {user.email}
                       </button>
                     </li>
-                    <li className="nav-item ms-2">
+                    <li className="nav-item ms-lg-2">
                       <button 
                         onClick={() => {
                           handleLogout();
                           handleLinkClick();
                         }} 
-                        className="btn btn-danger btn-sm"
+                        className="btn btn-danger btn-sm w-100 w-lg-auto"
                       >
                         Logout
                       </button>
@@ -404,10 +581,10 @@ export default function Header() {
                         Login
                       </Link>
                     </li>
-                    <li className="nav-item ms-2">
+                    <li className="nav-item ms-lg-2">
                       <Link
                         prefetch={true}
-                        className={`btn btn-light btn-sm dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 ${
+                        className={`btn btn-light btn-sm dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 w-100 w-lg-auto ${
                           isLinkActive('/auth/signup') ? 'active' : ''
                         }`}
                         href="/auth/signup"

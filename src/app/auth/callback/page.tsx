@@ -1,4 +1,4 @@
-'use client';
+'use client'; 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -13,19 +13,21 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuth = async () => {
       try {
-        console.log('🔄 Checking Supabase session after OAuth redirect...');
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log('🔄 Handling Supabase OAuth callback...');
+        
+        // ✅ Use getSessionFromUrl for OAuth
+        const { data: { session }, error: urlSessionError } = await supabase.auth.getSessionFromUrl();
 
-        if (sessionError || !session) {
+        if (urlSessionError || !session) {
           toast.error('Login failed. Please try again.');
           router.replace('/auth/login');
           return;
         }
 
         const user = session.user;
-        console.log('✅ Auth callback user:', user);
+        console.log('✅ OAuth callback user:', user);
 
-        // First-time login: ensure profile exists
+        // Ensure profile exists
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -33,13 +35,13 @@ export default function AuthCallback() {
           .single();
 
         if (profileError || !profileData) {
-          console.log('🆕 First login detected! Creating profile...');
+          console.log('🆕 Creating profile for first-time login...');
           const { error: insertError } = await supabase.from('profiles').insert({
             id: user.id,
             email: user.email,
             full_name: user.user_metadata?.name || 'New User',
             role: user.user_metadata?.role || 'teacher',
-            trial_ends_at: new Date(Date.now() + 365*24*60*60*1000), // 1-year trial
+            trial_ends_at: new Date(Date.now() + 365*24*60*60*1000),
             trial_given: false
           });
 
@@ -57,12 +59,12 @@ export default function AuthCallback() {
           return;
         }
 
-        console.log('🎯 User role determined:', roleData);
+        console.log('🎯 User role:', roleData);
 
         // Set cookie
         Cookies.set('role', roleData, { expires: 7, path: '/' });
 
-        // Redirect based on role
+        // Redirect
         if (roleData === 'admin' || roleData === 'super_admin') {
           toast.success('Welcome back, Admin! 👑');
           router.replace('/admin');
