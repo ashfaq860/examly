@@ -233,12 +233,12 @@ export default function AcademyDashboard() {
                     const color = colors[idx % colors.length];
 
                     return (
-                      <div key={item.class} className="mb-3">
+                      <div key={item.class} className="m-0">
                         <div className="d-flex justify-content-between fw-semibold mb-1">
                           <span>{item.class}</span>
                           <span>{item.count} ({percentage}%)</span>
                         </div>
-                        <div className="progress rounded-pill" style={{ height: '20px', overflow: 'hidden' }}>
+                        <div className="progress rounded-pill" style={{ height: '10px', overflow: 'hidden' }}>
                           <div
                             className="progress-bar"
                             style={{
@@ -270,12 +270,12 @@ export default function AcademyDashboard() {
           const color = colors[idx % colors.length];
 
           return (
-            <div key={item.subject} className="mb-3">
+            <div key={item.subject} className="m-0 ">
               <div className="d-flex justify-content-between fw-semibold mb-1">
                 <span>{item.subject}</span>
                 <span>{item.count} ({percentage}%)</span>
               </div>
-              <div className="progress rounded-pill" style={{ height: '22px', overflow: 'hidden' }}>
+              <div className="progress rounded-pill" style={{ height: '12px', overflow: 'hidden' }}>
                 <div
                   className="progress-bar"
                   style={{
