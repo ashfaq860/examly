@@ -4,15 +4,15 @@ import AuthLayout from '@/components/AuthLayout';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import Link from 'next/link';
-//import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { supabase } from '@/lib/supabaseClient';
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  //const supabase = createClientComponentClient();
+  const supabase = createClientComponentClient();
 
   // ✅ Redirect if already logged in (commented out intentionally)
   useEffect(() => {
