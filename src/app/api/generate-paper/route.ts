@@ -724,11 +724,12 @@ async function generateAndSaveMCQKey(userId: string, paperId: string, mcqQuestio
           </style>
         </head>
         <body>
-          <h1>MCQ Paper Key</h1>
-          <p><strong>Paper ID:</strong> ${paperId}</p>
+          <h1 style="text-align: center;">MCQ Paper Key-www.examly.pk</h1>
+         <div style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
           <p><strong>Class:</strong> ${className}</p>
           <p><strong>Subject:</strong> ${subjectName}</p>
           <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+          </div>
           <br>
     `;
 
@@ -1606,7 +1607,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
 }
 
     .note {  padding: 0px; margin:0 0; font-size: 12px; line-height: 1.1; }
-    table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 10px; ${isEnglish&&mcqPlacement!=='three_papers'? ' direction:ltr' : ' direction:rtl'}}
+    table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 10px; ${isEnglish && mcqPlacement!=='three_papers'? ' direction:ltr' : ' direction:rtl'}}
     table, th, td { border: 1px solid #000; }
     td { padding: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '2px' : '4px'}; vertical-align: top; }
     hr{color:black}
@@ -1666,9 +1667,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
       <h1 class="eng text-center">
       ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="30" width="70"/>` : ''}<br/>
    <span class="institute" style="font-size:12px; margin-top:-15px !important">   ${englishTitle} </span>
-    </h1>
-
-      ` :`
+    </h1>` :`
       <h1 class="eng text-center">
       ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="60" width="140"/>` : ''} <br/>
    <span class="institute">   ${englishTitle} </span>
@@ -1878,22 +1877,25 @@ function getCutLine() {
   `;
 }
 let addThreeMCQ='';
-  if (mcqPlacement === "two_papers") {
-    htmlContent += getWatermarkHTML({ className: 'watermark-1', css: 'top: 20%; left: 35%;' }, 250, isPaidUser, removeWatermark, logoBase64);
-   if(hasMCQs) htmlContent += getCutLine()+htmlContent;
-    htmlContent += getWatermarkHTML({ className: 'watermark-2', css: 'bottom: 20%; left: 35%;' }, 250, isPaidUser, removeWatermark, logoBase64);
-  } else if (mcqPlacement === "three_papers") {
-    addThreeMCQ += htmlContent+getWatermarkHTML({ className: 'watermark-1', css: 'top: 13%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
-    if(hasMCQs) addThreeMCQ += getCutLine()+htmlContent;
-    addThreeMCQ += getWatermarkHTML({ className: 'watermark-2', css: 'top: 47%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
-    if(hasMCQs) addThreeMCQ += getCutLine()+htmlContent;
-    addThreeMCQ += getWatermarkHTML({ className: 'watermark-3', css: 'bottom: 10%; left: 35%;' }, 300, isPaidUser, removeWatermark, logoBase64);
-  }
-htmlContent = addThreeMCQ;
+if (mcqPlacement === "two_papers") {
+  const firstPaperCopy = htmlContent;
+  htmlContent += getWatermarkHTML({ className: 'watermark-1', css: 'top: 20%; left: 35%;' }, 250, isPaidUser, removeWatermark, logoBase64);
+  if(hasMCQs) htmlContent += getCutLine()+firstPaperCopy;
+  htmlContent += getWatermarkHTML({ className: 'watermark-2', css: 'bottom: 20%; left: 35%;' }, 250, isPaidUser, removeWatermark, logoBase64);
+} else if (mcqPlacement === "three_papers") {
+  const firstPaperCopy = htmlContent;
+  addThreeMCQ += htmlContent+getWatermarkHTML({ className: 'watermark-1', css: 'top: 13%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
+  if(hasMCQs) addThreeMCQ += getCutLine()+firstPaperCopy;
+  addThreeMCQ += getWatermarkHTML({ className: 'watermark-2', css: 'top: 47%; left: 30%;' }, 300, isPaidUser, removeWatermark, logoBase64);
+  if(hasMCQs) addThreeMCQ += getCutLine()+firstPaperCopy;
+  addThreeMCQ += getWatermarkHTML({ className: 'watermark-3', css: 'bottom: 10%; left: 35%;' }, 300, isPaidUser, removeWatermark, logoBase64);
+  htmlContent = addThreeMCQ;
+}
 
   // FIXED: Always generate subjective section if there are subjective questions or no MCQs at all
-  if (subjectiveQuestions.length > 0 || !hasMCQs) {
-    // Page break logic - only add page break if there are MCQs and placement is separate or two_papers
+  //if (subjectiveQuestions.length > 0 || !hasMCQs) {
+  if (subjectiveQuestions.length > 0 || (mcqPlacement === "separate" && hasMCQs) || !hasMCQs) {  
+  // Page break logic - only add page break if there are MCQs and placement is separate or two_papers
     if (hasMCQs && (mcqPlacement === "separate" || mcqPlacement === "two_papers" || mcqPlacement === "three_papers")) {
       htmlContent += `
     <!-- Page break before subjective section -->
