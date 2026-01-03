@@ -16,6 +16,7 @@ import type { Browser, Page } from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import PDFDocument from 'pdfkit';
+import { is } from 'zod/v4/locales';
 
 // --- Optimizations ---
 
@@ -2138,7 +2139,7 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
               <div class="short-questions ${isUrdu ? 'urdu' : ''}" style="line-height:1.2; font-size:12px;">
       ${instructionHtml}
   `;
-if (subject === 'urdu') {
+if (subject === 'urdu' || isUrdu) {
   // For Urdu, two questions per row
   for (let i = 0; i < groupQuestions.length; i += 2) {
     subjectiveContent += `<div class="short-question-row" style="display:flex; gap:10px; margin-bottom:2px;">`;
