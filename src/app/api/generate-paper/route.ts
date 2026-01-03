@@ -958,7 +958,8 @@ function calculateSectionMarks(
   
   return totalMarks;
 }
-
+let subjectName='';
+let className='';
 // Function to create paper record
 async function createPaperRecord(requestData: PaperGenerationRequest, userId: string) {
   const {
@@ -980,8 +981,8 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
     .eq('id', classId)
     .single();
 
-  const subjectName = subject?.name || 'Unknown Subject';
-  const className = classData?.name || 'Unknown Class';
+ subjectName = subject?.name || 'Unknown Subject';
+  className = classData?.name || 'Unknown Class';
 
   // CRITICAL FIX: Calculate total marks based on "to attempt" values from toAttemptValues
   // Create paper record with new schema
@@ -1441,17 +1442,20 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   
   try {
     // Fetch subject details
+    console.log('Fetching subject details for subject_id:', paper.subject_id);
     const { data: subjectData, error: subjectError } = await supabaseAdmin
       .from('subjects')
       .select('name')
       .eq('id', paper.subject_id)
       .single();
-
+console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
     if (!subjectError && subjectData) {
-      subject = subjectData.name;
+      subject = subjectData.name?subjectData.name.toString():subjectName;
       const cachedTranslation = translationCache.get(subject);
+      console.log('subject currently generated paper:',subject);
       if (cachedTranslation) {
         subject_ur = cachedTranslation;
+        console.log('Using cached translation for subject:', subject_ur);
       } else {
         const translatedSubject = await translate(subject, { to: 'ur' });
         subject_ur = translatedSubject.text;
@@ -1706,7 +1710,7 @@ let htmlNoThreePapers = `  <!-- Row 2 -->
     </td>
     <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
       ${isUrdu || isBilingual ? `<span class="metaUrdu">مضمون: ${subject_ur}</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Subject: ${subject}</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Subject: ${subject_name}</span>` : ''}
     </td>
     <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
       ${isUrdu || isBilingual ? `<span class="metaUrdu">تاریخ:${formatPaperDate(dateOfPaper)}</span>` : ''}
@@ -1834,7 +1838,7 @@ if(mcqPlacement!=="three_papers"){
       htmlContent += `
        </table>
 ${mcqPlacement==="separate" || mcqPlacement==="two_papers" || mcqPlacement==="three_papers" ? `
-    <div class="footer no-break" style="margin-top: ${mcqPlacement==='three_papers'?'0px;':'5px;'} text-align: center; font-size: 12px; color: #666;  padding-top: ${mcqPlacement==='three_papers'?'0px;':'5px;'}">
+    <div class="footer no-break" style="margin-top: ${mcqPlacement==='three_papers'?'0px;':'0px;'} text-align: center; font-size: 12px; color: #666;  padding-top: ${mcqPlacement==='three_papers'?'0px;':'5px;'}">
     <p class="english">www.examly.pk | Generate papers Save Time | Generated on ${new Date().toLocaleDateString()} by www.examly.pk </p>
   </div>
   </div>` : ``}
@@ -2027,77 +2031,78 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
   `;
 
 
-  // Poetry Explanation (Urdu)
+  //  ####Start### Poetry Explanation (Urdu)
         if (poetryExplanationQuestions.length > 0) {
           const toAttemptForType = getToAttemptForType('poetry_explanation');
           const showAttemptAny = toAttemptForType > 0 && toAttemptForType < poetryExplanationQuestions.length;
           // ✅ Marks per poetry explanation (safe global)
 // Ensure numbers
-const marksPerQuestion = Number(poetryExplanationQuestions[0]?.custom_marks ?? poetry_explanationMarks) || 0;
-const toAttempt = Number(toAttemptForType) || 0;
-const totalQuestions = poetryExplanationQuestions.length;
-const totalMarks = (showAttemptAny ? toAttempt : totalQuestions) * marksPerQuestion;
-questionNumber=questionNumber+1;
-subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+            const marksPerQuestion = Number(poetryExplanationQuestions[0]?.custom_marks ?? poetry_explanationMarks) || 0;
+            const toAttempt = Number(toAttemptForType) || 0;
+            const totalQuestions = poetryExplanationQuestions.length;
+            const totalMarks = (showAttemptAny ? toAttempt : totalQuestions) * marksPerQuestion;
+            questionNumber=questionNumber+1;
+            subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
 
-if (isUrdu || isBilingual) {
-  if (showAttemptAny) {
-    subjectiveContent += `
-  <div class="urdu" style="text-align:right; direction:rtl; font-size:14px; font-weight:bold;">
-    <span dir="ltr" style="font-weight:bold; margin-left:4px;">
-      .${questionNumber}
-    </span>
-    کوئی سے ${toAttempt} اشعار کی تشریح کریں۔
-  </div>
-`;
+            if (isUrdu || isBilingual) {
+              if (showAttemptAny) {
+                subjectiveContent += `
+              <div class="urdu" style="text-align:right; direction:rtl; font-size:14px; font-weight:bold;">
+                <span dir="ltr" style="font-weight:bold; margin-left:4px;">
+                  .${questionNumber}
+                </span>
+                کوئی سے ${toAttempt} اشعار کی تشریح کریں۔
+              </div>
+            `;
 
-  } else {
-    subjectiveContent += `<div class="urdu" style="text-align: right; direction: rtl;  font-size:14px; font-weight:bold;"> 
-     درج ذیل اشعار کی تشریح کریں۔<strong>${questionNumber}.</strong>
-    </div>`;
-  }
-}
+              } else {
+                subjectiveContent += `<div class="urdu" style="text-align: right; direction: rtl;  font-size:14px; font-weight:bold;"> 
+                درج ذیل اشعار کی تشریح کریں۔<strong>${questionNumber}.</strong>
+                </div>`;
+              }
+            }
 
-subjectiveContent += `</div>`; // close instructions1
+            subjectiveContent += `</div>`; // close instructions1
 
-          subjectiveContent += `</div>`;
-       for (let i = 0; i < poetryExplanationQuestions.length; i += 2) {
-  subjectiveContent += `<div class="question-row urdu" style="display:flex;  gap:10px; margin-bottom:5px; ">`;
+                      subjectiveContent += `</div>`;
+                  for (let i = 0; i < poetryExplanationQuestions.length; i += 2) {
+              subjectiveContent += `<div class="question-row urdu" style="display:flex;  gap:10px; margin-bottom:5px; ">`;
 
-  for (let j = i; j < i + 2 && j < poetryExplanationQuestions.length; j++) {
-    const pq = poetryExplanationQuestions[j];
-    const q = pq.questions;
-    const questionMarks = pq.custom_marks || poetry_explanationMarks;
-    const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
-    const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
-    const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+              for (let j = i; j < i + 2 && j < poetryExplanationQuestions.length; j++) {
+                const pq = poetryExplanationQuestions[j];
+                const q = pq.questions;
+                const questionMarks = pq.custom_marks || poetry_explanationMarks;
+                const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+                const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+                const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
 
-    let questionDisplayHtml = `<div class="long-question" style="flex:1; font-size:12px; line-height:1.4;">`;
+                let questionDisplayHtml = `<div class="long-question" style="flex:1; font-size:12px; line-height:1.4;">`;
 
-  if (isUrdu) {
-      questionDisplayHtml += `
-        <div style="display:flex; align-items:flex-start; gap:5px; direction:rtl; text-align:right;">
-          <div style="flex-shrink:0; font-weight:bold;">
-            (${toRoman(j + 1)})
-          </div>
-          <div style="flex:1;" class="urdu">
-            ${urduQuestion} <span class="marks-display">(${questionMarks})</span>
-          </div>
-        </div>
-      `;
-    } 
+              if (isUrdu) {
+                  questionDisplayHtml += `
+                    <div style="display:flex; align-items:flex-start; gap:5px; direction:rtl; text-align:right;">
+                      <div style="flex-shrink:0; font-weight:bold;">
+                        (${toRoman(j + 1)})
+                      </div>
+                      <div style="flex:1;" class="urdu">
+                        ${urduQuestion} <span class="marks-display">(${questionMarks})</span>
+                      </div>
+                    </div>
+                  `;
+                } 
 
-    questionDisplayHtml += `</div>`; // end question container
-    subjectiveContent += questionDisplayHtml;
-  }
+                questionDisplayHtml += `</div>`; // end question container
+                subjectiveContent += questionDisplayHtml;
+              }
 
-  subjectiveContent += `</div>`; // end row
-}
+              subjectiveContent += `</div>`; // end row
+            }
 
           
           partNumber++;
         }
-        // Group short questions (6 per group)
+
+        // ##Start## Group short questions (6 per group)
              let questionsPerGroup = 6;
           if(subject==='urdu' || subject_ur==='اردو'|| subject==='English'|| subject==='english' || subject === 'tarjuma ul quran'){
               questionsPerGroup=8;
@@ -2107,17 +2112,13 @@ subjectiveContent += `</div>`; // close instructions1
           //const questionsPerGroup = 6;
           const totalGroups = Math.ceil(shortQuestions.length / questionsPerGroup);
         for (let g = 0; g < totalGroups; g++) {
-            const groupQuestions = shortQuestions.slice(
-              g * questionsPerGroup,
-              (g + 1) * questionsPerGroup
-            );
-
-            // Q. numbering starts from 2 for Part I in board layout
+            const groupQuestions = shortQuestions.slice(g * questionsPerGroup,(g + 1) * questionsPerGroup);
+// Q. numbering starts from 2 for Part I in board layout
              questionNumber = g + 2;
  // Get toAttempt value for short questions
             const shortToAttemptValue = getToAttemptForType('short');
             const showAttemptAny = shortToAttemptValue < groupQuestions.length;
- let instructionHtml = '<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">';
+       let instructionHtml = '<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">';
             if (isEnglish || isBilingual) {
               if (showAttemptAny) {
                 instructionHtml += `<div class="eng" style="vertical-align: baseline;"><strong>${questionNumber}.</strong> Write short answers to any ${shortToAttemptValue} question(s). (${shortToAttemptValue} x ${shortMarksPerQuestion} = ${shortTotalMarks})</div>`;
