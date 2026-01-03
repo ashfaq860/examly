@@ -125,6 +125,7 @@ async function getPuppeteerBrowser() {
   browserPromise = launchBrowser();
   return browserPromise;
 }
+
 // Get Chrome executable path for different environments
 function getChromePath() {
   if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
