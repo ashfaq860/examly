@@ -138,7 +138,7 @@ export default function AcademyDashboard() {
     );
   }
 
-  const subscriptionInfo = trialStatus
+  /*const subscriptionInfo = trialStatus
     ? {
         type: trialStatus.isTrial ? 'Trial' : trialStatus.subscriptionName || 'Premium',
         status: trialStatus.hasActiveSubscription ? 'active' : 'inactive',
@@ -150,6 +150,23 @@ export default function AcademyDashboard() {
         trialDaysLeft: trialStatus.daysRemaining,
       }
     : null;
+*/
+const subscriptionInfo = trialStatus
+  ? {
+      type: trialStatus.isTrial
+        ? 'Free Trial'
+        : trialStatus.subscriptionName || 'Premium',
+      status: trialStatus.hasActiveSubscription ? 'Active' : 'Inactive',
+      papersLeft:
+        trialStatus.isTrial
+          ? 'Unlimited'
+          : trialStatus.papersRemaining === 'unlimited'
+          ? 'Unlimited'
+          : trialStatus.papersRemaining,
+      isTrial: trialStatus.isTrial,
+      trialDaysLeft: trialStatus.isTrial ? trialStatus.daysRemaining : 0,
+    }
+  : null;
 
   // Prepare data for horizontal bar chart
   const barChartData = {
