@@ -2133,7 +2133,7 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
 
         // ##Start## Group short questions (6 per group)
              let questionsPerGroup = 6;
-          if(subject==='urdu' || subject_ur==='اردو'|| subject==='English'|| subject==='english' || subject === 'tarjuma ul quran'){
+          if(subject=='urdu' || subject_ur==='اردو'|| subject==='English'|| subject==='english' || subject === 'tarjuma ul quran'){
               questionsPerGroup=8;
           }else if(subject==='Islamiyat'|| subject_ur==='اسلامیات'){
               questionsPerGroup=9;
