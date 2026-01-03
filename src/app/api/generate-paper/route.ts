@@ -1010,8 +1010,8 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
     console.log(`📊 Paper details:`, {
       title: paper.title,
       created_by: paper.created_by,
-      class_name: paper.class_name,
-      subject_name: paper.subject_name
+      class_name: paper.class_name+'/'+className,
+      subject_name: paper.subject_name+'/'+subjectName
     });
     return paper;
   } catch (error) {
@@ -1440,7 +1440,23 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   let paperClass = '';
   let subject = '';
   let subject_ur = '';
-  
+  paperClass = className;
+  subject = subjectName;
+  const cachedTranslation = translationCache.get(subjectName);
+  if (cachedTranslation) {
+    subject_ur = cachedTranslation;
+    console.log('Using cached translation for subject:', subject_ur);
+  } else {
+    const translatedSubject = await translate(subject, { to: 'ur' });
+    subject_ur = translatedSubject.text;
+    translationCache.set(subjectName, subject_ur);
+  }
+  console.log('My new subjects and class Subject and Class for paper generation:', {
+    subject,
+    subject_ur,
+    paperClass
+  });
+  /*
   try {
     // Fetch subject details
     console.log('Fetching subject details for subject_id:', paper.subject_id);
@@ -1451,7 +1467,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
       .single();
 console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
     if (!subjectError && subjectData) {
-      subject = subjectData.name?subjectData.name.toString():subjectName;
+      subject = subjectData.name;
       const cachedTranslation = translationCache.get(subject);
       console.log('subject currently generated paper:',subject);
       if (cachedTranslation) {
@@ -1464,8 +1480,20 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
       }
     } else {
       console.warn('Using fallback subject data due to error:', subjectError);
-      subject = 'Subject';
-      subject_ur = 'مضمون';
+      //subject = 'Subject';
+      //subject_ur = 'مضمون';
+      subject = subjectName;
+     const cachedTranslation = translationCache.get(subjectName);
+      //console.log('subject currently generated paper:',subject);
+      if (cachedTranslation) {
+        subject_ur = cachedTranslation;
+        console.log('subject not found from papers table:', subject_ur);
+      } else {
+        const translatedSubject = await translate(subject, { to: 'ur' });
+        subject_ur = translatedSubject.text;
+        translationCache.set(subject, subject_ur);
+      }
+    
     }
 
     // Fetch class details
@@ -1488,7 +1516,7 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
     subject_ur = 'مضمون';
     paperClass = 'Class';
   }
-
+*/
   // Get questions by type from the final ordered list
   const mcqQuestions = finalQuestions.filter((pq: any) => 
     pq.question_type === 'mcq' && pq.questions
@@ -1711,7 +1739,7 @@ let htmlNoThreePapers = `  <!-- Row 2 -->
     </td>
     <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
       ${isUrdu || isBilingual ? `<span class="metaUrdu">مضمون: ${subject_ur}</span>` : ''}
-      ${isEnglish || isBilingual ? `<span class="metaEng">Subject: ${subject_name}</span>` : ''}
+      ${isEnglish || isBilingual ? `<span class="metaEng">Subject: ${subject}</span>` : ''}
     </td>
     <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
       ${isUrdu || isBilingual ? `<span class="metaUrdu">تاریخ:${formatPaperDate(dateOfPaper)}</span>` : ''}
