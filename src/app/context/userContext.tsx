@@ -1,4 +1,4 @@
-// Update the UserContext to handle unlimited papers
+// src/app/context/userContext.tsx
 'use client';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
@@ -82,7 +82,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const trialData = await response.json();
 
-     /* setTrialStatus({
+      setTrialStatus({
         isTrial: trialData.isTrial,
         trialEndsAt: trialData.trialEndsAt ? new Date(trialData.trialEndsAt) : null,
         daysRemaining: trialData.daysRemaining,
@@ -94,24 +94,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscriptionEndDate: trialData.subscriptionEndDate ? new Date(trialData.subscriptionEndDate) : null,
         message: trialData.message || null   // <-- added
       });
-      */setTrialStatus({
-  isTrial: trialData.isTrial,
-  trialEndsAt: trialData.trialEndsAt ? new Date(trialData.trialEndsAt) : null,
-  daysRemaining: trialData.daysRemaining,
-  hasActiveSubscription: trialData.hasActiveSubscription,
-  papersGenerated: trialData.papersGenerated,
-
-  // ✅ FORCE UNLIMITED FOR TRIAL
-  papersRemaining: trialData.isTrial ? 'unlimited' : trialData.papersRemaining,
-
-  subscriptionName: trialData.subscriptionName,
-  subscriptionType: trialData.subscriptionType,
-  subscriptionEndDate: trialData.subscriptionEndDate
-    ? new Date(trialData.subscriptionEndDate)
-    : null,
-  message: trialData.message || null
-});
-
     } catch (error) {
       console.error('Error fetching trial status:', error);
       setError(error instanceof Error ? error.message : 'Unknown error');

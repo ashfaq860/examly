@@ -1,4 +1,3 @@
-//dashboard/page.tsx
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -37,12 +36,7 @@ export default function AcademyDashboard() {
 
   /* 🚨 Redirect if missing required profile info */
   useEffect(() => {
-    //if (trialStatus?.message && !trialStatus.hasActiveSubscription) {
-    if (
-  trialStatus?.message &&
-  !trialStatus.isTrial &&
-  !trialStatus.hasActiveSubscription
-) {
+    if (trialStatus?.message && !trialStatus.hasActiveSubscription) {
       router.push('/dashboard/settings');
     }
   }, [trialStatus, router]);
@@ -110,9 +104,7 @@ export default function AcademyDashboard() {
           }));
 
         setAnalytics({
-          //totalPapers: trialStatus?.papersGenerated || papers?.length || 0,
-          totalPapers: papers?.length || 0,
-
+          totalPapers: trialStatus?.papersGenerated || papers?.length || 0,
           totalQuestions: totalQuestions || 0,
           papersByClass,
           papersBySubject,
@@ -138,7 +130,7 @@ export default function AcademyDashboard() {
     );
   }
 
-  /*const subscriptionInfo = trialStatus
+  const subscriptionInfo = trialStatus
     ? {
         type: trialStatus.isTrial ? 'Trial' : trialStatus.subscriptionName || 'Premium',
         status: trialStatus.hasActiveSubscription ? 'active' : 'inactive',
@@ -150,23 +142,6 @@ export default function AcademyDashboard() {
         trialDaysLeft: trialStatus.daysRemaining,
       }
     : null;
-*/
-const subscriptionInfo = trialStatus
-  ? {
-      type: trialStatus.isTrial
-        ? 'Free Trial'
-        : trialStatus.subscriptionName || 'Premium',
-      status: trialStatus.hasActiveSubscription ? 'Active' : 'Inactive',
-      papersLeft:
-        trialStatus.isTrial
-          ? 'Unlimited'
-          : trialStatus.papersRemaining === 'unlimited'
-          ? 'Unlimited'
-          : trialStatus.papersRemaining,
-      isTrial: trialStatus.isTrial,
-      trialDaysLeft: trialStatus.isTrial ? trialStatus.daysRemaining : 0,
-    }
-  : null;
 
   // Prepare data for horizontal bar chart
   const barChartData = {

@@ -4,7 +4,6 @@ import { useUser } from '@/app/context/userContext';
 const SubscriptionStatus: React.FC = () => {
   const { trialStatus, isLoading } = useUser();
 
-  // Normalize trialStatus into one display object
   const getDisplayData = () => {
     if (!trialStatus) {
       return {
@@ -20,19 +19,20 @@ const SubscriptionStatus: React.FC = () => {
 
     // Active subscription takes priority
     if (trialStatus.hasActiveSubscription) {
+      const isUnlimited =
+        trialStatus.subscriptionType !== 'paper_pack' || trialStatus.papersRemaining === 'unlimited';
       return {
         type: trialStatus.subscriptionName || 'Premium',
         status: 'active',
         endDate: trialStatus.subscriptionEndDate
           ? trialStatus.subscriptionEndDate.toLocaleDateString()
           : '',
-        papersLeft: trialStatus.papersRemaining,
+        papersLeft: isUnlimited ? 'Unlimited' : trialStatus.papersRemaining,
         isTrial: false,
         trialDaysLeft: 0,
-        totalPapersInPlan:
-          trialStatus.subscriptionType === 'paper_pack'
-            ? trialStatus.papersRemaining + (trialStatus.papersGenerated || 0)
-            : Infinity, // unlimited for recurring
+        totalPapersInPlan: isUnlimited
+          ? Infinity
+          : (trialStatus.papersRemaining || 0) + (trialStatus.papersGenerated || 0),
       };
     }
 
@@ -40,7 +40,10 @@ const SubscriptionStatus: React.FC = () => {
     if (trialStatus.isTrial) {
       const isExpired =
         (trialStatus.trialEndsAt && new Date() > trialStatus.trialEndsAt) ||
-        trialStatus.papersRemaining <= 0;
+        (trialStatus.papersRemaining !== 'unlimited' && trialStatus.papersRemaining <= 0);
+
+      const papersLeft =
+        trialStatus.papersRemaining === 'unlimited' ? 'Unlimited' : trialStatus.papersRemaining;
 
       return {
         type: 'Trial',
@@ -48,10 +51,10 @@ const SubscriptionStatus: React.FC = () => {
         endDate: trialStatus.trialEndsAt
           ? trialStatus.trialEndsAt.toLocaleDateString()
           : '',
-        papersLeft: trialStatus.papersRemaining,
+        papersLeft,
         isTrial: true,
         trialDaysLeft: trialStatus.daysRemaining,
-        totalPapersInPlan: 5,
+        totalPapersInPlan: trialStatus.papersRemaining === 'unlimited' ? Infinity : 5,
       };
     }
 
@@ -68,7 +71,6 @@ const SubscriptionStatus: React.FC = () => {
   };
 
   const displayData = getDisplayData();
-  // console.log(displayData);
 
   if (isLoading) {
     return (
@@ -83,7 +85,16 @@ const SubscriptionStatus: React.FC = () => {
     );
   }
 
-  // Render UI
+  const renderPapersText = () => {
+    if (displayData.papersLeft === 'Unlimited' || displayData.totalPapersInPlan === Infinity) {
+      return 'Unlimited papers';
+    }
+    if (displayData.isTrial) {
+      return `${displayData.papersLeft} of ${displayData.totalPapersInPlan} papers remaining`;
+    }
+    return `${displayData.papersLeft} papers remaining`;
+  };
+
   switch (displayData.status) {
     case 'active':
       return (
@@ -92,9 +103,7 @@ const SubscriptionStatus: React.FC = () => {
             <div>
               <strong>{displayData.type} Plan - Active</strong>
               <div className="small">
-                {displayData.totalPapersInPlan === Infinity
-                  ? 'Unlimited papers'
-                  : `${displayData.papersLeft} papers remaining`}
+                {renderPapersText()}
                 {displayData.endDate && ` (renews ${displayData.endDate})`}
               </div>
             </div>
@@ -115,9 +124,7 @@ const SubscriptionStatus: React.FC = () => {
             <div>
               <strong>Free Trial Active</strong>
               <div className="small">{displayData.trialDaysLeft} days remaining</div>
-              <div className="small">
-                {displayData.papersLeft} of {displayData.totalPapersInPlan} papers remaining
-              </div>
+              <div className="small">{renderPapersText()}</div>
             </div>
             <button
               className="btn btn-sm btn-primary"
