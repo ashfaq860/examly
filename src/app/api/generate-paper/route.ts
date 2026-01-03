@@ -2780,14 +2780,14 @@ idiomPhrasesQuestions.forEach((pq: any, idx: number) => {
     if (showAttemptAny) {
       subjectiveContent += `
         <div class="instruction-text eng" style="vertical-align: baseline;">
-          <span>${questionNumber}. </span> Use any ${toAttemptForType} of the following sentences.
+          <span>${questionNumber}. </span> Change the voice  ${toAttemptForType} of the following sentences.
           <span class="marks-display">(${activePassiveMarksPerQuestion} x ${toAttemptForType} = ${activePassiveTotalMarks})</span>
         </div>
       `;
     } else {
       subjectiveContent += `
         <div class="instruction-text eng" style="vertical-align: baseline;">
-          <span>${questionNumber}. </span> Complete all the following sentences.
+          <span>${questionNumber}. </span> Change the voice of the following.
           <span class="marks-display">(${activePassiveMarksPerQuestion} x ${activePassiveQuestions.length} = ${activePassiveTotalMarks})</span>
         </div>
       `;
@@ -2797,67 +2797,37 @@ idiomPhrasesQuestions.forEach((pq: any, idx: number) => {
   subjectiveContent += `</div>`;
 
   activePassiveQuestions.forEach((pq: any, idx: number) => {
-    const q = pq.questions;
-    const questionMarks = pq.custom_marks || activePassiveMarks;
-    const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
-    const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
-    const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+  const q = pq.questions;
+  const questionMarks = pq.custom_marks || activePassiveMarks;
+  const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+  const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+  const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
 
-    // Open a new row every 2 questions
-    if (idx % 2 === 0) {
-      subjectiveContent += `<div class="ap-row" style="display:flex; gap:12px; margin-bottom:6px;">`;
-    }
+  // Open a new row every 3 questions
+  if (idx % 3 === 0) {
+    subjectiveContent += `<div class="ap-row" style="display:flex; gap:12px; margin-bottom:6px;">`;
+  }
 
-    let questionDisplayHtml = `
-      <div class="ap-col" style="flex:1; font-size:11px; line-height:1.2;">
-        <div class="long-question">
-          <div style="display:flex; justify-content:space-between; margin-top:5px;">
-    `;
-
-    if (isEnglish) {
-      questionDisplayHtml += `
-        <div class="eng" style="width:100%;">
-          <strong>(${toRoman(idx + 1)}).</strong> ${englishQuestion}
-          <span class="marks-display">(${questionMarks})</span>
-        </div>
-      `;
-    } else if (isUrdu) {
-      questionDisplayHtml += `
-        <div class="urdu" style="width:100%; direction:rtl; text-align:right;">
-          <strong>سوال ${idx + 1}:</strong> ${urduQuestion}
-          <span class="marks-display">(${questionMarks})</span>
-        </div>
-      `;
-    } else { // bilingual
-      questionDisplayHtml += `
-        <div class="eng" style="width:48%;">
-          <strong>Q.${idx + 1}.</strong> ${englishQuestion}
-          <span class="marks-display">(${questionMarks})</span>
-        </div>
-      `;
-      if (hasUrduQuestion) {
-        questionDisplayHtml += `
-          <div class="urdu" style="width:48%; direction:rtl; text-align:right;">
-            <strong>سوال ${idx + 1}:</strong> ${urduQuestion}
+  let questionDisplayHtml = `
+    <div class="ap-col" style="flex:1; font-size:11px; line-height:1.2;">
+      <div class="long-question">
+        <div style="display:flex; justify-content:space-between; margin-top:5px;">
+          <div class="eng" style="width:100%;">
+            <strong>(${toRoman(idx + 1)}).</strong> ${englishQuestion}
             <span class="marks-display">(${questionMarks})</span>
-          </div>
-        `;
-      }
-    }
-
-    questionDisplayHtml += `
           </div>
         </div>
       </div>
-    `;
+    </div>
+  `;
 
-    subjectiveContent += questionDisplayHtml;
+  subjectiveContent += questionDisplayHtml;
 
-    // Close row after 2 columns OR last item
-    if (idx % 2 === 1 || idx === activePassiveQuestions.length - 1) {
-      subjectiveContent += `</div>`;
-    }
-  });
+  // Close row after 3 columns OR last item
+  if (idx % 3 === 2 || idx === activePassiveQuestions.length - 1) {
+    subjectiveContent += `</div>`;
+  }
+});
 
   partNumber++;
 }
