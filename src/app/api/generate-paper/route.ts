@@ -2716,45 +2716,45 @@ const translateEnglishTotalMarks =(showAttemptAny ? toAttemptForType : translate
   }
 
   subjectiveContent += `</div>`;
+idiomPhrasesQuestions.forEach((pq: any, idx: number) => {
+  const q = pq.questions;
+  const questionMarks = pq.custom_marks || idiom_phrasesMarks;
+  const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
+  const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
+  const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
 
-  idiomPhrasesQuestions.forEach((pq: any, idx: number) => {
-    const q = pq.questions;
-    const questionMarks = pq.custom_marks || idiom_phrasesMarks;
-    const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
-    const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
-    const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
+  // Open a new row every 4 questions
+  if (idx % 4 === 0) {
+    subjectiveContent += `<div class="idiom-row" style="display:flex; gap:10px; margin-bottom:6px;">`;
+  }
 
-    // Open a new row every 3 questions
-    if (idx % 3 === 0) {
-      subjectiveContent += `<div class="idiom-row" style="display:flex; gap:10px; margin-bottom:6px;">`;
-    }
+  let questionDisplayHtml = `
+    <div class="idiom-col" style="flex:1; font-size:11px; line-height:1.2;">
+      <div class="long-question">
+  `;
 
-    let questionDisplayHtml = `
-      <div class="idiom-col" style="flex:1; font-size:11px; line-height:1.2;">
-        <div class="long-question">
-    `;
-
-    if (isEnglish) {
-      questionDisplayHtml += `
-        <div class="eng">
-          <strong>(${toRoman(idx + 1)}).</strong> ${englishQuestion}
-          <span class="marks-display">(${questionMarks})</span>
-        </div>
-      `;
-    }
-
+  if (isEnglish) {
     questionDisplayHtml += `
-        </div>
+      <div class="eng">
+        <strong>(${toRoman(idx + 1)}).</strong> ${englishQuestion}
+        <span class="marks-display">(${questionMarks})</span>
       </div>
     `;
+  }
 
-    subjectiveContent += questionDisplayHtml;
+  questionDisplayHtml += `
+      </div>
+    </div>
+  `;
 
-    // Close row after 3 columns OR last item
-    if (idx % 3 === 2 || idx === idiomPhrasesQuestions.length - 1) {
-      subjectiveContent += `</div>`;
-    }
-  });
+  subjectiveContent += questionDisplayHtml;
+
+  // Close row after 4 columns OR last item
+  if (idx % 4 === 3 || idx === idiomPhrasesQuestions.length - 1) {
+    subjectiveContent += `</div>`;
+  }
+});
+
 
   partNumber++;
 }
