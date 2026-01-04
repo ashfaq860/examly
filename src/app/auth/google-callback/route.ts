@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-// Generate unique 8-char referral code
 const generateReferralCode = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
@@ -19,19 +18,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing userId or email' }, { status: 400 });
     }
 
-    // Check if profile exists
     const { data: existingProfile } = await supabaseAdmin
       .from('profiles')
       .select('id')
       .eq('id', userId)
       .maybeSingle();
 
-    // If profile exists, nothing to do
     if (existingProfile?.id) {
       return NextResponse.json({ message: 'Profile already exists' });
     }
 
-    // Generate unique referral code
     let referralCode = generateReferralCode();
     let attempts = 0;
     while (attempts < 10) {
@@ -46,7 +42,6 @@ export async function POST(req: NextRequest) {
       attempts++;
     }
 
-    // Insert profile
     const { error: profileError } = await supabaseAdmin.from('profiles').insert({
       id: userId,
       full_name,
