@@ -4,8 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 export async function POST(req: NextRequest) {
   try {
     const { userId, full_name, email } = await req.json();
-
-    if (!userId || !email) {
+if (!userId || !email) {
       return NextResponse.json({ error: 'Missing userId or email' }, { status: 400 });
     }
 
