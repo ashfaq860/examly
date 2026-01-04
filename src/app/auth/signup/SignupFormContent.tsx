@@ -1,78 +1,68 @@
+// app/auth/signup/SignupFormContent.tsx
 'use client';
-import { useState, useEffect } from 'react';
+
+import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AuthLayout from '@/components/AuthLayout';
-import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-
 import { Eye, EyeOff } from 'lucide-react';
+
 export default function SignupForm() {
   const search = useSearchParams();
-  
-  const [role, setRole] = useState("teacher");
+  const router = useRouter();
+
+  const referralCodeFromUrl = search.get('ref') || '';
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState(referralCodeFromUrl);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
-
-  
-
-  const handleSignup = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
-    if (!name.trim()) {
-      toast.error('Please enter your name');
-      setLoading(false);
-      return;
-    }
-
-    if (password.length < 6) {
-      toast.error('Password must be at least 6 characters long');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { role, name: name.trim() } },
-      });
-
-      if (error) {
-        if (error.message.includes('already registered') || error.message.includes('already exists')) {
-          toast.error('Email already exists. Please login or use a different email.');
-        } else {
-          toast.error(error.message);
-        }
-        setLoading(false);
-        return;
-      }
-
-      toast.success('Signup successful! Check your email for confirmation.');
-      setTimeout(() => router.push('/auth/login'), 3000);
-    } catch (err) {
-      console.error('Unexpected error during signup:', err);
-      toast.error('An unexpected error occurred. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const togglePasswordVisibility = () => setShowPassword(!showPassword);
 
+const handleSignup = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+
+  try {
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password, referralCode }),
+    });
+
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      data = { error: 'Invalid server response' };
+    }
+
+    if (!res.ok) {
+      console.error('Signup failed', data);
+      toast.error(data.error || 'Signup failed. Try again.');
+      setLoading(false);
+      return;
+    }
+
+    toast.success(data.message || 'Signup successful!');
+    setTimeout(() => router.push('/auth/login'), 2000);
+  } catch (err: any) {
+    console.error('Unexpected signup error', err);
+    toast.error(err.message || 'Unexpected signup error');
+  } finally {
+    setLoading(false);
+  }
+};
+
+
   return (
-
-    <AuthLayout title="SignUp" subtitle="Only PTB Syllabus">  
+    <AuthLayout title="SignUp" subtitle="Only PTB Syllabus">
       <form onSubmit={handleSignup}>
-        {/* Role */}
-  
-
-        {/* Name */}
+        {/* Full Name */}
         <div className="mb-3">
           <label className="form-label">Full Name</label>
           <input
@@ -98,31 +88,43 @@ export default function SignupForm() {
           />
         </div>
 
+        {/* Referral Code */}
+        <div className="mb-3">
+          <label className="form-label">
+            Referral Code <span className="text-muted">(optional)</span>
+          </label>
+          <input
+            type="text"
+            className="form-control"
+            value={referralCode}
+            onChange={(e) => setReferralCode(e.target.value)}
+            placeholder="Enter referral code"
+          />
+        </div>
+
         {/* Password */}
-
-<div className="mb-3">
-  <label className="form-label">Password</label>
-  <div className="password-input-container">
-    <input
-      required
-      minLength={6}
-      type={showPassword ? 'text' : 'password'}
-      className="form-control"
-      value={password}
-      onChange={(e) => setPassword(e.target.value)}
-      placeholder="At least 6 characters"
-    />
-    <button
-      type="button"
-      className="password-toggle-btn"
-      onClick={togglePasswordVisibility}
-      aria-label={showPassword ? 'Hide password' : 'Show password'}
-    >
-      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-    </button>
-  </div>
-</div>
-
+        <div className="mb-3">
+          <label className="form-label">Password</label>
+          <div className="password-input-container position-relative">
+            <input
+              required
+              minLength={6}
+              type={showPassword ? 'text' : 'password'}
+              className="form-control"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 6 characters"
+            />
+            <button
+              type="button"
+              className="password-toggle-btn position-absolute end-0 top-50 translate-middle-y me-3 border-0 bg-transparent"
+              onClick={togglePasswordVisibility}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+        </div>
 
         <button className="btn btn-primary w-100 mb-3" disabled={loading}>
           {loading ? 'Creating Account...' : 'Create Account'}
@@ -130,8 +132,7 @@ export default function SignupForm() {
 
         <div className="mt-3 text-center">
           <span className="text-muted">Already have an account? </span>
-          <Link href="/auth/login"  style={{'background':"#073E8C !important",'color':"white !important"}}>
-
+          <Link href="/auth/login" style={{ background: '#073E8C', color: 'white' }}>
             Sign in
           </Link>
         </div>
