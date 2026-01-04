@@ -85,31 +85,34 @@ export default function LoginPage() {
   };
 
   // 🌟 NEW: Google Sign-In Function
-  const handleGoogleLogin = async () => {
-    try {
-      setErr(null);
-      setLoading(true);
+t handleGoogleLogin = async () => {
+  try {
+    setErr(null);
+    setLoading(true);
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`, // must be in your Supabase redirect URLs
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
         },
-      });
+      },
+    });
 
-      if (error) {
-        console.error('Google login error:', error);
-        setErr(error.message);
-      } else {
-        console.log('🔗 Redirecting to Google for authentication...');
-      }
-    } catch (err) {
-      console.error('Google login failed:', err);
-      setErr('Google login failed. Try again.');
-    } finally {
-      setLoading(false);
+    if (error) {
+      console.error('Google login error:', error);
+      setErr(error.message);
     }
-  };
+    // Redirect happens automatically via Supabase
+  } catch (err) {
+    console.error('Google login failed:', err);
+    setErr('Google login failed. Try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <AuthLayout title="Welcome back" subtitle="">

@@ -4,19 +4,24 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 export async function POST(req: NextRequest) {
   try {
     const { userId, full_name, email } = await req.json();
-if (!userId || !email) {
+    
+    if (!userId || !email) {
       return NextResponse.json({ error: 'Missing userId or email' }, { status: 400 });
     }
 
     // Check if profile exists
     const { data: existingProfile } = await supabaseAdmin
       .from('profiles')
-      .select('id')
+      .select('id, role')
       .eq('id', userId)
       .maybeSingle();
 
     if (existingProfile?.id) {
-      return NextResponse.json({ message: 'Profile already exists' });
+      // Profile exists, return the role
+      return NextResponse.json({ 
+        message: 'Profile already exists', 
+        role: existingProfile.role 
+      });
     }
 
     // Generate unique referral code
@@ -42,12 +47,12 @@ if (!userId || !email) {
       attempts++;
     }
 
-    // Insert profile
+    // Insert profile with default role
     const { error: profileError } = await supabaseAdmin.from('profiles').insert({
       id: userId,
       full_name,
       email,
-      role: 'teacher',
+      role: 'teacher', // Default role for Google sign-ups
       login_method: 'google',
       referral_code: referralCode,
       allowed_papers: 0,
@@ -63,7 +68,11 @@ if (!userId || !email) {
       return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 });
     }
 
-    return NextResponse.json({ message: 'Profile created successfully', referral_code: referralCode });
+    return NextResponse.json({ 
+      message: 'Profile created successfully', 
+      referral_code: referralCode,
+      role: 'teacher' 
+    });
   } catch (err) {
     console.error('Google callback error:', err);
     return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 });
