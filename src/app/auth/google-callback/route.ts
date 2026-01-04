@@ -1,15 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-const generateReferralCode = () => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-};
-
 export async function POST(req: NextRequest) {
   try {
     const { userId, full_name, email } = await req.json();
@@ -18,6 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing userId or email' }, { status: 400 });
     }
 
+    // Check if profile exists
     const { data: existingProfile } = await supabaseAdmin
       .from('profiles')
       .select('id')
@@ -28,6 +20,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Profile already exists' });
     }
 
+    // Generate unique referral code
+    const generateReferralCode = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let code = '';
+      for (let i = 0; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    };
+
     let referralCode = generateReferralCode();
     let attempts = 0;
     while (attempts < 10) {
@@ -36,12 +38,12 @@ export async function POST(req: NextRequest) {
         .select('id')
         .eq('referral_code', referralCode)
         .maybeSingle();
-
       if (!codeExists) break;
       referralCode = generateReferralCode();
       attempts++;
     }
 
+    // Insert profile
     const { error: profileError } = await supabaseAdmin.from('profiles').insert({
       id: userId,
       full_name,
