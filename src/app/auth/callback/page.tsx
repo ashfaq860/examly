@@ -1,69 +1,74 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
+import { getSupabaseClient } from '@/lib/supabaseClient';
 
-// Inner component that uses useSearchParams
-function AuthCallbackInner() {
+export default function AuthCallbackPage() {
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = getSupabaseClient();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const searchParams = useSearchParams();
 
   useEffect(() => {
-    const handleGoogleCallback = async () => {
+    const handleCallback = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Check for OAuth error in URL
-        const errorCode = searchParams.get('error');
-        const errorDescription = searchParams.get('error_description');
+        // Get the hash from the URL (PKCE stores token in hash fragment)
+        const hash = window.location.hash;
         
-        if (errorCode) {
-          console.error('OAuth Error:', errorCode, errorDescription);
-          setError(`Authentication failed: ${errorDescription || errorCode}`);
-          setTimeout(() => router.push('/auth/login'), 3000);
-          return;
-        }
-
-        // Check for OAuth success code
-        const code = searchParams.get('code');
-        if (!code) {
-          // If no code, check if we already have a session
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (hash) {
+          // Parse the hash to get access token if present
+          const params = new URLSearchParams(hash.substring(1));
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
           
-          if (sessionError || !session) {
-            console.error('No session found and no OAuth code');
-            setTimeout(() => router.push('/auth/login'), 2000);
-            return;
+          if (accessToken && refreshToken) {
+            // Set the session manually
+            const { data: { session }, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            
+            if (sessionError) {
+              console.error('Session error:', sessionError);
+              throw sessionError;
+            }
+            
+            if (session?.user) {
+              await processUser(session.user);
+              return;
+            }
           }
-          
-          // We have a session, proceed
-          await processUserSession(session);
-          return;
         }
 
-        // Exchange the code for a session
-        const { data: { session }, error: oauthError } = await supabase.auth.exchangeCodeForSession(code);
+        // Fallback: Try to get the current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (oauthError || !session) {
-          console.error('OAuth exchange error:', oauthError);
-          setError('Failed to complete authentication. Please try again.');
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          setError('Failed to authenticate. Please try again.');
           setTimeout(() => router.push('/auth/login'), 3000);
           return;
         }
 
-        await processUserSession(session);
+        if (!session?.user) {
+          console.error('No user found in session');
+          setError('No user found. Redirecting to login...');
+          setTimeout(() => router.push('/auth/login'), 3000);
+          return;
+        }
+
+        await processUser(session.user);
 
       } catch (err: any) {
         console.error('Callback error:', err);
         setError(err.message || 'An error occurred during authentication');
         
-        // Sign out to clear invalid session
+        // Clear any invalid session
         await supabase.auth.signOut();
         
         setTimeout(() => router.push('/auth/login'), 3000);
@@ -72,11 +77,7 @@ function AuthCallbackInner() {
       }
     };
 
-    const processUserSession = async (session: any) => {
-      if (!session?.user) {
-        throw new Error('No user found in session');
-      }
-
+    const processUser = async (user: any) => {
       // Call your API to create/update profile
       const response = await fetch('/api/auth/google-callback', {
         method: 'POST',
@@ -84,11 +85,11 @@ function AuthCallbackInner() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId: session.user.id,
-          full_name: session.user.user_metadata?.full_name || 
-                    session.user.user_metadata?.name || 
+          userId: user.id,
+          full_name: user.user_metadata?.full_name || 
+                    user.user_metadata?.name || 
                     '',
-          email: session.user.email,
+          email: user.email,
         }),
       });
 
@@ -100,13 +101,13 @@ function AuthCallbackInner() {
 
       const data = await response.json();
       
-      // Get user role from API response or fetch it
+      // Get user role
       let userRole = data.role;
       
       // If role not in API response, fetch it from database
       if (!userRole) {
         const { data: roleData, error: roleError } = await supabase
-          .rpc('get_user_role', { user_id: session.user.id });
+          .rpc('get_user_role', { user_id: user.id });
         
         if (roleError) {
           console.error('Role fetch error:', roleError);
@@ -131,8 +132,8 @@ function AuthCallbackInner() {
       }
     };
 
-    handleGoogleCallback();
-  }, [router, supabase, searchParams]);
+    handleCallback();
+  }, [router, supabase]);
 
   if (loading) {
     return (
@@ -160,22 +161,3 @@ function AuthCallbackInner() {
 
   return null;
 }
-
-// Main component with Suspense boundary
-export default function AuthCallbackPage() {
-  return (
-    <Suspense fallback={
-      <div className="d-flex flex-column justify-content-center align-items-center vh-100">
-        <div className="spinner-border text-primary mb-3" style={{ width: '3rem', height: '3rem' }} role="status">
-          <span className="visually-hidden">Loading...</span>
-        </div>
-        <p className="text-muted">Loading authentication...</p>
-      </div>
-    }>
-      <AuthCallbackInner />
-    </Suspense>
-  );
-}
-
-// Force dynamic rendering
-export const dynamic = 'force-dynamic';
