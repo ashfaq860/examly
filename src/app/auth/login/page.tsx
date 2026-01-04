@@ -85,7 +85,7 @@ export default function LoginPage() {
   };
 
   // 🌟 NEW: Google Sign-In Function
-t handleGoogleLogin = async () => {
+  const handleGoogleLogin = async () => {
   try {
     setErr(null);
     setLoading(true);
