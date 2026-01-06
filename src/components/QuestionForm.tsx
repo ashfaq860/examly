@@ -1330,7 +1330,8 @@ export default function QuestionForm({
               />
             </div>
           )}
-
+</div>
+<div className="row g-3 mt-2">
           {/* English and Other Subjects MCQ Options */}
           {(formData.question_type === 'mcq' && (isEnglishSubject() || (!isEnglishSubject() && !isUrduSubject()))) && (
             <>

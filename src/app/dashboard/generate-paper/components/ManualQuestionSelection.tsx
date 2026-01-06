@@ -646,7 +646,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
       <div className="card-body">
         <h2 className="h4 card-title mb-3">Manual Question Selection</h2>
         
-        {/* Debug panel */}
+        {/* Debug panel }
         {process.env.NODE_ENV === 'development' && (
           <div className="alert alert-info mb-3">
             <h6>Debug Info:</h6>
@@ -669,7 +669,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
             </div>
           </div>
         )}
-
+        {/* Debug panel */}
         {/* Selection Progress */}
         <div className="card bg-light mb-4">
           <div className="card-body">
@@ -914,7 +914,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                                 {language === 'bilingual' && (
                                   <div className="bilingual-text">
                                     <div className="english-version mb-2" style={isSelected ? { color: '#fff' } : {}}>
-                                      <strong>English:</strong> {typeof questionText === 'object' ? questionText.english : questionText}
+                                       {typeof questionText === 'object' ? questionText.english : questionText}
                                     </div>
                                     <div 
                                       className="urdu-version" 
@@ -924,7 +924,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                                         ...(isSelected ? { color: '#fff' } : {})
                                       }}
                                     >
-                                      <strong>اردو:</strong> {typeof questionText === 'object' ? questionText.urdu : questionText}
+                                       {typeof questionText === 'object' ? questionText.urdu : questionText}
                                     </div>
                                   </div>
                                 )}
@@ -1103,24 +1103,24 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
       {/* CSS for selected state */}
       <style jsx>{`
         .list-group-item.active {
-          background-color: #000 !important;
-          border-color: #000 !important;
-          color: #fff !important;
+          background-color: #1BA79A !important;
+          border-color: #08408D !important;
+          color: #000 !important;
         }
         
         .list-group-item.active .badge:not(.bg-primary):not(.bg-success):not(.bg-info):not(.bg-warning) {
-          background-color: #333 !important;
-          color: #fff !important;
+          background-color: #CFF4FC !important;
+          color: #000 !important;
         }
         
         .list-group-item.active .text-muted {
-          color: #ddd !important;
+          color: #000 !important;
         }
         
         .list-group-item.active .alert-warning {
-          background-color: #444 !important;
+          background-color: #CFF4FC !important;
           border-color: #666 !important;
-          color: #fff !important;
+          color: #000 !important;
         }
       `}</style>
     </div>
