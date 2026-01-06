@@ -287,12 +287,13 @@ export default function ProfileSettingsPage() {
           style={{ fontSize: '2.5rem', background: 'linear-gradient(to right, #0d6efd, #6f42c1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
         >Profile Settings</motion.h1>
 
-        {error && <div className="alert alert-danger alert-dismissible fade show" role="alert"><strong>Error: </strong>{error}<button type="button" className="btn-close" onClick={() => setError(null)}></button></div>}
-        {success && <div className="alert alert-success alert-dismissible fade show" role="alert"><strong>Success: </strong>{success}<button type="button" className="btn-close" onClick={() => setSuccess(null)}></button></div>}
-
+        
         {profile && (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }} className="row justify-content-center">
             <div className="col-lg-8">
+              {error && <div className="alert alert-danger alert-dismissible fade show" role="alert"><strong>Error: </strong>{error}<button type="button" className="btn-close" onClick={() => setError(null)}></button></div>}
+        {success && <div className="alert alert-success alert-dismissible fade show" role="alert"><strong>Success: </strong>{success}<button type="button" className="btn-close" onClick={() => setSuccess(null)}></button></div>}
+
               {/* Profile Edit Card */}
               <div className="card shadow-sm border-0">
                 <div className="card-header bg-primary text-white py-3"><h5 className="card-title mb-0">Edit Your Profile</h5></div>
@@ -362,7 +363,7 @@ export default function ProfileSettingsPage() {
                     {/* Package Status */}
                     {renderPackageStatus()}
 
-                    <div className="mt-4">
+                    <div className="mt-4 d-flex justify-content-end">
                       <button type="submit" className="btn btn-primary px-4 py-2" disabled={saving || (formData.cellno && formData.cellno !== profile.cellno && cellnoStatus !== 'valid')}>
                         {saving ? <><span className="spinner-border spinner-border-sm me-2" role="status"></span>Saving...</> : <><Save size={18} className="me-2"/>Save Changes</>}
                       </button>

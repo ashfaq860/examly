@@ -1,3 +1,4 @@
+// src/app/auth/google-callback/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 

@@ -1,11 +1,13 @@
+// src/app/dashboard/profile/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import AcademyLayout from "@/components/AcademyLayout";
-import { User, Phone, University, FileText, Calendar, Package as PackageIcon, Clock, Mail } from "lucide-react";
+import { User, Phone, University, FileText, Calendar, Package as PackageIcon, Clock, Mail, Link as LinkIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-
+import toast, { Toaster } from "react-hot-toast";
+import { Share2, Mail as MailIcon } from "lucide-react";
 type Profile = {
   id: string;
   full_name: string | null;
@@ -19,6 +21,7 @@ type Profile = {
   papers_generated: number | null;
   cellno: string | null;
   logo: string | null;
+  referral_code?: string | null;
 };
 
 type Package = {
@@ -61,7 +64,7 @@ export default function ProfilePage() {
       }
     };
     getSession();
-    
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (!session) {
@@ -69,7 +72,7 @@ export default function ProfilePage() {
         setError("Please log in to view your profile");
       }
     });
-    
+
     return () => subscription.unsubscribe();
   }, [supabase]);
 
@@ -79,16 +82,16 @@ export default function ProfilePage() {
       setError(null);
       try {
         if (!session) throw new Error("Please log in to view your profile");
-        
+
         const response = await fetch('/api/profile');
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.error || `Failed to fetch profile: ${response.status}`);
         }
-        
+
         const data = await response.json();
         if (data.error) throw new Error(data.error);
-        
+
         setProfile(data.profile);
         setUserPackages(data.userPackages || []);
       } catch (err: any) {
@@ -98,33 +101,27 @@ export default function ProfilePage() {
         setLoading(false);
       }
     };
-    
+
     if (session) fetchProfileAndPackages();
   }, [session]);
 
   const getPackageStatus = (userPackage: UserPackage) => {
     const now = new Date();
     const expiresAt = userPackage.expires_at ? new Date(userPackage.expires_at) : null;
-    
-    // If is_active is false, show "Pending" status
+
     if (!userPackage.is_active) {
       return { status: 'pending', label: 'Pending', badgeClass: 'bg-secondary' };
     }
-    
-    // Check if package has expired by date
+
     const isExpiredByDate = expiresAt && expiresAt < now;
-    
-    // Check if paper pack has run out of papers
-    const isPaperPackEmpty = userPackage.packages.type === 'paper_pack' && 
-                            userPackage.papers_remaining !== null && 
-                            userPackage.papers_remaining <= 0;
-    
-    // If either condition is true, package is expired
+    const isPaperPackEmpty = userPackage.packages.type === 'paper_pack' &&
+      userPackage.papers_remaining !== null &&
+      userPackage.papers_remaining <= 0;
+
     if (isExpiredByDate || isPaperPackEmpty) {
       return { status: 'expired', label: 'Expired', badgeClass: 'bg-danger' };
     }
-    
-    // Otherwise, package is active
+
     return { status: 'active', label: 'Active', badgeClass: 'bg-success' };
   };
 
@@ -134,6 +131,16 @@ export default function ProfilePage() {
     const today = new Date();
     const diffTime = expireDate.getTime() - today.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const getReferralLink = () => {
+    if (!profile?.referral_code) return "";
+    return `${window.location.origin}/auth/signup?ref=${profile.referral_code}`;
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Link copied!");
   };
 
   if (loading) {
@@ -161,14 +168,15 @@ export default function ProfilePage() {
 
   return (
     <AcademyLayout>
+      <Toaster position="top-right" />
       <div className="container px-0 px-md-3 py-2">
-        <motion.h1 
-          initial={{ opacity: 0, y: -20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ duration: 0.5 }} 
+        <motion.h1
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
           className="text-center mb-2 fw-bold"
-          style={{ 
-            fontSize: '2.5rem', 
+          style={{
+            fontSize: '2.5rem',
             background: 'linear-gradient(to right, #0d6efd, #6f42c1)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent'
@@ -178,27 +186,28 @@ export default function ProfilePage() {
         </motion.h1>
 
         {profile && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }} 
-            animate={{ opacity: 1, scale: 1 }} 
-            transition={{ duration: 0.4 }} 
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.4 }}
             className="rounded-3 shadow-lg p-2 p-md-4 mb-5"
             style={{ background: 'linear-gradient(to right, #eef2ff, #eff6ff)' }}
           >
+            {/* Profile Header */}
             <div className="d-flex flex-column flex-md-row align-items-center gap-4 mb-4">
               {profile.logo ? (
-                <img 
-                  src={profile.logo} 
-                  alt="Profile" 
+                <img
+                  src={profile.logo}
+                  alt="Profile"
                   className="rounded-circle object-fit-cover border border-4 border-primary shadow"
                   style={{ width: '7rem', height: '7rem' }}
                 />
               ) : (
-                <div 
+                <div
                   className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold shadow"
-                  style={{ 
-                    width: '7rem', 
-                    height: '7rem', 
+                  style={{
+                    width: '7rem',
+                    height: '7rem',
                     background: 'linear-gradient(to right, #bee3f8, #a3bffa)',
                     fontSize: '2.5rem'
                   }}
@@ -209,7 +218,7 @@ export default function ProfilePage() {
 
               <div className="flex-grow-1">
                 <h2 className="d-flex align-items-center gap-2 fs-3 fw-semibold text-dark mb-1">
-                  <User size={20}/> {profile.full_name || "No Name Provided"}
+                  <User size={20} /> {profile.full_name || "No Name Provided"}
                 </h2>
                 <p className="text-muted d-flex align-items-center gap-2 mb-2">
                   <Mail size={16} /> {profile.email}
@@ -223,12 +232,12 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Profile info in two columns */}
+            {/* Profile Info Grid */}
             <div className="row mt-4">
               <div className="col-md-6 mb-3">
                 <div className="d-flex align-items-center p-3 bg-white rounded shadow-sm">
                   <div className="me-3 p-2 bg-primary bg-opacity-10 rounded">
-                    <University className="text-primary" size={20}/>
+                    <University className="text-primary" size={20} />
                   </div>
                   <div>
                     <div className="text-muted small">Institution</div>
@@ -236,11 +245,11 @@ export default function ProfilePage() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="col-md-6 mb-3">
                 <div className="d-flex align-items-center p-3 bg-white rounded shadow-sm">
                   <div className="me-3 p-2 bg-info bg-opacity-10 rounded">
-                    <FileText className="text-info" size={20}/>
+                    <FileText className="text-info" size={20} />
                   </div>
                   <div>
                     <div className="text-muted small">Papers Generated</div>
@@ -248,11 +257,11 @@ export default function ProfilePage() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="col-md-6 mb-3">
                 <div className="d-flex align-items-center p-3 bg-white rounded shadow-sm">
                   <div className="me-3 p-2 bg-success bg-opacity-10 rounded">
-                    <Calendar className="text-success" size={20}/>
+                    <Calendar className="text-success" size={20} />
                   </div>
                   <div>
                     <div className="text-muted small">Member Since</div>
@@ -260,11 +269,11 @@ export default function ProfilePage() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="col-md-6 mb-3">
                 <div className="d-flex align-items-center p-3 bg-white rounded shadow-sm">
                   <div className="me-3 p-2 bg-warning bg-opacity-10 rounded">
-                    <Phone className="text-warning" size={20}/>
+                    <Phone className="text-warning" size={20} />
                   </div>
                   <div>
                     <div className="text-muted small">Phone Number</div>
@@ -274,10 +283,11 @@ export default function ProfilePage() {
               </div>
             </div>
 
+            {/* Trial Info */}
             {profile.trial_ends_at && (
               <div className="d-flex align-items-center p-3 bg-warning bg-opacity-10 rounded mt-3">
                 <div className="me-3 p-2 bg-warning bg-opacity-25 rounded">
-                  <Clock className="text-warning" size={20}/>
+                  <Clock className="text-warning" size={20} />
                 </div>
                 <div>
                   <div className="text-warning small">Trial Period</div>
@@ -285,11 +295,75 @@ export default function ProfilePage() {
                 </div>
               </div>
             )}
+
+            {/* Referral Section */}
+            {profile.referral_code && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="bg-white rounded shadow-sm p-4 mt-4 border border-success"
+              >
+                <h5 className="fw-bold text-success mb-2">
+                  🎁 Invite Friends & Get 1 Month Free
+                </h5>
+                <p className="text-muted mb-3">
+                  Share your referral code or link. When someone signs up using it, you earn <strong>1 month free trial</strong>.
+                </p>
+
+               
+                {/* Share Buttons */}
+                <div className="d-flex align-items-center gap-2 flex-wrap mb-3">
+                  <a
+                    href={`https://wa.me/?text=Join%20using%20my%20referral%20link%20and%20get%201%20month%20free%20trial:%20${encodeURIComponent(getReferralLink())}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-success d-flex align-items-center gap-1"
+                  >
+                     <Share2 size={16} />  Share Via WhatsApp
+                  </a>
+
+                  <a
+                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getReferralLink())}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-primary d-flex align-items-center gap-1"
+                  >
+                    <Share2 size={16} /> Share Via Facebook
+                  </a>
+
+                  <a
+                    href={`mailto:?subject=Join and Get 1 Month Free Trial&body=Sign up using my referral link and get 1 month free trial: ${encodeURIComponent(getReferralLink())}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline-secondary d-flex align-items-center gap-1"
+                  >
+                     <Share2 size={16} /> Share via Email <MailIcon size={16} />
+                  </a>
+                </div>
+ {/* Code & Link */}
+            
+
+                <div className="d-flex align-items-center gap-3 flex-wrap mb-3">
+                  <div className="px-4 py-2 rounded fw-bold text-dark" style={{ background: "#f1f5f9", fontSize: "1rem" }}>
+                    {getReferralLink()}
+                  </div>
+                  <button className="btn btn-outline-success d-flex align-items-center gap-1" onClick={() => copyToClipboard(getReferralLink())}>
+                    <LinkIcon size={16} /> Copy Link
+                  </button>
+                </div>
+
+                <small className="text-muted d-block mt-2">
+                  Referral code/link can be used by multiple users. You earn rewards every time.
+                </small>
+              </motion.div>
+            )}
           </motion.div>
         )}
 
+        {/* Subscriptions */}
         <h2 className="d-flex align-items-center gap-2 mb-4 fw-bold fs-3 text-dark">
-          <PackageIcon size={28}/> My Subscriptions
+          <PackageIcon size={28} /> My Subscriptions
         </h2>
 
         {userPackages.length === 0 ? (
@@ -301,24 +375,18 @@ export default function ProfilePage() {
             {userPackages.map((userPackage) => {
               const packageStatus = getPackageStatus(userPackage);
               const daysRemaining = calculateDaysRemaining(userPackage.expires_at);
-              
+
               return (
-                <motion.div 
-                  key={userPackage.id} 
-                  whileHover={{ scale: 1.02 }} 
-                  className="col-md-6 col-lg-4 mb-4"
-                >
+                <motion.div key={userPackage.id} whileHover={{ scale: 1.02 }} className="col-md-6 col-lg-4 mb-4">
                   <div className="card h-100 border-0 shadow-sm">
-                    <div className={`card-header ${packageStatus.badgeClass.replace('bg-', 'bg-').replace('bg-', 'bg-')}-10`}>
+                    <div className={`card-header ${packageStatus.badgeClass.replace('bg-', 'bg-')}-10`}>
                       <h5 className="card-title mb-1">{userPackage.packages.name}</h5>
                       <p className="card-text text-muted small mb-0">{userPackage.packages.description}</p>
                     </div>
                     <div className="card-body">
                       <div className="d-flex justify-content-between mb-2">
                         <span>Status:</span>
-                        <span className={`badge ${packageStatus.badgeClass}`}>
-                          {packageStatus.label}
-                        </span>
+                        <span className={`badge ${packageStatus.badgeClass}`}>{packageStatus.label}</span>
                       </div>
                       <div className="d-flex justify-content-between mb-2">
                         <span>Type:</span>
@@ -331,10 +399,7 @@ export default function ProfilePage() {
                       <div className="d-flex justify-content-between mb-2">
                         <span>Papers Remaining:</span>
                         <span>
-                          {userPackage.packages.type === 'paper_pack' 
-                            ? (userPackage.papers_remaining ?? 0)
-                            : 'Unlimited'
-                          }
+                          {userPackage.packages.type === 'paper_pack' ? (userPackage.papers_remaining ?? 0) : 'Unlimited'}
                         </span>
                       </div>
                       {userPackage.expires_at && (
@@ -346,9 +411,7 @@ export default function ProfilePage() {
                       {daysRemaining !== null && packageStatus.status === 'active' && (
                         <div className="d-flex justify-content-between mb-2">
                           <span>Days Remaining:</span>
-                          <span className={daysRemaining <= 7 ? 'text-danger fw-bold' : 'text-success'}>
-                            {daysRemaining}
-                          </span>
+                          <span className={daysRemaining <= 7 ? 'text-danger fw-bold' : 'text-success'}>{daysRemaining}</span>
                         </div>
                       )}
                       {userPackage.is_trial && (

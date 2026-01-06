@@ -4,6 +4,7 @@ import Link from "next/link";
 import AdminLayout from "@/components/AdminLayout";
 import { isUserAdmin } from "@/lib/auth-utils";
 import { useRouter } from 'next/navigation';
+import toast from "react-hot-toast";
 
 export default function ProfilesPage() {
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -161,15 +162,38 @@ export default function ProfilesPage() {
                       <Link href={`/admin/users/${p.id}`} className="btn btn-sm btn-outline-info me-2">View</Link>
                       <Link href={`/admin/users/${p.id}/edit`} className="btn btn-sm btn-outline-primary me-2">Edit</Link>
                       <button
-                        className="btn btn-sm btn-outline-danger"
-                        onClick={async () => {
-                          if (!confirm("Delete profile?")) return;
-                          await fetch(`/api/admin/profiles/${p.id}`, { method: "DELETE" });
-                          setProfiles(profiles.filter((x) => x.id !== p.id));
-                        }}
-                      >
-                        Delete
-                      </button>
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={async () => {
+                            const confirmed = window.confirm(
+                              "⚠️ Do you really want to delete this user?\n\nThis action cannot be undone."
+                            );
+                            if (!confirmed) return;
+
+                            const toastId = toast.loading("Deleting user...");
+
+                            try {
+                              const res = await fetch(`/api/admin/profiles/${p.id}`, {
+                                method: "DELETE",
+                              });
+
+                              const data = await res.json();
+
+                              if (!res.ok) {
+                                throw new Error(data.error || "Failed to delete user");
+                              }
+
+                              // Remove from UI only after success
+                              setProfiles((prev) => prev.filter((x) => x.id !== p.id));
+
+                              toast.success("User deleted successfully", { id: toastId });
+                            } catch (err: any) {
+                              toast.error(err.message || "Delete failed", { id: toastId });
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+
                     </td>
                   </tr>
                 ))

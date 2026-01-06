@@ -1,10 +1,9 @@
 // components/QuestionForm.tsx
 'use client';
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { FiX } from 'react-icons/fi';
+import { supabase } from '@/lib/supabaseClient';
 import toast from 'react-hot-toast';
-
+import SimpleWysiwyg from 'react-simple-wysiwyg';
 interface QuestionFormProps {
   question?: any;
   classes: any[];
@@ -883,7 +882,7 @@ export default function QuestionForm({
                   <label className="form-label">
                     Question Text (English) *
                   </label>
-                  <textarea
+                  <SimpleWysiwyg
                     className="form-control"
                     rows={3}
                     name="question_text"
@@ -899,7 +898,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">English Text to Translate *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control"
                       rows={3}
                       name="question_text"
@@ -917,7 +916,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">Urdu Text to Translate *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control"
                       rows={3}
                       name="question_text"
@@ -935,7 +934,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">Idiom/Phrase (English) *</label>
-                    <input
+                    <SimpleWysiwyg
                       type="text"
                       className="form-control"
                       name="idiom_phrase"
@@ -953,7 +952,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">Passage Text (English) *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control"
                       rows={5}
                       name="passage_text"
@@ -965,7 +964,7 @@ export default function QuestionForm({
                   </div>
                   <div className="col-md-12">
                     <label className="form-label">Question about Passage (English) *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control"
                       rows={3}
                       name="question_text"
@@ -983,7 +982,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">Direct Speech Sentence *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control"
                       rows={3}
                       name="direct_sentence"
@@ -1001,7 +1000,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">Active Voice Sentence *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control"
                       rows={3}
                       name="active_sentence"
@@ -1023,7 +1022,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">سوال (اردو) *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control urdu-text"
                       rows={4}
                       name="question_text_ur"
@@ -1041,7 +1040,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">شعر *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control urdu-text"
                       rows={4}
                       name="poetry_text"
@@ -1059,7 +1058,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">نثر پارہ *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control urdu-text"
                       rows={4}
                       name="prose_text"
@@ -1077,7 +1076,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">سوال *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control urdu-text"
                       rows={4}
                       name="question_text_ur"
@@ -1097,7 +1096,7 @@ export default function QuestionForm({
                     <label className="form-label urdu-label">
                       {formData.question_type === 'sentence_correction' ? 'جملہ (درستگی کے لیے) *' : 'جملہ (تکمیل کے لیے) *'}
                     </label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control urdu-text"
                       rows={3}
                       name="sentence_text"
@@ -1115,7 +1114,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">نثر پارہ (پاسج) *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control urdu-text"
                       rows={5}
                       name="passage_text_ur"
@@ -1127,7 +1126,7 @@ export default function QuestionForm({
                   </div>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">سوال (پاسج کے بارے میں) *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control urdu-text"
                       rows={3}
                       name="question_text_ur"
@@ -1148,7 +1147,7 @@ export default function QuestionForm({
               {/* English Question text */}
               <div className="col-md-12">
                 <label className="form-label">Question Text (English) *</label>
-                <textarea
+                <SimpleWysiwyg
                   className="form-control"
                   rows={3}
                   name="question_text"
@@ -1161,7 +1160,7 @@ export default function QuestionForm({
               {/* Urdu Question text */}
               <div className="col-md-12">
                 <label className="form-label">Question Text (Urdu)</label>
-                <textarea
+                <SimpleWysiwyg
                   className="form-control urdu-text"
                   rows={3}
                   name="question_text_ur"
@@ -1320,7 +1319,7 @@ export default function QuestionForm({
           {['past_paper', 'model_paper'].includes(formData.source_type) && (
             <div className="col-md-6">
               <label className="form-label">Year</label>
-              <input
+              <SimpleWysiwyg
                 type="number"
                 className="form-control"
                 name="source_year"
@@ -1337,7 +1336,7 @@ export default function QuestionForm({
             <>
               <div className="col-md-6">
                 <label className="form-label">Option A (English) *</label>
-                <input
+                <SimpleWysiwyg
                   type="text"
                   className="form-control"
                   name="option_a"
@@ -1349,7 +1348,7 @@ export default function QuestionForm({
 
               <div className="col-md-6">
                 <label className="form-label">Option B (English) *</label>
-                <input
+                <SimpleWysiwyg
                   type="text"
                   className="form-control"
                   name="option_b"
@@ -1361,7 +1360,7 @@ export default function QuestionForm({
 
               <div className="col-md-6">
                 <label className="form-label">Option C (English)</label>
-                <input
+                <SimpleWysiwyg
                   type="text"
                   className="form-control"
                   name="option_c"
@@ -1372,7 +1371,7 @@ export default function QuestionForm({
 
               <div className="col-md-6">
                 <label className="form-label">Option D (English)</label>
-                <input
+                <SimpleWysiwyg
                   type="text"
                   className="form-control"
                   name="option_d"
@@ -1386,7 +1385,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-6">
                     <label className="form-label">Option A (Urdu)</label>
-                    <input
+                    <SimpleWysiwyg
                       type="text"
                       className="form-control urdu-text"
                       name="option_a_ur"
@@ -1398,7 +1397,7 @@ export default function QuestionForm({
 
                   <div className="col-md-6">
                     <label className="form-label">Option B (Urdu)</label>
-                    <input
+                    <SimpleWysiwyg
                       type="text"
                       className="form-control urdu-text"
                       name="option_b_ur"
@@ -1410,7 +1409,7 @@ export default function QuestionForm({
 
                   <div className="col-md-6">
                     <label className="form-label">Option C (Urdu)</label>
-                    <input
+                    <SimpleWysiwyg
                       type="text"
                       className="form-control urdu-text"
                       name="option_c_ur"
@@ -1422,7 +1421,7 @@ export default function QuestionForm({
 
                   <div className="col-md-6">
                     <label className="form-label">Option D (Urdu)</label>
-                    <input
+                    <SimpleWysiwyg
                       type="text"
                       className="form-control urdu-text"
                       name="option_d_ur"
@@ -1458,7 +1457,7 @@ export default function QuestionForm({
             <>
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن اے (اردو) *</label>
-                <input
+                <SimpleWysiwyg
                   type="text"
                   className="form-control urdu-text"
                   name="option_a_ur"
@@ -1471,7 +1470,7 @@ export default function QuestionForm({
 
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن بی (اردو) *</label>
-                <input
+                <SimpleWysiwyg
                   type="text"
                   className="form-control urdu-text"
                   name="option_b_ur"
@@ -1484,7 +1483,7 @@ export default function QuestionForm({
 
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن سی (اردو)</label>
-                <input
+                <SimpleWysiwyg
                   type="text"
                   className="form-control urdu-text"
                   name="option_c_ur"
@@ -1496,7 +1495,7 @@ export default function QuestionForm({
 
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن ڈی (اردو)</label>
-                <input
+                <SimpleWysiwyg
                   type="text"
                   className="form-control urdu-text"
                   name="option_d_ur"
@@ -1531,7 +1530,7 @@ export default function QuestionForm({
               {isEnglishSubject() && (
                 <div className="col-md-12">
                   <label className="form-label">Answer (English) *</label>
-                  <textarea
+                  <SimpleWysiwyg
                     className="form-control"
                     rows={3}
                     name="answer_text"
@@ -1554,7 +1553,7 @@ export default function QuestionForm({
               {isUrduSubject() && (
                 <div className="col-md-12">
                   <label className="form-label urdu-label">جواب (اردو) *</label>
-                  <textarea
+                  <SimpleWysiwyg
                     className="form-control urdu-text"
                     rows={3}
                     name="answer_text_ur"
@@ -1570,7 +1569,7 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">Answer (English) *</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control"
                       rows={3}
                       name="answer_text"
@@ -1581,7 +1580,7 @@ export default function QuestionForm({
                   </div>
                   <div className="col-md-12">
                     <label className="form-label">Answer (Urdu)</label>
-                    <textarea
+                    <SimpleWysiwyg
                       className="form-control urdu-text"
                       rows={3}
                       name="answer_text_ur"
