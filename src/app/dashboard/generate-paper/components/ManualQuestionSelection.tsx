@@ -19,7 +19,28 @@ interface ManualQuestionSelectionProps {
   language: 'english' | 'urdu' | 'bilingual';
   source_type: string;
   typeCounts?: Record<string, number>;
-  autoAdvance?: boolean; // New prop for auto-advance feature
+  autoAdvance?: boolean;
+}
+
+interface QuestionWithOptions extends Question {
+  option_a?: string;
+  option_b?: string;
+  option_c?: string;
+  option_d?: string;
+  option_a_ur?: string;
+  option_b_ur?: string;
+  option_c_ur?: string;
+  option_d_ur?: string;
+  option_a_urdu?: string;
+  option_b_urdu?: string;
+  option_c_urdu?: string;
+  option_d_urdu?: string;
+  option_a_english?: string;
+  option_b_english?: string;
+  option_c_english?: string;
+  option_d_english?: string;
+  question_text_english?: string;
+  question_text_urdu?: string;
 }
 
 export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = ({
@@ -37,7 +58,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
   language,
   source_type,
   typeCounts,
-  autoAdvance = true, // Default to auto-advance enabled
+  autoAdvance = true,
 }) => {
   // Get question types based on subject
   const getQuestionTypesLocal = useCallback(() => {
@@ -77,9 +98,9 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     return defaultTypes;
   }, [subjectId, subjects]);
 
-  const questionTypes = getQuestionTypesLocal();
+  const questionTypes = useMemo(() => getQuestionTypesLocal(), [getQuestionTypesLocal]);
 
-  const [questions, setQuestions] = useState<Record<string, Question[]>>({});
+  const [questions, setQuestions] = useState<Record<string, QuestionWithOptions[]>>({});
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [filters, setFilters] = useState({
     difficulty: 'all' as 'all' | string,
@@ -92,31 +113,26 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
   const [isShuffling, setIsShuffling] = useState(false);
   const [showCompletionMessage, setShowCompletionMessage] = useState(false);
   
-  // Add refs for request management and state tracking
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastFetchParamsRef = useRef<string>('');
+  const fetchInProgressRef = useRef(false);
+  const fetchAttemptsRef = useRef(0);
+  const prevFetchParamsRef = useRef<string>('');
   const prevSelectedRef = useRef<Record<string, string[]>>({});
   const prevRequiredCountsRef = useRef<Record<string, number>>({});
   const autoAdvanceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const completionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Compute required counts without triggering unnecessary updates
   const computedCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     
-    // Set counts from props
     counts['mcq'] = mcqCount || 0;
     counts['short'] = shortCount || 0;
     counts['long'] = longCount || 0;
 
-    // Set counts from typeCounts if available
     if (typeCounts) {
       Object.keys(typeCounts).forEach(k => {
         counts[k] = typeCounts[k] || 0;
       });
     } else {
-      // Fallback: try to get from question types
       questionTypes.forEach(type => {
         if (counts[type.value] === undefined) {
           counts[type.value] = 0;
@@ -127,7 +143,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     return counts;
   }, [questionTypes, mcqCount, shortCount, longCount, typeCounts]);
 
-  // Update required counts only when they actually change
   useEffect(() => {
     const countsChanged = JSON.stringify(computedCounts) !== JSON.stringify(prevRequiredCountsRef.current);
     
@@ -137,52 +152,23 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     }
   }, [computedCounts]);
 
-  // Initialize selected state for all question types - only on mount
   useEffect(() => {
     const initialSelected: Record<string, string[]> = {};
-    const initialQuestions: Record<string, Question[]> = {};
     
     questionTypes.forEach(type => {
       initialSelected[type.value] = [];
-      initialQuestions[type.value] = [];
     });
     
     setSelected(initialSelected);
-    setQuestions(initialQuestions);
-    setCurrentTypeIndex(0);
     prevSelectedRef.current = initialSelected;
-    
-    // Only run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [questionTypes]);
 
-  // Re-initialize when question types change significantly
-  useEffect(() => {
-    if (Object.keys(selected).length === 0 && Object.keys(questions).length === 0) {
-      const initialSelected: Record<string, string[]> = {};
-      const initialQuestions: Record<string, Question[]> = {};
-      
-      questionTypes.forEach(type => {
-        initialSelected[type.value] = [];
-        initialQuestions[type.value] = [];
-      });
-      
-      setSelected(initialSelected);
-      setQuestions(initialQuestions);
-      setCurrentTypeIndex(0);
-      prevSelectedRef.current = initialSelected;
-    }
-  }, [questionTypes, selected, questions]);
-  
-  // Filter active types (those with required count > 0)
   const activeTypes = useMemo(() => {
     return questionTypes.filter(type => requiredCounts[type.value] > 0);
   }, [questionTypes, requiredCounts]);
 
-  // Get current type
   const currentType = activeTypes[currentTypeIndex];
 
-  // Get completion status for a type
   const getCompletionStatus = (type: string) => {
     const required = requiredCounts[type] || 0;
     const selectedCount = selected[type]?.length || 0;
@@ -193,14 +179,12 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     };
   };
 
-  // Auto-advance to next type when current type is completed
   useEffect(() => {
     if (!currentType || !autoAdvance) return;
     
     const currentTypeKey = currentType.value;
     const currentCompletionStatus = getCompletionStatus(currentTypeKey);
     
-    // If current type is completed and there are more types, auto-advance
     if (currentCompletionStatus.completed && currentTypeIndex < activeTypes.length - 1) {
       if (autoAdvanceTimerRef.current) {
         clearTimeout(autoAdvanceTimerRef.current);
@@ -209,7 +193,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
       autoAdvanceTimerRef.current = setTimeout(() => {
         setCurrentTypeIndex(prev => prev + 1);
         autoAdvanceTimerRef.current = null;
-      }, 800); // 0.8 second delay for user to see completion
+      }, 800);
     }
     
     return () => {
@@ -219,7 +203,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     };
   }, [selected, currentTypeIndex, currentType, activeTypes.length, autoAdvance]);
 
-  // Check if all types are complete and automatically proceed to next step
   useEffect(() => {
     if (activeTypes.length === 0) return;
     
@@ -235,7 +218,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
       completionTimerRef.current = setTimeout(() => {
         setShowCompletionMessage(true);
         
-        // Wait a moment to show completion message, then proceed
         setTimeout(() => {
           onAllComplete();
         }, 1500);
@@ -251,7 +233,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     };
   }, [selected, activeTypes, requiredCounts, onAllComplete]);
 
-  // Notify parent of selected questions - only when selection actually changes
   useEffect(() => {
     const selectionChanged = JSON.stringify(selected) !== JSON.stringify(prevSelectedRef.current);
     
@@ -261,42 +242,39 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     }
   }, [selected, onQuestionsSelected]);
 
-  // Get chapters for current subject
   const subjectChapters = useMemo(() => {
     return chapters.filter(chapter => chapter.subject_id === subjectId && chapter.class_id === classId);
   }, [chapters, subjectId, classId]);
 
-  // Get chapter IDs based on selection
-  const getChapterIdsToUse = useCallback((): string[] => {
+  const chapterIds = useMemo(() => {
     if (subjectChapters.length === 0) {
       return [];
     }
     
-    let chapterIds: string[] = [];
+    let ids: string[] = [];
     
     if (chapterOption === 'full_book') {
-      chapterIds = subjectChapters.map(c => c.id);
+      ids = subjectChapters.map(c => c.id);
     } else if (chapterOption === 'half_book') {
       const halfIndex = Math.ceil(subjectChapters.length / 2);
-      chapterIds = subjectChapters.slice(0, halfIndex).map(c => c.id);
+      ids = subjectChapters.slice(0, halfIndex).map(c => c.id);
     } else if (chapterOption === 'single_chapter' && selectedChapters && selectedChapters.length > 0) {
-      chapterIds = [selectedChapters[0]]; // Take first if multiple
+      ids = [selectedChapters[0]];
     } else if (chapterOption === 'custom' && selectedChapters && selectedChapters.length > 0) {
-      chapterIds = selectedChapters;
+      ids = selectedChapters;
     } else {
       return [];
     }
     
-    return chapterIds.filter(id => id); // Remove any falsy values
+    return ids.filter(id => id);
   }, [chapterOption, selectedChapters, subjectChapters]);
 
-  // Handle language translation
-  const handleLanguageTranslation = useCallback((questions: Question[], language: string) => {
+  const handleLanguageTranslation = useCallback((questions: QuestionWithOptions[], lang: string) => {
     return questions.map(question => {
       const translatedQuestion = { ...question };
       
-      if (language !== 'english') {
-        const isBi = language === 'bilingual';
+      if (lang !== 'english') {
+        const isBi = lang === 'bilingual';
         
         // Translate question text
         if (question.question_text_ur) {
@@ -308,50 +286,43 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
           }
         }
         
-        // Translate MCQ options
-        if (question.question_type === 'mcq') {
-          const options = ['option_a', 'option_b', 'option_c', 'option_d'];
-          options.forEach(opt => {
-            const urduField = `${opt}_ur`;
-            if (question[urduField]) {
-              if (isBi) {
-                (translatedQuestion as any)[`${opt}_english`] = question[opt];
-                (translatedQuestion as any)[`${opt}_urdu`] = question[urduField];
-              } else {
-                translatedQuestion[opt] = question[urduField];
-              }
+        // Translate MCQ options if they exist
+        const options = ['option_a', 'option_b', 'option_c', 'option_d'];
+        options.forEach(opt => {
+          const urduField = `${opt}_ur` as keyof QuestionWithOptions;
+          if (question[urduField]) {
+            if (isBi) {
+              (translatedQuestion as any)[`${opt}_english`] = question[opt as keyof QuestionWithOptions];
+              (translatedQuestion as any)[`${opt}_urdu`] = question[urduField];
+            } else {
+              (translatedQuestion as any)[opt] = question[urduField];
             }
-          });
-        }
+          }
+        });
       }
       
       return translatedQuestion;
     });
   }, []);
 
-  // Cancel any ongoing requests
-  const cancelPendingRequests = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    
-    if (fetchTimeoutRef.current) {
-      clearTimeout(fetchTimeoutRef.current);
-      fetchTimeoutRef.current = null;
-    }
-  }, []);
-
-  // Fetch questions for all types with proper debouncing
   const fetchQuestions = useCallback(async () => {
-    if (!subjectId || !classId) {
-      console.log('Missing subjectId or classId:', { subjectId, classId });
+    if (fetchInProgressRef.current) {
+      console.log('Fetch already in progress, skipping...');
       return;
     }
 
-    const chapterIds = getChapterIdsToUse();
-    
-    // Create a unique key for this fetch request
+    if (!subjectId || !classId) {
+      console.log('Missing subjectId or classId');
+      return;
+    }
+
+    if (chapterIds.length === 0) {
+      console.log('No chapters selected');
+      setError('Please select at least one chapter');
+      setQuestions({});
+      return;
+    }
+
     const fetchKey = JSON.stringify({
       subjectId,
       classId,
@@ -361,50 +332,33 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
       questionTypes: questionTypes.map(t => t.value).sort()
     });
 
-    // If we're already fetching with the same parameters, skip
-    if (lastFetchParamsRef.current === fetchKey) {
-      console.log('Skipping duplicate fetch request');
+    if (prevFetchParamsRef.current === fetchKey && fetchAttemptsRef.current > 0) {
+      console.log('Skipping duplicate fetch request with same parameters');
       return;
     }
 
-    console.log('Fetching questions with:', {
+    console.log('Fetching questions...', {
       subjectId,
       classId,
-      chapterIds: chapterIds.length,
-      chapterOption,
+      chapterCount: chapterIds.length,
       language,
       source_type,
-      questionTypes: questionTypes.map(t => t.value)
+      fetchAttempt: fetchAttemptsRef.current + 1
     });
-
-    if (chapterIds.length === 0) {
-      console.log('No chapters selected');
-      setError('Please select at least one chapter');
-      setQuestions({});
-      return;
-    }
-
-    // Cancel any pending requests
-    cancelPendingRequests();
-
-    // Create new abort controller
-    abortControllerRef.current = new AbortController();
-    lastFetchParamsRef.current = fetchKey;
 
     try {
       setIsLoading(true);
       setError(null);
+      fetchInProgressRef.current = true;
+      fetchAttemptsRef.current++;
+      prevFetchParamsRef.current = fetchKey;
       
-      const result: Record<string, Question[]> = {};
+      const result: Record<string, QuestionWithOptions[]> = {};
       
-      // Fetch questions for each type with delay to avoid overloading
-      for (let i = 0; i < questionTypes.length; i++) {
-        const type = questionTypes[i];
-        
-        // Add small delay between requests
-        if (i > 0) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
+      const typesToFetch = activeTypes.length > 0 ? activeTypes : questionTypes;
+      
+      for (let i = 0; i < typesToFetch.length; i++) {
+        const type = typesToFetch[i];
         
         try {
           console.log(`Fetching ${type.value} questions...`);
@@ -422,8 +376,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
               random: false,
               shuffle: false
             },
-            signal: abortControllerRef.current?.signal,
-            timeout: 30000 // 30 second timeout
+            timeout: 30000
           });
           
           const questionsForType = response.data || [];
@@ -435,66 +388,47 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
             result[type.value] = [];
           }
         } catch (err) {
-          if (axios.isCancel(err)) {
-            console.log(`Fetch for ${type.value} was cancelled`);
-          } else {
-            console.error(`Error fetching ${type.value} questions:`, err);
-            result[type.value] = [];
-          }
+          console.error(`Error fetching ${type.value} questions:`, err);
+          result[type.value] = [];
         }
       }
       
-      console.log('All questions fetched:', Object.keys(result).map(k => `${k}: ${result[k].length}`));
+      console.log('Fetch completed successfully');
+      console.log('Questions summary:', Object.keys(result).map(k => `${k}: ${result[k].length}`));
+      
       setQuestions(result);
       
-      // If no questions found, show error
       const totalQuestions = Object.values(result).reduce((sum, arr) => sum + arr.length, 0);
       if (totalQuestions === 0) {
         setError('No questions found for the selected criteria. Please try different chapters or filters.');
       }
+      
     } catch (err) {
-      if (axios.isCancel(err)) {
-        console.log('Fetch request was cancelled');
-      } else {
-        console.error('Error fetching questions:', err);
-        setError('Failed to load questions. Please try again.');
-        setQuestions({});
-      }
+      console.error('Error in fetchQuestions:', err);
+      setError('Failed to load questions. Please try again.');
+      setQuestions({});
     } finally {
       setIsLoading(false);
-      abortControllerRef.current = null;
+      fetchInProgressRef.current = false;
     }
   }, [
     subjectId,
     classId,
-    getChapterIdsToUse,
+    chapterIds,
     language,
     source_type,
     questionTypes,
     handleLanguageTranslation,
-    chapterOption,
-    cancelPendingRequests
+    activeTypes
   ]);
 
-  // Debounced fetch function
-  const debouncedFetchQuestions = useCallback(() => {
-    if (fetchTimeoutRef.current) {
-      clearTimeout(fetchTimeoutRef.current);
-    }
-    
-    fetchTimeoutRef.current = setTimeout(() => {
-      fetchQuestions();
-    }, 300); // 300ms debounce
-  }, [fetchQuestions]);
-
-  // Fetch questions when component mounts or dependencies change
   useEffect(() => {
     if (subjectId && classId && subjectChapters.length > 0) {
-      debouncedFetchQuestions();
+      console.log('Triggering initial fetch...');
+      fetchQuestions();
     }
     
     return () => {
-      cancelPendingRequests();
       if (autoAdvanceTimerRef.current) {
         clearTimeout(autoAdvanceTimerRef.current);
       }
@@ -502,9 +436,8 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         clearTimeout(completionTimerRef.current);
       }
     };
-  }, [subjectId, classId, debouncedFetchQuestions, subjectChapters.length, cancelPendingRequests]);
+  }, [subjectId, classId, fetchQuestions, subjectChapters.length]);
 
-  // Adjust selection when required counts change
   useEffect(() => {
     setSelected(prev => {
       const newSelected = { ...prev };
@@ -522,17 +455,14 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     });
   }, [requiredCounts]);
 
-  // Toggle question selection
   const toggleQuestionSelection = useCallback((questionId: string, type: string) => {
     setSelected(prev => {
       const newSelected = { ...prev };
       if (!newSelected[type]) newSelected[type] = [];
       
       if (newSelected[type].includes(questionId)) {
-        // Remove if already selected
         newSelected[type] = newSelected[type].filter(id => id !== questionId);
       } else {
-        // Add if not at limit
         const maxCount = requiredCounts[type] || Infinity;
         if (newSelected[type].length < maxCount) {
           newSelected[type] = [...newSelected[type], questionId];
@@ -542,18 +472,14 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     });
   }, [requiredCounts]);
 
-  // Filter questions based on selected filters
   const filteredQuestions = useMemo(() => {
-    const allFiltered: Record<string, Question[]> = {};
+    const allFiltered: Record<string, QuestionWithOptions[]> = {};
     
     questionTypes.forEach(type => {
       const typeQuestions = questions[type.value] || [];
       
       allFiltered[type.value] = typeQuestions.filter(q => {
-        // Filter by difficulty
         const matchesDifficulty = filters.difficulty === 'all' || q.difficulty === filters.difficulty;
-        
-        // Filter by chapter
         const matchesChapter = filters.chapter === 'all' || q.chapter_id === filters.chapter;
         
         return matchesDifficulty && matchesChapter;
@@ -563,7 +489,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     return allFiltered;
   }, [questions, filters, questionTypes]);
 
-  // Shuffle questions for a specific type
   const shuffleQuestions = async (type: string) => {
     setIsShuffling(true);
     
@@ -573,7 +498,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
       return;
     }
     
-    // Shuffle all available questions
     const shuffled = [...availableQuestions]
       .map(q => q.id)
       .sort(() => Math.random() - 0.5);
@@ -588,7 +512,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     setIsShuffling(false);
   };
 
-  // Shuffle all types
   const shuffleAll = async () => {
     setIsShuffling(true);
     
@@ -610,7 +533,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     setIsShuffling(false);
   };
 
-  // Navigation between types
   const handlePreviousType = () => {
     if (currentTypeIndex > 0) {
       if (autoAdvanceTimerRef.current) {
@@ -629,12 +551,10 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
       }
       setCurrentTypeIndex(currentTypeIndex + 1);
     } else {
-      // If we're on the last type and user clicks next, complete
       onAllComplete();
     }
   };
 
-  // Select all for current type
   const selectAllForCurrentType = () => {
     if (!activeTypes[currentTypeIndex]) return;
     
@@ -652,7 +572,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     }));
   };
 
-  // Clear all for current type
   const clearAllForCurrentType = () => {
     if (!activeTypes[currentTypeIndex]) return;
     
@@ -663,7 +582,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     }));
   };
 
-  // Manually proceed to next step
   const handleProceed = () => {
     if (completionTimerRef.current) {
       clearTimeout(completionTimerRef.current);
@@ -671,11 +589,56 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     onAllComplete();
   };
 
-  // Refresh questions
   const refreshQuestions = () => {
-    // Clear the last fetch params to force a new fetch
-    lastFetchParamsRef.current = '';
+    fetchInProgressRef.current = false;
+    prevFetchParamsRef.current = '';
+    fetchAttemptsRef.current = 0;
     fetchQuestions();
+  };
+
+  const hasMcqOptions = (question: QuestionWithOptions): boolean => {
+    return !!(question.option_a || question.option_b || question.option_c || question.option_d);
+  };
+
+  const getMcqOptionText = (question: QuestionWithOptions, optionKey: string): { english: string, urdu: string } => {
+    const baseOption = question[`${optionKey}` as keyof QuestionWithOptions] as string || '';
+    
+    if (language === 'english') {
+      return { english: baseOption, urdu: '' };
+    } else if (language === 'urdu') {
+      const urduField = `${optionKey}_ur` as keyof QuestionWithOptions;
+      const urduText = question[urduField] as string || baseOption;
+      return { english: '', urdu: urduText };
+    } else if (language === 'bilingual') {
+      const englishField = `${optionKey}_english` as keyof QuestionWithOptions;
+      const urduField = `${optionKey}_urdu` as keyof QuestionWithOptions;
+      const englishText = question[englishField] as string || baseOption;
+      const urduText = question[urduField] as string || question[`${optionKey}_ur` as keyof QuestionWithOptions] as string || baseOption;
+      return { english: englishText, urdu: urduText };
+    }
+    
+    return { english: baseOption, urdu: '' };
+  };
+
+  const getQuestionText = (question: QuestionWithOptions) => {
+    if (language === 'english') {
+      return question.question_text || 'No question text available';
+    } else if (language === 'urdu') {
+      return question.question_text_urdu || question.question_text_ur || question.question_text || 'No question text available';
+    } else if (language === 'bilingual') {
+      return {
+        english: question.question_text_english || question.question_text || 'No question text available',
+        urdu: question.question_text_urdu || question.question_text_ur || 'No Urdu text available'
+      };
+    }
+    return question.question_text || 'No question text available';
+  };
+
+  // Custom styles for selected items
+  const selectedStyle: React.CSSProperties = {
+    backgroundColor: '#000',
+    color: '#fff',
+    borderColor: '#000',
   };
 
   return (
@@ -683,6 +646,30 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
       <div className="card-body">
         <h2 className="h4 card-title mb-3">Manual Question Selection</h2>
         
+        {/* Debug panel */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="alert alert-info mb-3">
+            <h6>Debug Info:</h6>
+            <div className="row">
+              <div className="col-md-6">
+                <small>
+                  <strong>Current Type:</strong> {currentType?.value}<br />
+                  <strong>MCQ Questions:</strong> {questions['mcq']?.length || 0}<br />
+                  <strong>Is Loading:</strong> {isLoading ? 'Yes' : 'No'}<br />
+                  <strong>Fetch Attempts:</strong> {fetchAttemptsRef.current}
+                </small>
+              </div>
+              <div className="col-md-6">
+                <small>
+                  <strong>Active Types:</strong> {activeTypes.length}<br />
+                  <strong>Chapters:</strong> {chapterIds.length}<br />
+                  <strong>Language:</strong> {language}
+                </small>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Selection Progress */}
         <div className="card bg-light mb-4">
           <div className="card-body">
@@ -759,12 +746,11 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
             <div className="spinner-border text-primary" role="status">
               <span className="visually-hidden">Loading questions...</span>
             </div>
-            <p className="mt-2">Loading questions... (This may take a moment)</p>
-            <small className="text-muted">Please don't navigate away while questions are loading.</small>
+            <p className="mt-2">Loading questions...</p>
           </div>
         )}
 
-        {/* Filters */}
+        {/* Filters and Question Selection */}
         {!isLoading && activeTypes.length > 0 && (
           <>
             <div className="row mb-4">
@@ -854,7 +840,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                 <div className="list-group" style={{ maxHeight: '500px', overflowY: 'auto' }}>
                   {filteredQuestions[currentType.value]?.length === 0 ? (
                     <div className="text-center py-4">
-                      <p className="text-muted">No questions found for the selected criteria.</p>
+                      <p className="text-muted">No {currentType.label.toLowerCase()} questions found.</p>
                       <button 
                         className="btn btn-outline-primary btn-sm"
                         onClick={refreshQuestions}
@@ -865,13 +851,15 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                   ) : (
                     filteredQuestions[currentType.value]?.map((question, index) => {
                       const isSelected = selected[currentType.value]?.includes(question.id) || false;
+                      const questionText = getQuestionText(question);
                       
                       return (
                         <div
                           key={question.id}
                           className={`list-group-item list-group-item-action ${isSelected ? 'active' : ''}`}
                           onClick={() => toggleQuestionSelection(question.id, currentType.value)}
-                          style={{ cursor: 'pointer' }}
+                          style={isSelected ? selectedStyle : {}}
+                          data-selected={isSelected}
                         >
                           <div className="d-flex align-items-start">
                             <div className="form-check me-3 mt-1">
@@ -881,6 +869,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                                 checked={isSelected}
                                 onChange={() => toggleQuestionSelection(question.id, currentType.value)}
                                 onClick={(e) => e.stopPropagation()}
+                                style={isSelected ? { backgroundColor: '#fff', borderColor: '#fff' } : {}}
                               />
                             </div>
                             <div className="flex-grow-1">
@@ -897,64 +886,117 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                                   {question.chapter_name && (
                                     <span>Chapter: {question.chapter_name}</span>
                                   )}
+                                  {currentType.value === 'mcq' && (
+                                    <span className="badge bg-warning ms-2">MCQ</span>
+                                  )}
                                 </div>
                               </div>
                               
                               {/* Question Text */}
                               <div className="mb-2">
                                 {language === 'english' && (
-                                  <div className="question-text">
-                                    {question.question_text}
+                                  <div className="question-text" style={isSelected ? { color: '#fff' } : {}}>
+                                    {typeof questionText === 'string' ? questionText : questionText.english}
                                   </div>
                                 )}
                                 {language === 'urdu' && (
-                                  <div className="question-text urdu-text" style={{ direction: 'rtl', textAlign: 'right' }}>
-                                    {question.question_text_urdu || question.question_text}
+                                  <div 
+                                    className="question-text urdu-text" 
+                                    style={{ 
+                                      direction: 'rtl', 
+                                      textAlign: 'right',
+                                      ...(isSelected ? { color: '#fff' } : {})
+                                    }}
+                                  >
+                                    {typeof questionText === 'string' ? questionText : questionText.urdu}
                                   </div>
                                 )}
                                 {language === 'bilingual' && (
                                   <div className="bilingual-text">
-                                    <div className="english-version mb-2">
-                                      <strong>English:</strong> {question.question_text_english || question.question_text}
+                                    <div className="english-version mb-2" style={isSelected ? { color: '#fff' } : {}}>
+                                      <strong>English:</strong> {typeof questionText === 'object' ? questionText.english : questionText}
                                     </div>
-                                    <div className="urdu-version" style={{ direction: 'rtl', textAlign: 'right' }}>
-                                      <strong>اردو:</strong> {question.question_text_urdu}
+                                    <div 
+                                      className="urdu-version" 
+                                      style={{ 
+                                        direction: 'rtl', 
+                                        textAlign: 'right',
+                                        ...(isSelected ? { color: '#fff' } : {})
+                                      }}
+                                    >
+                                      <strong>اردو:</strong> {typeof questionText === 'object' ? questionText.urdu : questionText}
                                     </div>
                                   </div>
                                 )}
                               </div>
 
-                              {/* MCQ Options */}
-                              {currentType.value === 'mcq' && question.question_type === 'mcq' && (
+                              {/* MCQ Options - FIXED: English and Urdu in same line for bilingual */}
+                              {currentType.value === 'mcq' && (
                                 <div className="mt-3">
                                   <div className="row g-2">
-                                    {['option_a', 'option_b', 'option_c', 'option_d'].map((option, idx) => {
-                                      const letter = ['A', 'B', 'C', 'D'][idx];
-                                      const optionText = question[option];
-                                      const urduOptionText = question[`${option}_urdu`];
+                                    {['option_a', 'option_b', 'option_c', 'option_d'].map((optionKey, idx) => {
+                                      const { english, urdu } = getMcqOptionText(question, optionKey);
+                                      const hasOptionText = english || urdu;
                                       
-                                      if (!optionText) return null;
+                                      if (!hasOptionText) return null;
+                                      
+                                      const letter = ['A', 'B', 'C', 'D'][idx];
                                       
                                       return (
-                                        <div key={option} className="col-12 col-md-6">
-                                          <div className="border rounded p-2 bg-light">
+                                        <div key={optionKey} className="col-12 col-md-6">
+                                          <div 
+                                            className="border rounded p-2" 
+                                            style={isSelected ? { 
+                                              backgroundColor: '#333', 
+                                              borderColor: '#555',
+                                              color: '#fff'
+                                            } : { backgroundColor: '#f8f9fa' }}
+                                          >
                                             <div className="d-flex align-items-start">
-                                              <span className="badge bg-primary me-2">{letter}</span>
+                                              <span 
+                                                className="badge me-2"
+                                                style={isSelected ? { backgroundColor: '#666' } : { backgroundColor: '#0d6efd' }}
+                                              >
+                                                {letter}
+                                              </span>
                                               <div className="flex-grow-1">
-                                                {language === 'english' && (
-                                                  <span>{optionText}</span>
+                                                {language === 'english' && english && (
+                                                  <span style={isSelected ? { color: '#fff' } : {}}>{english}</span>
                                                 )}
-                                                {language === 'urdu' && (
-                                                  <span className="urdu-text" style={{ direction: 'rtl', display: 'block' }}>
-                                                    {urduOptionText || optionText}
+                                                {language === 'urdu' && urdu && (
+                                                  <span 
+                                                    className="urdu-text" 
+                                                    style={{ 
+                                                      direction: 'rtl', 
+                                                      display: 'block',
+                                                      ...(isSelected ? { color: '#fff' } : {})
+                                                    }}
+                                                  >
+                                                    {urdu}
                                                   </span>
                                                 )}
-                                                {language === 'bilingual' && urduOptionText && (
-                                                  <div>
-                                                    <div>{optionText}</div>
-                                                    <div className="urdu-text" style={{ direction: 'rtl' }}>
-                                                      {urduOptionText}
-                                                    </div>
+                                                {language === 'bilingual' && (
+                                                  <div className="d-flex justify-content-between align-items-center w-100">
+                                                    {english && (
+                                                      <div 
+                                                        className="english-option me-2"
+                                                        style={isSelected ? { color: '#fff' } : {}}
+                                                      >
+                                                        {english}
+                                                      </div>
+                                                    )}
+                                                    {urdu && (
+                                                      <div 
+                                                        className="urdu-option text-end"
+                                                        style={{ 
+                                                          direction: 'rtl',
+                                                          flex: 1,
+                                                          ...(isSelected ? { color: '#fff' } : {})
+                                                        }}
+                                                      >
+                                                        {urdu}
+                                                      </div>
+                                                    )}
                                                   </div>
                                                 )}
                                               </div>
@@ -964,6 +1006,21 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                                       );
                                     })}
                                   </div>
+                                  {!hasMcqOptions(question) && (
+                                    <div 
+                                      className="alert mt-2 py-1"
+                                      style={isSelected ? { 
+                                        backgroundColor: '#444', 
+                                        borderColor: '#666',
+                                        color: '#fff'
+                                      } : {}}
+                                    >
+                                      <small>
+                                        <i className="bi bi-exclamation-triangle me-1"></i> 
+                                        This MCQ question has no options defined.
+                                      </small>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1042,6 +1099,30 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
           </div>
         )}
       </div>
+
+      {/* CSS for selected state */}
+      <style jsx>{`
+        .list-group-item.active {
+          background-color: #000 !important;
+          border-color: #000 !important;
+          color: #fff !important;
+        }
+        
+        .list-group-item.active .badge:not(.bg-primary):not(.bg-success):not(.bg-info):not(.bg-warning) {
+          background-color: #333 !important;
+          color: #fff !important;
+        }
+        
+        .list-group-item.active .text-muted {
+          color: #ddd !important;
+        }
+        
+        .list-group-item.active .alert-warning {
+          background-color: #444 !important;
+          border-color: #666 !important;
+          color: #fff !important;
+        }
+      `}</style>
     </div>
   );
 };
