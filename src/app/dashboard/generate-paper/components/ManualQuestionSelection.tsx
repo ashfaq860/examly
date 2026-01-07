@@ -307,17 +307,17 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
 
   const fetchQuestions = useCallback(async () => {
     if (fetchInProgressRef.current) {
-      console.log('Fetch already in progress, skipping...');
+      ////console.log('Fetch already in progress, skipping...');
       return;
     }
 
     if (!subjectId || !classId) {
-      console.log('Missing subjectId or classId');
+      ////console.log('Missing subjectId or classId');
       return;
     }
 
     if (chapterIds.length === 0) {
-      console.log('No chapters selected');
+      //console.log('No chapters selected');
       setError('Please select at least one chapter');
       setQuestions({});
       return;
@@ -333,11 +333,11 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     });
 
     if (prevFetchParamsRef.current === fetchKey && fetchAttemptsRef.current > 0) {
-      console.log('Skipping duplicate fetch request with same parameters');
+      //console.log('Skipping duplicate fetch request with same parameters');
       return;
     }
 
-    console.log('Fetching questions...', {
+    /*/console.log('Fetching questions...', {
       subjectId,
       classId,
       chapterCount: chapterIds.length,
@@ -345,7 +345,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
       source_type,
       fetchAttempt: fetchAttemptsRef.current + 1
     });
-
+*/
     try {
       setIsLoading(true);
       setError(null);
@@ -361,7 +361,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         const type = typesToFetch[i];
         
         try {
-          console.log(`Fetching ${type.value} questions...`);
+          //console.log(`Fetching ${type.value} questions...`);
           
           const response = await axios.get(`/api/questions`, {
             params: {
@@ -380,7 +380,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
           });
           
           const questionsForType = response.data || [];
-          console.log(`Found ${questionsForType.length} ${type.value} questions`);
+          //console.log(`Found ${questionsForType.length} ${type.value} questions`);
           
           if (questionsForType.length > 0) {
             result[type.value] = handleLanguageTranslation(questionsForType, language);
@@ -393,8 +393,8 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         }
       }
       
-      console.log('Fetch completed successfully');
-      console.log('Questions summary:', Object.keys(result).map(k => `${k}: ${result[k].length}`));
+      //console.log('Fetch completed successfully');
+      //console.log('Questions summary:', Object.keys(result).map(k => `${k}: ${result[k].length}`));
       
       setQuestions(result);
       
@@ -404,7 +404,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
       }
       
     } catch (err) {
-      console.error('Error in fetchQuestions:', err);
+     // console.error('Error in fetchQuestions:', err);
       setError('Failed to load questions. Please try again.');
       setQuestions({});
     } finally {
@@ -424,7 +424,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
 
   useEffect(() => {
     if (subjectId && classId && subjectChapters.length > 0) {
-      console.log('Triggering initial fetch...');
+      //console.log('Triggering initial fetch...');
       fetchQuestions();
     }
     
@@ -634,6 +634,14 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     return question.question_text || 'No question text available';
   };
 
+  // Function to get chapter name for a question
+  const getChapterName = (question: QuestionWithOptions) => {
+    if (question.chapter_name) return question.chapter_name;
+    
+    const chapter = subjectChapters.find(ch => ch.id === question.chapter_id);
+    return chapter ? `Ch. ${chapter.chapterNo}: ${chapter.name}` : 'Unknown Chapter';
+  };
+
   // Custom styles for selected items
   const selectedStyle: React.CSSProperties = {
     backgroundColor: '#000',
@@ -646,59 +654,31 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
       <div className="card-body">
         <h2 className="h4 card-title mb-1">Manual Question Selection</h2>
         
-        {/* Debug panel }
-        {process.env.NODE_ENV === 'development' && (
-          <div className="alert alert-info mb-3">
-            <h6>Debug Info:</h6>
-            <div className="row">
-              <div className="col-md-6">
-                <small>
-                  <strong>Current Type:</strong> {currentType?.value}<br />
-                  <strong>MCQ Questions:</strong> {questions['mcq']?.length || 0}<br />
-                  <strong>Is Loading:</strong> {isLoading ? 'Yes' : 'No'}<br />
-                  <strong>Fetch Attempts:</strong> {fetchAttemptsRef.current}
-                </small>
-              </div>
-              <div className="col-md-6">
-                <small>
-                  <strong>Active Types:</strong> {activeTypes.length}<br />
-                  <strong>Chapters:</strong> {chapterIds.length}<br />
-                  <strong>Language:</strong> {language}
-                </small>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* Debug panel */}
         {/* Selection Progress */}
         <div className="card bg-light mb-2">
           <div className="card-body px-1 pb-0 pt-1">
             <div className="d-flex justify-content-between align-items-center mb-1 d-none d-lg-flex">
-              {/*<h3 className="h6 card-title mb-0">Selection Progress</h3>*/}
-
-                  {/* Progress indicators */}
-            <div className="mb-0">
-              <div className="d-flex flex-wrap gap-2">
-                {activeTypes.map((type, index) => {
-                  const status = getCompletionStatus(type.value);
-                  return (
-                    <div key={type.value} className="d-flex align-items-center">
-                      <div className={`badge ${index === currentTypeIndex ? 'bg-primary' : status.completed ? 'bg-success' : 'bg-secondary'} me-1`}>
-                        {index + 1}
+              <div className="mb-0">
+                <div className="d-flex flex-wrap gap-2">
+                  {activeTypes.map((type, index) => {
+                    const status = getCompletionStatus(type.value);
+                    return (
+                      <div key={type.value} className="d-flex align-items-center">
+                        <div className={`badge ${index === currentTypeIndex ? 'bg-primary' : status.completed ? 'bg-success' : 'bg-secondary'} me-1`}>
+                          {index + 1}
+                        </div>
+                        <small className={index === currentTypeIndex ? 'fw-bold text-primary' : ''}>
+                          {type.label} ({status.progress})
+                          {status.completed && (
+                            <i className="bi bi-check-circle-fill text-success ms-1" style={{ fontSize: '0.8em' }}></i>
+                          )}
+                        </small>
+                        {index < activeTypes.length - 1 && <span className="mx-1">›</span>}
                       </div>
-                      <small className={index === currentTypeIndex ? 'fw-bold text-primary' : ''}>
-                        {type.label} ({status.progress})
-                        {status.completed && (
-                          <i className="bi bi-check-circle-fill text-success ms-1" style={{ fontSize: '0.8em' }}></i>
-                        )}
-                      </small>
-                      {index < activeTypes.length - 1 && <span className="mx-1">›</span>}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-            { /** button grould select alll and shufle all */}
               <div className="btn-group">
                 <button 
                   className="btn btn-outline-primary btn-sm"
@@ -716,8 +696,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                 </button>
               </div>
             </div>
-            
-        
           </div>
         </div>
 
@@ -772,7 +750,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
               </div>
               
               <div className="col-md-6">
-                <label className="form-label mb-0 ">Chapter</label>
+                <label className="form-label mb-0">Chapter</label>
                 <select
                   className="form-select"
                   value={filters.chapter}
@@ -855,6 +833,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                     filteredQuestions[currentType.value]?.map((question, index) => {
                       const isSelected = selected[currentType.value]?.includes(question.id) || false;
                       const questionText = getQuestionText(question);
+                      const chapterName = getChapterName(question);
                       
                       return (
                         <div
@@ -878,7 +857,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                             <div className="flex-grow-1">
                               <div className="d-flex justify-content-between align-items-start mb-1">
                                 <div className="badge bg-secondary me-2">
-                                  Q{index + 1}
+                                  Q.{index + 1}
                                 </div>
                                 <div className="text-muted small">
                                   {question.difficulty && (
@@ -886,9 +865,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                                       {question.difficulty}
                                     </span>
                                   )}
-                                  {question.chapter_name && (
-                                    <span>Chapter: {question.chapter_name}</span>
-                                  )}
+                                  <span className="chapter-name">{chapterName}</span>
                                   {currentType.value === 'mcq' && (
                                     <span className="badge bg-warning ms-2">MCQ</span>
                                   )}
@@ -896,7 +873,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                               </div>
                               
                               {/* Question Text */}
-                              <div className="mb-2">
+                              <div className="mb-0">
                                 {language === 'english' && (
                                   <div className="question-text" style={isSelected ? { color: '#fff' } : {}}>
                                     {typeof questionText === 'string' ? questionText : questionText.english}
@@ -906,8 +883,10 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                                   <div 
                                     className="question-text urdu-text" 
                                     style={{ 
+                                      fontFamily: "'JameelNooriNastaleeqKasheeda', 'Noto Nastaliq Urdu', 'Urdu Typesetting', 'Segoe UI', sans-serif",
                                       direction: 'rtl', 
                                       textAlign: 'right',
+                                      fontSize: '1.1rem',
                                       ...(isSelected ? { color: '#fff' } : {})
                                     }}
                                   >
@@ -916,26 +895,28 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                                 )}
                                 {language === 'bilingual' && (
                                   <div className="bilingual-text">
-                                    <div className="english-version mb-2" style={isSelected ? { color: '#fff' } : {}}>
-                                       {typeof questionText === 'object' ? questionText.english : questionText}
+                                    <div className="english-version mb-0" style={isSelected ? { color: '#fff' } : {}}>
+                                      {typeof questionText === 'object' ? questionText.english : questionText}
                                     </div>
                                     <div 
-                                      className="urdu-version" 
+                                      className="urdu-version urdu-text" 
                                       style={{ 
+                                        fontFamily: "'JameelNooriNastaleeqKasheeda', 'Noto Nastaliq Urdu', 'Urdu Typesetting', 'Segoe UI', sans-serif",
                                         direction: 'rtl', 
                                         textAlign: 'right',
+                                        fontSize: '1.1rem',
                                         ...(isSelected ? { color: '#fff' } : {})
                                       }}
                                     >
-                                       {typeof questionText === 'object' ? questionText.urdu : questionText}
+                                      {typeof questionText === 'object' ? questionText.urdu : questionText}
                                     </div>
                                   </div>
                                 )}
                               </div>
 
-                              {/* MCQ Options - FIXED: English and Urdu in same line for bilingual */}
+                              {/* MCQ Options */}
                               {currentType.value === 'mcq' && (
-                                <div className="mt-3">
+                                <div className="mt-0">
                                   <div className="row g-2">
                                     {['option_a', 'option_b', 'option_c', 'option_d'].map((optionKey, idx) => {
                                       const { english, urdu } = getMcqOptionText(question, optionKey);
@@ -970,8 +951,10 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                                                   <span 
                                                     className="urdu-text" 
                                                     style={{ 
+                                                      fontFamily: "'JameelNooriNastaleeqKasheeda', 'Noto Nastaliq Urdu', 'Urdu Typesetting', 'Segoe UI', sans-serif",
                                                       direction: 'rtl', 
                                                       display: 'block',
+                                                      fontSize: '1.05rem',
                                                       ...(isSelected ? { color: '#fff' } : {})
                                                     }}
                                                   >
@@ -990,10 +973,12 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                                                     )}
                                                     {urdu && (
                                                       <div 
-                                                        className="urdu-option text-end"
+                                                        className="urdu-option text-end urdu-text"
                                                         style={{ 
+                                                          fontFamily: "'JameelNooriNastaleeqKasheeda', 'Noto Nastaliq Urdu', 'Urdu Typesetting', 'Segoe UI', sans-serif",
                                                           direction: 'rtl',
                                                           flex: 1,
+                                                          fontSize: '1.05rem',
                                                           ...(isSelected ? { color: '#fff' } : {})
                                                         }}
                                                       >
@@ -1103,8 +1088,22 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         )}
       </div>
 
-      {/* CSS for selected state */}
+      {/* CSS for selected state and Urdu font */}
       <style jsx>{`
+        @font-face {
+          font-family: 'JameelNooriNastaleeqKasheeda';
+          src: url('/fonts/JameelNooriNastaleeqKasheeda.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+        
+        .urdu-text {
+          font-family: 'JameelNooriNastaleeqKasheeda', 'Noto Nastaliq Urdu', 'Urdu Typesetting', 'Segoe UI', sans-serif;
+          font-size: 1.1rem;
+          line-height: 1.6;
+        }
+        
         .list-group-item.active {
           background-color: #1BA79A !important;
           border-color: #08408D !important;
@@ -1124,6 +1123,31 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
           background-color: #CFF4FC !important;
           border-color: #666 !important;
           color: #000 !important;
+        }
+        
+        .chapter-name {
+          font-size: 0.85rem;
+          color: #6c757d;
+        }
+        
+        .list-group-item.active .chapter-name {
+          color: #000 !important;
+          font-weight: 500;
+        }
+        
+        .question-text {
+          font-size: 1rem;
+          line-height: 1.5;
+          margin-bottom: 0.5rem;
+        }
+        
+        .spinning {
+          animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
       `}</style>
     </div>

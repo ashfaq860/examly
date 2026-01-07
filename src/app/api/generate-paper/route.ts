@@ -35,9 +35,9 @@ async function getPuppeteerBrowser() {
   }
 
   const launchBrowser = async () => {
-    console.log('🚀 Launching Puppeteer browser...');
-    console.log('Environment:', process.env.NODE_ENV);
-    console.log('Vercel:', !!process.env.VERCEL);
+    ////console.log('🚀 Launching Puppeteer browser...');
+    ////console.log('Environment:', process.env.NODE_ENV);
+    ////console.log('Vercel:', !!process.env.VERCEL);
 
     try {
       // Enhanced Chromium configuration for serverless environment
@@ -84,40 +84,40 @@ async function getPuppeteerBrowser() {
 
       // Use @sparticuz/chromium in production, system Chrome in development
       if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
-        console.log('🔧 Configuring Chromium for production...');
+        ////console.log('🔧 Configuring Chromium for production...');
         
         // Configure Chromium for Vercel
         launchOptions.executablePath = await chromium.executablePath();
         launchOptions.defaultViewport = chromium.defaultViewport;
         
-        console.log('✅ Using @sparticuz/chromium for production');
+        ////console.log('✅ Using @sparticuz/chromium for production');
       } else {
-        console.log('🔧 Configuring for development...');
+        ////console.log('🔧 Configuring for development...');
         const chromePath = getChromePath();
         if (chromePath) {
           launchOptions.executablePath = chromePath;
-          console.log('✅ Using local Chrome:', chromePath);
+          ////console.log('✅ Using local Chrome:', chromePath);
         } else {
           console.warn('⚠️ No local Chrome found, using system default');
         }
       }
 
-      console.log('🔄 Launching browser with options...');
-      console.log('Executable path:', launchOptions.executablePath);
+      ////console.log('🔄 Launching browser with options...');
+      ////console.log('Executable path:', launchOptions.executablePath);
       
       const browser = await puppeteer.launch(launchOptions);
       
-      console.log('✅ Browser launched successfully');
+      ////console.log('✅ Browser launched successfully');
       
       // Set up cleanup on disconnect
       browser.on('disconnected', () => {
-        console.log('🔌 Browser disconnected, clearing instance');
+        ////console.log('🔌 Browser disconnected, clearing instance');
         browserPromise = null;
       });
       
       return browser;
     } catch (error) {
-      console.error('❌ Failed to launch puppeteer:', error);
+     // console.error('❌ Failed to launch puppeteer:', error);
       browserPromise = null;
       throw new Error(`PDF generation unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -318,16 +318,16 @@ async function findQuestionsWithFallback(
   count: number,
   randomSeed?: number
 ) {
-  console.log(`\n🔍 Finding ${count} ${type} questions...`);
-  console.log(`📋 Filters: subject=${subjectId}, class=${classId}, chapters=${chapterIds.length}, source_type=${source_type}, difficulty=${difficulty}`);
-  console.log(`🎯 Selected Chapter IDs:`, chapterIds);
+  ////console.log(`\n🔍 Finding ${count} ${type} questions...`);
+  ////console.log(`📋 Filters: subject=${subjectId}, class=${classId}, chapters=${chapterIds.length}, source_type=${source_type}, difficulty=${difficulty}`);
+  ////console.log(`🎯 Selected Chapter IDs:`, chapterIds);
   
   // Map source_type to database values
   const dbSourceType = source_type ? mapSourceType(source_type) : undefined;
   
   // Get class_subject_id for filtering
   const classSubjectId = await getClassSubjectId(classId, subjectId);
-  console.log(`🎯 Class Subject ID: ${classSubjectId}`);
+  ////console.log(`🎯 Class Subject ID: ${classSubjectId}`);
 
   // Build query with proper filtering - ALWAYS start with subject and type
   let query = supabaseAdmin
@@ -338,16 +338,16 @@ async function findQuestionsWithFallback(
 
   // **CRITICAL FIX: Always apply chapter filtering FIRST if chapters are selected**
   if (chapterIds && chapterIds.length > 0) {
-    console.log(`✅ Applying chapter filter: ${chapterIds.length} chapters`);
+    ////console.log(`✅ Applying chapter filter: ${chapterIds.length} chapters`);
     query = query.in('chapter_id', chapterIds);
   } else {
-    console.log('ℹ️ No specific chapters selected, will use class-based filtering');
+    ////console.log('ℹ️ No specific chapters selected, will use class-based filtering');
   }
 
   // **FIX: Apply class filtering through class_subject_id**
   if (classSubjectId) {
     query = query.eq('class_subject_id', classSubjectId);
-    console.log(`✅ Filtering by class_subject_id: ${classSubjectId}`);
+    ////console.log(`✅ Filtering by class_subject_id: ${classSubjectId}`);
   } else {
     console.warn('⚠️ No class_subject_id found, applying alternative class filtering');
     
@@ -360,11 +360,11 @@ async function findQuestionsWithFallback(
 
     if (!chaptersError && relevantChapters && relevantChapters.length > 0) {
       const relevantChapterIds = relevantChapters.map(c => c.id);
-      console.log(`📚 Found ${relevantChapterIds.length} chapters for class ${classId} and subject ${subjectId}`);
+      ////console.log(`📚 Found ${relevantChapterIds.length} chapters for class ${classId} and subject ${subjectId}`);
       
       // If no specific chapters were selected by user, use all relevant chapters
       if (!chapterIds || chapterIds.length === 0) {
-        console.log(`✅ Using ${relevantChapterIds.length} relevant chapters for class filtering`);
+        ////console.log(`✅ Using ${relevantChapterIds.length} relevant chapters for class filtering`);
         query = query.in('chapter_id', relevantChapterIds);
       } else {
         // If user selected specific chapters, ensure they belong to the right class
@@ -372,7 +372,7 @@ async function findQuestionsWithFallback(
           relevantChapters.some(c => c.id === id)
         );
         if (validChapterIds.length > 0) {
-          console.log(`✅ Using ${validChapterIds.length} valid chapters after class validation`);
+          ////console.log(`✅ Using ${validChapterIds.length} valid chapters after class validation`);
           query = query.in('chapter_id', validChapterIds);
         } else {
           console.warn('⚠️ No valid chapters after class validation, using relevant chapters');
@@ -388,21 +388,21 @@ async function findQuestionsWithFallback(
   // Filter by source type if specified and not 'all'
   if (dbSourceType && dbSourceType !== 'all') {
     query = query.eq('source_type', dbSourceType);
-    console.log(`✅ Filtering by source type: ${dbSourceType}`);
+    ////console.log(`✅ Filtering by source type: ${dbSourceType}`);
   }
   
   if (difficulty && difficulty !== 'any') {
     query = query.eq('difficulty', difficulty);
-    console.log(`✅ Filtering by difficulty: ${difficulty}`);
+    ////console.log(`✅ Filtering by difficulty: ${difficulty}`);
   }
 
-  console.log(`🎯 Final query filters applied:`);
-  console.log(`   - Question Type: ${type}`);
-  console.log(`   - Subject: ${subjectId}`);
-  console.log(`   - Chapters: ${chapterIds?.length || 'all'}`);
-  console.log(`   - Class Subject ID: ${classSubjectId || 'none'}`);
-  console.log(`   - Source Type: ${dbSourceType || 'all'}`);
-  console.log(`   - Difficulty: ${difficulty || 'any'}`);
+  ////console.log(`🎯 Final query filters applied:`);
+  ////console.log(`   - Question Type: ${type}`);
+  ////console.log(`   - Subject: ${subjectId}`);
+  ////console.log(`   - Chapters: ${chapterIds?.length || 'all'}`);
+  ////console.log(`   - Class Subject ID: ${classSubjectId || 'none'}`);
+  ////console.log(`   - Source Type: ${dbSourceType || 'all'}`);
+  ////console.log(`   - Difficulty: ${difficulty || 'any'}`);
   
   // Apply randomization using randomSeed
   if (randomSeed) {
@@ -421,10 +421,10 @@ async function findQuestionsWithFallback(
     return [];
   }
 
-  console.log(`📊 Found ${questions?.length || 0} questions after all filters`);
+  ////console.log(`📊 Found ${questions?.length || 0} questions after all filters`);
 
   if (!questions || questions.length === 0) {
-    console.log('❌ No questions found with the applied filters');
+    ////console.log('❌ No questions found with the applied filters');
     
     // Debug: Let's see what's available without filters
     const debugQuery = supabaseAdmin
@@ -435,7 +435,7 @@ async function findQuestionsWithFallback(
       .limit(10);
     
     const { data: debugQuestions } = await debugQuery;
-    console.log('🐛 Debug - Questions available without chapter filter:', debugQuestions);
+    ////console.log('🐛 Debug - Questions available without chapter filter:', debugQuestions);
     
     return [];
   }
@@ -448,17 +448,17 @@ async function findQuestionsWithFallback(
       const x = Math.sin(randomSeed++) * 10000;
       return x - Math.floor(x) - 0.5;
     });
-    console.log(`🔀 Applied randomization with seed: ${randomSeed}`);
+    ////console.log(`🔀 Applied randomization with seed: ${randomSeed}`);
   }
 
   // Take the required number of questions
   const selectedQuestions = finalQuestions.slice(0, count);
   
-  console.log(`✅ Final selection: ${selectedQuestions.length} ${type} questions`);
+  ////console.log(`✅ Final selection: ${selectedQuestions.length} ${type} questions`);
   
   // Log the chapters of selected questions for verification
   const selectedChapters = [...new Set(selectedQuestions.map(q => q.chapter_id))];
-  console.log(`📖 Selected questions come from ${selectedChapters.length} chapters:`, selectedChapters);
+  ////console.log(`📖 Selected questions come from ${selectedChapters.length} chapters:`, selectedChapters);
   
   return selectedQuestions;
 }
@@ -471,8 +471,8 @@ async function getQuestionsForManualSelection(
   source_type: string | undefined,
   difficulty: string | undefined
 ) {
-  console.log(`\n🔍 Getting questions for manual selection...`);
-  console.log(`📋 Filters: subject=${subjectId}, class=${classId}, chapters=${chapterIds.length}, source_type=${source_type}, difficulty=${difficulty}`);
+  ////console.log(`\n🔍 Getting questions for manual selection...`);
+  ////console.log(`📋 Filters: subject=${subjectId}, class=${classId}, chapters=${chapterIds.length}, source_type=${source_type}, difficulty=${difficulty}`);
   
   const dbSourceType = source_type ? mapSourceType(source_type) : undefined;
   const classSubjectId = await getClassSubjectId(classId, subjectId);
@@ -510,7 +510,7 @@ async function getQuestionsForManualSelection(
     return [];
   }
 
-  console.log(`✅ Found ${questions?.length || 0} questions for manual selection`);
+  ////console.log(`✅ Found ${questions?.length || 0} questions for manual selection`);
   return questions || [];
 }
 
@@ -592,7 +592,7 @@ async function incrementPapersGenerated(userId: string) {
     if (updateError) {
       console.error('Error updating papers_generated:', updateError);
     } else {
-      console.log(`✅ Incremented papers_generated to ${newCount} for user ${userId}`);
+      ////console.log(`✅ Incremented papers_generated to ${newCount} for user ${userId}`);
     }
   } catch (error) {
     console.error('Failed to update papers_generated:', error);
@@ -645,7 +645,7 @@ async function saveUserPDF(userId: string, pdfBuffer: Buffer, title: string): Pr
       });
 
     if (uploadError) {
-      console.error('Error uploading PDF:', uploadError);
+    //  console.error('Error uploading PDF:', uploadError);
       throw uploadError;
     }
 
@@ -676,14 +676,14 @@ async function saveUserPDF(userId: string, pdfBuffer: Buffer, title: string): Pr
         .remove(filesToDelete);
 
       if (deleteError) {
-        console.warn('Error deleting old PDFs:', deleteError);
+       // console.warn('Error deleting old PDFs:', deleteError);
         // Don't throw, the new upload succeeded
       } else {
-        console.log(`🗑️ Deleted ${filesToDelete.length} old PDF(s) for user ${userId}`);
+        ////console.log(`🗑️ Deleted ${filesToDelete.length} old PDF(s) for user ${userId}`);
       }
     }
 
-    console.log(`📄 Saved PDF: ${fileName} for user ${userId}`);
+    ////console.log(`📄 Saved PDF: ${fileName} for user ${userId}`);
     return fileName;
   } catch (error) {
     console.error('Error in saveUserPDF:', error);
@@ -779,7 +779,7 @@ await page.close();
       throw uploadError;
     }
 
-    console.log(`🔑 Saved MCQ key: ${fileName} for user ${userId}`);
+    ////console.log(`🔑 Saved MCQ key: ${fileName} for user ${userId}`);
     return fileName;
   } catch (error) {
     console.error('Error in generateAndSaveMCQKey:', error);
@@ -865,7 +865,7 @@ function calculateSectionMarks(
       return sum + customMark;
     }, 0);
     
-    console.log(`📊 MCQ Section marks: ${totalMarks} (${attemptedMcqQuestions.length} questions attempted)`);
+    ////console.log(`📊 MCQ Section marks: ${totalMarks} (${attemptedMcqQuestions.length} questions attempted)`);
     
   } else if (sectionType === 'subjective') {
     // Calculate marks for subjective section (all non-mcq types)
@@ -913,7 +913,7 @@ function calculateSectionMarks(
       return sum + customMark;
     }, 0);
     
-    console.log(`📊 Subjective Section marks: ${totalMarks} (${attemptedQuestions.length} questions attempted)`);
+    ////console.log(`📊 Subjective Section marks: ${totalMarks} (${attemptedQuestions.length} questions attempted)`);
     
   } else if (sectionType === 'short') {
     // Calculate marks for short questions only
@@ -958,7 +958,7 @@ function calculateSectionMarks(
       return sum + customMark;
     }, 0);
     
-    console.log(`📊 ${sectionType} Section marks: ${totalMarks} (${attemptedQuestions.length} questions attempted)`);
+    ////console.log(`📊 ${sectionType} Section marks: ${totalMarks} (${attemptedQuestions.length} questions attempted)`);
   }
   
   return totalMarks;
@@ -1010,13 +1010,14 @@ async function createPaperRecord(requestData: PaperGenerationRequest, userId: st
       throw paperError;
     }
 
-    console.log(`✅ Paper created with ID: ${paper.id}`);
-    console.log(`📊 Paper details:`, {
+    ////console.log(`✅ Paper created with ID: ${paper.id}`);
+    /*///console.log(`📊 Paper details:`, {
       title: paper.title,
       created_by: paper.created_by,
       class_name: paper.class_name+'/'+className,
       subject_name: paper.subject_name+'/'+subjectName
     });
+    */
     return paper;
   } catch (error) {
     console.error('Error creating paper:', error);
@@ -1035,7 +1036,7 @@ async function getUserLogoBase64(userId: string): Promise<string> {
       .single();
 
     if (profileError || !profile?.logo) {
-      console.log('⚠️ No user logo found, using default logo');
+      ////console.log('⚠️ No user logo found, using default logo');
       return loadImageAsBase64('examly.jpg');
     }
 
@@ -1049,7 +1050,7 @@ async function getUserLogoBase64(userId: string): Promise<string> {
     
     // If it's a URL, try to fetch and convert to base64
     try {
-      console.log('🔄 Fetching user logo from URL:', logoUrl);
+      ////console.log('🔄 Fetching user logo from URL:', logoUrl);
       const response = await fetch(logoUrl);
       if (!response.ok) {
         throw new Error(`Failed to fetch logo: ${response.status} ${response.statusText}`);
@@ -1067,7 +1068,7 @@ async function getUserLogoBase64(userId: string): Promise<string> {
       const base64Image = buffer.toString('base64');
       const formattedBase64 = `data:${contentType};base64,${base64Image}`;
       
-      console.log('✅ User logo converted to base64 successfully');
+      ////console.log('✅ User logo converted to base64 successfully');
       return formattedBase64;
       
     } catch (fetchError) {
@@ -1163,7 +1164,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
    removeWatermark
   } = requestData;
 
-  console.log('📋 Received toAttemptValues:', toAttemptValues);
+  ////console.log('📋 Received toAttemptValues:', toAttemptValues);
 
   // Create a map for quick custom marks lookup
   const customMarksMap = new Map();
@@ -1176,13 +1177,13 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   }
 
   // Fetch paper questions with full question data OR use reordered questions from frontend
-  console.log('📋 Fetching paper questions with details...');
+  ////console.log('📋 Fetching paper questions with details...');
   
   let finalQuestions: any[] = [];
 
   // Check if we have reordered questions from frontend
   if (reorderedQuestions) {
-    console.log('🔄 Using reordered questions from frontend preview');
+    ////console.log('🔄 Using reordered questions from frontend preview');
     
     // Combine all questions in the correct order
     let orderNumber = 1;
@@ -1193,11 +1194,11 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
       
       // FIX: Skip empty question types
       if (questions.length === 0) {
-        console.log(`⏭️ Skipping ${type} questions (0 questions provided)`);
+        ////console.log(`⏭️ Skipping ${type} questions (0 questions provided)`);
         return;
       }
       
-      console.log(`🔍 Processing ${questions.length} reordered ${type} questions`);
+      ////console.log(`🔍 Processing ${questions.length} reordered ${type} questions`);
       
       questions.forEach((question: any) => {
         // Determine default marks based on type
@@ -1233,7 +1234,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
       });
     });
     
-    console.log(`✅ Using ${finalQuestions.length} reordered questions from frontend with custom marks`);
+    ////console.log(`✅ Using ${finalQuestions.length} reordered questions from frontend with custom marks`);
   } else {
     // Fallback to database order (existing code)
     const { data: paperQuestions, error: pqError } = await supabaseAdmin
@@ -1270,7 +1271,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     }
 
     finalQuestions = paperQuestions || [];
-    console.log(`✅ Using ${finalQuestions.length} questions from database order`);
+    ////console.log(`✅ Using ${finalQuestions.length} questions from database order`);
   }
 
   // FIX: Check if we have any questions at all
@@ -1278,9 +1279,9 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     throw new Error('No questions found for the generated paper');
   }
 
-  console.log(`📊 Final question order for PDF generation:`);
+  ////console.log(`📊 Final question order for PDF generation:`);
   finalQuestions.forEach((pq: any, index: number) => {
-    console.log(`${index + 1}. Type: ${pq.question_type}, Order: ${pq.order_number}, ID: ${pq.question_id}, Marks: ${pq.custom_marks}`);
+    ////console.log(`${index + 1}. Type: ${pq.question_type}, Order: ${pq.order_number}, ID: ${pq.question_id}, Marks: ${pq.custom_marks}`);
   });
 
   // CRITICAL FIX: Calculate section marks using toAttemptValues
@@ -1325,7 +1326,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     toAttemptValues.directInDirect || paper.directInDirect_to_attempt || requestData.directInDirectToAttempt || requestData.directInDirectCount || 0
   );
   
-  console.log('📊 Additional To Attempt Map:', Object.fromEntries(additionalToAttemptMap.entries()));
+  ////console.log('📊 Additional To Attempt Map:', Object.fromEntries(additionalToAttemptMap.entries()));
 
   // Helper function to get toAttempt value for any question type
   const getToAttemptForType = (type: string): number => {
@@ -1386,13 +1387,13 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     additionalToAttemptMap
   );
   
-  console.log('📊 Section marks calculated:', {
+  /*///console.log('📊 Section marks calculated:', {
     mcqSectionMarks,
     subjectiveSectionMarks,
     totalMarks: paper.total_marks,
     mcqPlacement
   });
-
+*/
   // FIXED: Determine time values based on MCQ placement
   const getTimeValues = () => {
     const placement = mcqPlacement || 'separate';
@@ -1413,7 +1414,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   };
 
   const timeValues = getTimeValues();
-  console.log('⏱️ Time values for PDF:', {
+  /*//console.log('⏱️ Time values for PDF:', {
     mcqPlacement: mcqPlacement,
     mcqTime: timeValues.mcqTime,
     mcqTimeDisplayEng: formatTimeForDisplay(timeValues.mcqTime,'eng'),
@@ -1423,7 +1424,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     mcqTimeMinutes: mcqTimeMinutes,
     subjectiveTimeMinutes: subjectiveTimeMinutes
   });
-
+*/
   // Generate HTML content for PDF
   const isUrdu = language === 'urdu';
   const isBilingual = language === 'bilingual';
@@ -1435,7 +1436,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   
   // Check if it's a board paper (model paper)
   const isBoardPaper = paper.paper_type === 'model' || paperType === 'model';
-  console.log(`📋 Paper type: ${paper.paper_type}, isBoardPaper: ${isBoardPaper}`);
+  ////console.log(`📋 Paper type: ${paper.paper_type}, isBoardPaper: ${isBoardPaper}`);
 
   // Load fonts
   const jameelNooriBase64 = loadFontAsBase64('JameelNooriNastaleeqKasheeda.ttf');
@@ -1453,34 +1454,35 @@ const DejaVuSansBase64 = loadFontAsBase64('DejaVuSans.ttf');
   const cachedTranslation = translationCache.get(subjectName);
   if (cachedTranslation) {
     subject_ur = cachedTranslation;
-    console.log('Using cached translation for subject:', subject_ur);
+    ////console.log('Using cached translation for subject:', subject_ur);
   } else {
     const translatedSubject = await translate(subject, { to: 'ur' });
     subject_ur = translatedSubject.text;
     translationCache.set(subjectName, subject_ur);
   }
-  console.log('My new subjects and class Subject and Class for paper generation:', {
+  /*/console.log('My new subjects and class Subject and Class for paper generation:', {
     subject,
     subject_ur,
     paperClass
   });
+  */
   /*
   try {
     // Fetch subject details
-    console.log('Fetching subject details for subject_id:', paper.subject_id);
+    ////console.log('Fetching subject details for subject_id:', paper.subject_id);
     const { data: subjectData, error: subjectError } = await supabaseAdmin
       .from('subjects')
       .select('name')
       .eq('id', paper.subject_id)
       .single();
-console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
+////console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
     if (!subjectError && subjectData) {
       subject = subjectData.name;
       const cachedTranslation = translationCache.get(subject);
-      console.log('subject currently generated paper:',subject);
+      ////console.log('subject currently generated paper:',subject);
       if (cachedTranslation) {
         subject_ur = cachedTranslation;
-        console.log('Using cached translation for subject:', subject_ur);
+        ////console.log('Using cached translation for subject:', subject_ur);
       } else {
         const translatedSubject = await translate(subject, { to: 'ur' });
         subject_ur = translatedSubject.text;
@@ -1492,10 +1494,10 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
       //subject_ur = 'مضمون';
       subject = subjectName;
      const cachedTranslation = translationCache.get(subjectName);
-      //console.log('subject currently generated paper:',subject);
+      //////console.log('subject currently generated paper:',subject);
       if (cachedTranslation) {
         subject_ur = cachedTranslation;
-        console.log('subject not found from papers table:', subject_ur);
+        ////console.log('subject not found from papers table:', subject_ur);
       } else {
         const translatedSubject = await translate(subject, { to: 'ur' });
         subject_ur = translatedSubject.text;
@@ -1535,10 +1537,10 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
   );
 
   // Log the counts for debugging
-  console.log(`📊 Question counts for PDF generation:`);
-  console.log(`   - MCQ Questions: ${mcqQuestions.length}`);
-  console.log(`   - Subjective Questions: ${subjectiveQuestions.length}`);
-  console.log(`   - Total Questions: ${finalQuestions.length}`);
+  ////console.log(`📊 Question counts for PDF generation:`);
+  ////console.log(`   - MCQ Questions: ${mcqQuestions.length}`);
+  ////console.log(`   - Subjective Questions: ${subjectiveQuestions.length}`);
+  ////console.log(`   - Total Questions: ${finalQuestions.length}`);
 
   // Check if there are MCQs
   const hasMCQs = mcqQuestions.length > 0;
@@ -1569,9 +1571,9 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
   const directInDirectQuestions = subjectiveQuestionsByType['directInDirect'] || [];
 
   // Log subjective question types
-  console.log(`📊 Subjective question types:`, Object.keys(subjectiveQuestionsByType));
+  ////console.log(`📊 Subjective question types:`, Object.keys(subjectiveQuestionsByType));
   Object.entries(subjectiveQuestionsByType).forEach(([type, questions]) => {
-    console.log(`   - ${type}: ${questions.length} questions`);
+    ////console.log(`   - ${type}: ${questions.length} questions`);
   });
 
   // FIXED: Get formatted time display
@@ -1699,7 +1701,7 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
     justify-content: space-between;
     align-items: center;
     margin: 0 0;
-     font-size: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '10px' : '12px'}; 
+     font-size: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '10px' : '11px'}; 
     }
     ol li{ font-size:9px; }
     .student-info{ margin-top: 10px; margin-bottom:10px; display: flex; justify-content: space-between;  flex-direction: ${isEnglish ? 'row-reverse' : 'row'}; }
@@ -1752,7 +1754,7 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
    <span class="institute" style="font-size:12px; margin-top:-15px !important">   ${englishTitle} </span>
     </h1>` :`
       <h1 class="eng text-center">
-      ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="60" width="140"/>` : ''} <br/>
+      ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="50" width="140"/>` : ''} <br/>
    <span class="institute">   ${englishTitle} </span>
     </h1>
 `}
@@ -1924,11 +1926,11 @@ ${mcqPlacement==="separate" || mcqPlacement==="two_papers" || mcqPlacement==="th
   
 </div>`;
     } else {
-      console.log('⏭️ No MCQ questions to include in PDF');
+      ////console.log('⏭️ No MCQ questions to include in PDF');
     }
   } else {
     // When there are no MCQs, don't generate the MCQ container at all
-    console.log('⏭️ No MCQs in this paper, skipping MCQ section entirely');
+    ////console.log('⏭️ No MCQs in this paper, skipping MCQ section entirely');
   }
 
 
@@ -2004,7 +2006,7 @@ if (mcqPlacement === "two_papers") {
 
       ` :`
       <h1 class="eng text-center">
-      ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="60" width="140"/>` : ''} <br/>
+      ${logoBase64 ? `<img src="${logoBase64}" class="header-img"  height="50" width="140"/>` : ''} <br/>
    <span class="institute">   ${englishTitle} </span>
     </h1>
 `}
@@ -2087,7 +2089,7 @@ ${mcqPlacement === "three_papers"?``:`
       // Add subjective questions sections
       // BOARD PAPER: Group short questions into 6 per group with "attempt 4" instructions
       if (isBoardPaper) {
-        console.log('📋 Rendering board pattern paper (model paper) with grouped short questions');
+        ////console.log('📋 Rendering board pattern paper (model paper) with grouped short questions');
         let partNumber = 2; // Next part number after short questions
         let questionNumber:number = 1;
         // Part I - Short Questions (grouped)
@@ -2121,12 +2123,12 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
             const totalQuestions = poetryExplanationQuestions.length;
             const totalMarks = (showAttemptAny ? toAttempt : totalQuestions) * marksPerQuestion;
             questionNumber=questionNumber+1;
-            subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+            subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
 
             if (isUrdu || isBilingual) {
               if (showAttemptAny) {
                 subjectiveContent += `
-              <div class="urdu" style="text-align:right; direction:rtl; font-size:14px; font-weight:bold;">
+              <div class="urdu" style="text-align:right; direction:rtl; font-size:13px; font-weight:bold;">
                 <span dir="ltr" style="font-weight:bold; margin-left:4px;">
                   .${questionNumber}
                 </span>
@@ -2135,7 +2137,7 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
             `;
 
               } else {
-                subjectiveContent += `<div class="urdu" style="text-align: right; direction: rtl;  font-size:14px; font-weight:bold;"> 
+                subjectiveContent += `<div class="urdu" style="text-align: right; direction: rtl;  font-size:13px; font-weight:bold;"> 
                 درج ذیل اشعار کی تشریح کریں۔<strong>${questionNumber}.</strong>
                 </div>`;
               }
@@ -2145,7 +2147,7 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
 
                       subjectiveContent += `</div>`;
                   for (let i = 0; i < poetryExplanationQuestions.length; i += 2) {
-              subjectiveContent += `<div class="question-row urdu" style="display:flex;  gap:10px; margin-bottom:5px; ">`;
+              subjectiveContent += `<div class="question-row urdu" style="display:flex;  gap:10px; margin-bottom:2px; ">`;
 
               for (let j = i; j < i + 2 && j < poetryExplanationQuestions.length; j++) {
                 const pq = poetryExplanationQuestions[j];
@@ -2155,7 +2157,7 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
                 const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
                 const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
 
-                let questionDisplayHtml = `<div class="long-question" style="flex:1; font-size:12px; line-height:1.4;">`;
+                let questionDisplayHtml = `<div class="long-question" style="flex:1; font-size:11px; line-height:1.2;">`;
 
               if (isUrdu) {
                   questionDisplayHtml += `
@@ -2200,7 +2202,7 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
  // Get toAttempt value for short questions
             const shortToAttemptValue = getToAttemptForType('short');
             const showAttemptAny = groupAttemptAny < groupQuestions.length;
-       let instructionHtml = '<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">';
+       let instructionHtml = '<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">';
             if (isEnglish || isBilingual) {
               if (showAttemptAny) {
                 instructionHtml += `<div class="eng" style="vertical-align: baseline;"><strong>${questionNumber}.</strong> Write short answers to any ${groupAttemptAny} question(s). (${groupAttemptAny} x ${shortMarksPerQuestion} = ${groupAttemptAny*shortMarksPerQuestion})</div>`;
@@ -2217,7 +2219,7 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
             }
             instructionHtml += '</div>';
            subjectiveContent += `
-              <div class="short-questions ${isUrdu ? 'urdu' : ''}" style="line-height:1.2; font-size:12px;">
+              <div class="short-questions ${isUrdu ? 'urdu' : ''}" style="line-height:1.2; font-size:11px;">
       ${instructionHtml}
   `;
 if (subject === 'urdu' || isUrdu) {
@@ -2233,7 +2235,7 @@ if (subject === 'urdu' || isUrdu) {
       const urduQuestion = formatQuestionText(urduQuestionRaw || englishQuestionRaw || '');
 
       subjectiveContent += `
-        <div class="short-question-item" style="flex:1; line-height:1.5; font-size:12px;">
+        <div class="short-question-item" style="flex:1; line-height:1.2; font-size:11px;">
           <div style="display:flex; align-items:flex-start; gap:5px; direction:rtl; text-align:right;">
             <div style="flex-shrink:0; font-weight:bold;">(${toRoman(j + 1)})</div>
             <div style="flex:1;">${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>
@@ -2255,7 +2257,7 @@ if (subject === 'urdu' || isUrdu) {
     const hasUrdu = hasActualUrduText(urduQuestion);
 
     subjectiveContent += `
-  <div class="short-question-item" style="line-height:1.0; font-size:12px; margin-bottom:0px;">
+  <div class="short-question-item" style="line-height:1.0; font-size:11px; margin-bottom:0px;">
     <div style="display:flex; align-items:flex-start; gap:5px;">
       <!-- English question with number -->
       <div style="flex-shrink:0; font-weight:bold;">(${toRoman(idx + 1)})</div>
@@ -2284,7 +2286,7 @@ if (subject === 'urdu' || isUrdu) {
   `;
           }
         } else {
-          console.log('⏭️ No short questions for board paper');
+          ////console.log('⏭️ No short questions for board paper');
         }
 
         
@@ -2297,7 +2299,7 @@ if (subject === 'urdu' || isUrdu) {
 // ✅ Total marks for translation section
         const translateUrduTotalMarks =(showAttemptAny ? toAttemptForType : translateUrduQuestions.length) * translateUrduMarksPerQuestion;
 
- subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+ subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
          if (isEnglish || isBilingual) {
             if (showAttemptAny) {
               subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline;"><span>${Number(questionNumber)+1 }.</span> Translate any ${toAttemptForType} of the following paragraphs into Urdu. (${toAttemptForType} x ${translateUrduMarksPerQuestion} = ${translateUrduTotalMarks})</div>`;
@@ -2312,7 +2314,7 @@ if (subject === 'urdu' || isUrdu) {
             const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
             const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
             const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
-            let questionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:5px;  line-height:1.4;">';
+            let questionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:2px;  line-height:1.2;">';
             if (isEnglish) {
                 questionDisplayHtml += `<div class="eng" style="width:100%;">
                  <div style="display:flex; align-items:flex-start; gap:6px;">
@@ -2344,7 +2346,7 @@ if (subject === 'urdu' || isUrdu) {
   </div>`;
           }
           
-        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; margin-bottom: 2px; margin-top: 4px; display: flex; flex-direction: column;">`;
+        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; margin-bottom: 2px; margin-top: 2px; display: flex; flex-direction: column;">`;
 
 const longToAttemptValue = getToAttemptForType('long');
 const showAttemptAny = longToAttemptValue < longQuestions.length;
@@ -2386,7 +2388,7 @@ questionNumber=questionNumber+1;
 
   if (isEnglish) {
     longQuestionDisplayHtml += `
-      <div class="eng" style="${subject==='urdu'||subject==='english'||subject==='English'?'vertical-align: baseline; line-height:1.6; font-weight:bold':''}; width:100%;">
+      <div class="eng" style="${subject==='urdu'||subject==='english'||subject==='English'?'vertical-align: baseline; line-height:1.2; font-weight:bold':''}; width:100%;">
         <div style="display:flex; align-items:flex-start; gap:5px;">
           <div style="flex-shrink:0;"><strong>${subject==='urdu'||subject==='english'||subject==='English' ? questionNumber : `Q.${idx + 1}`}.</strong></div>
           <div style="flex:1;">${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>
@@ -2396,7 +2398,7 @@ questionNumber=questionNumber+1;
   } else if (isUrdu) {
     longQuestionDisplayHtml += `
       <div class="urdu" style="width:100%; direction:rtl; text-align:right;">
-        <div style="display:flex; align-items:flex-start; gap:5px; ${subject==='urdu'?' font-size:14px; font-weight:bold; line-height:1.6;':''}">
+        <div style="display:flex; align-items:flex-start; gap:5px; ${subject==='urdu'?' font-size:13px; font-weight:bold; line-height:1.2;':''}">
           <div style="flex-shrink:0;"><strong>${subject==='urdu' ? questionNumber : `سوال ${idx + 1}`}.</strong></div>
           <div style="flex:1;">${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>
         </div>
@@ -2428,7 +2430,7 @@ questionNumber=questionNumber+1;
 });
 
         } else {
-          console.log('⏭️ No long questions for board paper');
+          ////console.log('⏭️ No long questions for board paper');
         }
         
         // Additional Urdu/English question types for board paper
@@ -2449,7 +2451,7 @@ const proseExplanationTotalMarks =
   (showAttemptAny ? toAttemptForType : proseExplanationQuestions.length) *
   proseExplanationMarksPerQuestion;
 
-   subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+   subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
           if (isUrdu || isBilingual) {
             if (showAttemptAny) {
               subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;">  <span dir="ltr" style="font-weight:bold; margin-left:4px;">
@@ -2479,7 +2481,7 @@ const proseExplanationTotalMarks =
    if (isUrdu) {
     questionDisplayHtml += `
       <div class="urdu" style="width:100%; direction:rtl; text-align:justify;">
-        <div style="display:flex; align-items:flex-start; gap:5px; font-size:12px; line-height:1.4;">
+        <div style="display:flex; align-items:flex-start; gap:5px; font-size:11px; line-height:1.2;">
           <div style="flex-shrink:0;"><strong>(${toRoman(idx + 1)})</strong></div>
           <div style="flex:1;">${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>
         </div>
@@ -2505,7 +2507,7 @@ const proseExplanationTotalMarks =
 // ✅ Total marks for translation section
         const translateUrduTotalMarks =(showAttemptAny ? toAttemptForType : translateUrduQuestions.length) * translateUrduMarksPerQuestion;
 
-        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
          if (isUrdu || isBilingual) {
             if (showAttemptAny) {
               subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;">
@@ -2535,7 +2537,7 @@ const proseExplanationTotalMarks =
     const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
 
     subjectiveContent += `
-      <div class="urdu" style="flex:1; font-size:12px; line-height:1.4;">
+      <div class="urdu" style="flex:1; font-size:11px; line-height:1.2;">
         <div style="display:flex; align-items:flex-start; gap:5px; ">
           
           <!-- Question Number -->
@@ -2567,12 +2569,12 @@ const proseExplanationTotalMarks =
           const showAttemptAny = toAttemptForType > 0 && toAttemptForType < sentenceCompletionQuestions.length;
           // ✅ Marks per translation question (safe global)
           questionNumber  = questionNumber+1;
-         console.log('📝 sentenceCompletionQuestions:', sentenceCompletionQuestions);
+         ////console.log('📝 sentenceCompletionQuestions:', sentenceCompletionQuestions);
         const translateUrduMarksPerQuestion = translateUrduQuestions[0]?.custom_marks ?? translate_urduMarks;
 // ✅ Total marks for translation section
         const translateUrduTotalMarks =(showAttemptAny ? toAttemptForType : translateUrduQuestions.length) * translateUrduMarksPerQuestion;
 
-        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
          if (isUrdu || isBilingual) {
             if (showAttemptAny) {
               subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;"> 
@@ -2603,7 +2605,7 @@ const proseExplanationTotalMarks =
     const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
 
     subjectiveContent += `
-      <div class="urdu" style="flex:1; font-size:11px; line-height:1.4;">
+      <div class="urdu" style="flex:1; font-size:11px; line-height:1.2;">
         <div style="display:flex; align-items:flex-start; gap:5px;">
           
           <!-- Question Number -->
@@ -2638,7 +2640,7 @@ const passageMarksPerQuestion =
 // Total marks
 const passageTotalMarks =(showAttemptAny ? toAttemptForType : passageQuestions.length) * passageMarksPerQuestion;
 
-        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
           if (isEnglish || isBilingual) {
             if (showAttemptAny) {
               subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline;"><span>${questionNumber}. </span>Read the following passage carefully and answer the questions given at the end. (${showAttemptAny ? toAttemptForType : passageQuestions.length}x${passageMarksPerQuestion}  = ${passageTotalMarks})</div>`;
@@ -2689,7 +2691,7 @@ const translateEnglishTotalMarks =(showAttemptAny ? toAttemptForType : translate
 
           subjectiveContent += `
  
-  <div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">`;
+  <div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
           
           if (isEnglish || isBilingual) {
             if (showAttemptAny) {
@@ -2745,7 +2747,7 @@ const translateEnglishTotalMarks =(showAttemptAny ? toAttemptForType : translate
   const idiomPhrasesTotalMarks = numQuestionsToUse * idiomPhrasesMarksPerQuestion;
 
   subjectiveContent += `
-    <div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">
+    <div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">
   `;
 
   if (isEnglish || isBilingual) {
@@ -2778,7 +2780,7 @@ idiomPhrasesQuestions.forEach((pq: any, idx: number) => {
 
   // Open a new row every 4 questions
   if (idx % 4 === 0) {
-    subjectiveContent += `<div class="idiom-row" style="display:flex; gap:10px; margin-bottom:6px;">`;
+    subjectiveContent += `<div class="idiom-row" style="display:flex; gap:10px; margin-bottom:4px;">`;
   }
 
   let questionDisplayHtml = `
@@ -2826,7 +2828,7 @@ idiomPhrasesQuestions.forEach((pq: any, idx: number) => {
   const activePassiveTotalMarks = numQuestionsToUse * activePassiveMarksPerQuestion;
 
   subjectiveContent += `
-    <div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">
+    <div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">
   `;
 
   if (isEnglish || isBilingual) {
@@ -2858,7 +2860,7 @@ idiomPhrasesQuestions.forEach((pq: any, idx: number) => {
 
   // Open a new row every 3 questions
   if (idx % 3 === 0) {
-    subjectiveContent += `<div class="ap-row" style="display:flex; gap:12px; margin-bottom:6px;">`;
+    subjectiveContent += `<div class="ap-row" style="display:flex; gap:12px; margin-bottom:4px;">`;
   }
 
   let questionDisplayHtml = `
@@ -2919,7 +2921,7 @@ idiomPhrasesQuestions.forEach((pq: any, idx: number) => {
            
            
             if(subject==="urdu" || subject==="English"){
-              console.log(`📝 Rendering long questions for URDU subject`);
+              ////console.log(`📝 Rendering long questions for URDU subject`);
               
             } else {
              
@@ -3066,7 +3068,7 @@ typeQuestions.forEach((pq: any, idx: number) => {
 // end long questionsDecide items per row
           } else {
             // Render as short questions and all other types of questions
-            console.log(`📝 Rendering ${type} questions with toAttempt: ${toAttemptForType}`);
+            ////console.log(`📝 Rendering ${type} questions with toAttempt: ${toAttemptForType}`);
             
             let instructionHtml = '<div style="display:flex;  justify-content:space-between; margin-bottom:0px; font-weight:bold">';
             
@@ -3331,7 +3333,7 @@ typeQuestions.forEach((pq: any, idx: number) => {
       }
       
     } else {
-      console.log('⏭️ No subjective questions to include in PDF');
+      ////console.log('⏭️ No subjective questions to include in PDF');
       // If no subjective questions, still add a message or minimal content
       subjectiveContent += `
       <div style="text-align: center; padding: 40px 0; font-size: 14px; color: #666;">
@@ -3388,7 +3390,7 @@ typeQuestions.forEach((pq: any, idx: number) => {
   `};</div>`;
     }
   } else {
-    console.log('⏭️ No subjective questions and no MCQs - generating empty paper');
+    ////console.log('⏭️ No subjective questions and no MCQs - generating empty paper');
     // If there are no questions at all, generate minimal content
     htmlContent += `
 <div class="container">
@@ -3423,9 +3425,9 @@ async function generatePDFFromHTML(htmlContent: string) {
   let page: Page | null = null;
   
   try {
-    console.log('🔄 Getting Puppeteer browser instance...');
+    ////console.log('🔄 Getting Puppeteer browser instance...');
     browser = await getPuppeteerBrowser();
-    console.log('✅ Browser instance obtained');
+    ////console.log('✅ Browser instance obtained');
     
     // Create page with retry logic
     let retryCount = 0;
@@ -3434,7 +3436,7 @@ async function generatePDFFromHTML(htmlContent: string) {
     while (retryCount < maxRetries) {
       try {
         page = await browser.newPage();
-        console.log('✅ New page created');
+        ////console.log('✅ New page created');
         
         // Check if page is ready
         if (!page || page.isClosed()) {
@@ -3489,7 +3491,7 @@ async function generatePDFFromHTML(htmlContent: string) {
       }
     }
 
-    console.log('🔄 Setting HTML content...');
+    ////console.log('🔄 Setting HTML content...');
     
     // Check if page is still valid
     if (!page || page.isClosed()) {
@@ -3502,7 +3504,7 @@ async function generatePDFFromHTML(htmlContent: string) {
       timeout: 60000
     });
 
-    console.log('✅ HTML content set, waiting for fonts...');
+    ////console.log('✅ HTML content set, waiting for fonts...');
     
     // Wait for fonts to load with timeout
     await Promise.race([
@@ -3510,7 +3512,7 @@ async function generatePDFFromHTML(htmlContent: string) {
       new Promise(resolve => setTimeout(resolve, 10000))
     ]);
 
-    console.log('✅ Fonts loaded, generating PDF...');
+    ////console.log('✅ Fonts loaded, generating PDF...');
     
     const pdfBuffer = await page.pdf({
       format: 'A4',
@@ -3520,7 +3522,7 @@ async function generatePDFFromHTML(htmlContent: string) {
       timeout: 60000
     });
 
-    console.log('✅ PDF generated successfully');
+    ////console.log('✅ PDF generated successfully');
     return pdfBuffer;
     
   } catch (error) {
@@ -3607,13 +3609,13 @@ async function tryRpcRandomQuestions(
     // Try server side RPC first (fast random sampling)
     const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('get_random_questions', params);
     if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
-      console.log(`✅ RPC returned ${rpcData.length} ${qtype} questions`);
+      ////console.log(`✅ RPC returned ${rpcData.length} ${qtype} questions`);
       return rpcData;
     }
     if (rpcError) {
       console.warn('RPC get_random_questions returned error:', rpcError);
     } else {
-      console.log('RPC returned no rows, falling back to DB query');
+      ////console.log('RPC returned no rows, falling back to DB query');
     }
 
     // Fallback: query DB directly with same filters (non-random ordering here; caller may shuffle)
@@ -3658,11 +3660,11 @@ async function tryRpcRandomQuestions(
       return null;
     }
     if (!rows || rows.length === 0) {
-      console.log('Fallback DB query returned no rows');
+      ////console.log('Fallback DB query returned no rows');
       return null;
     }
 
-    console.log(`✅ Fallback DB returned ${rows.length} ${qtype} questions`);
+    ////console.log(`✅ Fallback DB returned ${rows.length} ${qtype} questions`);
     return rows;
   } catch (err) {
     console.warn('tryRpcRandomQuestions failed:', err);
@@ -3672,7 +3674,7 @@ async function tryRpcRandomQuestions(
 
 // Main POST function
 export async function POST(request: Request) {
-  console.log('📄 POST request received to generate paper');
+  ////console.log('📄 POST request received to generate paper');
   
   const startTime = Date.now();
   let paper: any;
@@ -3680,13 +3682,13 @@ export async function POST(request: Request) {
   try {
     // Use the enhanced token extraction
     const token = extractToken(request);
-    console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(-6)}` : 'none');
+    ////console.log('🔐 Token present:', token ? `${token.slice(0,6)}...${token.slice(-6)}` : 'none');
     if (!token) {
       console.warn('No authorization token found in headers or cookies');
       return NextResponse.json({ error: 'Authorization token required' }, { status: 401 });
     }
 
-    console.log('🔐 Token found, verifying user...');
+    ////console.log('🔐 Token found, verifying user...');
 
     // Verify user with better error handling
     const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
@@ -3712,16 +3714,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 401 });
     }
 
-    console.log(`👤 User ${user.id} authenticated successfully`);
-    console.log(`🔐 User auth method: ${user.app_metadata?.provider || 'email'}`);
+    ////console.log(`👤 User ${user.id} authenticated successfully`);
+    ////console.log(`🔐 User auth method: ${user.app_metadata?.provider || 'email'}`);
 
     // Fetch user's profile logo before processing the request
-    console.log('🔄 Fetching user profile logo...');
+    ////console.log('🔄 Fetching user profile logo...');
     const logoBase64 = await getUserLogoBase64(user.id);
-    console.log('✅ User logo processed');
+    ////console.log('✅ User logo processed');
 
     const requestData: PaperGenerationRequest = await request.json();
-    console.log('📋 Request data received:', {
+    /*/console.log('📋 Request data received:', {
       title: requestData.title,
       subjectId: requestData.subjectId,
       classId: requestData.classId,
@@ -3750,7 +3752,7 @@ export async function POST(request: Request) {
       activePassiveCount: requestData.activePassiveCount,
       directInDirectCount: requestData.directInDirectCount
     });
-
+*/
     const { 
       title,
       subjectId,
@@ -3820,22 +3822,22 @@ export async function POST(request: Request) {
         .eq('subject_id', subjectId)
         .eq('class_id', classId);
       chapterIds = chapters?.map(c => c.id) || [];
-      console.log(`📚 Full book chapters found: ${chapterIds.length}`);
+      ////console.log(`📚 Full book chapters found: ${chapterIds.length}`);
     } else if ((chapterOption === 'custom' || chapterOption === 'single_chapter') && selectedChapters && selectedChapters.length > 0) {
       // Handle both custom (multi) and single_chapter (single id in array)
       chapterIds = selectedChapters;
-      console.log(`🎯 Chapters selected (${chapterOption}): ${chapterIds.length}`);
+      ////console.log(`🎯 Chapters selected (${chapterOption}): ${chapterIds.length}`);
     }
 
-    console.log(`🎯 Final chapter IDs to use: ${chapterIds.length}`);
+    ////console.log(`🎯 Final chapter IDs to use: ${chapterIds.length}`);
 
     // FIXED: Manual selection with proper question verification AND reordering
     if (selectionMethod === 'manual' && selectedQuestions) {
-      console.log('🔧 Using manual question selection');
+      ////console.log('🔧 Using manual question selection');
 
       // NEW: Check if we have reordered questions from the frontend
       if (reorderedQuestions) {
-        console.log('🔄 Using reordered questions from preview');
+        ////console.log('🔄 Using reordered questions from preview');
         
         let orderNumber = 1;
         
@@ -3845,11 +3847,11 @@ export async function POST(request: Request) {
           
           // FIX: Skip empty question types
           if (questions.length === 0) {
-            console.log(`⏭️ Skipping ${type} questions (0 questions provided)`);
+            ////console.log(`⏭️ Skipping ${type} questions (0 questions provided)`);
             return;
           }
           
-          console.log(`🔍 Processing ${questions.length} reordered ${type} questions`);
+          ////console.log(`🔍 Processing ${questions.length} reordered ${type} questions`);
           
           for (const question of questions) {
             questionInserts.push({
@@ -3860,11 +3862,11 @@ export async function POST(request: Request) {
             });
           }
           
-          console.log(`✅ Added ${questions.length} reordered ${type} questions`);
+          ////console.log(`✅ Added ${questions.length} reordered ${type} questions`);
         });
       } else {
         // Fallback to original manual selection logic
-        console.log('📝 Using original manual selection (no reordering data)');
+        ////console.log('📝 Using original manual selection (no reordering data)');
         
         const questionTypes = Object.keys(selectedQuestions).map(type => ({
           type: type as QuestionType,
@@ -3878,11 +3880,11 @@ export async function POST(request: Request) {
           
           // FIX: Skip if no questions of this type
           if (qList.length === 0) {
-            console.log(`⏭️ Skipping ${qType.type} questions (0 questions provided)`);
+            ////console.log(`⏭️ Skipping ${qType.type} questions (0 questions provided)`);
             continue;
           }
           
-          console.log(`🔍 Verifying ${qList.length} manually selected ${qType.type} questions`);
+          ////console.log(`🔍 Verifying ${qList.length} manually selected ${qType.type} questions`);
           
           // Verify these questions exist and belong to the correct subject/class
           const { data: existingQuestions, error: verifyError } = await supabaseAdmin
@@ -3901,7 +3903,7 @@ export async function POST(request: Request) {
             continue;
           }
 
-          console.log(`✅ Found ${existingQuestions.length} valid ${qType.type} questions`);
+          ////console.log(`✅ Found ${existingQuestions.length} valid ${qType.type} questions`);
 
           // Insert the valid questions in the order they were selected
           for (const questionId of qList) {
@@ -3916,12 +3918,12 @@ export async function POST(request: Request) {
             }
           }
 
-          console.log(`✅ Added ${existingQuestions.length} manually selected ${qType.type} questions`);
+          ////console.log(`✅ Added ${existingQuestions.length} manually selected ${qType.type} questions`);
         }
       }
     } else {
       // Auto selection logic - FIXED to include Urdu/English question types
-      console.log('🤖 Using auto question selection');
+      ////console.log('🤖 Using auto question selection');
       
       // Define all question types including Urdu/English specific ones
       const questionTypes = [
@@ -3947,7 +3949,7 @@ export async function POST(request: Request) {
       for (const qType of questionTypes) {
         // FIX: Only process if count > 0
         if (qType.count > 0) {
-          console.log(`🔍 Finding ${qType.count} ${qType.type} questions...`);
+          ////console.log(`🔍 Finding ${qType.count} ${qType.type} questions...`);
           
           const questions = await findQuestionsWithFallback(
             qType.type,
@@ -3969,12 +3971,12 @@ export async function POST(request: Request) {
                 question_type: qType.type
               });
             }
-            console.log(`✅ Added ${questions.length} ${qType.type} questions`);
+            ////console.log(`✅ Added ${questions.length} ${qType.type} questions`);
           } else {
             console.warn(`⚠️ No ${qType.type} questions found`);
           }
         } else {
-          console.log(`⏭️ Skipping ${qType.type} questions (count is 0)`);
+          ////console.log(`⏭️ Skipping ${qType.type} questions (count is 0)`);
         }
       }
     }
@@ -3982,7 +3984,7 @@ export async function POST(request: Request) {
     // Get MCQ questions for key generation
     const mcqQuestions = [];
     if (mcqCount > 0) {
-      console.log(`🔍 Finding ${mcqCount} MCQ questions for key generation...`);
+      ////console.log(`🔍 Finding ${mcqCount} MCQ questions for key generation...`);
 
       const mcqResults = await findQuestionsWithFallback(
         'mcq',
@@ -4004,17 +4006,17 @@ export async function POST(request: Request) {
             questions: question
           });
         });
-        console.log(`✅ Found ${mcqQuestions.length} MCQ questions for key generation`);
+        ////console.log(`✅ Found ${mcqQuestions.length} MCQ questions for key generation`);
       } else {
         console.warn(`⚠️ No MCQ questions found for key generation`);
       }
     }
 
     // Generate PDF
-    console.log('🔄 Generating HTML content...');
+    ////console.log('🔄 Generating HTML content...');
     const htmlContent = await generatePaperHTML(paper, user.id, requestData, logoBase64);
 
-    console.log('🔄 Creating PDF from HTML...');
+    ////console.log('🔄 Creating PDF from HTML...');
 
     let pdfBuffer: Buffer;
     try {
@@ -4024,9 +4026,9 @@ export async function POST(request: Request) {
 
       // Fallback for development: create a simple PDF
       if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 Using fallback PDF generation for development...');
+        ////console.log('🔄 Using fallback PDF generation for development...');
         pdfBuffer = await createFallbackPDF(htmlContent, paper.title || 'Paper');
-        console.log('✅ Fallback PDF generated successfully');
+        ////console.log('✅ Fallback PDF generated successfully');
       } else {
         throw pdfError;
       }
@@ -4039,9 +4041,9 @@ export async function POST(request: Request) {
 
     if (isPaidUser) {
       try {
-        console.log('💾 Saving PDF to storage for paid user...');
+        ////console.log('💾 Saving PDF to storage for paid user...');
         pdfPath = await saveUserPDF(user.id, pdfBuffer, paper.title || 'Paper');
-        console.log('✅ PDF saved to storage successfully');
+        ////console.log('✅ PDF saved to storage successfully');
       } catch (storageErr) {
         console.warn('Failed to save PDF to storage:', storageErr);
         // Don't fail the request if storage fails
@@ -4050,9 +4052,9 @@ export async function POST(request: Request) {
       // Generate and save MCQ key if there are MCQ questions
       if (mcqQuestions.length > 0) {
         try {
-          console.log('🔑 Generating MCQ key for paid user...');
+          ////console.log('🔑 Generating MCQ key for paid user...');
           keyPath = await generateAndSaveMCQKey(user.id, paper.id, mcqQuestions, requestData.subjectId, requestData.classId);
-          console.log('✅ MCQ key saved to storage successfully');
+          ////console.log('✅ MCQ key saved to storage successfully');
         } catch (keyErr) {
           console.warn('Failed to generate and save MCQ key:', keyErr);
           // Don't fail the request if key generation fails
@@ -4065,11 +4067,11 @@ export async function POST(request: Request) {
       try {
         const updateData: any = {};
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        console.log('Supabase URL:', supabaseUrl);
+        ////console.log('Supabase URL:', supabaseUrl);
         if (pdfPath) updateData.paperPdf = `${supabaseUrl}/storage/v1/object/public/generated-papers/${pdfPath}`;
         if (keyPath) updateData.paperKey = `${supabaseUrl}/storage/v1/object/public/key/${keyPath}`;
 
-        console.log('Updating paper with:', updateData);
+        ////console.log('Updating paper with:', updateData);
 
         const { error } = await supabaseAdmin
           .from('papers')
@@ -4078,7 +4080,7 @@ export async function POST(request: Request) {
         if (error) {
           console.error('Update error:', error);
         } else {
-          console.log('✅ Updated paper record with PDF and key URLs');
+          ////console.log('✅ Updated paper record with PDF and key URLs');
         }
       } catch (updateErr) {
         console.warn('Failed to update paper with PDF/key URLs:', updateErr);
@@ -4092,7 +4094,7 @@ export async function POST(request: Request) {
       console.warn('Failed to increment papers generated count:', incErr);
     }
 
-    console.log(`✅ Paper generation completed successfully in ${Date.now() - startTime}ms`);
+    ////console.log(`✅ Paper generation completed successfully in ${Date.now() - startTime}ms`);
 
     // Return PDF as response
     return new NextResponse(pdfBuffer, {
@@ -4117,7 +4119,7 @@ export async function POST(request: Request) {
     try {
       if (typeof paper !== 'undefined' && paper?.id) {
         await supabaseAdmin.from('papers').delete().eq('id', paper.id);
-        console.log('✅ Cleaned up paper record after error');
+        ////console.log('✅ Cleaned up paper record after error');
       }
     } catch (cleanupErr) {
       console.warn('Failed to cleanup paper record after error:', cleanupErr);
@@ -4131,7 +4133,7 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   } finally {
-    console.log(`⏱️ Total request time: ${Date.now() - startTime}ms`);
+    ////console.log(`⏱️ Total request time: ${Date.now() - startTime}ms`);
   }
 }
 
