@@ -1437,7 +1437,8 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   const jameelNooriBase64 = loadFontAsBase64('JameelNooriNastaleeqKasheeda.ttf');
   const notoNastaliqBase64 = loadFontAsBase64('NotoNastaliqUrdu-Regular.ttf');
   const algerianBase64 = loadFontAsBase64('Algerian Regular.ttf');
-  const notoSansBase64 = loadFontAsBase64('NotoSans-VariableFont_wdth_wght.ttf');
+  const notoSansBase64 = loadFontAsBase64('NotoSans-Regular.ttf');
+   const notoSansSymbolsBase64 = loadFontAsBase64('NotoSansSymbols2-Regular.ttf');
   let paperClass = '';
   let subject = '';
   let subject_ur = '';
@@ -1601,12 +1602,19 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
       font-weight: normal;
       font-style: normal;
     }
-        @font-face {
-      font-family: 'Noto Sans';
-      src: url('data:font/truetype;charset=utf-8;base64,${notoSansBase64}') format('truetype');
-      font-weight: normal;
-      font-style: normal;
-    }
+       @font-face {
+  font-family: 'Noto Sans';
+  src: url('data:font/ttf;base64,${notoSansBase64}') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Noto Sans Symbols';
+  src: url('data:font/ttf;base64,${notoSansSymbolsBase64}') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Times New Roman, sans-serif; padding: 0px; }
     .container { max-width: 900px; margin: 0 auto; background: white; padding: 0;  }
@@ -1615,15 +1623,33 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
     .header h2 { font-size: 12px; }
     .institute{font-family:algerian; }
     .urdu { font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif; direction: rtl; }
-    .eng { font-family: ${subject==='chemistry'|| subject==='math' || subject==='mathethemetics'?'Noto Sans':'"Times New Roman"'}, serif; direction: ltr;  white-space: pre-line;}
+    .eng {
+  font-family: ${
+    subject === 'chemistry' ||
+    subject === 'math' ||
+    subject === 'mathethemetics'
+      ? "'Noto Sans','Noto Sans Symbols'"
+      : "'Times New Roman','Noto Sans Symbols'"
+  }, serif;
+
+  direction: ltr;
+  white-space: pre-line;
+}
      .options .urdu {
     font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu";
     direction: rtl;
   }
   .options .eng {
-    font-family: ${subject==='chemistry'|| subject==='math' || subject==='mathethemetics'?'Noto Sans':'"Times New Roman, serif"'}, serif;
-    direction: ltr;
-  }
+  font-family: ${
+    subject === 'chemistry' ||
+    subject === 'math' ||
+    subject === 'mathethemetics'
+      ? "'Noto Sans','Noto Sans Symbols'"
+      : "'Times New Roman','Noto Sans Symbols'"
+  }, serif;
+
+  direction: ltr;
+}
   .meta { display: flex; justify-content: space-between; margin: 0 0; font-size: 12px; font-weight:bold;  }
   .metaUrdu, .metaEng {
   display: inline-block;
