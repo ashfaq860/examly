@@ -1621,6 +1621,10 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
   font-style: normal;
   font-display: swap;
 }
+  @font-face {
+  font-family: 'DejaVu Sans';
+  src: url('node_modules/dejavu-fonts-ttf/ttf/DejaVuSans.ttf') format('truetype');
+}
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Times New Roman, sans-serif; padding: 0px; }
     .container { max-width: 900px; margin: 0 auto; background: white; padding: 0;  }
@@ -1634,7 +1638,7 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
     subject === 'chemistry' ||
     subject === 'math' ||
     subject === 'mathethemetics'
-      ? "'Noto Sans','Noto Sans Symbols'"
+      ? "'DejaVu Sans', serif"
       : "'Times New Roman','Noto Sans Symbols'"
   }, serif;
 
@@ -1647,7 +1651,7 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
     subject === 'chemistry' ||
     subject === 'math' ||
     subject === 'mathethemetics'
-      ? "'Noto Sans','Noto Sans Symbols'"
+      ? "DejaVu Sans', serif"
       : "'Times New Roman','Noto Sans Symbols'"
   }, serif;
 
