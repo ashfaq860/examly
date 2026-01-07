@@ -1,11 +1,13 @@
-//dashboard/generated-papers/page.tsx
+// dashboard/generated-papers/page.tsx
 'use client';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import AcademyLayout from '@/components/AcademyLayout';
 import { useUser } from '@/app/context/userContext';
-import { FileText,Download ,Trash2  } from 'lucide-react';
+import { FileText, Download, Trash2 } from 'lucide-react';
+
 export default function GeneratedPapersPage() {
   const supabase = createClientComponentClient();
   const router = useRouter();
@@ -54,8 +56,10 @@ export default function GeneratedPapersPage() {
     }
   };
 
+  /* ================= EFFECT: FETCH ON TRIAL/SUBSCRIPTION ================= */
   useEffect(() => {
-    if (trialStatus && (trialStatus.hasActiveSubscription || trialStatus.isTrial)) {
+    const isTrialActive = trialStatus?.isTrial && new Date(trialStatus.trialEndsAt || 0) > new Date();
+    if (trialStatus && (trialStatus.hasActiveSubscription || isTrialActive)) {
       fetchPapers();
     } else if (trialStatus) {
       setLoading(false);
@@ -65,7 +69,6 @@ export default function GeneratedPapersPage() {
   /* ================= DOWNLOAD PDF ================= */
   const handleDownloadPDF = async (paper: any) => {
     if (!paper.paperPdf) return alert('PDF not found.');
-
     try {
       setDownloadingPdfId(paper.id);
       const response = await fetch(paper.paperPdf);
@@ -91,7 +94,6 @@ export default function GeneratedPapersPage() {
   /* ================= DOWNLOAD KEY ================= */
   const handleDownloadKey = async (paper: any) => {
     if (!paper.paperKey) return alert('Key not found.');
-
     try {
       setDownloadingKeyId(paper.id);
       const response = await fetch(paper.paperKey);
@@ -120,7 +122,6 @@ export default function GeneratedPapersPage() {
 
     try {
       setDeletingId(paper.id);
-
       const res = await fetch('/api/papers/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -152,7 +153,9 @@ export default function GeneratedPapersPage() {
   }
 
   /* ================= RESTRICTED ACCESS ================= */
-  if (trialStatus && !trialStatus.hasActiveSubscription && !trialStatus.isTrial) {
+  const isTrialActive = trialStatus?.isTrial && new Date(trialStatus.trialEndsAt || 0) > new Date();
+
+  if (trialStatus && !trialStatus.hasActiveSubscription && !isTrialActive) {
     return (
       <AcademyLayout>
         <div className="container-fluid text-center py-5">
@@ -216,16 +219,15 @@ export default function GeneratedPapersPage() {
                       <td>
                         {paper.paperPdf ? (
                           <button
-                            className="btn btn-sm btn-outline-success"
+                            className="btn btn-sm btn-outline-success d-flex align-items-center gap-1"
                             disabled={downloadingPdfId === paper.id}
                             onClick={() => handleDownloadPDF(paper)}
-                          > 
-                          
+                          >
                             {downloadingPdfId === paper.id
-                              ? <>Download Paper PDF <span className="spinner-border spinner-border-sm" /></>
-                              : 'Download Paper PDF '}
-                              <FileText color="green" size={20} />
-                              <Download color="green" size={20} />
+                              ? <>Downloading <span className="spinner-border spinner-border-sm" /></>
+                              : 'Download Paper'}
+                            <FileText color="green" size={16} />
+                            <Download color="green" size={16} />
                           </button>
                         ) : '—'}
                       </td>
@@ -234,18 +236,16 @@ export default function GeneratedPapersPage() {
                       <td>
                         {paper.paperKey ? (
                           <button
-                            className="btn btn-sm btn-outline-primary"
+                            className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
                             disabled={downloadingKeyId === paper.id}
                             onClick={() => handleDownloadKey(paper)}
                           >
-                         
                             {downloadingKeyId === paper.id
-                              ? <>Download Key <span className="spinner-border spinner-border-sm" /></>
-                              : 'Download Key '}
-                              <FileText color="blue" size={20} />
-                              <Download color="blue" size={20} />
+                              ? <>Downloading Key <span className="spinner-border spinner-border-sm" /></>
+                              : 'Download Key'}
+                            <FileText color="blue" size={16} />
+                            <Download color="blue" size={16} />
                           </button>
-                          
                         ) : '—'}
                       </td>
 
@@ -254,14 +254,14 @@ export default function GeneratedPapersPage() {
                       {/* Delete */}
                       <td className="text-end">
                         <button
-                          className="btn btn-sm btn-outline-danger"
+                          className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1 justify-content-end"
                           disabled={deletingId === paper.id}
                           onClick={() => handleDeletePaper(paper)}
                         >
                           {deletingId === paper.id
                             ? <span className="spinner-border spinner-border-sm" />
                             : 'Delete'}
-                          <Trash2 color="red" size={20} />
+                          <Trash2 color="red" size={16} />
                         </button>
                       </td>
                     </tr>
