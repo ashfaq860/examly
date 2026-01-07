@@ -27,8 +27,8 @@ export const StepProgress: React.FC<StepProgressProps> = ({ step }) => {
   ];
 
   return (
-    <div className="mb-3">
-      <div className="d-flex justify-content-between align-items-center mb-3 progress-scroll">
+    <div className="mb-1">
+      <div className="d-flex justify-content-between align-items-center mb-1 progress-scroll">
         {steps.map((item, index) => (
           <div key={item.step} className="d-flex flex-column align-items-center position-relative me-4">
             <span>{index+1}</span>
@@ -66,7 +66,7 @@ export const StepProgress: React.FC<StepProgressProps> = ({ step }) => {
         ))}
       </div>
 
-      <div className="text-center">
+      <div className="text-center d-none">
         <small className="text-muted">
           Step {step} of 7 - {stepLabels[step - 1]}
         </small>

@@ -642,9 +642,9 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
   };
 
   return (
-    <div className="card mt-4 step-transition">
+    <div className="card mt-2 step-transition">
       <div className="card-body">
-        <h2 className="h4 card-title mb-3">Manual Question Selection</h2>
+        <h2 className="h4 card-title mb-1">Manual Question Selection</h2>
         
         {/* Debug panel }
         {process.env.NODE_ENV === 'development' && (
@@ -671,30 +671,13 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         )}
         {/* Debug panel */}
         {/* Selection Progress */}
-        <div className="card bg-light mb-4">
-          <div className="card-body">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h3 className="h6 card-title mb-0">Selection Progress</h3>
-              <div className="btn-group">
-                <button 
-                  className="btn btn-outline-primary btn-sm"
-                  onClick={shuffleAll}
-                  disabled={isLoading || isShuffling || activeTypes.length === 0}
-                >
-                  <i className={`bi bi-shuffle me-1 ${isShuffling ? 'spinning' : ''}`}></i> Shuffle All
-                </button>
-                <button 
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={refreshQuestions}
-                  disabled={isLoading}
-                >
-                  <i className="bi bi-arrow-clockwise me-1"></i> Refresh
-                </button>
-              </div>
-            </div>
-            
-            {/* Progress indicators */}
-            <div className="mb-3">
+        <div className="card bg-light mb-2">
+          <div className="card-body px-1 pb-0 pt-1">
+            <div className="d-flex justify-content-between align-items-center mb-1">
+              {/*<h3 className="h6 card-title mb-0">Selection Progress</h3>*/}
+
+                  {/* Progress indicators */}
+            <div className="mb-0">
               <div className="d-flex flex-wrap gap-2">
                 {activeTypes.map((type, index) => {
                   const status = getCompletionStatus(type.value);
@@ -715,12 +698,32 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                 })}
               </div>
             </div>
+            { /** button grould select alll and shufle all */}
+              <div className="btn-group">
+                <button 
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={shuffleAll}
+                  disabled={isLoading || isShuffling || activeTypes.length === 0}
+                >
+                  <i className={`bi bi-shuffle me-1 ${isShuffling ? 'spinning' : ''}`}></i> Shuffle All
+                </button>
+                <button 
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={refreshQuestions}
+                  disabled={isLoading}
+                >
+                  <i className="bi bi-arrow-clockwise me-1"></i> Refresh
+                </button>
+              </div>
+            </div>
+            
+        
           </div>
         </div>
 
         {/* Completion Message */}
         {showCompletionMessage && (
-          <div className="alert alert-success alert-dismissible fade show mb-3" role="alert">
+          <div className="alert alert-success alert-dismissible fade show mb-1" role="alert">
             <i className="bi bi-check-circle-fill me-2"></i>
             <strong>All questions selected!</strong> Automatically proceeding to next step...
             <button 
@@ -734,7 +737,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
 
         {/* Error Message */}
         {error && (
-          <div className="alert alert-danger mb-3" role="alert">
+          <div className="alert alert-danger mb-1" role="alert">
             <i className="bi bi-exclamation-triangle me-2"></i>
             {error}
           </div>
@@ -742,7 +745,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
 
         {/* Loading State */}
         {isLoading && (
-          <div className="text-center py-4">
+          <div className="text-center py-2">
             <div className="spinner-border text-primary" role="status">
               <span className="visually-hidden">Loading questions...</span>
             </div>
@@ -753,9 +756,9 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         {/* Filters and Question Selection */}
         {!isLoading && activeTypes.length > 0 && (
           <>
-            <div className="row mb-4">
+            <div className="row mb-2">
               <div className="col-md-6">
-                <label className="form-label">Difficulty</label>
+                <label className="form-label mb-0">Difficulty</label>
                 <select
                   className="form-select"
                   value={filters.difficulty}
@@ -769,7 +772,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
               </div>
               
               <div className="col-md-6">
-                <label className="form-label">Chapter</label>
+                <label className="form-label mb-0 ">Chapter</label>
                 <select
                   className="form-select"
                   value={filters.chapter}
@@ -788,7 +791,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
             {/* Current Type Selection */}
             {currentType && (
               <div className="mb-4">
-                <div className="d-flex justify-content-between align-items-center mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-1">
                   <div>
                     <h5 className="mb-0">
                       {currentType.label} Questions
@@ -862,7 +865,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                           data-selected={isSelected}
                         >
                           <div className="d-flex align-items-start">
-                            <div className="form-check me-3 mt-1">
+                            <div className="form-check me-3 mt-1 d-none">
                               <input
                                 type="checkbox"
                                 className="form-check-input"

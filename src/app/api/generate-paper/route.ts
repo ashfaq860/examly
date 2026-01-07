@@ -1586,6 +1586,7 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
 <html lang="${isUrdu ? 'ur' : 'en'}">
 <head>
   <meta charset="UTF-8">
+
   <title>${isUrdu ? subject_ur : subject} </title>
    <style>
  
@@ -1623,13 +1624,16 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
   font-style: normal;
   font-display: swap;
 }
-  @font-face {
+@font-face {
   font-family: 'DejaVu Sans';
   src: url('data:font/ttf;base64,${DejaVuSansBase64}') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
 }
+
+
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Times New Roman, sans-serif; padding: 0px; }
     .container { max-width: 900px; margin: 0 auto; background: white; padding: 0;  }
@@ -1644,23 +1648,21 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
     subject === 'math' ||
     subject === 'mathethemetics'
       ? "'DejaVu Sans', serif"
-      : "'Times New Roman','Noto Sans Symbols'"
+      : "'DejaVu Sans', serif"
   }, serif;
 
   direction: ltr;
   white-space: pre-line;
 }
 
-  .options .eng {
+ .options .eng {
   font-family: ${
     subject === 'chemistry' ||
     subject === 'math' ||
     subject === 'mathethemetics'
-      ? "DejaVu Sans', serif"
-      : "'Times New Roman','Noto Sans Symbols'"
-  }, serif;
-
-  direction: ltr;
+      ? "'DejaVu Sans', serif"
+      : "'DejaVu Sans', serif"
+  };
 }
        .options .urdu {
     font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu";
