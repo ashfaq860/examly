@@ -1443,6 +1443,8 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   const algerianBase64 = loadFontAsBase64('Algerian Regular.ttf');
   const notoSansBase64 = loadFontAsBase64('NotoSans-Regular.ttf');
    const notoSansSymbolsBase64 = loadFontAsBase64('NotoSansSymbols2-Regular.ttf');
+const DejaVuSansBase64 = loadFontAsBase64('DejaVuSans.ttf');
+   
   let paperClass = '';
   let subject = '';
   let subject_ur = '';
@@ -1623,7 +1625,10 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
 }
   @font-face {
   font-family: 'DejaVu Sans';
-  src: url('node_modules/dejavu-fonts-ttf/ttf/DejaVuSans.ttf') format('truetype');
+  src: url('data:font/ttf;base64,${DejaVuSansBase64}') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
 }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Times New Roman, sans-serif; padding: 0px; }
