@@ -1611,6 +1611,7 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
   src: url('data:font/ttf;base64,${notoSansBase64}') format('truetype');
   font-weight: normal;
   font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
@@ -1618,6 +1619,7 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
   src: url('data:font/ttf;base64,${notoSansSymbolsBase64}') format('truetype');
   font-weight: normal;
   font-style: normal;
+  font-display: swap;
 }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Times New Roman, sans-serif; padding: 0px; }
