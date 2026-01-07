@@ -16,6 +16,7 @@ interface TrialStatus {
   subscriptionType?: 'paper_pack' | 'subscription' | null;
   subscriptionEndDate?: Date | null;
    message?: string | null;   // <-- added
+  referral_code?: string | null;
 }
 
 interface UserContextType {
@@ -56,7 +57,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           daysRemaining: 0,
           hasActiveSubscription: false,
           papersGenerated: 0,
-          papersRemaining: 0
+          papersRemaining: 0,
+          referral_code: null
         });
         setIsLoading(false);
         return;
@@ -72,7 +74,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             daysRemaining: 0,
             hasActiveSubscription: false,
             papersGenerated: 0,
-            papersRemaining: 0
+            papersRemaining: 0,
+            referral_code: null
           });
           return;
         }
@@ -91,6 +94,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         papersRemaining: trialData.papersRemaining,
         subscriptionName: trialData.subscriptionName,
         subscriptionType: trialData.subscriptionType,
+        referral_code: trialData.referral_code,
         subscriptionEndDate: trialData.subscriptionEndDate ? new Date(trialData.subscriptionEndDate) : null,
         message: trialData.message || null   // <-- added
       });
@@ -103,7 +107,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         daysRemaining: 0,
         hasActiveSubscription: false,
         papersGenerated: 0,
-        papersRemaining: 0
+        papersRemaining: 0,
+        referral_code: null
       });
     } finally {
       setIsLoading(false);

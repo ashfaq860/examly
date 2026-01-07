@@ -334,10 +334,10 @@ export default function AcademyLayout({ children }: any) {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="container-fluid mt-3">
+      <div className="container-fluid mt-0">
         <div className="row">
           {/* Desktop Sidebar */}
-          <div className="col-lg-2 d-none d-lg-block border-end">
+          <div className="col-lg-2 d-none d-lg-block border-end  pt-3">
             <ul className="nav nav-pills flex-column">
               {sidebarLinks.map((item) => (
                 <li key={item.path} className="mb-2">

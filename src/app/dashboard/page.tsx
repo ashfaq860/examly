@@ -2,9 +2,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AcademyLayout from '@/components/AcademyLayout';
-import SubscriptionStatus from '@/components/academy/SubscriptionStatus';
 import StatCard from '@/components/academy/StatCard';
 import ChartCard from '@/components/academy/ChartCard';
+import ReferralSection from '@/components/ReferralSection';
 import { useUser } from '../context/userContext';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import {
@@ -16,9 +16,22 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+
+interface Analytics {
+  totalPapers: number;
+  totalQuestions: number;
+  papersByClass: { class: string; count: number }[];
+  papersBySubject: { subject: string; count: number }[];
+  recentActivity: {
+    id: string;
+    title: string;
+    class: string;
+    subject: string;
+    date: string;
+  }[];
+}
 
 export default function AcademyDashboard() {
   const supabase = createClientComponentClient();
@@ -26,21 +39,22 @@ export default function AcademyDashboard() {
   const { trialStatus, isLoading: trialLoading } = useUser();
 
   const [loading, setLoading] = useState(true);
-  const [analytics, setAnalytics] = useState({
+  const [analytics, setAnalytics] = useState<Analytics>({
     totalPapers: 0,
     totalQuestions: 0,
-    papersByClass: [] as any[],
-    papersBySubject: [] as any[],
-    recentActivity: [] as any[],
+    papersByClass: [],
+    papersBySubject: [],
+    recentActivity: [],
   });
 
-  /* 🚨 Redirect if missing required profile info */
+  // Redirect if trial message exists and no active subscription
   useEffect(() => {
     if (trialStatus?.message && !trialStatus.hasActiveSubscription) {
       router.push('/dashboard/settings');
     }
   }, [trialStatus, router]);
 
+  // Fetch papers and questions for dashboard
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -50,7 +64,7 @@ export default function AcademyDashboard() {
           return;
         }
 
-        /* 🔐 Role Check */
+        // Check user role
         const { data: roleData, error: roleError } = await supabase.rpc(
           'get_user_role',
           { user_id: user.id }
@@ -61,7 +75,7 @@ export default function AcademyDashboard() {
           return;
         }
 
-        // Fetch papers and questions
+        // Fetch questions count and papers
         const [{ count: totalQuestions }, { data: papers }] = await Promise.all([
           supabase.from('questions').select('*', { count: 'exact', head: true }),
           supabase
@@ -70,7 +84,7 @@ export default function AcademyDashboard() {
             .eq('created_by', user.id),
         ]);
 
-        // Calculate Papers by Class
+        // Process papers by class and subject
         const papersByClassMap: Record<string, number> = {};
         const papersBySubjectMap: Record<string, number> = {};
 
@@ -91,7 +105,6 @@ export default function AcademyDashboard() {
           count: papersBySubjectMap[subj],
         }));
 
-        // Recent Activity (latest 5 papers)
         const recentActivity = (papers || [])
           .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           .slice(0, 5)
@@ -111,7 +124,7 @@ export default function AcademyDashboard() {
           recentActivity,
         });
       } catch (error) {
-        console.error('Error fetching academy dashboard:', error);
+        console.error('Error fetching dashboard:', error);
       } finally {
         setLoading(false);
       }
@@ -130,6 +143,7 @@ export default function AcademyDashboard() {
     );
   }
 
+  // Subscription info for cards and referral section
   const subscriptionInfo = trialStatus
     ? {
         type: trialStatus.isTrial ? 'Trial' : trialStatus.subscriptionName || 'Premium',
@@ -140,47 +154,21 @@ export default function AcademyDashboard() {
             : trialStatus.papersRemaining,
         isTrial: trialStatus.isTrial,
         trialDaysLeft: trialStatus.daysRemaining,
+        referralCode: trialStatus.referral_code || '',
       }
     : null;
-
-  // Prepare data for horizontal bar chart
-  const barChartData = {
-    labels: analytics.papersBySubject.map((p: any) => p.subject),
-    datasets: [
-      {
-        label: 'Number of Papers',
-        data: analytics.papersBySubject.map((p: any) => p.count),
-        backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'],
-        borderRadius: 6,
-        barPercentage: 0.6,
-      },
-    ],
-  };
-
-  const barChartOptions = {
-    indexAxis: 'y' as const,
-    responsive: true,
-    plugins: {
-      legend: { display: false },
-      tooltip: { enabled: true },
-      title: { display: false },
-    },
-    scales: {
-      x: { beginAtZero: true, ticks: { precision: 0 } },
-      y: { ticks: { autoSkip: false } },
-    },
-  };
 
   return (
     <AcademyLayout>
       <div className="container-fluid">
+
         {trialStatus?.message && (
           <div className="alert alert-warning mb-4">{trialStatus.message}</div>
         )}
 
-        <SubscriptionStatus />
+        <ReferralSection referralCode={subscriptionInfo?.referralCode || ''} />
 
-        {/* 📊 Stats */}
+        {/* Stats Cards */}
         <div className="row g-4 mb-4">
           <div className="col-md-3">
             <StatCard
@@ -216,9 +204,8 @@ export default function AcademyDashboard() {
           </div>
         </div>
 
-        {/* 📈 Charts */}
+        {/* Charts */}
         <div className="row g-4 mb-4">
-
           {/* Papers by Class */}
           <div className="col-lg-6">
             <ChartCard title="Papers by Class">
@@ -226,12 +213,11 @@ export default function AcademyDashboard() {
                 {analytics.papersByClass.length === 0 ? (
                   <div className="col-12 text-center text-muted py-3">No data available</div>
                 ) : (
-                  analytics.papersByClass.map((item: any, idx: number) => {
+                  analytics.papersByClass.map((item, idx) => {
                     const total = analytics.papersByClass.reduce((sum, i) => sum + i.count, 0);
                     const percentage = total ? ((item.count / total) * 100).toFixed(1) : 0;
                     const colors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'];
                     const color = colors[idx % colors.length];
-
                     return (
                       <div key={item.class} className="m-0">
                         <div className="d-flex justify-content-between fw-semibold mb-1">
@@ -241,11 +227,7 @@ export default function AcademyDashboard() {
                         <div className="progress rounded-pill" style={{ height: '10px', overflow: 'hidden' }}>
                           <div
                             className="progress-bar"
-                            style={{
-                              width: `${percentage}%`,
-                              backgroundColor: color,
-                              transition: 'width 0.6s ease',
-                            }}
+                            style={{ width: `${percentage}%`, backgroundColor: color, transition: 'width 0.6s ease' }}
                           />
                         </div>
                       </div>
@@ -256,52 +238,45 @@ export default function AcademyDashboard() {
             </ChartCard>
           </div>
 
-         {/* Papers by Subject - Vertical Progress Bars */}
-<div className="col-lg-6">
-  <ChartCard title="Papers by Subject">
-    {analytics.papersBySubject.length === 0 ? (
-      <div className="text-center text-muted py-4">No data available</div>
-    ) : (
-      <div className="row g-3">
-        {analytics.papersBySubject.map((item: any, idx: number) => {
-          const total = analytics.papersBySubject.reduce((sum, i) => sum + i.count, 0);
-          const percentage = total ? ((item.count / total) * 100).toFixed(1) : 0;
-          const colors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'];
-          const color = colors[idx % colors.length];
-
-          return (
-            <div key={item.subject} className="m-0 ">
-              <div className="d-flex justify-content-between fw-semibold mb-1">
-                <span>{item.subject}</span>
-                <span>{item.count} ({percentage}%)</span>
-              </div>
-              <div className="progress rounded-pill" style={{ height: '12px', overflow: 'hidden' }}>
-                <div
-                  className="progress-bar"
-                  style={{
-                    width: `${percentage}%`,
-                    backgroundColor: color,
-                    transition: 'width 0.6s ease',
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    )}
-  </ChartCard>
-</div>
-
+          {/* Papers by Subject */}
+          <div className="col-lg-6">
+            <ChartCard title="Papers by Subject">
+              {analytics.papersBySubject.length === 0 ? (
+                <div className="text-center text-muted py-4">No data available</div>
+              ) : (
+                <div className="row g-3">
+                  {analytics.papersBySubject.map((item, idx) => {
+                    const total = analytics.papersBySubject.reduce((sum, i) => sum + i.count, 0);
+                    const percentage = total ? ((item.count / total) * 100).toFixed(1) : 0;
+                    const colors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'];
+                    const color = colors[idx % colors.length];
+                    return (
+                      <div key={item.subject} className="m-0">
+                        <div className="d-flex justify-content-between fw-semibold mb-1">
+                          <span>{item.subject}</span>
+                          <span>{item.count} ({percentage}%)</span>
+                        </div>
+                        <div className="progress rounded-pill" style={{ height: '12px', overflow: 'hidden' }}>
+                          <div
+                            className="progress-bar"
+                            style={{ width: `${percentage}%`, backgroundColor: color, transition: 'width 0.6s ease' }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </ChartCard>
+          </div>
         </div>
 
-        {/* 🕒 Recent Activity */}
+        {/* Recent Activity */}
         <div className="card shadow-sm mt-4">
           <div className="card-header bg-white d-flex align-items-center">
             <i className="bi bi-activity me-2 text-primary fs-5"></i>
             <h5 className="mb-0 fw-semibold">Recent Activity</h5>
           </div>
-
           <div className="card-body p-0">
             {analytics.recentActivity.length === 0 ? (
               <div className="text-center text-muted py-5">
@@ -311,23 +286,20 @@ export default function AcademyDashboard() {
               </div>
             ) : (
               <ul className="list-group list-group-flush">
-                {analytics.recentActivity.map((activity: any) => (
+                {analytics.recentActivity.map((activity) => (
                   <li key={activity.id} className="list-group-item px-3 py-1 activity-item">
                     <div className="row align-items-center g-3">
-
                       <div className="col-auto">
                         <div className="activity-icon bg-primary text-white rounded-circle d-flex align-items-center justify-content-center">
                           <i className="bi bi-file-earmark-text"></i>
                         </div>
                       </div>
-
                       <div className="col-12 col-lg-4">
                         <div className="fw-semibold">Paper Generated</div>
                         <small className="text-muted d-block text-truncate">
                           Institute: {activity.title}
                         </small>
                       </div>
-
                       <div className="col-12 col-lg-4">
                         <div className="d-flex gap-2 flex-wrap">
                           <span className="badge bg-info-subtle text-info rounded-pill">
@@ -340,7 +312,6 @@ export default function AcademyDashboard() {
                           </span>
                         </div>
                       </div>
-
                       <div className="col-12 col-lg-3 text-lg-end">
                         <small className="text-muted">
                           <i className="bi bi-calendar-event me-1"></i>
@@ -351,7 +322,6 @@ export default function AcademyDashboard() {
                           })}
                         </small>
                       </div>
-
                     </div>
                   </li>
                 ))}

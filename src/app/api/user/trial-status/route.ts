@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     // Fetch profile with cellno check
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, created_at, papers_generated, trial_ends_at, trial_given, cellno, subscription_status')
+      .select('id, created_at, papers_generated, trial_ends_at, trial_given, cellno, subscription_status,referral_code')
       .eq('id', userId)
       .maybeSingle();
 
@@ -88,8 +88,9 @@ export async function GET(request: NextRequest) {
   subscriptionEndDate: userPackage?.expires_at ? new Date(userPackage.expires_at) : null,
   hasCellno, // Expose cell number status
   trialEligible: hasCellno && !hasActiveSubscription && !isTrial,
+  referral_code: profile.referral_code || null,
   message: !hasCellno
-    ? "Update your profile with a valid cell number to activate your 6 Months free trial."
+    ? "Update your profile with a valid cell number to activate your 3 Months free trial."
     : null
 });
 

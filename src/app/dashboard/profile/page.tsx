@@ -3,11 +3,23 @@
 
 import { useEffect, useState } from "react";
 import AcademyLayout from "@/components/AcademyLayout";
-import { User, Phone, University, FileText, Calendar, Package as PackageIcon, Clock, Mail, Link as LinkIcon } from "lucide-react";
+import {
+  User,
+  Phone,
+  University,
+  FileText,
+  Calendar,
+  Package as PackageIcon,
+  Clock,
+  Mail,
+  Link as LinkIcon,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import toast, { Toaster } from "react-hot-toast";
-import { Share2, Mail as MailIcon } from "lucide-react";
+
+import ReferralSection from "@/components/ReferralSection";
+
 type Profile = {
   id: string;
   full_name: string | null;
@@ -54,6 +66,7 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<any>(null);
 
+  // Fetch session
   useEffect(() => {
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -76,6 +89,7 @@ export default function ProfilePage() {
     return () => subscription.unsubscribe();
   }, [supabase]);
 
+  // Fetch profile & packages
   useEffect(() => {
     const fetchProfileAndPackages = async () => {
       setLoading(true);
@@ -105,22 +119,20 @@ export default function ProfilePage() {
     if (session) fetchProfileAndPackages();
   }, [session]);
 
+  // Helpers
   const getPackageStatus = (userPackage: UserPackage) => {
     const now = new Date();
     const expiresAt = userPackage.expires_at ? new Date(userPackage.expires_at) : null;
 
-    if (!userPackage.is_active) {
-      return { status: 'pending', label: 'Pending', badgeClass: 'bg-secondary' };
-    }
+    if (!userPackage.is_active) return { status: 'pending', label: 'Pending', badgeClass: 'bg-secondary' };
 
     const isExpiredByDate = expiresAt && expiresAt < now;
-    const isPaperPackEmpty = userPackage.packages.type === 'paper_pack' &&
+    const isPaperPackEmpty =
+      userPackage.packages.type === 'paper_pack' &&
       userPackage.papers_remaining !== null &&
       userPackage.papers_remaining <= 0;
 
-    if (isExpiredByDate || isPaperPackEmpty) {
-      return { status: 'expired', label: 'Expired', badgeClass: 'bg-danger' };
-    }
+    if (isExpiredByDate || isPaperPackEmpty) return { status: 'expired', label: 'Expired', badgeClass: 'bg-danger' };
 
     return { status: 'active', label: 'Active', badgeClass: 'bg-success' };
   };
@@ -143,6 +155,7 @@ export default function ProfilePage() {
     toast.success("Link copied!");
   };
 
+  // Loading
   if (loading) {
     return (
       <AcademyLayout>
@@ -155,12 +168,12 @@ export default function ProfilePage() {
     );
   }
 
+  // Error
   if (error) {
     return (
       <AcademyLayout>
         <div className="alert alert-danger" role="alert">
-          <strong>Error: </strong>
-          {error}
+          <strong>Error: </strong>{error}
         </div>
       </AcademyLayout>
     );
@@ -179,7 +192,7 @@ export default function ProfilePage() {
             fontSize: '2.5rem',
             background: 'linear-gradient(to right, #0d6efd, #6f42c1)',
             WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent'
+            WebkitTextFillColor: 'transparent',
           }}
         >
           My Profile
@@ -209,7 +222,7 @@ export default function ProfilePage() {
                     width: '7rem',
                     height: '7rem',
                     background: 'linear-gradient(to right, #bee3f8, #a3bffa)',
-                    fontSize: '2.5rem'
+                    fontSize: '2.5rem',
                   }}
                 >
                   {profile.full_name ? profile.full_name.charAt(0).toUpperCase() : 'U'}
@@ -291,72 +304,16 @@ export default function ProfilePage() {
                 </div>
                 <div>
                   <div className="text-warning small">Trial Period</div>
-                  <div className="fw-semibold">Your trial ends on {new Date(profile.trial_ends_at).toLocaleDateString()}</div>
+                  <div className="fw-semibold">
+                    Your trial ends on {new Date(profile.trial_ends_at).toLocaleDateString()}
+                  </div>
                 </div>
               </div>
             )}
 
             {/* Referral Section */}
             {profile.referral_code && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="bg-white rounded shadow-sm p-4 mt-4 border border-success"
-              >
-                <h5 className="fw-bold text-success mb-2">
-                  🎁 Invite Friends & Get 1 Month Free
-                </h5>
-                <p className="text-muted mb-3">
-                  Share your referral code or link. When someone signs up using it, you earn <strong>1 month free trial</strong>.
-                </p>
-
-               
-                {/* Share Buttons */}
-                <div className="d-flex align-items-center gap-2 flex-wrap mb-3">
-                  <a
-                    href={`https://wa.me/?text=Join%20using%20my%20referral%20link%20and%20get%201%20month%20free%20trial:%20${encodeURIComponent(getReferralLink())}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-success d-flex align-items-center gap-1"
-                  >
-                     <Share2 size={16} />  Share Via WhatsApp
-                  </a>
-
-                  <a
-                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getReferralLink())}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-primary d-flex align-items-center gap-1"
-                  >
-                    <Share2 size={16} /> Share Via Facebook
-                  </a>
-
-                  <a
-                    href={`mailto:?subject=Join and Get 1 Month Free Trial&body=Sign up using my referral link and get 1 month free trial: ${encodeURIComponent(getReferralLink())}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-outline-secondary d-flex align-items-center gap-1"
-                  >
-                     <Share2 size={16} /> Share via Email <MailIcon size={16} />
-                  </a>
-                </div>
- {/* Code & Link */}
-            
-
-                <div className="d-flex align-items-center gap-3 flex-wrap mb-3">
-                  <div className="px-4 py-2 rounded fw-bold text-dark" style={{ background: "#f1f5f9", fontSize: "1rem" }}>
-                    {getReferralLink()}
-                  </div>
-                  <button className="btn btn-outline-success d-flex align-items-center gap-1" onClick={() => copyToClipboard(getReferralLink())}>
-                    <LinkIcon size={16} /> Copy Link
-                  </button>
-                </div>
-
-                <small className="text-muted d-block mt-2">
-                  Referral code/link can be used by multiple users. You earn rewards every time.
-                </small>
-              </motion.div>
+              <ReferralSection referralCode={profile.referral_code} copyToClipboard={copyToClipboard} />
             )}
           </motion.div>
         )}
@@ -399,7 +356,9 @@ export default function ProfilePage() {
                       <div className="d-flex justify-content-between mb-2">
                         <span>Papers Remaining:</span>
                         <span>
-                          {userPackage.packages.type === 'paper_pack' ? (userPackage.papers_remaining ?? 0) : 'Unlimited'}
+                          {userPackage.packages.type === 'paper_pack'
+                            ? userPackage.papers_remaining ?? 0
+                            : 'Unlimited'}
                         </span>
                       </div>
                       {userPackage.expires_at && (
@@ -411,7 +370,9 @@ export default function ProfilePage() {
                       {daysRemaining !== null && packageStatus.status === 'active' && (
                         <div className="d-flex justify-content-between mb-2">
                           <span>Days Remaining:</span>
-                          <span className={daysRemaining <= 7 ? 'text-danger fw-bold' : 'text-success'}>{daysRemaining}</span>
+                          <span className={daysRemaining <= 7 ? 'text-danger fw-bold' : 'text-success'}>
+                            {daysRemaining}
+                          </span>
                         </div>
                       )}
                       {userPackage.is_trial && (

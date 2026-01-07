@@ -1437,6 +1437,7 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
   const jameelNooriBase64 = loadFontAsBase64('JameelNooriNastaleeqKasheeda.ttf');
   const notoNastaliqBase64 = loadFontAsBase64('NotoNastaliqUrdu-Regular.ttf');
   const algerianBase64 = loadFontAsBase64('Algerian Regular.ttf');
+  const notoSansBase64 = loadFontAsBase64('NotoSans-VariableFont_wdth_wght.ttf');
   let paperClass = '';
   let subject = '';
   let subject_ur = '';
@@ -1600,6 +1601,12 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
       font-weight: normal;
       font-style: normal;
     }
+        @font-face {
+      font-family: 'Noto Sans';
+      src: url('data:font/truetype;charset=utf-8;base64,${notoSansBase64}') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Times New Roman, sans-serif; padding: 0px; }
     .container { max-width: 900px; margin: 0 auto; background: white; padding: 0;  }
@@ -1608,13 +1615,13 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
     .header h2 { font-size: 12px; }
     .institute{font-family:algerian; }
     .urdu { font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif; direction: rtl; }
-    .eng { font-family: "Times New Roman", serif; direction: ltr;  white-space: pre-line;}
+    .eng { font-family: ${subject==='chemistry'|| subject==='math' || subject==='mathethemetics'?'Noto Sans':'"Times New Roman"'}, serif; direction: ltr;  white-space: pre-line;}
      .options .urdu {
     font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu";
     direction: rtl;
   }
   .options .eng {
-    font-family: "Times New Roman", serif;
+    font-family: ${subject==='chemistry'|| subject==='math' || subject==='mathethemetics'?'Noto Sans':'"Times New Roman, serif"'}, serif;
     direction: ltr;
   }
   .meta { display: flex; justify-content: space-between; margin: 0 0; font-size: 12px; font-weight:bold;  }
@@ -2133,10 +2140,13 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
 
         // ##Start## Group short questions (6 per group)
              let questionsPerGroup = 6;
+             let groupAttemptAny = 4;
           if(subject=='urdu' || subject_ur==='اردو'|| subject==='English'|| subject==='english' || subject === 'tarjuma ul quran'){
               questionsPerGroup=8;
+              groupAttemptAny=5;
           }else if(subject==='Islamiyat'|| subject_ur==='اسلامیات'){
               questionsPerGroup=9;
+              groupAttemptAny=6;
           }
           //const questionsPerGroup = 6;
           const totalGroups = Math.ceil(shortQuestions.length / questionsPerGroup);
@@ -2146,18 +2156,18 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
              questionNumber = g + 2;
  // Get toAttempt value for short questions
             const shortToAttemptValue = getToAttemptForType('short');
-            const showAttemptAny = shortToAttemptValue < groupQuestions.length;
+            const showAttemptAny = groupAttemptAny < groupQuestions.length;
        let instructionHtml = '<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">';
             if (isEnglish || isBilingual) {
               if (showAttemptAny) {
-                instructionHtml += `<div class="eng" style="vertical-align: baseline;"><strong>${questionNumber}.</strong> Write short answers to any ${shortToAttemptValue} question(s). (${shortToAttemptValue} x ${shortMarksPerQuestion} = ${shortTotalMarks})</div>`;
+                instructionHtml += `<div class="eng" style="vertical-align: baseline;"><strong>${questionNumber}.</strong> Write short answers to any ${groupAttemptAny} question(s). (${groupAttemptAny} x ${shortMarksPerQuestion} = ${shortTotalMarks})</div>`;
               } else {
                 instructionHtml += `<div class="eng" style="vertical-align: baseline;"><strong>${questionNumber}.</strong> Write short answers to the following questions. (${shortTotalMarks})</div>`;
               }
             }
             if (isUrdu || isBilingual) {
               if (showAttemptAny) {
-                instructionHtml += `<div class="urdu" style="direction:rtl;"><strong><span>${subject==="urdu" ? questionNumber+1 :questionNumber}.</span> سوالات میں سے ${shortToAttemptValue}  سوالات کے مختصر جوابات لکھیں۔ </strong></div>`;
+                instructionHtml += `<div class="urdu" style="direction:rtl;"><strong><span>${subject==="urdu" ? questionNumber+1 :questionNumber}.</span> سوالات میں سے ${groupAttemptAny}  سوالات کے مختصر جوابات لکھیں۔ </strong></div>`;
               } else {
                 instructionHtml += `<div class="urdu" style="direction:rtl;"><strong><span>${subject==="urdu" ? questionNumber+1 :questionNumber}.</span> درج ذیل سوالات کے مختصر جوابات لکھیں۔ </strong></div>`;
               }
