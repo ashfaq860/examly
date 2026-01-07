@@ -752,14 +752,18 @@ async function generateAndSaveMCQKey(userId: string, paperId: string, mcqQuestio
     const page = await browser.newPage();
 
     // Set content and generate PDF
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
-    });
+await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
-    await page.close();
+// ✅ WAIT FOR ALL FONTS TO LOAD
+await page.evaluate(() => document.fonts.ready);
+
+const pdfBuffer = await page.pdf({
+  format: 'A4',
+  printBackground: true,
+  margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+});
+
+await page.close();
 
     // Upload the key PDF
     const { error: uploadError } = await supabaseAdmin.storage
@@ -1635,10 +1639,7 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
   direction: ltr;
   white-space: pre-line;
 }
-     .options .urdu {
-    font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu";
-    direction: rtl;
-  }
+
   .options .eng {
   font-family: ${
     subject === 'chemistry' ||
@@ -1650,6 +1651,10 @@ console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
 
   direction: ltr;
 }
+       .options .urdu {
+    font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu";
+    direction: rtl;
+  }
   .meta { display: flex; justify-content: space-between; margin: 0 0; font-size: 12px; font-weight:bold;  }
   .metaUrdu, .metaEng {
   display: inline-block;
