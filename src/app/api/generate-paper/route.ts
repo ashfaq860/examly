@@ -2384,7 +2384,7 @@ questionNumber=questionNumber+1;
   const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
 
   let longQuestionDisplayHtml = `<div class="long-question" style="margin-bottom:2px;">`;
-  longQuestionDisplayHtml += `<div style="display: flex; justify-content:space-between; font-size:11px; margin-top:0px; line-height:1.3;">`;
+  longQuestionDisplayHtml += `<div style="display: flex; justify-content:space-between; font-size:13px; margin-top:0px; line-height:1.4;">`;
 
   if (isEnglish) {
     longQuestionDisplayHtml += `
