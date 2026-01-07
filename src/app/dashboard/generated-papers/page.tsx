@@ -154,8 +154,8 @@ export default function GeneratedPapersPage() {
 
   /* ================= RESTRICTED ACCESS ================= */
   const isTrialActive = trialStatus?.isTrial && new Date(trialStatus.trialEndsAt || 0) > new Date();
-
-  if (trialStatus && !trialStatus.hasActiveSubscription && !isTrialActive) {
+console.log('check is trial active',trialStatus,"check if there is active subscription",trialStatus?.hasActiveSubscription,'active trial subs',isTrialActive)
+  if (trialStatus && isTrialActive) {
     return (
       <AcademyLayout>
         <div className="container-fluid text-center py-5">

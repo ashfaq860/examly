@@ -2160,7 +2160,7 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
        let instructionHtml = '<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.4; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 4px;">';
             if (isEnglish || isBilingual) {
               if (showAttemptAny) {
-                instructionHtml += `<div class="eng" style="vertical-align: baseline;"><strong>${questionNumber}.</strong> Write short answers to any ${groupAttemptAny} question(s). (${groupAttemptAny} x ${shortMarksPerQuestion} = ${shortTotalMarks})</div>`;
+                instructionHtml += `<div class="eng" style="vertical-align: baseline;"><strong>${questionNumber}.</strong> Write short answers to any ${groupAttemptAny} question(s). (${groupAttemptAny} x ${shortMarksPerQuestion} = ${groupAttemptAny*shortMarksPerQuestion})</div>`;
               } else {
                 instructionHtml += `<div class="eng" style="vertical-align: baseline;"><strong>${questionNumber}.</strong> Write short answers to the following questions. (${shortTotalMarks})</div>`;
               }
