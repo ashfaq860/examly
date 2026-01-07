@@ -2123,7 +2123,7 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
             const totalQuestions = poetryExplanationQuestions.length;
             const totalMarks = (showAttemptAny ? toAttempt : totalQuestions) * marksPerQuestion;
             questionNumber=questionNumber+1;
-            subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
+            subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.3; display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
 
             if (isUrdu || isBilingual) {
               if (showAttemptAny) {
@@ -2157,7 +2157,7 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
                 const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
                 const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
 
-                let questionDisplayHtml = `<div class="long-question" style="flex:1; font-size:11px; line-height:1.2;">`;
+                let questionDisplayHtml = `<div class="long-question" style="flex:1; font-size:11px; line-height:1.3;">`;
 
               if (isUrdu) {
                   questionDisplayHtml += `
@@ -2202,7 +2202,7 @@ const shortTotalMarks = shortToAttemptValue * shortMarksPerQuestion;
  // Get toAttempt value for short questions
             const shortToAttemptValue = getToAttemptForType('short');
             const showAttemptAny = groupAttemptAny < groupQuestions.length;
-       let instructionHtml = '<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">';
+       let instructionHtml = '<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.3; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">';
             if (isEnglish || isBilingual) {
               if (showAttemptAny) {
                 instructionHtml += `<div class="eng" style="vertical-align: baseline;"><strong>${questionNumber}.</strong> Write short answers to any ${groupAttemptAny} question(s). (${groupAttemptAny} x ${shortMarksPerQuestion} = ${groupAttemptAny*shortMarksPerQuestion})</div>`;
@@ -2235,7 +2235,7 @@ if (subject === 'urdu' || isUrdu) {
       const urduQuestion = formatQuestionText(urduQuestionRaw || englishQuestionRaw || '');
 
       subjectiveContent += `
-        <div class="short-question-item" style="flex:1; line-height:1.2; font-size:11px;">
+        <div class="short-question-item" style="flex:1; line-height:1.3; font-size:11px;">
           <div style="display:flex; align-items:flex-start; gap:5px; direction:rtl; text-align:right;">
             <div style="flex-shrink:0; font-weight:bold;">(${toRoman(j + 1)})</div>
             <div style="flex:1;">${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>
@@ -2299,7 +2299,7 @@ if (subject === 'urdu' || isUrdu) {
 // ✅ Total marks for translation section
         const translateUrduTotalMarks =(showAttemptAny ? toAttemptForType : translateUrduQuestions.length) * translateUrduMarksPerQuestion;
 
- subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
+ subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.3; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
          if (isEnglish || isBilingual) {
             if (showAttemptAny) {
               subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline;"><span>${Number(questionNumber)+1 }.</span> Translate any ${toAttemptForType} of the following paragraphs into Urdu. (${toAttemptForType} x ${translateUrduMarksPerQuestion} = ${translateUrduTotalMarks})</div>`;
@@ -2314,7 +2314,7 @@ if (subject === 'urdu' || isUrdu) {
             const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
             const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
             const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
-            let questionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:2px;  line-height:1.2;">';
+            let questionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:2px;  line-height:1.3;">';
             if (isEnglish) {
                 questionDisplayHtml += `<div class="eng" style="width:100%;">
                  <div style="display:flex; align-items:flex-start; gap:6px;">
@@ -2346,7 +2346,7 @@ if (subject === 'urdu' || isUrdu) {
   </div>`;
           }
           
-        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; margin-bottom: 2px; margin-top: 2px; display: flex; flex-direction: column;">`;
+        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.3; margin-bottom: 2px; margin-top: 2px; display: flex; flex-direction: column;">`;
 
 const longToAttemptValue = getToAttemptForType('long');
 const showAttemptAny = longToAttemptValue < longQuestions.length;
@@ -2384,11 +2384,11 @@ questionNumber=questionNumber+1;
   const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
 
   let longQuestionDisplayHtml = `<div class="long-question" style="margin-bottom:2px;">`;
-  longQuestionDisplayHtml += `<div style="display: flex; justify-content:space-between; font-size:11px; margin-top:0px; line-height:1.2;">`;
+  longQuestionDisplayHtml += `<div style="display: flex; justify-content:space-between; font-size:11px; margin-top:0px; line-height:1.3;">`;
 
   if (isEnglish) {
     longQuestionDisplayHtml += `
-      <div class="eng" style="${subject==='urdu'||subject==='english'||subject==='English'?'vertical-align: baseline; line-height:1.2; font-weight:bold':''}; width:100%;">
+      <div class="eng" style="${subject==='urdu'||subject==='english'||subject==='English'?'vertical-align: baseline; line-height:1.4; font-weight:bold':''}; width:100%;">
         <div style="display:flex; align-items:flex-start; gap:5px;">
           <div style="flex-shrink:0;"><strong>${subject==='urdu'||subject==='english'||subject==='English' ? questionNumber : `Q.${idx + 1}`}.</strong></div>
           <div style="flex:1;">${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>
@@ -2398,7 +2398,7 @@ questionNumber=questionNumber+1;
   } else if (isUrdu) {
     longQuestionDisplayHtml += `
       <div class="urdu" style="width:100%; direction:rtl; text-align:right;">
-        <div style="display:flex; align-items:flex-start; gap:5px; ${subject==='urdu'?' font-size:13px; font-weight:bold; line-height:1.2;':''}">
+        <div style="display:flex; align-items:flex-start; gap:5px; ${subject==='urdu'?' font-size:13px; font-weight:bold; line-height:1.3;':''}">
           <div style="flex-shrink:0;"><strong>${subject==='urdu' ? questionNumber : `سوال ${idx + 1}`}.</strong></div>
           <div style="flex:1;">${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>
         </div>
@@ -2451,7 +2451,7 @@ const proseExplanationTotalMarks =
   (showAttemptAny ? toAttemptForType : proseExplanationQuestions.length) *
   proseExplanationMarksPerQuestion;
 
-   subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
+   subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.3; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
           if (isUrdu || isBilingual) {
             if (showAttemptAny) {
               subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;">  <span dir="ltr" style="font-weight:bold; margin-left:4px;">
@@ -2459,7 +2459,7 @@ const proseExplanationTotalMarks =
     </span>
     کوئی سے ${toAttemptForType} نثرپاروں کی تشریح کریں۔سبق کا نام اورمصنف کا نام بھی لکھیں۔</div>`;
             } else {
-              subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;">  <span dir="ltr" style="font-weight:bold; margin-left:4px;">
+              subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;">  <span dir="ltr" style="font-weight:bold; margin-left:0px;">
       .${questionNumber}
     </span>
     درج ذیل نثرپاروں کی تشریح کریں۔سبق کا نام اورمصنف کا نام بھی لکھیں۔</div>`;
@@ -2481,7 +2481,7 @@ const proseExplanationTotalMarks =
    if (isUrdu) {
     questionDisplayHtml += `
       <div class="urdu" style="width:100%; direction:rtl; text-align:justify;">
-        <div style="display:flex; align-items:flex-start; gap:5px; font-size:11px; line-height:1.2;">
+        <div style="display:flex; align-items:flex-start; gap:5px; font-size:11px; line-height:1.3;">
           <div style="flex-shrink:0;"><strong>(${toRoman(idx + 1)})</strong></div>
           <div style="flex:1;">${urduQuestion} <span class="marks-display">(${questionMarks})</span></div>
         </div>
@@ -2507,7 +2507,7 @@ const proseExplanationTotalMarks =
 // ✅ Total marks for translation section
         const translateUrduTotalMarks =(showAttemptAny ? toAttemptForType : translateUrduQuestions.length) * translateUrduMarksPerQuestion;
 
-        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
+        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.3; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
          if (isUrdu || isBilingual) {
             if (showAttemptAny) {
               subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;">
@@ -2516,7 +2516,7 @@ const proseExplanationTotalMarks =
     </span>
               کوئی سے ${toAttemptForType} جملوں کی درستی کیجئے۔</div>`;
             } else {
-              subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;"> <span dir="ltr" style="font-weight:bold; margin-left:4px;">
+              subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;"> <span dir="ltr" style="font-weight:bold; margin-left:0px;">
       .${questionNumber}
     </span> درج ذیل جملوں کی درستی کیجئے۔</div>`;
             }
@@ -2537,7 +2537,7 @@ const proseExplanationTotalMarks =
     const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
 
     subjectiveContent += `
-      <div class="urdu" style="flex:1; font-size:11px; line-height:1.2;">
+      <div class="urdu" style="flex:1; font-size:11px; line-height:1.3;">
         <div style="display:flex; align-items:flex-start; gap:5px; ">
           
           <!-- Question Number -->
@@ -2574,7 +2574,7 @@ const proseExplanationTotalMarks =
 // ✅ Total marks for translation section
         const translateUrduTotalMarks =(showAttemptAny ? toAttemptForType : translateUrduQuestions.length) * translateUrduMarksPerQuestion;
 
-        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
+        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.3; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
          if (isUrdu || isBilingual) {
             if (showAttemptAny) {
               subjectiveContent += `<div class="urdu" style="flex: 1; text-align: right; direction: rtl;"> 
@@ -2605,7 +2605,7 @@ const proseExplanationTotalMarks =
     const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
 
     subjectiveContent += `
-      <div class="urdu" style="flex:1; font-size:11px; line-height:1.2;">
+      <div class="urdu" style="flex:1; font-size:11px; line-height:1.3;">
         <div style="display:flex; align-items:flex-start; gap:5px;">
           
           <!-- Question Number -->
@@ -2640,7 +2640,7 @@ const passageMarksPerQuestion =
 // Total marks
 const passageTotalMarks =(showAttemptAny ? toAttemptForType : passageQuestions.length) * passageMarksPerQuestion;
 
-        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
+        subjectiveContent += `<div class="instructions1" style="font-weight: bold; font-size: 14px; line-height: 1.3; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
           if (isEnglish || isBilingual) {
             if (showAttemptAny) {
               subjectiveContent += `<div class="instruction-text eng" style="vertical-align: baseline;"><span>${questionNumber}. </span>Read the following passage carefully and answer the questions given at the end. (${showAttemptAny ? toAttemptForType : passageQuestions.length}x${passageMarksPerQuestion}  = ${passageTotalMarks})</div>`;
@@ -2656,7 +2656,7 @@ const passageTotalMarks =(showAttemptAny ? toAttemptForType : passageQuestions.l
            const englishQuestion = formatQuestionText(q.question_text || 'No question text available');
             const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
             const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
-            let questionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:5px;  line-height:1.2;">';
+            let questionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:5px;  line-height:1.3;">';
             if (isEnglish) {
                 questionDisplayHtml += `<div class="eng" style="width:100%;"> ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
             } else if (isUrdu) {
@@ -2691,7 +2691,7 @@ const translateEnglishTotalMarks =(showAttemptAny ? toAttemptForType : translate
 
           subjectiveContent += `
  
-  <div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
+  <div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.3; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">`;
           
           if (isEnglish || isBilingual) {
             if (showAttemptAny) {
@@ -2711,7 +2711,7 @@ const translateEnglishTotalMarks =(showAttemptAny ? toAttemptForType : translate
             const hasUrduQuestion = hasActualUrduText(q.question_text_ur);
             const urduQuestion = hasUrduQuestion ? formatQuestionText(q.question_text_ur) : '';
 
-            let questionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:5px;  line-height:1.2;">';
+            let questionDisplayHtml = '<div class="long-question" style="margin-bottom:2px;"><div style="display: flex; justify-content:space-between; font-size:11px; margin-top:5px;  line-height:1.3;">';
             if (isEnglish) {
                 questionDisplayHtml += `<div class="urdu" style="width:100%;"><strong></strong> ${englishQuestion} <span class="marks-display">(${questionMarks})</span></div>`;
             } else if (isUrdu) {
@@ -2747,7 +2747,7 @@ const translateEnglishTotalMarks =(showAttemptAny ? toAttemptForType : translate
   const idiomPhrasesTotalMarks = numQuestionsToUse * idiomPhrasesMarksPerQuestion;
 
   subjectiveContent += `
-    <div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">
+    <div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.3; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">
   `;
 
   if (isEnglish || isBilingual) {
@@ -2784,7 +2784,7 @@ idiomPhrasesQuestions.forEach((pq: any, idx: number) => {
   }
 
   let questionDisplayHtml = `
-    <div class="idiom-col" style="flex:1; font-size:11px; line-height:1.2;">
+    <div class="idiom-col" style="flex:1; font-size:11px; line-height:1.3;">
       <div class="long-question">
   `;
 
@@ -2828,7 +2828,7 @@ idiomPhrasesQuestions.forEach((pq: any, idx: number) => {
   const activePassiveTotalMarks = numQuestionsToUse * activePassiveMarksPerQuestion;
 
   subjectiveContent += `
-    <div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">
+    <div class="instructions1" style="font-weight: bold; font-size: 13px; line-height: 1.3; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; margin-top: 2px;">
   `;
 
   if (isEnglish || isBilingual) {
