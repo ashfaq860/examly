@@ -673,7 +673,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         {/* Selection Progress */}
         <div className="card bg-light mb-2">
           <div className="card-body px-1 pb-0 pt-1">
-            <div className="d-flex justify-content-between align-items-center mb-1 d-none d-lg-block">
+            <div className="d-flex justify-content-between align-items-center mb-1 d-none d-lg-flex">
               {/*<h3 className="h6 card-title mb-0">Selection Progress</h3>*/}
 
                   {/* Progress indicators */}
