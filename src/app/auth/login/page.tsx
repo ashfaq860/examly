@@ -16,23 +16,7 @@ export default function LoginPage() {
   const supabase = createClientComponentClient();
 
   // ✅ Redirect if user is already logged in
-/*
-useEffect(() => {
- const handleRegister = async () => {
-    const res = await fetch('/api/send-confirmation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
 
-    const data = await res.json();
-    if(data){
-  alert('Confirmation email sent. Please check your inbox.');
-    };
-  }
-handleRegister();
-}, []);
-*/
   useEffect(() => {
     const checkUser = async () => {
       try {

@@ -9,7 +9,7 @@ export default function Footer() {
           <div className="col-md-4">
             <h5>Examly</h5>
             <p className="small-muted">Make Papers • Quiz Online</p>
-            <p className="small">Contact: support@examly.pk</p>
+            <p className="small">Contact: examlypk@gmail.com</p>
           </div>
 
           <div className="col-md-4">
@@ -27,6 +27,8 @@ export default function Footer() {
             <ul className="list-unstyled">
               <li><Link href="/about">About Us</Link></li>
               <li><Link href="/contact">Contact Us</Link></li>
+                <li><Link href="/privacy-policy">Privacy Policy</Link></li>
+                  <li><Link href="/terms-and-conditions">Terms&Conditions</Link></li>
               
             </ul>
           </div>

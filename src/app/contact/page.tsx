@@ -78,31 +78,31 @@ if (response.ok) {
     {
       icon: "bi bi-telephone-fill",
       title: "Call Us",
-      details: "0304-5302981",
+      details: "0343-0041686",
       description: "Available Monday to Friday, 9AM - 6PM",
-      link: "tel:03045302981",
+      link: "tel:0343-0041686",
       color: "primary"
     },
     {
       icon: "bi bi-envelope-fill",
       title: "Email Us",
-      details: "meshfaq@yahoo.com",
+      details: "examlypk@gmail.com",
       description: "We'll respond within 24 hours",
-      link: "mailto:meshfaq@yahoo.com",
+      link: "mailto:examlypk@gmail.com",
       color: "success"
     },
     {
       icon: "bi bi-whatsapp",
       title: "WhatsApp",
-      details: "0304-5302981",
+      details: "0343-0041686",
       description: "Quick chat support",
-      link: "https://wa.me/923045302981",
+      link: "https://wa.me/923430041686",
       color: "success"
     },
     {
       icon: "bi bi-geo-alt-fill",
       title: "Visit Office",
-      details: "Education Hub, Tech Street",
+      details: "ToyoTa Ada Kasur Road, Raiwind",
       description: "Lahore, Pakistan",
       link: "#",
       color: "warning"
@@ -388,7 +388,7 @@ if (response.ok) {
                 </div>
                 <div className="text-center mt-4">
                   <p className="text-muted">
-                    Still have questions? <a href="tel:03045302981" className="text-primary fw-medium">Call us at 0304-5302981</a>
+                    Still have questions? <a href="tel:03045302981" className="text-primary fw-medium">Call us at 0343-0041686</a>
                   </p>
                 </div>
               </div>
@@ -409,9 +409,9 @@ if (response.ok) {
                 <div className="d-flex gap-3 flex-wrap justify-content-center justify-content-lg-start">
                   <a href="tel:03045302981" className="btn btn-warning btn-lg px-4 py-2 fw-bold">
                     <i className="bi bi-telephone-fill me-2"></i>
-                    Call Support: 0304-5302981
+                    Call Support: 0343-0041686
                   </a>
-                  <a href="https://wa.me/923045302981" className="btn btn-success btn-lg px-4 py-2" target="_blank" rel="noopener noreferrer">
+                  <a href="https://wa.me/923430041686" className="btn btn-success btn-lg px-4 py-2" target="_blank" rel="noopener noreferrer">
                     <i className="bi bi-whatsapp me-2"></i>
                     WhatsApp Chat
                   </a>
@@ -437,7 +437,7 @@ if (response.ok) {
                 </p>
                 <div className="d-flex gap-3 justify-content-center flex-wrap">
                   <Link href="/auth/signup" className="btn btn-warning btn-lg px-5 py-3 fw-bold">
-                    Start 1 Month Free Trial
+                    Start 3 Month Free Trial
                   </Link>
                   <a href="tel:03045302981" className="btn btn-outline-light btn-lg px-5 py-3">
                     <i className="bi bi-telephone me-2"></i>
@@ -446,7 +446,7 @@ if (response.ok) {
                 </div>
                 <div className="mt-4">
                   <small className="opacity-75">
-                    ✓ Free 1 Month Trial ✓ No Credit Card Required ✓ Expert Support Available
+                    ✓ Free 3 Month Trial ✓ No Credit Card Required ✓ Expert Support Available
                   </small>
                 </div>
               </div>
