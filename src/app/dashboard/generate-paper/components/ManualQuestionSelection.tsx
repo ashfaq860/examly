@@ -43,6 +43,61 @@ interface QuestionWithOptions extends Question {
   question_text_urdu?: string;
 }
 
+// Helper function to safely render HTML content
+const renderHtmlContent = (htmlString: string | undefined): { __html: string } => {
+  if (!htmlString) return { __html: '' };
+  
+  // Create a temporary div to decode HTML entities
+  const txt = document.createElement('textarea');
+  txt.innerHTML = htmlString;
+  const decoded = txt.value;
+  
+  return { __html: decoded };
+};
+
+// Helper component for rendering HTML content safely with proper styling
+const HtmlContent: React.FC<{ 
+  content: string | undefined; 
+  className?: string;
+  style?: React.CSSProperties;
+}> = ({ content, className, style }) => {
+  if (!content) return null;
+  
+  const hasHtmlTags = /<[^>]*>/g.test(content);
+  
+  // Process content to add inline styles to p tags
+  const processContent = (html: string): string => {
+    // Add inline style to remove margin from p tags
+    return html.replace(/<p([^>]*)>/gi, '<p$1 style="margin-bottom: 0 !important;">');
+  };
+  
+  if (hasHtmlTags) {
+    const processedHtml = processContent(content);
+    const txt = document.createElement('textarea');
+    txt.innerHTML = processedHtml;
+    const decoded = txt.value;
+    
+    return (
+      <div 
+        className={className}
+        style={style}
+        dangerouslySetInnerHTML={{ __html: decoded }}
+      />
+    );
+  }
+  
+  // If no HTML tags, just render as plain text
+  const txt = document.createElement('textarea');
+  txt.innerHTML = content;
+  const decoded = txt.value;
+  
+  return (
+    <div className={className} style={style}>
+      {decoded}
+    </div>
+  );
+};
+
 export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = ({
   subjectId,
   classId,
@@ -63,16 +118,16 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
   // Get question types based on subject
   const getQuestionTypesLocal = useCallback(() => {
     const defaultTypes = [
-      { value: 'mcq', label: 'Multiple Choice', fieldPrefix: 'mcq' },
-      { value: 'short', label: 'Short Answer', fieldPrefix: 'short' },
-      { value: 'long', label: 'Long Answer', fieldPrefix: 'long' },
+      { value: 'mcq', label: 'MCQ', fieldPrefix: 'mcq' },
+      { value: 'short', label: 'Short', fieldPrefix: 'short' },
+      { value: 'long', label: 'Long', fieldPrefix: 'long' },
     ];
 
     const englishTypes = [
-      { value: 'mcq', label: 'Multiple Choice', fieldPrefix: 'mcq' },
-      { value: 'short', label: 'Short Answer', fieldPrefix: 'short' },
+      { value: 'mcq', label: 'MCQ', fieldPrefix: 'mcq' },
+      { value: 'short', label: 'Short', fieldPrefix: 'short' },
       { value: 'translate_urdu', label: 'Translate into Urdu', fieldPrefix: 'translateUrdu' },
-      { value: 'long', label: 'Long Answer', fieldPrefix: 'long' },
+      { value: 'long', label: 'Long', fieldPrefix: 'long' },
       { value: 'idiom_phrases', label: 'Idiom/Phrases', fieldPrefix: 'idiomPhrases' },
       { value: 'translate_english', label: 'Translate into English', fieldPrefix: 'translateEnglish' },
       { value: 'passage', label: 'Passage and Questions', fieldPrefix: 'passage' },
@@ -644,9 +699,9 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
 
   // Custom styles for selected items
   const selectedStyle: React.CSSProperties = {
-    backgroundColor: '#000',
-    color: '#fff',
-    borderColor: '#000',
+    backgroundColor: '#1BA79A',
+    color: '#000',
+    borderColor: '#08408D',
   };
 
   return (
@@ -875,48 +930,48 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                               {/* Question Text */}
                               <div className="mb-0">
                                 {language === 'english' && (
-                                  <div className="question-text" style={isSelected ? { color: '#fff' } : {}}>
-                                    {typeof questionText === 'string' ? questionText : questionText.english}
-                                  </div>
+                                  <HtmlContent 
+                                    content={typeof questionText === 'string' ? questionText : undefined}
+                                    className="question-text"
+                                    style={isSelected ? { color: '#000' } : {}}
+                                  />
                                 )}
                                 {language === 'urdu' && (
-                                  <div 
-                                    className="question-text urdu-text" 
+                                  <HtmlContent 
+                                    content={typeof questionText === 'string' ? questionText : undefined}
+                                    className="question-text urdu-text"
                                     style={{ 
-                                      fontFamily: "'JameelNooriNastaleeqKasheeda', 'Noto Nastaliq Urdu', 'Urdu Typesetting', 'Segoe UI', sans-serif",
                                       direction: 'rtl', 
                                       textAlign: 'right',
                                       fontSize: '1.1rem',
-                                      ...(isSelected ? { color: '#fff' } : {})
+                                      ...(isSelected ? { color: '#000' } : {})
                                     }}
-                                  >
-                                    {typeof questionText === 'string' ? questionText : questionText.urdu}
-                                  </div>
+                                  />
                                 )}
                                 {language === 'bilingual' && (
                                   <div className="bilingual-text">
-                                    <div className="english-version mb-0" style={isSelected ? { color: '#fff' } : {}}>
-                                      {typeof questionText === 'object' ? questionText.english : questionText}
-                                    </div>
-                                    <div 
-                                      className="urdu-version urdu-text" 
+                                    <HtmlContent 
+                                      content={typeof questionText === 'object' ? questionText.english : undefined}
+                                      className="english-version mb-1"
+                                      style={isSelected ? { color: '#000' } : {}}
+                                    />
+                                    <HtmlContent 
+                                      content={typeof questionText === 'object' ? questionText.urdu : undefined}
+                                      className="urdu-version urdu-text"
                                       style={{ 
-                                        fontFamily: "'JameelNooriNastaleeqKasheeda', 'Noto Nastaliq Urdu', 'Urdu Typesetting', 'Segoe UI', sans-serif",
                                         direction: 'rtl', 
                                         textAlign: 'right',
                                         fontSize: '1.1rem',
-                                        ...(isSelected ? { color: '#fff' } : {})
+                                        ...(isSelected ? { color: '#000' } : {})
                                       }}
-                                    >
-                                      {typeof questionText === 'object' ? questionText.urdu : questionText}
-                                    </div>
+                                    />
                                   </div>
                                 )}
                               </div>
 
                               {/* MCQ Options */}
                               {currentType.value === 'mcq' && (
-                                <div className="mt-0">
+                                <div className="mt-2">
                                   <div className="row g-2">
                                     {['option_a', 'option_b', 'option_c', 'option_d'].map((optionKey, idx) => {
                                       const { english, urdu } = getMcqOptionText(question, optionKey);
@@ -931,59 +986,56 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                                           <div 
                                             className="border rounded p-2" 
                                             style={isSelected ? { 
-                                              backgroundColor: '#333', 
-                                              borderColor: '#555',
-                                              color: '#fff'
+                                              backgroundColor: '#CFF4FC', 
+                                              borderColor: '#666',
+                                              color: '#000'
                                             } : { backgroundColor: '#f8f9fa' }}
                                           >
                                             <div className="d-flex align-items-start">
                                               <span 
                                                 className="badge me-2"
-                                                style={isSelected ? { backgroundColor: '#666' } : { backgroundColor: '#0d6efd' }}
+                                                style={isSelected ? { backgroundColor: '#08408D', color: '#fff' } : { backgroundColor: '#0d6efd', color: '#fff' }}
                                               >
                                                 {letter}
                                               </span>
                                               <div className="flex-grow-1">
                                                 {language === 'english' && english && (
-                                                  <span style={isSelected ? { color: '#fff' } : {}}>{english}</span>
+                                                  <HtmlContent 
+                                                    content={english}
+                                                    style={isSelected ? { color: '#000' } : {}}
+                                                  />
                                                 )}
                                                 {language === 'urdu' && urdu && (
-                                                  <span 
-                                                    className="urdu-text" 
+                                                  <HtmlContent 
+                                                    content={urdu}
+                                                    className="urdu-text"
                                                     style={{ 
-                                                      fontFamily: "'JameelNooriNastaleeqKasheeda', 'Noto Nastaliq Urdu', 'Urdu Typesetting', 'Segoe UI', sans-serif",
                                                       direction: 'rtl', 
                                                       display: 'block',
                                                       fontSize: '1.05rem',
-                                                      ...(isSelected ? { color: '#fff' } : {})
+                                                      ...(isSelected ? { color: '#000' } : {})
                                                     }}
-                                                  >
-                                                    {urdu}
-                                                  </span>
+                                                  />
                                                 )}
                                                 {language === 'bilingual' && (
-                                                  <div className="d-flex justify-content-between align-items-center w-100">
+                                                  <div className="bilingual-option d-flex flex-column">
                                                     {english && (
-                                                      <div 
-                                                        className="english-option me-2"
-                                                        style={isSelected ? { color: '#fff' } : {}}
-                                                      >
-                                                        {english}
-                                                      </div>
+                                                      <HtmlContent 
+                                                        content={english}
+                                                        className="english-option mb-1 text-start"
+                                                        style={isSelected ? { color: '#000' } : {}}
+                                                      />
                                                     )}
                                                     {urdu && (
-                                                      <div 
-                                                        className="urdu-option text-end urdu-text"
+                                                      <HtmlContent 
+                                                        content={urdu}
+                                                        className="urdu-option urdu-text text-end"
                                                         style={{ 
-                                                          fontFamily: "'JameelNooriNastaleeqKasheeda', 'Noto Nastaliq Urdu', 'Urdu Typesetting', 'Segoe UI', sans-serif",
                                                           direction: 'rtl',
-                                                          flex: 1,
                                                           fontSize: '1.05rem',
-                                                          ...(isSelected ? { color: '#fff' } : {})
+                                                          ...(isSelected ? { color: '#000' } : {})
                                                         }}
-                                                      >
-                                                        {urdu}
-                                                      </div>
+                                                      />
                                                     )}
                                                   </div>
                                                 )}
@@ -996,11 +1048,11 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                                   </div>
                                   {!hasMcqOptions(question) && (
                                     <div 
-                                      className="alert mt-2 py-1"
+                                      className="alert alert-warning mt-2 py-1"
                                       style={isSelected ? { 
-                                        backgroundColor: '#444', 
+                                        backgroundColor: '#CFF4FC', 
                                         borderColor: '#666',
-                                        color: '#fff'
+                                        color: '#000'
                                       } : {}}
                                     >
                                       <small>
@@ -1088,8 +1140,38 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         )}
       </div>
 
-      {/* CSS for selected state and Urdu font */}
-      <style jsx>{`
+      {/* Combined Global and Scoped CSS */}
+      <style jsx global>{`
+        /* Remove margin from p tags inside english-option and urdu-option */
+        .english-option p,
+        .urdu-option p,
+        .english-version p,
+        .urdu-version p,
+        .question-text p {
+          margin-bottom: 0 !important;
+          margin-top: 0 !important;
+        }
+        
+        /* Also remove padding if any */
+        .english-option p,
+        .urdu-option p,
+        .english-version p,
+        .urdu-version p,
+        .question-text p {
+          padding: 0 !important;
+        }
+        
+        /* Ensure other inline elements also have no margin */
+        .english-option span,
+        .urdu-option span,
+        .english-version span,
+        .urdu-version span,
+        .question-text span {
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        
+        /* Font for Urdu text */
         @font-face {
           font-family: 'JameelNooriNastaleeqKasheeda';
           src: url('/fonts/JameelNooriNastaleeqKasheeda.ttf') format('truetype');
@@ -1103,7 +1185,8 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
           font-size: 1.1rem;
           line-height: 1.6;
         }
-        
+
+        /* Component-specific scoped styles */
         .list-group-item.active {
           background-color: #1BA79A !important;
           border-color: #08408D !important;
@@ -1111,8 +1194,8 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         }
         
         .list-group-item.active .badge:not(.bg-primary):not(.bg-success):not(.bg-info):not(.bg-warning) {
-          background-color: #CFF4FC !important;
-          color: #000 !important;
+          background-color: #08408D !important;
+          color: #fff !important;
         }
         
         .list-group-item.active .text-muted {
@@ -1125,20 +1208,34 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
           color: #000 !important;
         }
         
-        .chapter-name {
-          font-size: 0.85rem;
-          color: #6c757d;
-        }
-        
         .list-group-item.active .chapter-name {
           color: #000 !important;
           font-weight: 500;
+        }
+        
+        .list-group-item.active .question-text {
+          color: #000 !important;
+        }
+        
+        .chapter-name {
+          font-size: 0.85rem;
+          color: #6c757d;
         }
         
         .question-text {
           font-size: 1rem;
           line-height: 1.5;
           margin-bottom: 0.5rem;
+        }
+        
+        .bilingual-option .english-option {
+          font-size: 0.95rem;
+          line-height: 1.4;
+        }
+        
+        .bilingual-option .urdu-option {
+          font-size: 1.05rem;
+          line-height: 1.6;
         }
         
         .spinning {

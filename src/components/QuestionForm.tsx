@@ -1,9 +1,10 @@
 // components/QuestionForm.tsx
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import toast from 'react-hot-toast';
-import SimpleWysiwyg from 'react-simple-wysiwyg';
+import { Editor } from '@tinymce/tinymce-react';
+
 interface QuestionFormProps {
   question?: any;
   classes: any[];
@@ -89,7 +90,69 @@ export default function QuestionForm({
   const [filteredTopics, setFilteredTopics] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
+  const editorRef = useRef<any>(null);
   
+  // TinyMCE API Key (get from https://www.tiny.cloud/)
+  // Store this in your .env.local file: NEXT_PUBLIC_TINYMCE_API_KEY=your-api-key
+  const TINYMCE_API_KEY = process.env.NEXT_PUBLIC_TINYMCE_API_KEY || 'no-api-key';
+  
+  // TinyMCE configuration for English/Math/Science
+  const englishEditorConfig = {
+    height: 300,
+    menubar: true,
+    plugins: [
+      'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+      'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+      'insertdatetime', 'media', 'table', 'help', 'wordcount',
+      'math' // Math formula plugin (premium)
+    ],
+    toolbar: 
+      'undo redo | blocks | bold italic underline strikethrough | ' +
+      'forecolor backcolor | alignleft aligncenter alignright alignjustify | ' +
+      'bullist numlist outdent indent | superscript subscript | ' +
+      'formula | removeformat help',
+    content_style: 'body { font-family: Helvetica, Arial, sans-serif; font-size: 16px; }',
+    directionality: 'ltr',
+    // Math plugin configuration
+    math: {
+      mathml: true,
+      engine: 'mathjax',
+      lib: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
+    },
+    // Enable file upload for images
+    images_upload_url: '/api/upload',
+    images_upload_handler: async (blobInfo: any) => {
+      try {
+        // You'll need to implement your own image upload endpoint
+        const formData = new FormData();
+        formData.append('file', blobInfo.blob(), blobInfo.filename());
+        
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const data = await response.json();
+        return data.location;
+      } catch (error) {
+        console.error('Image upload error:', error);
+        return '';
+      }
+    }
+  };
+
+  // TinyMCE configuration for Urdu (RTL)
+  const urduEditorConfig = {
+    ...englishEditorConfig,
+    content_style: 'body { font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif; font-size: 16pt; direction: rtl; }',
+    directionality: 'rtl',
+    toolbar: 
+      'undo redo | blocks | bold italic underline strikethrough | ' +
+      'forecolor backcolor | alignright aligncenter alignleft alignjustify | ' +
+      'bullist numlist outdent indent | ' +
+      'formula | removeformat help',
+  };
+
   // Check if selected subject is English
   const isEnglishSubject = () => {
     const selectedSubject = subjects.find(s => toId(s.id) === formData.subject_id);
@@ -100,6 +163,16 @@ export default function QuestionForm({
   const isUrduSubject = () => {
     const selectedSubject = subjects.find(s => toId(s.id) === formData.subject_id);
     return selectedSubject?.name?.toLowerCase().includes('urdu') || false;
+  };
+
+  // Check if subject is Math/Science (needs formula support)
+  const isMathScienceSubject = () => {
+    const selectedSubject = subjects.find(s => toId(s.id) === formData.subject_id);
+    const subjectName = selectedSubject?.name?.toLowerCase() || '';
+    return subjectName.includes('math') || 
+           subjectName.includes('physics') || 
+           subjectName.includes('chemistry') ||
+           subjectName.includes('science');
   };
 
   // Function to reset only text fields
@@ -824,6 +897,11 @@ export default function QuestionForm({
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Special handler for TinyMCE editor changes
+  const handleEditorChange = (content: string, fieldName: string) => {
+    setFormData(prev => ({ ...prev, [fieldName]: content }));
+  };
+
   // Get available question types based on subject
   const getAvailableQuestionTypes = () => {
     if (isEnglishSubject()) {
@@ -882,13 +960,11 @@ export default function QuestionForm({
                   <label className="form-label">
                     Question Text (English) *
                   </label>
-                  <SimpleWysiwyg
-                    className="form-control"
-                    rows={3}
-                    name="question_text"
+                  <Editor
+                    apiKey={TINYMCE_API_KEY}
                     value={formData.question_text}
-                    onChange={handleChange}
-                    required={formData.question_type !== 'passage'}
+                    onEditorChange={(content) => handleEditorChange(content, 'question_text')}
+                    init={englishEditorConfig}
                   />
                 </div>
               )}
@@ -898,14 +974,11 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">English Text to Translate *</label>
-                    <SimpleWysiwyg
-                      className="form-control"
-                      rows={3}
-                      name="question_text"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.question_text}
-                      onChange={handleChange}
-                      required
-                      placeholder="Enter English text to translate into Urdu"
+                      onEditorChange={(content) => handleEditorChange(content, 'question_text')}
+                      init={englishEditorConfig}
                     />
                   </div>
                 </>
@@ -916,14 +989,11 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">Urdu Text to Translate *</label>
-                    <SimpleWysiwyg
-                      className="form-control"
-                      rows={3}
-                      name="question_text"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.question_text}
-                      onChange={handleChange}
-                      required
-                      placeholder="Enter Urdu text to translate into English"
+                      onEditorChange={(content) => handleEditorChange(content, 'question_text')}
+                      init={englishEditorConfig}
                     />
                   </div>
                 </>
@@ -934,14 +1004,14 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">Idiom/Phrase (English) *</label>
-                    <SimpleWysiwyg
-                      type="text"
+                    <textarea
                       className="form-control"
                       name="idiom_phrase"
                       value={formData.idiom_phrase}
                       onChange={handleChange}
                       required
                       placeholder="e.g., 'Break a leg'"
+                      rows={3}
                     />
                   </div>
                 </>
@@ -952,26 +1022,20 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">Passage Text (English) *</label>
-                    <SimpleWysiwyg
-                      className="form-control"
-                      rows={5}
-                      name="passage_text"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.passage_text}
-                      onChange={handleChange}
-                      required
-                      placeholder="Enter the passage text in English"
+                      onEditorChange={(content) => handleEditorChange(content, 'passage_text')}
+                      init={englishEditorConfig}
                     />
                   </div>
                   <div className="col-md-12">
                     <label className="form-label">Question about Passage (English) *</label>
-                    <SimpleWysiwyg
-                      className="form-control"
-                      rows={3}
-                      name="question_text"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.question_text}
-                      onChange={handleChange}
-                      required
-                      placeholder="Enter the question about the passage"
+                      onEditorChange={(content) => handleEditorChange(content, 'question_text')}
+                      init={englishEditorConfig}
                     />
                   </div>
                 </>
@@ -982,14 +1046,11 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">Direct Speech Sentence *</label>
-                    <SimpleWysiwyg
-                      className="form-control"
-                      rows={3}
-                      name="direct_sentence"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.direct_sentence}
-                      onChange={handleChange}
-                      required
-                      placeholder="Enter the direct speech sentence (e.g., 'She said, 'I am going to the market.'')"
+                      onEditorChange={(content) => handleEditorChange(content, 'direct_sentence')}
+                      init={englishEditorConfig}
                     />
                   </div>
                 </>
@@ -1000,14 +1061,11 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">Active Voice Sentence *</label>
-                    <SimpleWysiwyg
-                      className="form-control"
-                      rows={3}
-                      name="active_sentence"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.active_sentence}
-                      onChange={handleChange}
-                      required
-                      placeholder="Enter the active voice sentence (e.g., 'The cat chased the mouse.')"
+                      onEditorChange={(content) => handleEditorChange(content, 'active_sentence')}
+                      init={englishEditorConfig}
                     />
                   </div>
                 </>
@@ -1022,14 +1080,11 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">سوال (اردو) *</label>
-                    <SimpleWysiwyg
-                      className="form-control urdu-text"
-                      rows={4}
-                      name="question_text_ur"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.question_text_ur}
-                      onChange={handleChange}
-                      required
-                      placeholder="سوال درج کریں"
+                      onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
+                      init={urduEditorConfig}
                     />
                   </div>
                 </>
@@ -1040,14 +1095,11 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">شعر *</label>
-                    <SimpleWysiwyg
-                      className="form-control urdu-text"
-                      rows={4}
-                      name="poetry_text"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.poetry_text}
-                      onChange={handleChange}
-                      required
-                      placeholder="شعر درج کریں"
+                      onEditorChange={(content) => handleEditorChange(content, 'poetry_text')}
+                      init={urduEditorConfig}
                     />
                   </div>
                 </>
@@ -1058,14 +1110,11 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">نثر پارہ *</label>
-                    <SimpleWysiwyg
-                      className="form-control urdu-text"
-                      rows={4}
-                      name="prose_text"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.prose_text}
-                      onChange={handleChange}
-                      required
-                      placeholder="نثر پارہ درج کریں"
+                      onEditorChange={(content) => handleEditorChange(content, 'prose_text')}
+                      init={urduEditorConfig}
                     />
                   </div>
                 </>
@@ -1076,14 +1125,11 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">سوال *</label>
-                    <SimpleWysiwyg
-                      className="form-control urdu-text"
-                      rows={4}
-                      name="question_text_ur"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.question_text_ur}
-                      onChange={handleChange}
-                      required
-                      placeholder="سوال درج کریں"
+                      onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
+                      init={urduEditorConfig}
                     />
                   </div>
                 </>
@@ -1096,14 +1142,11 @@ export default function QuestionForm({
                     <label className="form-label urdu-label">
                       {formData.question_type === 'sentence_correction' ? 'جملہ (درستگی کے لیے) *' : 'جملہ (تکمیل کے لیے) *'}
                     </label>
-                    <SimpleWysiwyg
-                      className="form-control urdu-text"
-                      rows={3}
-                      name="sentence_text"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.sentence_text}
-                      onChange={handleChange}
-                      required
-                      placeholder="جملہ درج کریں"
+                      onEditorChange={(content) => handleEditorChange(content, 'sentence_text')}
+                      init={urduEditorConfig}
                     />
                   </div>
                 </>
@@ -1114,26 +1157,20 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">نثر پارہ (پاسج) *</label>
-                    <SimpleWysiwyg
-                      className="form-control urdu-text"
-                      rows={5}
-                      name="passage_text_ur"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.passage_text_ur}
-                      onChange={handleChange}
-                      required
-                      placeholder="نثر پارہ درج کریں"
+                      onEditorChange={(content) => handleEditorChange(content, 'passage_text_ur')}
+                      init={urduEditorConfig}
                     />
                   </div>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">سوال (پاسج کے بارے میں) *</label>
-                    <SimpleWysiwyg
-                      className="form-control urdu-text"
-                      rows={3}
-                      name="question_text_ur"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.question_text_ur}
-                      onChange={handleChange}
-                      required
-                      placeholder="سوال درج کریں"
+                      onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
+                      init={urduEditorConfig}
                     />
                   </div>
                 </>
@@ -1147,26 +1184,26 @@ export default function QuestionForm({
               {/* English Question text */}
               <div className="col-md-12">
                 <label className="form-label">Question Text (English) *</label>
-                <SimpleWysiwyg
-                  className="form-control"
-                  rows={3}
-                  name="question_text"
+                <Editor
+                  apiKey={TINYMCE_API_KEY}
                   value={formData.question_text}
-                  onChange={handleChange}
-                  required
+                  onEditorChange={(content) => handleEditorChange(content, 'question_text')}
+                  init={isMathScienceSubject() ? englishEditorConfig : {
+                    ...englishEditorConfig,
+                    plugins: englishEditorConfig.plugins.filter(p => p !== 'math'),
+                    toolbar: englishEditorConfig.toolbar.replace('formula | ', '')
+                  }}
                 />
               </div>
 
               {/* Urdu Question text */}
               <div className="col-md-12">
                 <label className="form-label">Question Text (Urdu)</label>
-                <SimpleWysiwyg
-                  className="form-control urdu-text"
-                  rows={3}
-                  name="question_text_ur"
+                <Editor
+                  apiKey={TINYMCE_API_KEY}
                   value={formData.question_text_ur}
-                  onChange={handleChange}
-                  placeholder="سوال درج کریں"
+                  onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
+                  init={urduEditorConfig}
                 />
               </div>
             </>
@@ -1280,6 +1317,11 @@ export default function QuestionForm({
                 Urdu subject supports specialized question types
               </small>
             )}
+            {isMathScienceSubject() && (
+              <small className="text-success d-block mt-1">
+                Math/Science subject: Formula editor enabled
+              </small>
+            )}
           </div>
 
           {/* Difficulty */}
@@ -1319,7 +1361,7 @@ export default function QuestionForm({
           {['past_paper', 'model_paper'].includes(formData.source_type) && (
             <div className="col-md-6">
               <label className="form-label">Year</label>
-              <SimpleWysiwyg
+              <input
                 type="number"
                 className="form-control"
                 name="source_year"
@@ -1330,54 +1372,68 @@ export default function QuestionForm({
               />
             </div>
           )}
-</div>
-<div className="row g-3 mt-2">
+        </div>
+        <div className="row g-3 mt-2">
           {/* English and Other Subjects MCQ Options */}
           {(formData.question_type === 'mcq' && (isEnglishSubject() || (!isEnglishSubject() && !isUrduSubject()))) && (
             <>
               <div className="col-md-6">
                 <label className="form-label">Option A (English) *</label>
-                <SimpleWysiwyg
-                  type="text"
-                  className="form-control"
-                  name="option_a"
+                <Editor
+                  apiKey={TINYMCE_API_KEY}
                   value={formData.option_a}
-                  onChange={handleChange}
-                  required
+                  onEditorChange={(content) => handleEditorChange(content, 'option_a')}
+                  init={{
+                    ...englishEditorConfig,
+                    height: 150,
+                    menubar: false,
+                    toolbar: 'bold italic | superscript subscript | formula'
+                  }}
                 />
               </div>
 
               <div className="col-md-6">
                 <label className="form-label">Option B (English) *</label>
-                <SimpleWysiwyg
-                  type="text"
-                  className="form-control"
-                  name="option_b"
+                <Editor
+                  apiKey={TINYMCE_API_KEY}
                   value={formData.option_b}
-                  onChange={handleChange}
-                  required
+                  onEditorChange={(content) => handleEditorChange(content, 'option_b')}
+                  init={{
+                    ...englishEditorConfig,
+                    height: 150,
+                    menubar: false,
+                    toolbar: 'bold italic | superscript subscript | formula'
+                  }}
                 />
               </div>
 
               <div className="col-md-6">
                 <label className="form-label">Option C (English)</label>
-                <SimpleWysiwyg
-                  type="text"
-                  className="form-control"
-                  name="option_c"
+                <Editor
+                  apiKey={TINYMCE_API_KEY}
                   value={formData.option_c}
-                  onChange={handleChange}
+                  onEditorChange={(content) => handleEditorChange(content, 'option_c')}
+                  init={{
+                    ...englishEditorConfig,
+                    height: 150,
+                    menubar: false,
+                    toolbar: 'bold italic | superscript subscript | formula'
+                  }}
                 />
               </div>
 
               <div className="col-md-6">
                 <label className="form-label">Option D (English)</label>
-                <SimpleWysiwyg
-                  type="text"
-                  className="form-control"
-                  name="option_d"
+                <Editor
+                  apiKey={TINYMCE_API_KEY}
                   value={formData.option_d}
-                  onChange={handleChange}
+                  onEditorChange={(content) => handleEditorChange(content, 'option_d')}
+                  init={{
+                    ...englishEditorConfig,
+                    height: 150,
+                    menubar: false,
+                    toolbar: 'bold italic | superscript subscript | formula'
+                  }}
                 />
               </div>
 
@@ -1386,49 +1442,61 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-6">
                     <label className="form-label">Option A (Urdu)</label>
-                    <SimpleWysiwyg
-                      type="text"
-                      className="form-control urdu-text"
-                      name="option_a_ur"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.option_a_ur}
-                      onChange={handleChange}
-                      placeholder="آپشن اے درج کریں"
+                      onEditorChange={(content) => handleEditorChange(content, 'option_a_ur')}
+                      init={{
+                        ...urduEditorConfig,
+                        height: 150,
+                        menubar: false,
+                        toolbar: 'bold italic | superscript subscript | formula'
+                      }}
                     />
                   </div>
 
                   <div className="col-md-6">
                     <label className="form-label">Option B (Urdu)</label>
-                    <SimpleWysiwyg
-                      type="text"
-                      className="form-control urdu-text"
-                      name="option_b_ur"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.option_b_ur}
-                      onChange={handleChange}
-                      placeholder="آپشن بی درج کریں"
+                      onEditorChange={(content) => handleEditorChange(content, 'option_b_ur')}
+                      init={{
+                        ...urduEditorConfig,
+                        height: 150,
+                        menubar: false,
+                        toolbar: 'bold italic | superscript subscript | formula'
+                      }}
                     />
                   </div>
 
                   <div className="col-md-6">
                     <label className="form-label">Option C (Urdu)</label>
-                    <SimpleWysiwyg
-                      type="text"
-                      className="form-control urdu-text"
-                      name="option_c_ur"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.option_c_ur}
-                      onChange={handleChange}
-                      placeholder="آپشن سی درج کریں"
+                      onEditorChange={(content) => handleEditorChange(content, 'option_c_ur')}
+                      init={{
+                        ...urduEditorConfig,
+                        height: 150,
+                        menubar: false,
+                        toolbar: 'bold italic | superscript subscript | formula'
+                      }}
                     />
                   </div>
 
                   <div className="col-md-6">
                     <label className="form-label">Option D (Urdu)</label>
-                    <SimpleWysiwyg
-                      type="text"
-                      className="form-control urdu-text"
-                      name="option_d_ur"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.option_d_ur}
-                      onChange={handleChange}
-                      placeholder="آپشن ڈی درج کریں"
+                      onEditorChange={(content) => handleEditorChange(content, 'option_d_ur')}
+                      init={{
+                        ...urduEditorConfig,
+                        height: 150,
+                        menubar: false,
+                        toolbar: 'bold italic | superscript subscript | formula'
+                      }}
                     />
                   </div>
                 </>
@@ -1458,56 +1526,66 @@ export default function QuestionForm({
             <>
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن اے (اردو) *</label>
-                <SimpleWysiwyg
-                  type="text"
-                  className="form-control urdu-text"
-                  name="option_a_ur"
+                <Editor
+                  apiKey={TINYMCE_API_KEY}
                   value={formData.option_a_ur}
-                  onChange={handleChange}
-                  required
-                  placeholder="آپشن اے درج کریں"
+                  onEditorChange={(content) => handleEditorChange(content, 'option_a_ur')}
+                  init={{
+                    ...urduEditorConfig,
+                    height: 150,
+                    menubar: false,
+                    toolbar: 'bold italic | superscript subscript'
+                  }}
                 />
               </div>
 
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن بی (اردو) *</label>
-                <SimpleWysiwyg
-                  type="text"
-                  className="form-control urdu-text"
-                  name="option_b_ur"
+                <Editor
+                  apiKey={TINYMCE_API_KEY}
                   value={formData.option_b_ur}
-                  onChange={handleChange}
-                  required
-                  placeholder="آپشن بی درج کریں"
+                  onEditorChange={(content) => handleEditorChange(content, 'option_b_ur')}
+                  init={{
+                    ...urduEditorConfig,
+                    height: 150,
+                    menubar: false,
+                    toolbar: 'bold italic | superscript subscript'
+                  }}
                 />
               </div>
 
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن سی (اردو)</label>
-                <SimpleWysiwyg
-                  type="text"
-                  className="form-control urdu-text"
-                  name="option_c_ur"
+                <Editor
+                  apiKey={TINYMCE_API_KEY}
                   value={formData.option_c_ur}
-                  onChange={handleChange}
-                  placeholder="آپشن سی درج کریں"
+                  onEditorChange={(content) => handleEditorChange(content, 'option_c_ur')}
+                  init={{
+                    ...urduEditorConfig,
+                    height: 150,
+                    menubar: false,
+                    toolbar: 'bold italic | superscript subscript'
+                  }}
                 />
               </div>
 
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن ڈی (اردو)</label>
-                <SimpleWysiwyg
-                  type="text"
-                  className="form-control urdu-text"
-                  name="option_d_ur"
+                <Editor
+                  apiKey={TINYMCE_API_KEY}
                   value={formData.option_d_ur}
-                  onChange={handleChange}
-                  placeholder="آپشن ڈی درج کریں"
+                  onEditorChange={(content) => handleEditorChange(content, 'option_d_ur')}
+                  init={{
+                    ...urduEditorConfig,
+                    height: 150,
+                    menubar: false,
+                    toolbar: 'bold italic | superscript subscript'
+                  }}
                 />
               </div>
 
               <div className="col-md-12">
-                <label className="form-label urdu-text" style={{float:'right'}} >صحیح آپشن منتخب کریں *</label>
+                <label className="form-label urdu-text" style={{float:'right'}}>صحیح آپشن منتخب کریں *</label>
                 <select
                   className="form-select urdu-text"
                   name="correct_option"
@@ -1531,22 +1609,11 @@ export default function QuestionForm({
               {isEnglishSubject() && (
                 <div className="col-md-12">
                   <label className="form-label">Answer (English) *</label>
-                  <SimpleWysiwyg
-                    className="form-control"
-                    rows={3}
-                    name="answer_text"
+                  <Editor
+                    apiKey={TINYMCE_API_KEY}
                     value={formData.answer_text}
-                    onChange={handleChange}
-                    required
-                    placeholder={
-                      formData.question_type === 'translate_urdu' 
-                        ? "Enter Urdu translation"
-                        : formData.question_type === 'translate_english'
-                        ? "Enter English translation"
-                        : formData.question_type === 'idiom_phrases'
-                        ? "Explain the meaning and usage"
-                        : "Enter answer"
-                    }
+                    onEditorChange={(content) => handleEditorChange(content, 'answer_text')}
+                    init={englishEditorConfig}
                   />
                 </div>
               )}
@@ -1554,14 +1621,11 @@ export default function QuestionForm({
               {isUrduSubject() && (
                 <div className="col-md-12">
                   <label className="form-label urdu-label">جواب (اردو) *</label>
-                  <SimpleWysiwyg
-                    className="form-control urdu-text"
-                    rows={3}
-                    name="answer_text_ur"
+                  <Editor
+                    apiKey={TINYMCE_API_KEY}
                     value={formData.answer_text_ur}
-                    onChange={handleChange}
-                    required
-                    placeholder="جواب درج کریں"
+                    onEditorChange={(content) => handleEditorChange(content, 'answer_text_ur')}
+                    init={urduEditorConfig}
                   />
                 </div>
               )}
@@ -1570,24 +1634,24 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label">Answer (English) *</label>
-                    <SimpleWysiwyg
-                      className="form-control"
-                      rows={3}
-                      name="answer_text"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.answer_text}
-                      onChange={handleChange}
-                      required
+                      onEditorChange={(content) => handleEditorChange(content, 'answer_text')}
+                      init={isMathScienceSubject() ? englishEditorConfig : {
+                        ...englishEditorConfig,
+                        plugins: englishEditorConfig.plugins.filter(p => p !== 'math'),
+                        toolbar: englishEditorConfig.toolbar.replace('formula | ', '')
+                      }}
                     />
                   </div>
                   <div className="col-md-12">
                     <label className="form-label">Answer (Urdu)</label>
-                    <SimpleWysiwyg
-                      className="form-control urdu-text"
-                      rows={3}
-                      name="answer_text_ur"
+                    <Editor
+                      apiKey={TINYMCE_API_KEY}
                       value={formData.answer_text_ur}
-                      onChange={handleChange}
-                      placeholder="جواب درج کریں"
+                      onEditorChange={(content) => handleEditorChange(content, 'answer_text_ur')}
+                      init={urduEditorConfig}
                     />
                   </div>
                 </>

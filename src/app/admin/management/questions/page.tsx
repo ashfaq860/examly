@@ -7,8 +7,10 @@ import {
   FiChevronLeft, FiChevronRight, FiChevronsLeft, FiChevronsRight
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import dynamic from 'next/dynamic';
 import * as XLSX from 'xlsx';
-import QuestionForm from '@/components/QuestionForm';
+//import QuestionForm from '@/components/QuestionForm';
+const QuestionForm = dynamic(() => import('@/components/QuestionForm'), { ssr: false });
 import { useRouter } from "next/navigation";
 import { isUserAdmin } from "@/lib/auth-utils";
 
