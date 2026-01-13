@@ -1250,15 +1250,13 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                     style={{ cursor: isPaidUser ? 'pointer' : 'not-allowed' }}
                   >
                     <div>
-                      <span className="fw-bold">Remove Watermark  {!isPaidUser && (
-                      <span className="badge bg-warning text-dark ms-2">Premium</span>
-                    )}</span>
-                     
+                      <span className="fw-bold">Remove Watermark</span>
+                      {!isPaidUser && (
+                        <span className="badge bg-warning text-dark ms-2">Premium</span>
+                      )}
                     </div>
-                   
                   </label>
                 </div>
-                
               </div>
 
               <div className="action-buttons">
@@ -1300,11 +1298,10 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                 
                 <div className="row g-2 mb-3">
                   <div className="col-6">
-                   
                     <a href="/dashboard/generate-paper" className="btn btn-outline-primary w-100">
-  <PlusCircle className="me-2" size={20} />
-  New Paper
-</a>
+                      <PlusCircle className="me-2" size={20} />
+                      New Paper
+                    </a>
                   </div>
                   <div className="col-6">
                     <button 
@@ -1313,64 +1310,83 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                       onClick={() => setStep(5)}
                       disabled={isLoading}
                     >
-                       <ArrowLeft className="me-2" size={20} /> 
+                      <ArrowLeft className="me-2" size={20} /> 
                       Back
                     </button>
                   </div>
                 </div>
               </div>
-            <div className="quick-stats mt-4 p-3 border rounded">
-              <h6 className="fw-bold text-primary mb-3">📈 Question Statistics</h6>
-              <div className="row text-center g-3">
-                {getQuestionTypes().map((type) => {
-                  const questions = previewQuestions[type.value] || [];
-                  if (questions.length === 0) return null;
-                  
-                  const attemptField = `${type.fieldPrefix}ToAttempt`;
-                  const marksField = `${type.fieldPrefix}Marks`;
-                  
-                  const attemptValue = watch(attemptField) || 0;
-                  const marksValue = watch(marksField) || 1;
-                  
-                  const sectionMarks = questions.slice(0, attemptValue).reduce((sum, q) => {
-                    return sum + (q.customMarks || marksValue);
-                  }, 0);
-                  
-                  return (
-                    <div key={type.value} className="col-4">
-                      <div className="fw-bold text-primary">{type.label}</div>
-                      <div className="fw-bold">{attemptValue}/{questions.length}</div>
-                      <small className="text-muted">(Attempt/Total)</small>
-                      <div className="small text-success">
-                        = {sectionMarks} marks
+              
+              <div className="quick-stats mt-4 p-3 border rounded">
+                <h6 className="fw-bold text-primary mb-3">📈 Question Statistics</h6>
+                <div className="row text-center g-3">
+                  {getQuestionTypes().map((type) => {
+                    const questions = previewQuestions[type.value] || [];
+                    if (questions.length === 0) return null;
+                    
+                    const attemptField = `${type.fieldPrefix}ToAttempt`;
+                    const marksField = `${type.fieldPrefix}Marks`;
+                    
+                    const attemptValue = watch(attemptField) || 0;
+                    const marksValue = watch(marksField) || 1;
+                    
+                    const sectionMarks = questions.slice(0, attemptValue).reduce((sum, q) => {
+                      return sum + (q.customMarks || marksValue);
+                    }, 0);
+                    
+                    return (
+                      <div key={type.value} className="col-4">
+                        <div className="fw-bold text-primary">{type.label}</div>
+                        <div className="fw-bold">{attemptValue}/{questions.length}</div>
+                        <small className="text-muted">(Attempt/Total)</small>
+                        <div className="small text-success">
+                          = {sectionMarks} marks
+                        </div>
                       </div>
+                    );
+                  })}
+                  
+                  {/* Paper Type and MCQ Placement */}
+                  <div className="col-6">
+                    <div className="fw-bold text-primary">Paper Type</div>
+                    <div className="fw-bold text-capitalize">
+                      {watch('paperType') || 'Standard'}
                     </div>
-                  );
-                })}
-                
-                {/* Paper Type and MCQ Placement */}
-                <div className="col-6">
-                  <div className="fw-bold text-primary">Paper Type</div>
-                  <div className="fw-bold text-capitalize">
-                    {watch('paperType') || 'Standard'}
                   </div>
-                </div>
-                
-                <div className="col-6">
-                  <div className="fw-bold text-primary">Paper Layout</div>
-                  <div className="fw-bold text-capitalize">
-                    {watch('mcqPlacement') || 'Mixed'} per Page
+                  
+                  <div className="col-6">
+                    <div className="fw-bold text-primary">Paper Layout</div>
+                    <div className="fw-bold text-capitalize">
+                      {(() => {
+                        const mcqPlacement = watch('mcqPlacement') || 'mixed';
+                        switch (mcqPlacement) {
+                          case 'separate':
+                            return 'Two Pages (1 mcq,1 subjective)';
+                          case 'mixed':
+                            return 'Single Paper';
+                          case 'two_papers':
+                            return 'Two Papers Per Page';
+                          case 'three_papers':
+                            return 'Three Papers Per Page';
+                          case 'mcq_only':
+                            return 'MCQ Paper Only';
+                          case 'subjective_only':
+                            return 'Subjective Paper Only';
+                          default:
+                            return 'Mixed Layout';
+                        }
+                      })()}
+                    </div>
                   </div>
-                </div>
-                
-                <div className="col-12 mt-2 pt-2 border-top">
-                  <div className="fw-bold text-danger fs-5">
-                    Total: {calculateTotalMarksFromQuestions()} Marks
+                  
+                  <div className="col-12 mt-2 pt-2 border-top">
+                    <div className="fw-bold text-danger fs-5">
+                      Total: {calculateTotalMarksFromQuestions()} Marks
+                    </div>
+                    <small className="text-muted">Based on "To Attempt" values</small>
                   </div>
-                  <small className="text-muted">Based on "To Attempt" values</small>
                 </div>
               </div>
-            </div>
 
               {isEditMode && (
                 <div className="edit-tips mt-3 p-3 bg-warning bg-opacity-10 rounded border">
