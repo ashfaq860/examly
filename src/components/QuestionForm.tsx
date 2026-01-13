@@ -94,7 +94,7 @@ export default function QuestionForm({
   
   // TinyMCE API Key (get from https://www.tiny.cloud/)
   // Store this in your .env.local file: NEXT_PUBLIC_TINYMCE_API_KEY=your-api-key
-  const TINYMCE_API_KEY = process.env.NEXT_PUBLIC_TINYMCE_API_KEY || 'no-api-key';
+  const TINYMCE_API_KEY = process.env.NEXT_PUBLIC_TINYMCE_API_KEY || 'qqbfm54y8414ospds0zs0yfpy23me5hjvl26retbbz6372pk';
   
   // TinyMCE configuration for English/Math/Science
   const englishEditorConfig = {
