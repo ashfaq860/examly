@@ -1702,12 +1702,12 @@ const DejaVuSansBase64 = loadFontAsBase64('DejaVuSans.ttf');
     justify-content: space-between;
     align-items: center;
     margin: 0 0;
-     font-size: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '10px' : '10px'}; 
+     font-size: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '10px' :'11px'}; 
     }
     ol li{ font-size:9px; }
     .student-info{ margin-top: 10px; margin-bottom:10px; display: flex; justify-content: space-between;  flex-direction: ${isEnglish ? 'row-reverse' : 'row'}; }
   
-    .options { margin-top: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '0px' : '2px'};  display: flex; justify-content: space-between; font-size:  ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '10px' : '12px'}; }
+    .options { margin-top: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '0px' : mcqQuestions.length>10?'1px':'2px'};  display: flex; justify-content: space-between; font-size:  ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '10px' :mcqQuestions.length>10? '10px':'12px'}; }
     .footer { 
       text-align: left; 
       margin-top: 10px; 
