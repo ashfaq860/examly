@@ -92,38 +92,30 @@ export default function QuestionForm({
   const [isTranslating, setIsTranslating] = useState(false);
   const editorRef = useRef<any>(null);
   
-  // TinyMCE API Key (get from https://www.tiny.cloud/)
-  // Store this in your .env.local file: NEXT_PUBLIC_TINYMCE_API_KEY=your-api-key
-  const TINYMCE_API_KEY ='qqbfm54y8414ospds0zs0yfpy23me5hjvl26retbbz6372pk';
+  // Use GPL version via CDN (no API key required)
+  const TINYMCE_SCRIPT_SRC = 'https://cdn.jsdelivr.net/npm/tinymce@6.8.3/tinymce.min.js';
   
-  // TinyMCE configuration for English/Math/Science
+  // TinyMCE configuration for English/Math/Science (GPL version)
   const englishEditorConfig = {
     height: 300,
     menubar: true,
     plugins: [
       'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
       'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-      'insertdatetime', 'media', 'table', 'help', 'wordcount',
-      'math' // Math formula plugin (premium)
+      'insertdatetime', 'media', 'table', 'help', 'wordcount'
     ],
     toolbar: 
       'undo redo | blocks | bold italic underline strikethrough | ' +
       'forecolor backcolor | alignleft aligncenter alignright alignjustify | ' +
-      'bullist numlist outdent indent | superscript subscript | ' +
-      'formula | removeformat help',
+      'bullist numlist outdent indent | removeformat help',
     content_style: 'body { font-family: Helvetica, Arial, sans-serif; font-size: 16px; }',
     directionality: 'ltr',
-    // Math plugin configuration
-    math: {
-      mathml: true,
-      engine: 'mathjax',
-      lib: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
-    },
+    // Remove license key check for GPL version
+    license_key: 'gpl',
     // Enable file upload for images
     images_upload_url: '/api/upload',
     images_upload_handler: async (blobInfo: any) => {
       try {
-        // You'll need to implement your own image upload endpoint
         const formData = new FormData();
         formData.append('file', blobInfo.blob(), blobInfo.filename());
         
@@ -149,8 +141,7 @@ export default function QuestionForm({
     toolbar: 
       'undo redo | blocks | bold italic underline strikethrough | ' +
       'forecolor backcolor | alignright aligncenter alignleft alignjustify | ' +
-      'bullist numlist outdent indent | ' +
-      'formula | removeformat help',
+      'bullist numlist outdent indent | removeformat help',
   };
 
   // Check if selected subject is English
@@ -165,7 +156,7 @@ export default function QuestionForm({
     return selectedSubject?.name?.toLowerCase().includes('urdu') || false;
   };
 
-  // Check if subject is Math/Science (needs formula support)
+  // Check if subject is Math/Science
   const isMathScienceSubject = () => {
     const selectedSubject = subjects.find(s => toId(s.id) === formData.subject_id);
     const subjectName = selectedSubject?.name?.toLowerCase() || '';
@@ -961,7 +952,7 @@ export default function QuestionForm({
                     Question Text (English) *
                   </label>
                   <Editor
-                    apiKey={TINYMCE_API_KEY}
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                     value={formData.question_text}
                     onEditorChange={(content) => handleEditorChange(content, 'question_text')}
                     init={englishEditorConfig}
@@ -975,7 +966,7 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label">English Text to Translate *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.question_text}
                       onEditorChange={(content) => handleEditorChange(content, 'question_text')}
                       init={englishEditorConfig}
@@ -990,7 +981,7 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label">Urdu Text to Translate *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.question_text}
                       onEditorChange={(content) => handleEditorChange(content, 'question_text')}
                       init={englishEditorConfig}
@@ -1023,7 +1014,7 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label">Passage Text (English) *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.passage_text}
                       onEditorChange={(content) => handleEditorChange(content, 'passage_text')}
                       init={englishEditorConfig}
@@ -1032,7 +1023,7 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label">Question about Passage (English) *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.question_text}
                       onEditorChange={(content) => handleEditorChange(content, 'question_text')}
                       init={englishEditorConfig}
@@ -1047,7 +1038,7 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label">Direct Speech Sentence *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.direct_sentence}
                       onEditorChange={(content) => handleEditorChange(content, 'direct_sentence')}
                       init={englishEditorConfig}
@@ -1062,7 +1053,7 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label">Active Voice Sentence *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.active_sentence}
                       onEditorChange={(content) => handleEditorChange(content, 'active_sentence')}
                       init={englishEditorConfig}
@@ -1081,7 +1072,7 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label urdu-label">سوال (اردو) *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.question_text_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
                       init={urduEditorConfig}
@@ -1096,7 +1087,7 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label urdu-label">شعر *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.poetry_text}
                       onEditorChange={(content) => handleEditorChange(content, 'poetry_text')}
                       init={urduEditorConfig}
@@ -1111,7 +1102,7 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label urdu-label">نثر پارہ *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.prose_text}
                       onEditorChange={(content) => handleEditorChange(content, 'prose_text')}
                       init={urduEditorConfig}
@@ -1126,7 +1117,7 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label urdu-label">سوال *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.question_text_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
                       init={urduEditorConfig}
@@ -1143,7 +1134,7 @@ export default function QuestionForm({
                       {formData.question_type === 'sentence_correction' ? 'جملہ (درستگی کے لیے) *' : 'جملہ (تکمیل کے لیے) *'}
                     </label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.sentence_text}
                       onEditorChange={(content) => handleEditorChange(content, 'sentence_text')}
                       init={urduEditorConfig}
@@ -1158,7 +1149,7 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label urdu-label">نثر پارہ (پاسج) *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.passage_text_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'passage_text_ur')}
                       init={urduEditorConfig}
@@ -1167,7 +1158,7 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label urdu-label">سوال (پاسج کے بارے میں) *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.question_text_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
                       init={urduEditorConfig}
@@ -1185,14 +1176,10 @@ export default function QuestionForm({
               <div className="col-md-12">
                 <label className="form-label">Question Text (English) *</label>
                 <Editor
-                  apiKey={TINYMCE_API_KEY}
+                  tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.question_text}
                   onEditorChange={(content) => handleEditorChange(content, 'question_text')}
-                  init={isMathScienceSubject() ? englishEditorConfig : {
-                    ...englishEditorConfig,
-                    plugins: englishEditorConfig.plugins.filter(p => p !== 'math'),
-                    toolbar: englishEditorConfig.toolbar.replace('formula | ', '')
-                  }}
+                  init={englishEditorConfig}
                 />
               </div>
 
@@ -1200,7 +1187,7 @@ export default function QuestionForm({
               <div className="col-md-12">
                 <label className="form-label">Question Text (Urdu)</label>
                 <Editor
-                  apiKey={TINYMCE_API_KEY}
+                  tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.question_text_ur}
                   onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
                   init={urduEditorConfig}
@@ -1380,14 +1367,14 @@ export default function QuestionForm({
               <div className="col-md-6">
                 <label className="form-label">Option A (English) *</label>
                 <Editor
-                  apiKey={TINYMCE_API_KEY}
+                  tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_a}
                   onEditorChange={(content) => handleEditorChange(content, 'option_a')}
                   init={{
                     ...englishEditorConfig,
                     height: 150,
                     menubar: false,
-                    toolbar: 'bold italic | superscript subscript | formula'
+                    toolbar: 'bold italic | removeformat help'
                   }}
                 />
               </div>
@@ -1395,14 +1382,14 @@ export default function QuestionForm({
               <div className="col-md-6">
                 <label className="form-label">Option B (English) *</label>
                 <Editor
-                  apiKey={TINYMCE_API_KEY}
+                  tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_b}
                   onEditorChange={(content) => handleEditorChange(content, 'option_b')}
                   init={{
                     ...englishEditorConfig,
                     height: 150,
                     menubar: false,
-                    toolbar: 'bold italic | superscript subscript | formula'
+                    toolbar: 'bold italic | removeformat help'
                   }}
                 />
               </div>
@@ -1410,14 +1397,14 @@ export default function QuestionForm({
               <div className="col-md-6">
                 <label className="form-label">Option C (English)</label>
                 <Editor
-                  apiKey={TINYMCE_API_KEY}
+                  tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_c}
                   onEditorChange={(content) => handleEditorChange(content, 'option_c')}
                   init={{
                     ...englishEditorConfig,
                     height: 150,
                     menubar: false,
-                    toolbar: 'bold italic | superscript subscript | formula'
+                    toolbar: 'bold italic | removeformat help'
                   }}
                 />
               </div>
@@ -1425,14 +1412,14 @@ export default function QuestionForm({
               <div className="col-md-6">
                 <label className="form-label">Option D (English)</label>
                 <Editor
-                  apiKey={TINYMCE_API_KEY}
+                  tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_d}
                   onEditorChange={(content) => handleEditorChange(content, 'option_d')}
                   init={{
                     ...englishEditorConfig,
                     height: 150,
                     menubar: false,
-                    toolbar: 'bold italic | superscript subscript | formula'
+                    toolbar: 'bold italic | removeformat help'
                   }}
                 />
               </div>
@@ -1443,14 +1430,14 @@ export default function QuestionForm({
                   <div className="col-md-6">
                     <label className="form-label">Option A (Urdu)</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.option_a_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'option_a_ur')}
                       init={{
                         ...urduEditorConfig,
                         height: 150,
                         menubar: false,
-                        toolbar: 'bold italic | superscript subscript | formula'
+                        toolbar: 'bold italic | removeformat help'
                       }}
                     />
                   </div>
@@ -1458,14 +1445,14 @@ export default function QuestionForm({
                   <div className="col-md-6">
                     <label className="form-label">Option B (Urdu)</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.option_b_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'option_b_ur')}
                       init={{
                         ...urduEditorConfig,
                         height: 150,
                         menubar: false,
-                        toolbar: 'bold italic | superscript subscript | formula'
+                        toolbar: 'bold italic | removeformat help'
                       }}
                     />
                   </div>
@@ -1473,14 +1460,14 @@ export default function QuestionForm({
                   <div className="col-md-6">
                     <label className="form-label">Option C (Urdu)</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.option_c_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'option_c_ur')}
                       init={{
                         ...urduEditorConfig,
                         height: 150,
                         menubar: false,
-                        toolbar: 'bold italic | superscript subscript | formula'
+                        toolbar: 'bold italic | removeformat help'
                       }}
                     />
                   </div>
@@ -1488,14 +1475,14 @@ export default function QuestionForm({
                   <div className="col-md-6">
                     <label className="form-label">Option D (Urdu)</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.option_d_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'option_d_ur')}
                       init={{
                         ...urduEditorConfig,
                         height: 150,
                         menubar: false,
-                        toolbar: 'bold italic | superscript subscript | formula'
+                        toolbar: 'bold italic | removeformat help'
                       }}
                     />
                   </div>
@@ -1527,14 +1514,14 @@ export default function QuestionForm({
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن اے (اردو) *</label>
                 <Editor
-                  apiKey={TINYMCE_API_KEY}
+                  tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_a_ur}
                   onEditorChange={(content) => handleEditorChange(content, 'option_a_ur')}
                   init={{
                     ...urduEditorConfig,
                     height: 150,
                     menubar: false,
-                    toolbar: 'bold italic | superscript subscript'
+                    toolbar: 'bold italic | removeformat help'
                   }}
                 />
               </div>
@@ -1542,14 +1529,14 @@ export default function QuestionForm({
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن بی (اردو) *</label>
                 <Editor
-                  apiKey={TINYMCE_API_KEY}
+                  tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_b_ur}
                   onEditorChange={(content) => handleEditorChange(content, 'option_b_ur')}
                   init={{
                     ...urduEditorConfig,
                     height: 150,
                     menubar: false,
-                    toolbar: 'bold italic | superscript subscript'
+                    toolbar: 'bold italic | removeformat help'
                   }}
                 />
               </div>
@@ -1557,14 +1544,14 @@ export default function QuestionForm({
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن سی (اردو)</label>
                 <Editor
-                  apiKey={TINYMCE_API_KEY}
+                  tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_c_ur}
                   onEditorChange={(content) => handleEditorChange(content, 'option_c_ur')}
                   init={{
                     ...urduEditorConfig,
                     height: 150,
                     menubar: false,
-                    toolbar: 'bold italic | superscript subscript'
+                    toolbar: 'bold italic | removeformat help'
                   }}
                 />
               </div>
@@ -1572,14 +1559,14 @@ export default function QuestionForm({
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن ڈی (اردو)</label>
                 <Editor
-                  apiKey={TINYMCE_API_KEY}
+                  tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_d_ur}
                   onEditorChange={(content) => handleEditorChange(content, 'option_d_ur')}
                   init={{
                     ...urduEditorConfig,
                     height: 150,
                     menubar: false,
-                    toolbar: 'bold italic | superscript subscript'
+                    toolbar: 'bold italic | removeformat help'
                   }}
                 />
               </div>
@@ -1610,7 +1597,7 @@ export default function QuestionForm({
                 <div className="col-md-12">
                   <label className="form-label">Answer (English) *</label>
                   <Editor
-                    apiKey={TINYMCE_API_KEY}
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                     value={formData.answer_text}
                     onEditorChange={(content) => handleEditorChange(content, 'answer_text')}
                     init={englishEditorConfig}
@@ -1622,7 +1609,7 @@ export default function QuestionForm({
                 <div className="col-md-12">
                   <label className="form-label urdu-label">جواب (اردو) *</label>
                   <Editor
-                    apiKey={TINYMCE_API_KEY}
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                     value={formData.answer_text_ur}
                     onEditorChange={(content) => handleEditorChange(content, 'answer_text_ur')}
                     init={urduEditorConfig}
@@ -1635,20 +1622,16 @@ export default function QuestionForm({
                   <div className="col-md-12">
                     <label className="form-label">Answer (English) *</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.answer_text}
                       onEditorChange={(content) => handleEditorChange(content, 'answer_text')}
-                      init={isMathScienceSubject() ? englishEditorConfig : {
-                        ...englishEditorConfig,
-                        plugins: englishEditorConfig.plugins.filter(p => p !== 'math'),
-                        toolbar: englishEditorConfig.toolbar.replace('formula | ', '')
-                      }}
+                      init={englishEditorConfig}
                     />
                   </div>
                   <div className="col-md-12">
                     <label className="form-label">Answer (Urdu)</label>
                     <Editor
-                      apiKey={TINYMCE_API_KEY}
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.answer_text_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'answer_text_ur')}
                       init={urduEditorConfig}
