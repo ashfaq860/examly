@@ -348,37 +348,45 @@ const GeneratePaperPage = () => {
     fetchChapters();
   }, [watchedSubjectId, watchedClassId]);
 
-  // Get chapter IDs to use
-  const getChapterIdsToUse = useCallback(() => {
-    if (!chapters || chapters.length === 0) {
-      return [];
-    }
-    
-    const subjectChapters = chapters.filter(chapter => 
-      chapter.subject_id === watchedSubjectId && chapter.class_id === watchedClassId
-    );
-    
-    if (subjectChapters.length === 0) {
-      return [];
-    }
-    
-    let selectedChapterIds: string[] = [];
-    
-    if (watchedChapterOption === 'full_book') {
-      selectedChapterIds = subjectChapters.map(c => c.id);
-    } else if (watchedChapterOption === 'half_book') {
-      const halfIndex = Math.ceil(subjectChapters.length / 2);
-      selectedChapterIds = subjectChapters.slice(0, halfIndex).map(c => c.id);
-    } else if (watchedChapterOption === 'single_chapter' && watch('selectedChapters') && watch('selectedChapters')!.length > 0) {
-      selectedChapterIds = watch('selectedChapters')!;
-    } else if (watchedChapterOption === 'custom' && watch('selectedChapters') && watch('selectedChapters')!.length > 0) {
-      selectedChapterIds = watch('selectedChapters')!;
-    } else {
-      return [];
-    }
-    
-    return selectedChapterIds;
-  }, [chapters, watchedSubjectId, watchedClassId, watchedChapterOption, watch]);
+  // Get chapter IDs to use// In your main page.tsx, update the getChapterIdsToUse function:
+const getChapterIdsToUse = useCallback(() => {
+  if (!chapters || chapters.length === 0) {
+    return [];
+  }
+  
+  // Filter chapters for the current subject and class
+  const subjectChapters = chapters.filter(chapter => 
+    chapter.subject_id === watchedSubjectId && chapter.class_id === watchedClassId
+  );
+  
+  if (subjectChapters.length === 0) {
+    return [];
+  }
+  
+  let selectedChapterIds: string[] = [];
+  
+  if (watchedChapterOption === 'full_book') {
+    // FIX: Return ALL chapters for full book
+    selectedChapterIds = subjectChapters.map(c => c.id);
+    console.log(`📚 Full book selected: ${selectedChapterIds.length} chapters`);
+  } else if (watchedChapterOption === 'half_book') {
+    const halfIndex = Math.ceil(subjectChapters.length / 2);
+    selectedChapterIds = subjectChapters.slice(0, halfIndex).map(c => c.id);
+    console.log(`📚 Half book selected: ${selectedChapterIds.length} chapters`);
+  } else if (watchedChapterOption === 'single_chapter' && watch('selectedChapters') && watch('selectedChapters')!.length > 0) {
+    selectedChapterIds = watch('selectedChapters')!;
+    console.log(`📚 Single chapter selected: ${selectedChapterIds.length} chapters`);
+  } else if (watchedChapterOption === 'custom' && watch('selectedChapters') && watch('selectedChapters')!.length > 0) {
+    selectedChapterIds = watch('selectedChapters')!;
+    console.log(`📚 Custom chapters selected: ${selectedChapterIds.length} chapters`);
+  } else {
+    console.log(`📚 No valid chapter selection`);
+    return [];
+  }
+  
+  console.log(`📚 Selected chapter IDs:`, selectedChapterIds);
+  return selectedChapterIds;
+}, [chapters, watchedSubjectId, watchedClassId, watchedChapterOption, watch]);
 
   const handleLanguageTranslation = (questions: Question[], language: string) => {
     return questions.map(question => {
@@ -455,150 +463,120 @@ const GeneratePaperPage = () => {
     }
   };
 
-  const loadAutoSelectedQuestions = async (chapterIds: string[], formValues: PaperFormData) => {
-    try {
-      const language = formValues.language;
-      const sourceType = formValues.source_type;
-      const availableQuestionTypes = getQuestionTypes(); 
+const loadAutoSelectedQuestions = async (chapterIds: string[], formValues: PaperFormData) => {
+  try {
+    const language = formValues.language;
+    const sourceType = formValues.source_type;
+    const availableQuestionTypes = getQuestionTypes();
 
-      const fetchRandomQuestionsByType = async (
-        questionType: string, 
-        count: number,
-        chapterIds: string[]
-      ) => {
-        if (count <= 0) return [];
+    // Generate a unique random seed for this request
+    const randomSeed = Date.now();
+
+    console.log(`🎲 Starting auto-generation with seed: ${randomSeed}`);
+    console.log(`📚 Total chapters selected: ${chapterIds.length}`);
+
+    // Function to get random questions from ALL chapters
+    const getRandomQuestionsFromChapters = async (
+      questionType: string,
+      count: number,
+      chapterIds: string[]
+    ): Promise<Question[]> => {
+      if (count <= 0) return [];
+      
+      try {
+        // Get a LARGE pool of questions from ALL selected chapters
+        const response = await axios.get(`/api/questions`, {
+          params: {
+            subjectId: watchedSubjectId,
+            classId: watchedClassId,
+            questionType,
+            chapterIds: chapterIds.join(','),
+            language,
+            includeUrdu: language !== 'english',
+            sourceType: sourceType !== 'all' ? sourceType : undefined,
+            limit: 100, // Get a large pool to ensure good random distribution
+            random: true,
+            shuffle: true,
+            randomSeed: randomSeed + questionType.charCodeAt(0), // Different seed per question type
+            ensureRandom: true,
+            timestamp: Date.now()
+          },
+        });
         
-        try {
-          const response = await axios.get(`/api/questions`, {
-            params: {
-              subjectId: watchedSubjectId,
-              classId: watchedClassId,
-              questionType,
-              chapterIds: chapterIds.join(','),
-              language,
-              includeUrdu: language !== 'english',
-              sourceType: sourceType !== 'all' ? sourceType : undefined,
-              limit: count * 3,
-              random: true,
-              shuffle: true
-            },
-          });
-          
-          let questions = response.data || [];
-          
-          if (questions.length < count && sourceType !== 'all') {
-            const fallbackResponse = await axios.get(`/api/questions`, {
-              params: {
-                subjectId: watchedSubjectId,
-                classId: watchedClassId,
-                questionType,
-                chapterIds: chapterIds.join(','),
-                language,
-                includeUrdu: language !== 'english',
-                limit: count * 3,
-                random: true,
-                shuffle: true
-              },
-            });
-            
-            const fallbackQuestions = fallbackResponse.data || [];
-            const combinedQuestions = [...questions, ...fallbackQuestions];
-            const uniqueQuestions = combinedQuestions.filter((q, index, self) => 
-              index === self.findIndex(q2 => q2.id === q.id)
-            );
-            
-            questions = uniqueQuestions;
-          }
-          
-          if (questions.length > 0) {
-            const shuffled = [...questions].sort(() => Math.random() - 0.5);
-            
-            if (chapterIds.length > 1 && shuffled.length >= count) {
-              const questionsByChapter: Record<string, Question[]> = {};
-              
-              shuffled.forEach(question => {
-                const chapterId = question.chapter_id;
-                if (!questionsByChapter[chapterId]) {
-                  questionsByChapter[chapterId] = [];
-                }
-                questionsByChapter[chapterId].push(question);
-              });
-              
-              const distributedQuestions: Question[] = [];
-              const chaptersWithQuestions = Object.keys(questionsByChapter);
-              
-              if (chaptersWithQuestions.length > 0) {
-                let chapterIndex = 0;
-                let attempts = 0;
-                const maxAttempts = count * 2;
-                
-                while (distributedQuestions.length < count && attempts < maxAttempts) {
-                  const chapterId = chaptersWithQuestions[chapterIndex % chaptersWithQuestions.length];
-                  const chapterQuestions = questionsByChapter[chapterId] || [];
-                  
-                  if (chapterQuestions.length > 0) {
-                    const question = chapterQuestions.shift();
-                    if (question) {
-                      distributedQuestions.push(question);
-                    }
-                  }
-                  
-                  chapterIndex++;
-                  attempts++;
-                  
-                  if (chapterIndex >= chaptersWithQuestions.length * 2 && distributedQuestions.length < count) {
-                    const remainingQuestions = shuffled.filter(q => 
-                      !distributedQuestions.some(dq => dq.id === q.id)
-                    );
-                    distributedQuestions.push(...remainingQuestions.slice(0, count - distributedQuestions.length));
-                    break;
-                  }
-                }
-              }
-              
-              if (distributedQuestions.length >= count) {
-                return distributedQuestions.slice(0, count);
-              }
-            }
-            
-            return shuffled.slice(0, count);
-          }
-          
-          return questions.slice(0, count);
-        } catch (error) {
-          console.error(`Error fetching ${questionType} questions:`, error);
+        let questions = response.data || [];
+        
+        console.log(`📊 ${questionType}: Got ${questions.length} questions from API, need ${count}`);
+        
+        if (questions.length === 0) {
+          console.warn(`No ${questionType} questions found`);
           return [];
         }
-      };
-
-      const questionPromises: Promise<Question[]>[] = [];
-      const questionTypeOrder = availableQuestionTypes;
-
-      questionTypeOrder.forEach(type => {
-        const countField = `${type.fieldPrefix}Count`;
-        const count = (formValues as any)[countField] || 0;
-        if (count > 0) {
-          questionPromises.push(fetchRandomQuestionsByType(type.value as string, count, chapterIds));
-        } else {
-          questionPromises.push(Promise.resolve([]));
+        
+        // Ensure we have questions from multiple chapters
+        if (chapterIds.length > 1) {
+          // Group questions by chapter to see distribution
+          const questionsByChapter: Record<string, Question[]> = {};
+          questions.forEach(q => {
+            if (!questionsByChapter[q.chapter_id]) questionsByChapter[q.chapter_id] = [];
+            questionsByChapter[q.chapter_id].push(q);
+          });
+          
+          console.log(`📊 ${questionType}: Questions distributed across ${Object.keys(questionsByChapter).length} chapters`);
         }
-      });
+        
+        // Shuffle again on client side for extra randomness
+        const shuffledQuestions = [...questions].sort(() => Math.random() - 0.5);
+        
+        // Take the required number of questions
+        const selectedQuestions = shuffledQuestions.slice(0, count);
+        
+        // Log which chapters we got questions from
+        const selectedChapters = new Set(selectedQuestions.map(q => q.chapter_id));
+        console.log(`✅ ${questionType}: Selected ${selectedQuestions.length} questions from ${selectedChapters.size} chapters`);
+        
+        return selectedQuestions;
+      } catch (error) {
+        console.error(`Error fetching ${questionType} questions:`, error);
+        return [];
+      }
+    };
 
-      const results = await Promise.all(questionPromises);
+    // Fetch questions for each type in parallel
+    const questionPromises: Promise<Question[]>[] = [];
+    
+    availableQuestionTypes.forEach(type => {
+      const countField = `${type.fieldPrefix}Count`;
+      const count = (formValues as any)[countField] || 0;
+      if (count > 0) {
+        questionPromises.push(getRandomQuestionsFromChapters(type.value as string, count, chapterIds));
+      } else {
+        questionPromises.push(Promise.resolve([]));
+      }
+    });
 
-      const result: Record<string, Question[]> = {};
-      const questionTypesOrder = availableQuestionTypes;
+    const results = await Promise.all(questionPromises);
 
-      questionTypesOrder.forEach((type, index) => {
-        result[type.value] = handleLanguageTranslation(results[index] || [], language);
-      });
+    const result: Record<string, Question[]> = {};
+    
+    availableQuestionTypes.forEach((type, index) => {
+      result[type.value] = handleLanguageTranslation(results[index] || [], language);
+    });
 
-      return result;
-    } catch (error) {
-      console.error('Error loading auto questions:', error);
-      throw error;
-    }
-  };
+    // Log final distribution
+    console.log(`✅ Auto-generation complete with seed: ${randomSeed}`);
+    Object.entries(result).forEach(([type, questions]) => {
+      if (questions.length > 0) {
+        const chaptersUsed = new Set(questions.map(q => q.chapter_id));
+        console.log(`📋 ${type}: ${questions.length} questions from ${chaptersUsed.size} chapters`);
+      }
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Error loading auto questions:', error);
+    throw error;
+  }
+};
 
   const loadPreviewQuestions = async () => {
     try {

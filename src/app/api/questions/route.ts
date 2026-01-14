@@ -15,6 +15,11 @@ export async function GET(request: NextRequest) {
     const sourceType = searchParams.get('source_type');
     const questionIds = searchParams.get('questionIds');
     const limit = parseInt(searchParams.get('limit') || '1000', 10);
+    const random = searchParams.get('random') === 'true';
+    const shuffle = searchParams.get('shuffle') === 'true';
+    const randomSeed = searchParams.get('randomSeed');
+    const ensureRandom = searchParams.get('ensureRandom') === 'true';
+    const timestamp = searchParams.get('timestamp');
 
     // Handle fetching by question IDs (for manual selection preview)
     if (questionIds) {
@@ -57,11 +62,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // For normal filtering, we need to join with chapters to filter by class
-    // Since Supabase doesn't support direct filtering on joined tables in the same way,
-    // we need a different approach
-
-    // Option 1: First get chapters for the class and subject, then get questions
     // Step 1: Get chapter IDs for the given class and subject
     const { data: chaptersData, error: chaptersError } = await supabaseAdmin
       .from('chapters')
@@ -121,14 +121,66 @@ export async function GET(request: NextRequest) {
       query = query.eq('source_type', sourceType);
     }
 
-    const { data: questionsData, error: questionsError } = await query;
+    // IMPORTANT: Declare shuffleSeed at the top level of the try block
+    let shuffleSeed = randomSeed ? parseInt(randomSeed) : Date.now();
+    
+    // Add order by RANDOM() if random parameter is true
+    if (random) {
+      // For Supabase, we can use the RPC function for random ordering
+      // First get all the filtered questions
+      const { data: allFilteredQuestions, error: allQuestionsError } = await query;
+      
+      if (allQuestionsError) {
+        console.error('Supabase questions query error:', allQuestionsError);
+        throw allQuestionsError;
+      }
 
-    if (questionsError) {
-      console.error('Supabase questions query error:', questionsError);
-      throw questionsError;
+      let questions = allFilteredQuestions || [];
+
+      // Apply Fisher-Yates shuffle for true randomness
+      if (questions.length > 0) {
+        // Use seeded random if provided, otherwise use Math.random()
+        const seededRandom = (seed: number) => {
+          const x = Math.sin(seed) * 10000;
+          return x - Math.floor(x);
+        };
+        
+        // First pass with seeded random
+        for (let i = questions.length - 1; i > 0; i--) {
+          const j = Math.floor(seededRandom(shuffleSeed + i) * (i + 1));
+          [questions[i], questions[j]] = [questions[j], questions[i]];
+        }
+        
+        // If ensureRandom is true, add extra shuffling
+        if (ensureRandom) {
+          // Second pass of shuffling for extra randomness
+          for (let i = questions.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [questions[i], questions[j]] = [questions[j], questions[i]];
+          }
+        }
+      }
+
+      // Apply limit after shuffling
+      const limitedQuestions = questions.slice(0, limit);
+      
+      console.log(`🎲 API: Returning ${limitedQuestions.length} random questions out of ${questions.length} total`);
+      console.log(`📊 Shuffle seed: ${shuffleSeed}, Random: ${random}, EnsureRandom: ${ensureRandom}`);
+
+      return NextResponse.json(limitedQuestions);
+    } else {
+      // Non-random query - order by id to maintain consistency
+      query = query.order('id', { ascending: true });
+      
+      const { data: questionsData, error: questionsError } = await query;
+
+      if (questionsError) {
+        console.error('Supabase questions query error:', questionsError);
+        throw questionsError;
+      }
+
+      return NextResponse.json(questionsData || []);
     }
-
-    return NextResponse.json(questionsData || []);
   } catch (error) {
     console.error('Error fetching questions:', error);
     return NextResponse.json(

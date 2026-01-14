@@ -45,17 +45,23 @@ const HtmlContent: React.FC<{
   style?: React.CSSProperties;
   dir?: 'ltr' | 'rtl';
   isUrdu?: boolean;
-}> = ({ content, className, style, dir, isUrdu = false }) => {
-  if (!content) return null;
+  marginBottom?: string;
+}> = ({ content, className, style, dir, isUrdu = false, marginBottom = '2px' }) => {
+  if (!content || content === 'undefined') return null;
   
   const decoded = decodeHtmlEntities(content);
   const hasHtmlTags = /<[^>]*>/g.test(decoded);
+  
+  const baseStyle: React.CSSProperties = {
+    marginBottom,
+    ...style
+  };
   
   if (hasHtmlTags) {
     return (
       <div 
         className={`${className} ${isUrdu ? 'urdu-text' : ''}`}
-        style={style}
+        style={baseStyle}
         dangerouslySetInnerHTML={{ __html: decoded }}
         dir={dir}
       />
@@ -63,7 +69,7 @@ const HtmlContent: React.FC<{
   }
   
   return (
-    <div className={`${className} ${isUrdu ? 'urdu-text' : ''}`} style={style} dir={dir}>
+    <div className={`${className} ${isUrdu ? 'urdu-text' : ''}`} style={baseStyle} dir={dir}>
       {decoded}
     </div>
   );
@@ -75,62 +81,77 @@ const BilingualMcqOption: React.FC<{
   urduContent: string | undefined;
   englishContent: string | undefined;
   className?: string;
-}> = ({ optionLetter, urduContent, englishContent, className }) => {
-  const hasBoth = englishContent && urduContent;
+  isUrduLanguage?: boolean;
+  isBilingual?: boolean;
+}> = ({ optionLetter, urduContent, englishContent, className, isUrduLanguage = false, isBilingual = false }) => {
+  // Clean up content - remove undefined strings
+  const cleanUrduContent = urduContent && urduContent !== 'undefined' ? urduContent : '';
+  const cleanEnglishContent = englishContent && englishContent !== 'undefined' ? englishContent : '';
+  
+  // Determine which content to show based on language
+  const showUrdu = (isUrduLanguage || isBilingual) && cleanUrduContent;
+  const showEnglish = (!isUrduLanguage || isBilingual) && cleanEnglishContent;
+  
+  const hasBoth = showUrdu && showEnglish;
   
   if (hasBoth) {
     return (
       <div className={`bilingual-option ${className || ''}`} style={{
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         width: '100%',
         marginBottom: '8px',
         padding: '4px 0'
       }}>
-        <span className="option-letter">({optionLetter})</span>
+        <span className="option-letter" style={{
+          fontFamily: "'Times New Roman', Times, serif",
+          fontSize: '13px',
+          minWidth: '25px'
+        }}>({optionLetter})</span>
         
         <div className="option-content" style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
           flex: 1,
-          marginLeft: '8px'
+          gap: '15px'
         }}>
-          {englishContent && (
+          {showEnglish && (
             <div className="english-option" style={{
               flex: 1,
               textAlign: 'left',
-              paddingRight: '10px'
+              minWidth: 0
             }}>
               <HtmlContent 
-                content={englishContent}
+                content={cleanEnglishContent}
                 style={{
                   fontFamily: "'Times New Roman', Times, serif",
                   fontSize: '13px',
                   lineHeight: '1.5',
-                  textAlign: 'left'
+                  textAlign: 'left',
+                  marginBottom: '0'
                 }}
                 dir="ltr"
               />
             </div>
           )}
           
-          {urduContent && (
+          {showUrdu && (
             <div className="urdu-option" style={{
               flex: 1,
-              textAlign: 'right',
-              paddingLeft: '10px'
+              minWidth: 0
             }}>
               <HtmlContent 
-                content={urduContent}
+                content={cleanUrduContent}
                 className="urdu-text"
                 isUrdu={true}
                 style={{
                   fontFamily: "'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif",
                   fontSize: '15px',
                   lineHeight: '2',
-                  textAlign: 'right'
+                  textAlign: 'right',
+                  marginBottom: '0'
                 }}
                 dir="rtl"
               />
@@ -141,43 +162,76 @@ const BilingualMcqOption: React.FC<{
     );
   }
   
-  // Single language option
-  return (
-    <div className={`single-option ${className || ''}`} style={{
-      display: 'flex',
-      alignItems: 'flex-start',
-      width: '100%',
-      marginBottom: '8px',
-      padding: '4px 0'
-    }}>
-      <span className="option-letter">({optionLetter})</span>
-      <div className="option-content" style={{ marginLeft: '8px', flex: 1 }}>
-        {englishContent && (
+  // Single language option - prioritize Urdu if Urdu language selected
+  if (isUrduLanguage && showUrdu) {
+    return (
+      <div className={`single-option ${className || ''}`} style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        width: '100%',
+        marginBottom: '4px',
+        padding: '2px 0',
+        direction: 'rtl'
+      }}>
+        <div className="option-content" style={{ 
+          flex: 1,
+          textAlign: 'right',
+          direction: 'rtl',
+          marginRight: '8px'
+        }}>
           <HtmlContent 
-            content={englishContent}
-            style={{
-              fontFamily: "'Times New Roman', Times, serif",
-              fontSize: '13px',
-              lineHeight: '1.5',
-              textAlign: 'left'
-            }}
-            dir="ltr"
-          />
-        )}
-        {urduContent && (
-          <HtmlContent 
-            content={urduContent}
+            content={cleanUrduContent}
             className="urdu-text"
             isUrdu={true}
             style={{
               fontFamily: "'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif",
               fontSize: '15px',
               lineHeight: '2',
-              textAlign: 'right'
+              textAlign: 'right',
+              marginBottom: '0'
             }}
             dir="rtl"
           />
-        )}
+        </div>
+        <span className="option-letter" style={{
+          fontFamily: "'Times New Roman', Times, serif",
+          fontSize: '13px',
+          minWidth: '25px'
+        }}>({optionLetter})</span>
+      </div>
+    );
+  }
+  
+  // English or single language option
+  return (
+    <div className={`single-option ${className || ''}`} style={{
+      display: 'flex',
+      alignItems: 'flex-start',
+      width: '100%',
+      marginBottom: '4px',
+      padding: '2px 0'
+    }}>
+      <span className="option-letter" style={{
+        fontFamily: "'Times New Roman', Times, serif",
+        fontSize: '13px',
+        minWidth: '25px'
+      }}>({optionLetter})</span>
+      <div className="option-content" style={{ 
+        marginLeft: '8px', 
+        flex: 1,
+        textAlign: 'left',
+        direction: 'ltr'
+      }}>
+        <HtmlContent 
+          content={cleanEnglishContent}
+          style={{
+            fontFamily: `${isUrduLanguage?"'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif":"'Times New Roman', Times, serif"}`,
+            fontSize: '13px',
+            lineHeight: '1.5',
+            marginBottom: '0'
+          }}
+           dir={isUrduLanguage ? 'rtl' : 'ltr'} 
+        />
       </div>
     </div>
   );
@@ -210,7 +264,30 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
   const [draggedQuestion, setDraggedQuestion] = useState<{ id: string; type: string } | null>(null);
   const [removeWatermark, setRemoveWatermark] = useState(false);
   const [isAlertVisible, setIsAlertVisible] = useState(false);
+  
+  // Get current language
+  const currentLanguage = watch('language') || 'english';
  
+  const isUrduLanguage = currentLanguage === 'urdu';
+  const isBilingual = currentLanguage === 'bilingual';
+   //alert(isUrduLanguage)
+  // Check if there are MCQ questions
+  const hasMCQ = previewQuestions['mcq'] && previewQuestions['mcq'].length > 0;
+  const hasSubjective = (previewQuestions['short'] && previewQuestions['short'].length > 0) || 
+                       (previewQuestions['long'] && previewQuestions['long'].length > 0);
+  
+  // Determine header text based on question types
+  let paperTypeText = '';
+  if (hasMCQ && hasSubjective) {
+    paperTypeText = isUrduLanguage ? 'حصہ انشائیہ/معرضی' : 'Subjective/MCQ Paper';
+  } else if (hasMCQ && !hasSubjective) {
+    paperTypeText = isUrduLanguage ? 'حصہ معرضی' : 'MCQ Paper';
+  } else if (!hasMCQ && hasSubjective) {
+    paperTypeText = isUrduLanguage ? 'حصہ انشائیہ' : 'Subjective Paper';
+  } else {
+    paperTypeText = isUrduLanguage ? 'پیپر' : 'Paper';
+  }
+
   // Handle watermark checkbox change
   const handleWatermarkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const isPaidUser = trialStatus?.hasActiveSubscription;
@@ -322,13 +399,6 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
     return total;
   };
 
-  // Calculate total marks for a specific type (for summary)
-  const calculateTotalForType = (type: string) => {
-    const toAttempt = getToAttemptForQuestionType(type);
-    const marksPerQuestion = getMarksForQuestionType(type);
-    return toAttempt * marksPerQuestion;
-  };
-
   const handleDragStart = (e: React.DragEvent, questionId: string, questionType: string) => {
     setDraggedQuestion({ id: questionId, type: questionType });
     e.dataTransfer.effectAllowed = 'move';
@@ -422,7 +492,8 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
           style={{ 
             transition: 'all 0.3s ease',
             position: 'relative',
-            cursor: isEditMode ? 'grab' : 'default'
+            cursor: isEditMode ? 'grab' : 'default',
+            marginBottom: '2px'
           }}
         >
           <td className="qnum" style={{ 
@@ -430,9 +501,11 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
             textAlign: 'center', 
             fontWeight: 'bold',
             border: '1px solid #000',
-            padding: '8px',
+            padding: '8px 4px',
             verticalAlign: 'top',
-            position: 'relative'
+            position: 'relative',
+            fontFamily: "'Times New Roman', Times, serif",
+            fontSize: '14px'
           }}>
             {isEditMode && (
               <div className="position-absolute top-0 start-0 m-1 text-muted" style={{ cursor: 'grab' }}>
@@ -444,30 +517,18 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
           <td style={{ 
             border: '1px solid #000',
             padding: '8px',
-            verticalAlign: 'top'
+            verticalAlign: 'top',
+            direction: isUrduLanguage ? 'rtl' : 'ltr'
           }}>
             <div className="question" style={{ 
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'flex-start',
-              margin: '0 0 10px 0'
+              margin: '0 0 8px 0',
+              direction: isUrduLanguage ? 'rtl' : 'ltr'
             }}>
               <div className="flex-grow-1" style={{ width: '100%' }}>
-                {watch('language') === 'english' && (
-                  <HtmlContent 
-                    content={question.question_text}
-                    className="fw-bold english-text"
-                    style={{
-                      fontFamily: "'Times New Roman', Times, serif",
-                      fontSize: '14px',
-                      lineHeight: '1.6',
-                      textAlign: 'left'
-                    }}
-                    dir="ltr"
-                  />
-                )}
-                
-                {watch('language') === 'urdu' && (
+                {isUrduLanguage && (
                   <HtmlContent 
                     content={question.question_text_urdu || question.question_text}
                     className="fw-bold urdu-text"
@@ -477,13 +538,29 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                       fontSize: '16px',
                       lineHeight: '2',
                       textAlign: 'right',
-                      fontWeight: 'bold'
+                      fontWeight: 'bold',
+                      marginBottom: '2px'
                     }}
                     dir="rtl"
                   />
                 )}
                 
-                {watch('language') === 'bilingual' && (
+                {currentLanguage === 'english' && (
+                  <HtmlContent 
+                    content={question.question_text}
+                    className="fw-bold english-text"
+                    style={{
+                      fontFamily: "'Times New Roman', Times, serif",
+                      fontSize: '14px',
+                      lineHeight: '1.6',
+                      textAlign: 'left',
+                      marginBottom: '2px'
+                    }}
+                    dir="ltr"
+                  />
+                )}
+                
+                {isBilingual && (
                   <BilingualQuestionText
                     urduText={question.question_text_urdu}
                     englishText={question.question_text_english || question.question_text}
@@ -508,7 +585,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
             </div>
             
             <div className="options" style={{ 
-              marginTop: '15px'
+              marginTop: '10px'
             }}>
               <div className="row g-2">
                 {question.option_a && (
@@ -516,7 +593,9 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                     <BilingualMcqOption
                       optionLetter="A"
                       urduContent={question.option_a_urdu}
-                      englishContent={question.option_a_english || question.option_a}
+                      englishContent={question.option_a}
+                      isUrduLanguage={isUrduLanguage}
+                      isBilingual={isBilingual}
                     />
                   </div>
                 )}
@@ -525,7 +604,9 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                     <BilingualMcqOption
                       optionLetter="B"
                       urduContent={question.option_b_urdu}
-                      englishContent={question.option_b_english || question.option_b}
+                      englishContent={question.option_b}
+                      isUrduLanguage={isUrduLanguage}
+                      isBilingual={isBilingual}
                     />
                   </div>
                 )}
@@ -534,7 +615,9 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                     <BilingualMcqOption
                       optionLetter="C"
                       urduContent={question.option_c_urdu}
-                      englishContent={question.option_c_english || question.option_c}
+                      englishContent={question.option_c}
+                      isUrduLanguage={isUrduLanguage}
+                      isBilingual={isBilingual}
                     />
                   </div>
                 )}
@@ -543,19 +626,25 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                     <BilingualMcqOption
                       optionLetter="D"
                       urduContent={question.option_d_urdu}
-                      englishContent={question.option_d_english || question.option_d}
+                      englishContent={question.option_d}
+                      isUrduLanguage={isUrduLanguage}
+                      isBilingual={isBilingual}
                     />
                   </div>
                 )}
               </div>
             </div>
             
-            <div className="mt-2 pt-2 border-top">
+            <div className="mt-2 pt-2 border-top" style={{ 
+              marginBottom: '2px',
+              direction: 'ltr'
+            }}>
               <small className="text-muted" style={{
                 fontFamily: "'Times New Roman', Times, serif",
                 direction: 'ltr',
                 textAlign: 'left',
-                display: 'block'
+                display: 'block',
+                fontSize: '12px'
               }}>
                 <i className="bi bi-tag me-1"></i>
                 Chapter {chapterNo}
@@ -570,7 +659,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
       return (
         <div
           key={question.id}
-          className={`question-item mb-4 p-3 border rounded ${isEditMode ? 'cursor-grab bg-light' : ''} ${
+          className={`question-item mb-1 p-3 border rounded ${isEditMode ? 'cursor-grab bg-light' : ''} ${
             draggedQuestion?.id === question.id ? 'dragging border-primary' : ''
           }`}
           draggable={isEditMode}
@@ -579,7 +668,9 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
           style={{ 
             transition: 'all 0.3s ease',
             position: 'relative',
-            cursor: isEditMode ? 'grab' : 'default'
+            cursor: isEditMode ? 'grab' : 'default',
+            marginBottom: '2px',
+            direction: isUrduLanguage ? 'rtl' : 'ltr'
           }}
         >
           {isEditMode && (
@@ -594,7 +685,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
               <div className="question-number">
                 <strong style={{
                   fontFamily: "'Times New Roman', Times, serif",
-                  direction: 'ltr',
+                  direction: isUrduLanguage ? 'rtl' : 'ltr',
                   fontSize: '14px'
                 }}>
                   {type === 'short' ? `(${index + 1})` : `Q.${index + 1}.`}
@@ -604,7 +695,8 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
               <div className="chapter-info">
                 <small className="text-muted" style={{
                   fontFamily: "'Times New Roman', Times, serif",
-                  direction: 'ltr'
+                  direction: isUrduLanguage ? 'rtl' : 'ltr',
+                  fontSize: '12px'
                 }}>
                   <i className="bi bi-tag me-1"></i>
                   Chapter {chapterNo}
@@ -627,26 +719,18 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                   />
                 </div>
               )}
-              <span className="badge bg-secondary">{question.customMarks || marksPerQuestion} marks</span>
+              <span className="badge bg-secondary" style={{
+                fontFamily: "'Times New Roman', Times, serif",
+                fontSize: '12px'
+              }}>
+                {question.customMarks || marksPerQuestion} marks
+              </span>
             </div>
           </div>
           
           {/* Second Row: Question Statement Only */}
-          <div className="question-statement mt-3">
-            {watch('language') === 'english' && (
-              <HtmlContent 
-                content={question.question_text}
-                style={{
-                  fontFamily: "'Times New Roman', Times, serif",
-                  direction: 'ltr',
-                  fontSize: '14px',
-                  lineHeight: '1.6'
-                }}
-                dir="ltr"
-              />
-            )}
-            
-            {watch('language') === 'urdu' && (
+          <div className="question-statement mt-2">
+            {isUrduLanguage && (
               <HtmlContent 
                 content={question.question_text_urdu || question.question_text}
                 className="urdu-text"
@@ -656,30 +740,47 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                   direction: 'rtl',
                   fontSize: '16px',
                   lineHeight: '2',
-                  textAlign: 'right'
+                  textAlign: 'right',
+                  marginBottom: '2px'
                 }}
                 dir="rtl"
               />
             )}
             
-            {watch('language') === 'bilingual' && (
+            {currentLanguage === 'english' && (
+              <HtmlContent 
+                content={question.question_text}
+                style={{
+                  fontFamily: "'Times New Roman', Times, serif",
+                  direction: 'ltr',
+                  fontSize: '14px',
+                  lineHeight: '1.6',
+                  marginBottom: '2px'
+                }}
+                dir="ltr"
+              />
+            )}
+            
+            {isBilingual && (
               <div className="bilingual-stacked" style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'flex-start',
-                gap: '20px'
+                gap: '20px',
+                marginBottom: '2px'
               }}>
                 <div className="english-version" style={{
                   flex: 1,
                   minWidth: 0
                 }}>
                   <HtmlContent 
-                    content={question.question_text_english || question.question_text}
+                    content={question.question_text}
                     style={{
                       fontFamily: "'Times New Roman', Times, serif",
                       fontSize: '14px',
                       lineHeight: '1.6',
-                      textAlign: 'left'
+                      textAlign: 'left',
+                      marginBottom: '0'
                     }}
                     dir="ltr"
                   />
@@ -696,7 +797,8 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                       fontFamily: "'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif",
                       fontSize: '16px',
                       lineHeight: '2',
-                      textAlign: 'right'
+                      textAlign: 'right',
+                      marginBottom: '0'
                     }}
                     dir="rtl"
                   />
@@ -724,86 +826,67 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
     let sectionNote = '';
     
     if (type === 'mcq') {
-      sectionTitle = 'SECTION A - MULTIPLE CHOICE QUESTIONS';
-      sectionNote = watch('language') !== 'english' 
-        ? 'نوٹ: ہر سوال کے چار ممکنہ جوابات A,B,C اور D دیئے گئے ہیں۔ درست جواب کے مطابق دائرہ پُر کریں۔ ایک سے زیادہ دائروں کو پُر کرنے کی صورت میں جواب غلط تصور ہوگا۔'
-        : 'Note: Four possible answers A, B, C and D to each question are given. Fill the correct option\'s circle. More than one filled circle will be treated wrong.';
+      sectionTitle = isUrduLanguage ? 'حصہ اول - معروضی سوالات' : 'SECTION A - MULTIPLE CHOICE QUESTIONS';
+      sectionNote = !isUrduLanguage 
+        ? 'Note: Four possible answers A, B, C and D to each question are given. Fill the correct option\'s circle. More than one filled circle will be treated wrong.'
+        : 'نوٹ: ہر سوال کے چار ممکنہ جوابات A,B,C اور D دیئے گئے ہیں۔ درست جواب کے مطابق دائرہ پُر کریں۔ ایک سے زیادہ دائروں کو پُر کرنے کی صورت میں جواب غلط تصور ہوگا۔';
     } else if (type === 'short') {
-      sectionTitle = 'Part - I / حصہ اول';
-      sectionNote = watch('language') !== 'english'
-        ? 'حصہ اول: مختصر جوابات لکھیں۔'
+      sectionTitle = isUrduLanguage ? 'حصہ دوم' : 'Part - I';
+      sectionNote = isUrduLanguage
+        ? 'حصہ دوم: مختصر جوابات لکھیں۔'
         : 'Part I. Write short answers.';
     } else if (type === 'long') {
-      sectionTitle = 'Part - II / حصہ دوم';
-      sectionNote = watch('language') !== 'english'
-        ? 'حصہ دوم: تفصیلی جوابات لکھیں۔'
+      sectionTitle = isUrduLanguage ? 'حصہ سوم' : 'Part - II';
+      sectionNote = isUrduLanguage
+        ? 'حصہ سوم: تفصیلی جوابات لکھیں۔'
         : 'Part II. Write detailed answers.';
     } else {
       sectionTitle = typeLabel;
     }
     
+    const direction = isUrduLanguage ? 'rtl' : 'ltr';
+    const textAlign = isUrduLanguage ? 'right' : 'left';
+    const fontFamily = isUrduLanguage 
+      ? "'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif" 
+      : "'Times New Roman', Times, serif";
+    
     return (
-      <div key={type} className="section mb-5">
+      <div key={type} className="section mb-4" style={{ marginBottom: '15px' }}>
         <div className="section-header mb-3">
           <h5 className="fw-bold mb-2" style={{ 
             fontSize: '14px', 
             color: '#2c3e50',
-            fontFamily: "'Times New Roman', Times, serif",
-            direction: 'ltr',
-            textAlign: 'center'
+            fontFamily: fontFamily,
+            direction: direction,
+            textAlign: textAlign,
+            marginBottom: '10px'
           }}>
             {sectionTitle}
             {type === 'mcq' && watch('mcqPlacement') === 'separate' && ' (ON SEPARATE PAGE)'}
           </h5>
           
           {sectionNote && (
-            <div className="note p-3 bg-light rounded border mb-3" style={{ fontSize: '12px', lineHeight: '1.2' }}>
-              {watch('language') !== 'english' && type === 'mcq' && (
-                <p className="mb-1 urdu-text" style={{
-                  fontFamily: "'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif",
-                  direction: 'rtl',
-                  fontSize: '14px',
-                  lineHeight: '2',
-                  textAlign: 'right',
-                  margin: 0
-                }}>
-                  {sectionNote}
-                </p>
-              )}
-              {watch('language') !== 'urdu' && type === 'mcq' && (
-                <p className="mb-0" style={{
-                  fontFamily: "'Times New Roman', Times, serif",
-                  direction: 'ltr',
-                  fontSize: '14px',
-                  lineHeight: '1.6',
-                  margin: 0
-                }}>
-                  {sectionNote}
-                </p>
-              )}
-              {type !== 'mcq' && (
-                <p className="mb-0" style={{
-                  fontFamily: watch('language') === 'urdu' ? "'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif" : "'Times New Roman', Times, serif",
-                  direction: watch('language') === 'urdu' ? 'rtl' : 'ltr',
-                  fontSize: '14px',
-                  lineHeight: watch('language') === 'urdu' ? '2' : '1.6',
-                  textAlign: watch('language') === 'urdu' ? 'right' : 'left',
-                  margin: 0
-                }}>
-                  {sectionNote}
-                </p>
-              )}
+            <div className="note p-3 bg-light rounded border mb-3" style={{ 
+              fontSize: '12px', 
+              lineHeight: isUrduLanguage ? '2' : '1.5',
+              direction: direction,
+              textAlign: textAlign,
+              fontFamily: fontFamily
+            }}>
+              {sectionNote}
             </div>
           )}
           
-          <div className="mt-2">
-            <small className="text-muted" style={{
-              fontFamily: "'Times New Roman', Times, serif",
-              direction: 'ltr'
-            }}>
+          <div className="mt-2" style={{ 
+            direction: 'ltr',
+            textAlign: 'left',
+            fontFamily: "'Times New Roman', Times, serif",
+            fontSize: '13px'
+          }}>
+            <small className="text-muted">
               {toAttempt} of {questions.length} questions to attempt. Each question carries {marksPerQuestion} mark{marksPerQuestion > 1 ? 's' : ''}.
             </small>
-            <span className="badge bg-primary ms-2">
+            <span className="badge bg-primary ms-2" style={{ fontSize: '12px' }}>
               {toAttempt} × {marksPerQuestion} = {sectionMarks} marks
             </span>
           </div>
@@ -813,15 +896,16 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
           className="questions-list"
           onDragOver={(e) => handleDragOver(e)}
           onDrop={(e) => handleDrop(e, type)}
+          style={{ marginBottom: '2px' }}
         >
           {type === 'mcq' ? (
             <div className="table-responsive">
               <table style={{ 
                 width: '100%', 
                 borderCollapse: 'collapse', 
-                margin: '10px 0', 
+                margin: '5px 0', 
                 fontSize: '14px',
-                direction: watch('language') === 'urdu' ? 'rtl' : 'ltr'
+                direction: isUrduLanguage ? 'rtl' : 'ltr'
               }}>
                 <tbody>
                   {questions.map((question, index) => renderQuestion(question, type, index))}
@@ -1033,17 +1117,19 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                 <div 
                   className="paper-preview" 
                   style={{ 
-                    fontFamily: 'Arial, sans-serif',
+                    fontFamily: isUrduLanguage ? "'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif" : "'Times New Roman', Times, serif",
                     padding: '20px',
                     background: 'white',
                     minHeight: '800px',
                     maxWidth: '900px',
-                    margin: '0 auto'
+                    margin: '0 auto',
+                    direction: isUrduLanguage ? 'rtl' : 'ltr',
+                    textAlign: isUrduLanguage ? 'right' : 'left'
                   }}
                 >
                   <div className="header text-center mb-1" style={{ fontSize: '13px' }}>
                     <div className="mb-3">
-                      <h1 className="text-center mb-2" style={{
+                      <h1 className="text-center mb-0" style={{
                         fontFamily: "'Times New Roman', Times, serif",
                         direction: 'ltr'
                       }}>
@@ -1074,7 +1160,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                       width: '100%', 
                       borderCollapse: 'collapse', 
                       border: 'none !important', 
-                      marginBottom: '20px',
+                      marginBottom: '0px',
                       direction: 'rtl',
                       textAlign: 'right'
                     }}>
@@ -1165,7 +1251,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                               fontSize: '14px',
                               display: 'block',
                               textAlign: 'right'
-                            }}>حصہ انشائیہ</span>
+                            }}>{paperTypeText}</span>
                           </td>
                         </tr>
                       </tbody>
@@ -1211,12 +1297,11 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                       color: '#666', 
                       borderTop: '1px solid #ccc', 
                       paddingTop: '10px',
-                      opacity: removeWatermark && isPaidUser ? 0.5 : 1
+                      opacity: removeWatermark && isPaidUser ? 0.5 : 1,
+                      fontFamily: "'Times New Roman', Times, serif",
+                      direction: 'ltr'
                     }}>
-                      <p style={{
-                        fontFamily: "'Times New Roman', Times, serif",
-                        direction: 'ltr'
-                      }}>
+                      <p>
                         Generated on {new Date().toLocaleDateString()} | www.examly.pk | Generate papers Save Time
                       </p>
                     </div>
@@ -1234,7 +1319,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
             </div>
             <div className="card-body">
               {/* Watermark Removal Checkbox - ALWAYS VISIBLE */}
-              <div className="watermark-control mb-2">
+              <div className="watermark-control mb-3">
                 <div className="form-check">
                   <input
                     className="form-check-input"
@@ -1336,10 +1421,10 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                     
                     return (
                       <div key={type.value} className="col-4">
-                        <div className="fw-bold text-primary">{type.label}</div>
-                        <div className="fw-bold">{attemptValue}/{questions.length}</div>
-                        <small className="text-muted">(Attempt/Total)</small>
-                        <div className="small text-success">
+                        <div className="fw-bold text-primary" style={{ fontSize: '13px' }}>{type.label}</div>
+                        <div className="fw-bold" style={{ fontSize: '14px' }}>{attemptValue}/{questions.length}</div>
+                        <small className="text-muted" style={{ fontSize: '11px' }}>(Attempt/Total)</small>
+                        <div className="small text-success" style={{ fontSize: '12px' }}>
                           = {sectionMarks} marks
                         </div>
                       </div>
@@ -1348,30 +1433,30 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                   
                   {/* Paper Type and MCQ Placement */}
                   <div className="col-6">
-                    <div className="fw-bold text-primary">Paper Type</div>
-                    <div className="fw-bold text-capitalize">
+                    <div className="fw-bold text-primary" style={{ fontSize: '13px' }}>Paper Type</div>
+                    <div className="fw-bold text-capitalize" style={{ fontSize: '12px' }}>
                       {watch('paperType') || 'Standard'}
                     </div>
                   </div>
                   
                   <div className="col-6">
-                    <div className="fw-bold text-primary">Paper Layout</div>
-                    <div className="fw-bold text-capitalize">
+                    <div className="fw-bold text-primary" style={{ fontSize: '13px' }}>Paper Layout</div>
+                    <div className="fw-bold text-capitalize" style={{ fontSize: '12px' }}>
                       {(() => {
                         const mcqPlacement = watch('mcqPlacement') || 'mixed';
                         switch (mcqPlacement) {
                           case 'separate':
-                            return 'Two Pages (1 mcq,1 subjective)';
+                            return 'Two Pages';
                           case 'mixed':
                             return 'Single Paper';
                           case 'two_papers':
-                            return 'Two Papers Per Page';
+                            return 'Two Papers';
                           case 'three_papers':
-                            return 'Three Papers Per Page';
+                            return 'Three Papers';
                           case 'mcq_only':
-                            return 'MCQ Paper Only';
+                            return 'MCQ Only';
                           case 'subjective_only':
-                            return 'Subjective Paper Only';
+                            return 'Subjective Only';
                           default:
                             return 'Mixed Layout';
                         }
@@ -1380,10 +1465,10 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                   </div>
                   
                   <div className="col-12 mt-2 pt-2 border-top">
-                    <div className="fw-bold text-danger fs-5">
+                    <div className="fw-bold text-danger" style={{ fontSize: '16px' }}>
                       Total: {calculateTotalMarksFromQuestions()} Marks
                     </div>
-                    <small className="text-muted">Based on "To Attempt" values</small>
+                    <small className="text-muted" style={{ fontSize: '11px' }}>Based on "To Attempt" values</small>
                   </div>
                 </div>
               </div>
@@ -1411,47 +1496,64 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
         /* Urdu font classes */
         .urdu-text {
           font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif !important;
-          font-size: 16px;
-          line-height: 2;
-          text-align: right;
-          direction: rtl;
-          font-weight: normal;
+          font-size: 16px !important;
+          line-height: 2 !important;
+          text-align: right !important;
+          direction: rtl !important;
+          font-weight: normal !important;
+          margin-bottom: 2px !important;
         }
         
         .english-text {
-          font-family: 'Times New Roman', Times, serif;
-          font-size: 14px;
-          line-height: 1.6;
-          text-align: left;
-          direction: ltr;
+          font-family: 'Times New Roman', Times, serif !important;
+          font-size: 14px !important;
+          line-height: 1.6 !important;
+          text-align: left !important;
+          direction: ltr !important;
+          margin-bottom: 2px !important;
         }
         
         /* Fix for bilingual layout */
         .bilingual-question-wrapper {
-          width: 100%;
+          width: 100% !important;
+          margin-bottom: 2px !important;
         }
         
         .bilingual-content {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 20px;
-          width: '100%';
+          display: flex !important;
+          justify-content: space-between !important;
+          align-items: flex-start !important;
+          gap: 20px !important;
+          width: 100% !important;
+          margin-bottom: 2px !important;
         }
         
         .english-part, .urdu-part {
-          flex: 1;
-          min-width: 0;
+          flex: 1 !important;
+          min-width: 0 !important;
+          margin-bottom: 2px !important;
         }
         
         .english-part {
-          text-align: left;
-          direction: ltr;
+          text-align: left !important;
+          direction: ltr !important;
         }
         
         .urdu-part {
-          text-align: right;
-          direction: rtl;
+          text-align: right !important;
+          direction: rtl !important;
+        }
+        
+        /* Fix for Urdu MCQ options alignment */
+        .single-option[style*="direction: rtl"] .option-letter {
+          order: 2 !important;
+        }
+        
+        .single-option[style*="direction: rtl"] .option-content {
+          order: 1 !important;
+          margin-right: 8px !important;
+          margin-left: 0 !important;
+          text-align: right !important;
         }
         
         /* Fix for MCQ options on mobile */
@@ -1466,7 +1568,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
           
           .bilingual-option, .single-option {
             width: 100% !important;
-            margin-bottom: 10px !important;
+            margin-bottom: 4px !important;
           }
           
           .option-content {
@@ -1475,6 +1577,16 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
           
           .english-option, .urdu-option {
             padding: 0 5px !important;
+          }
+          
+          .urdu-text {
+            font-size: 14px !important;
+            line-height: 1.8 !important;
+          }
+          
+          .english-text {
+            font-size: 12px !important;
+            line-height: 1.4 !important;
           }
         }
         
@@ -1493,36 +1605,57 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
         
         /* Style for superscript and subscript */
         sub, sup {
-          font-size: 0.75em;
-          line-height: 0;
-          position: relative;
-          vertical-align: baseline;
+          font-size: 0.75em !important;
+          line-height: 0 !important;
+          position: relative !important;
+          vertical-align: baseline !important;
         }
         
         sup {
-          top: -0.5em;
+          top: -0.5em !important;
         }
         
         sub {
-          bottom: -0.25em;
+          bottom: -0.25em !important;
         }
         
         /* Ensure proper RTL support */
         [dir="rtl"] {
-          text-align: right;
+          text-align: right !important;
         }
         
         [dir="ltr"] {
-          text-align: left;
+          text-align: left !important;
         }
         
         /* Table cell alignment fix */
         td[dir="rtl"] {
-          text-align: right;
+          text-align: right !important;
         }
         
         td[dir="ltr"] {
-          text-align: left;
+          text-align: left !important;
+        }
+        
+        /* Question item spacing */
+        .question-item {
+          margin-bottom: 2px !important;
+        }
+        
+        /* Professional paper styling */
+        .paper-preview {
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+          border: 1px solid #e0e0e0 !important;
+        }
+        
+        .section-header {
+          border-bottom: 2px solid #4a6fa5 !important;
+          padding-bottom: 8px !important;
+        }
+        
+        .note {
+          background-color: #f8f9fa !important;
+          border-left: 4px solid #4a6fa5 !important;
         }
       `}</style>
     </form>
@@ -1542,7 +1675,8 @@ const BilingualQuestionText: React.FC<{
         justifyContent: 'space-between',
         alignItems: 'flex-start',
         gap: '20px',
-        width: '100%'
+        width: '100%',
+        marginBottom: '2px'
       }}>
         {englishText && (
           <div className="english-part" style={{
@@ -1557,7 +1691,8 @@ const BilingualQuestionText: React.FC<{
                 fontFamily: "'Times New Roman', Times, serif",
                 fontSize: '14px',
                 lineHeight: '1.6',
-                textAlign: 'left'
+                textAlign: 'left',
+                marginBottom: '0'
               }}
               dir="ltr"
             />
@@ -1578,7 +1713,8 @@ const BilingualQuestionText: React.FC<{
                 fontSize: '16px',
                 lineHeight: '2',
                 textAlign: 'right',
-                fontWeight: 'bold'
+                fontWeight: 'bold',
+                marginBottom: '0'
               }}
               dir="rtl"
             />
