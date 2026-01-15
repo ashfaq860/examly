@@ -4,9 +4,9 @@ import Link from "next/link";
 
 const defaultSlides = [
   {
-    title: "Examly! A smart paper maker for Educators",
+    title: "Examly — Smart Paper Maker & Online Test Generator for Educators",
     description:
-      "Make perfect exam papers in minutes with examly, Full Book, Half Book, Chapter-wise, Custom Chapters, and Randomized papers tailored to your curriculum",
+      "Create professional exam papers in minutes with Examly, the advanced online test maker and question paper generator. Generate full-book, half-book, chapter-wise, custom chapters, and randomized papers tailored to your curriculum. Perfect for schools, colleges, and academies, Examly ensures balanced difficulty, fair assessments, and high-quality, printable exams to save teachers time and enhance student learning outcomes.",
     image: "/smartPaperMaker.png",
     cta: "Try Now",
     link: "/auth/login",
@@ -15,9 +15,9 @@ const defaultSlides = [
     imageStyle: "floating",
   },
   {
-    title: "Register&Get 1 Month Free",
+    title: "Register & Get 3 Month Free — Unlimited Test & Paper Generation",
     description:
-      "Enjoy unlimited paper generation for 1 month — comprehensive exam papers covering the entire syllabus with balanced difficulty.",
+      "Sign up today and get 3 months of free access to Examly's online test maker and question paper generator. Refer a friend and earn an additional 1 month free! Effortlessly create unlimited full-book, half-book, chapter-wise, and custom chapters exam papers. Ideal for teachers, academies, and educational institutes looking to save time while producing professional, balanced, and printable assessments for students.",
     image: "/sliderFreeOffer.jpg",
     cta: "Claim Offer",
     link: "/auth/signup",
@@ -26,9 +26,9 @@ const defaultSlides = [
     imageStyle: "perspective",
   },
   {
-    title: "Test Your MCQ Preparation Before the Exam with Examly",
+    title: "Assess Your MCQ Preparation with Examly — Online Quizzes & Tests",
     description:
-      " Assess your knowledge and identify gaps to ensure you're fully prepared for the Final Exam",
+      "Prepare effectively for exams using Examly's online quizzes and full-book MCQ tests. Identify knowledge gaps, track progress, and ensure readiness for final exams. Our smart test maker provides balanced question distribution, instant results, and printable quizzes. Perfect for students and educators seeking efficient online assessment tools and high-quality question papers to improve exam performance.",
     image: "/student.jpg",
     cta: "Try Full Book Quiz",
     link: "/auth/login",

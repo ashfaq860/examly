@@ -66,46 +66,77 @@ export default function HomeClientWrapper() {
 
       <main>
         {/* ================= PAPER MAKER ================= */}
+       
         <section
           data-animate
           className="scroll-animate fade-up py-5 bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-800"
         >
           <div className="container">
-            <div className="text-center mb-5" data-animate>
-              <h2 className="display-5 fw-bold text-success">
-                ✨ Advanced Paper Maker
-              </h2>
-              <p className="lead text-muted dark:text-gray-300">
-                Professionally organized question bank for exam papers
+
+    <div className="text-center mb-3" data-animate>
+         
+             <h1 className="display-5 fw-bold text-success">✨ Advanced Test Maker & Question Paper Generator</h1>
+              <p className="lead text-muted dark:text-gray-300 text-justify">
+                    Discover advanced features of our online test maker and question paper
+                    generator designed to simplify exam creation for schools, colleges, and
+                    academies. Create professional-quality question papers for classes 5th to
+                    12th using full book, half book, or custom chapter selections. Our smart
+                    question bank supports automatic and manual question selection with complete
+                    control over difficulty levels and question types. Generate board-pattern
+                    exam papers in BISE format, download instantly, and manage unlimited test
+                    creation through a secure and user-friendly system. Whether you are an
+                    educator or an institute, this paper maker saves time while ensuring
+                    accuracy, consistency, and exam readiness.
               </p>
+       
+
             </div>
 
-            <div className="row g-4">
-              <FeatureCard
-                img="/createProfessionalTest.jpg"
-                title="Create Professional Tests"
-                subtitle="Classes 5th to 12th"
-                list={['Full / Half book papers', 'Auto & manual selection', 'Difficulty control']}
-                href="/auth/login"
-                delay={0}
-              />
-              <FeatureCard
-                img="/1monthfree.jpg"
-                title="100% Free Offer"
-                subtitle="Unlimited paper generation"
-                list={['Free signup', 'Referral bonus', 'All classes access']}
-                href="/auth/signup"
-                delay={150}
-              />
-              <FeatureCard
-                img="/boardPattern.jpg"
-                title="Board Pattern Papers"
-                subtitle="BISE format supported"
-                list={['Auto generation', 'Manual control', 'Instant download']}
-                href="/auth/login"
-                delay={300}
-              />
-            </div>
+           
+           <div className="row g-4" data-animate>
+  <FeatureCard
+    img="/createProfessionalTest.jpg"
+    title="Make Professional Tests"
+    subtitle="Classes 5th to 12th"
+    list={[
+      'Generate full , half-book,single chapter and custom Chapters question papers quickly and easily',
+      'Auto & manual question selection for complete control over exam content',
+      'Set difficulty levels for each section to create balanced and fair assessments',
+      'Perfect for schools, colleges, and academies using our advanced test maker'
+    ]}
+    href="/auth/login"
+    delay={0}
+  />
+
+  <FeatureCard
+    img="/1monthfree.jpg"
+    title="100% Free Offer"
+    subtitle="Unlimited Paper Generation"
+    list={[
+      'Free signup with 3 months of unlimited access to generate tests and papers',
+      'Referral bonus: Invite friends and earn 1 month free.',
+      'Access question banks for all classes, with pre-designed board pattern papers',
+      'Easily create online tests and printable exam papers without any cost'
+    ]}
+    href="/auth/signup"
+    delay={150}
+  />
+
+  <FeatureCard
+    img="/boardPattern.jpg"
+    title="Board Pattern Papers"
+    subtitle="BISE Format Supported"
+    list={[
+      'Generate exam papers exactly in BISE board format for accuracy',
+      'Automatic generation of papers based on syllabus, chapters, and question types',
+      'Manual control to customize or rearrange questions as needed',
+      'Instant download and print-ready papers for teachers and academies'
+    ]}
+    href="/auth/login"
+    delay={300}
+  />
+</div>
+
           </div>
         </section>
 

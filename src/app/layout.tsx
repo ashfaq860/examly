@@ -9,9 +9,10 @@ import ClientLayoutWrapper from "./ClientLayoutWrapper";
 
 
 export const metadata = {
-  title: 'Examly —  Generate Papers • Make Tests • Make Teacher Time Table • Quiz Online',
-  description: 'Examly - Make Tests, paper generation, Make Teacher Time Table and online quizzes for students and academies.',
+  title: 'Examly — Online Test Maker, Question Paper Generator & Quiz Platform',
+  description: 'Examly is a powerful online test maker and question paper generator designed for schools, colleges, and academies. Create professional exams, full or half-book papers, and custom chapter tests with difficulty-based and question-type balanced distribution. Generate board pattern papers in BISE format, manage online quizzes, and design teacher timetables easily. Perfect for educators seeking a smart, time-saving system for high-quality assessments. With Examly, you can automate test creation, instantly download printable papers, and provide students with accurate, organized, and fair evaluations. Boost efficiency, save time, and enhance academic performance with our comprehensive paper generation and online test platform.'
 };
+
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
