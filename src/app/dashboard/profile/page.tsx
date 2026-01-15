@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import AcademyLayout from "@/components/AcademyLayout";
 import {
   User,
@@ -17,7 +18,6 @@ import {
 import { motion } from "framer-motion";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import toast, { Toaster } from "react-hot-toast";
-
 import ReferralSection from "@/components/ReferralSection";
 
 type Profile = {
@@ -60,38 +60,67 @@ type UserPackage = {
 
 export default function ProfilePage() {
   const supabase = createClientComponentClient();
+  const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [userPackages, setUserPackages] = useState<UserPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<any>(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
-  // Fetch session
+  // Check authentication and redirect if not logged in
   useEffect(() => {
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      if (!session) {
-        setLoading(false);
-        setError("Please log in to view your profile");
+    const checkAuth = async () => {
+      try {
+        const { data: { session }, error: authError } = await supabase.auth.getSession();
+        
+        if (authError || !session) {
+          console.log('No user found, redirecting to login');
+          router.push('/auth/login');
+          return;
+        }
+
+        // Check user role - only teachers can access
+        const { data: roleData, error: roleError } = await supabase.rpc(
+          'get_user_role',
+          { user_id: session.user.id }
+        );
+
+        if (roleError || roleData !== 'teacher') {
+          console.log('User is not a teacher, redirecting to home');
+          router.push('/');
+          return;
+        }
+
+        // User is authorized
+        setSession(session);
+        setIsAuthorized(true);
+      } catch (error) {
+        console.error('Error checking auth:', error);
+        router.push('/auth/login');
+      } finally {
+        setAuthChecked(true);
       }
     };
-    getSession();
 
+    checkAuth();
+
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
       if (!session) {
-        setLoading(false);
-        setError("Please log in to view your profile");
+        router.push('/auth/login');
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase]);
+  }, [supabase, router]);
 
-  // Fetch profile & packages
+  // Fetch profile & packages only if authorized
   useEffect(() => {
     const fetchProfileAndPackages = async () => {
+      if (!isAuthorized) return;
+      
       setLoading(true);
       setError(null);
       try {
@@ -116,8 +145,24 @@ export default function ProfilePage() {
       }
     };
 
-    if (session) fetchProfileAndPackages();
-  }, [session]);
+    if (isAuthorized && session) fetchProfileAndPackages();
+  }, [session, isAuthorized]);
+
+  // Show loading until auth is checked
+  if (!authChecked || (loading && isAuthorized)) {
+    return (
+      <AcademyLayout>
+        <div className="container-fluid text-center py-5">
+          <div className="spinner-border text-primary" />
+        </div>
+      </AcademyLayout>
+    );
+  }
+
+  // Don't render anything if not authorized (will redirect in useEffect)
+  if (!isAuthorized) {
+    return null;
+  }
 
   // Helpers
   const getPackageStatus = (userPackage: UserPackage) => {
@@ -155,25 +200,14 @@ export default function ProfilePage() {
     toast.success("Link copied!");
   };
 
-  // Loading
-  if (loading) {
-    return (
-      <AcademyLayout>
-        <div className="d-flex justify-content-center align-items-center" style={{ height: '256px' }}>
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-        </div>
-      </AcademyLayout>
-    );
-  }
-
-  // Error
+  // Error handling for profile fetch (after authentication)
   if (error) {
     return (
       <AcademyLayout>
-        <div className="alert alert-danger" role="alert">
-          <strong>Error: </strong>{error}
+        <div className="container px-0 px-md-3 py-2">
+          <div className="alert alert-danger" role="alert">
+            <strong>Error: </strong>{error}
+          </div>
         </div>
       </AcademyLayout>
     );

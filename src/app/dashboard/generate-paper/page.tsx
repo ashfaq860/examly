@@ -21,6 +21,7 @@ import { SelectionMethodStep } from './components/steps/SelectionMethodStep';
 import { ReviewStep } from './components/steps/ReviewStep';
 import { ManualQuestionSelection } from './components/ManualQuestionSelection';
 import { ArrowLeft } from 'lucide-react';
+import { useRouter } from 'next/navigation'; // Add this import
 
 const supabase = createClientComponentClient();
 
@@ -152,6 +153,7 @@ const GeneratePaperPage = () => {
   const [questionsCache, setQuestionsCache] = useState<Record<string, Record<string, Question[]>>>({});
   const [lastPreviewLoad, setLastPreviewLoad] = useState<any>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false); // Add this state
   
   const [generationProgress, setGenerationProgress] = useState({
     percentage: 0,
@@ -165,6 +167,7 @@ const GeneratePaperPage = () => {
   
   const { trialStatus, isLoading: trialLoading, refreshTrialStatus } = useUser();
   const [isFormInitialized, setIsFormInitialized] = useState(false);
+  const router = useRouter(); // Initialize router
 
   const {
     register,
@@ -208,6 +211,59 @@ const GeneratePaperPage = () => {
     },
   });
 
+  // Check authentication status - UPDATED
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error || !session) {
+          console.log('No user found, redirecting to login');
+          router.push('/auth/login');
+          return;
+        }
+
+        // Check user role
+        const { data: roleData, error: roleError } = await supabase.rpc(
+          'get_user_role',
+          { user_id: session.user.id }
+        );
+
+        if (roleError || roleData !== 'teacher') {
+          console.log('User is not a teacher, redirecting to home');
+          router.push('/');
+          return;
+        }
+
+        setIsAuthenticated(true);
+      } catch (error) {
+        console.error('Error checking auth:', error);
+        router.push('/auth/login');
+      } finally {
+        setAuthChecked(true);
+      }
+    };
+    
+    checkAuth();
+  }, [router]);
+
+  // Show loading until auth is checked
+  if (!authChecked || trialLoading) {
+    return (
+      <AcademyLayout>
+        <div className="container-fluid text-center py-5">
+          <div className="spinner-border text-primary" />
+        </div>
+      </AcademyLayout>
+    );
+  }
+
+  // Don't render anything if not authenticated (will redirect in useEffect)
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  // Rest of the component remains the same from here...
   const getQuestionTypes = () => {
     const subjectId = watch('subjectId');
     if (isEnglishSubject(subjects, subjectId)) return englishTypes;
@@ -254,15 +310,6 @@ const GeneratePaperPage = () => {
 
   const debouncedSubjectId = useDebounce(watchedSubjectId, 500);
   const debouncedClassId = useDebounce(watchedClassId, 500);
-
-  // Check authentication status
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsAuthenticated(!!session);
-    };
-    checkAuth();
-  }, []);
 
   // Language restriction based on subject
   useEffect(() => {
@@ -348,45 +395,45 @@ const GeneratePaperPage = () => {
     fetchChapters();
   }, [watchedSubjectId, watchedClassId]);
 
-  // Get chapter IDs to use// In your main page.tsx, update the getChapterIdsToUse function:
-const getChapterIdsToUse = useCallback(() => {
-  if (!chapters || chapters.length === 0) {
-    return [];
-  }
-  
-  // Filter chapters for the current subject and class
-  const subjectChapters = chapters.filter(chapter => 
-    chapter.subject_id === watchedSubjectId && chapter.class_id === watchedClassId
-  );
-  
-  if (subjectChapters.length === 0) {
-    return [];
-  }
-  
-  let selectedChapterIds: string[] = [];
-  
-  if (watchedChapterOption === 'full_book') {
-    // FIX: Return ALL chapters for full book
-    selectedChapterIds = subjectChapters.map(c => c.id);
-    console.log(`📚 Full book selected: ${selectedChapterIds.length} chapters`);
-  } else if (watchedChapterOption === 'half_book') {
-    const halfIndex = Math.ceil(subjectChapters.length / 2);
-    selectedChapterIds = subjectChapters.slice(0, halfIndex).map(c => c.id);
-    console.log(`📚 Half book selected: ${selectedChapterIds.length} chapters`);
-  } else if (watchedChapterOption === 'single_chapter' && watch('selectedChapters') && watch('selectedChapters')!.length > 0) {
-    selectedChapterIds = watch('selectedChapters')!;
-    console.log(`📚 Single chapter selected: ${selectedChapterIds.length} chapters`);
-  } else if (watchedChapterOption === 'custom' && watch('selectedChapters') && watch('selectedChapters')!.length > 0) {
-    selectedChapterIds = watch('selectedChapters')!;
-    console.log(`📚 Custom chapters selected: ${selectedChapterIds.length} chapters`);
-  } else {
-    console.log(`📚 No valid chapter selection`);
-    return [];
-  }
-  
-  console.log(`📚 Selected chapter IDs:`, selectedChapterIds);
-  return selectedChapterIds;
-}, [chapters, watchedSubjectId, watchedClassId, watchedChapterOption, watch]);
+  // Get chapter IDs to use
+  const getChapterIdsToUse = useCallback(() => {
+    if (!chapters || chapters.length === 0) {
+      return [];
+    }
+    
+    // Filter chapters for the current subject and class
+    const subjectChapters = chapters.filter(chapter => 
+      chapter.subject_id === watchedSubjectId && chapter.class_id === watchedClassId
+    );
+    
+    if (subjectChapters.length === 0) {
+      return [];
+    }
+    
+    let selectedChapterIds: string[] = [];
+    
+    if (watchedChapterOption === 'full_book') {
+      // FIX: Return ALL chapters for full book
+      selectedChapterIds = subjectChapters.map(c => c.id);
+      console.log(`📚 Full book selected: ${selectedChapterIds.length} chapters`);
+    } else if (watchedChapterOption === 'half_book') {
+      const halfIndex = Math.ceil(subjectChapters.length / 2);
+      selectedChapterIds = subjectChapters.slice(0, halfIndex).map(c => c.id);
+      console.log(`📚 Half book selected: ${selectedChapterIds.length} chapters`);
+    } else if (watchedChapterOption === 'single_chapter' && watch('selectedChapters') && watch('selectedChapters')!.length > 0) {
+      selectedChapterIds = watch('selectedChapters')!;
+      console.log(`📚 Single chapter selected: ${selectedChapterIds.length} chapters`);
+    } else if (watchedChapterOption === 'custom' && watch('selectedChapters') && watch('selectedChapters')!.length > 0) {
+      selectedChapterIds = watch('selectedChapters')!;
+      console.log(`📚 Custom chapters selected: ${selectedChapterIds.length} chapters`);
+    } else {
+      console.log(`📚 No valid chapter selection`);
+      return [];
+    }
+    
+    console.log(`📚 Selected chapter IDs:`, selectedChapterIds);
+    return selectedChapterIds;
+  }, [chapters, watchedSubjectId, watchedClassId, watchedChapterOption, watch]);
 
   const handleLanguageTranslation = (questions: Question[], language: string) => {
     return questions.map(question => {
@@ -463,120 +510,120 @@ const getChapterIdsToUse = useCallback(() => {
     }
   };
 
-const loadAutoSelectedQuestions = async (chapterIds: string[], formValues: PaperFormData) => {
-  try {
-    const language = formValues.language;
-    const sourceType = formValues.source_type;
-    const availableQuestionTypes = getQuestionTypes();
+  const loadAutoSelectedQuestions = async (chapterIds: string[], formValues: PaperFormData) => {
+    try {
+      const language = formValues.language;
+      const sourceType = formValues.source_type;
+      const availableQuestionTypes = getQuestionTypes();
 
-    // Generate a unique random seed for this request
-    const randomSeed = Date.now();
+      // Generate a unique random seed for this request
+      const randomSeed = Date.now();
 
-    console.log(`🎲 Starting auto-generation with seed: ${randomSeed}`);
-    console.log(`📚 Total chapters selected: ${chapterIds.length}`);
+      console.log(`🎲 Starting auto-generation with seed: ${randomSeed}`);
+      console.log(`📚 Total chapters selected: ${chapterIds.length}`);
 
-    // Function to get random questions from ALL chapters
-    const getRandomQuestionsFromChapters = async (
-      questionType: string,
-      count: number,
-      chapterIds: string[]
-    ): Promise<Question[]> => {
-      if (count <= 0) return [];
-      
-      try {
-        // Get a LARGE pool of questions from ALL selected chapters
-        const response = await axios.get(`/api/questions`, {
-          params: {
-            subjectId: watchedSubjectId,
-            classId: watchedClassId,
-            questionType,
-            chapterIds: chapterIds.join(','),
-            language,
-            includeUrdu: language !== 'english',
-            sourceType: sourceType !== 'all' ? sourceType : undefined,
-            limit: 100, // Get a large pool to ensure good random distribution
-            random: true,
-            shuffle: true,
-            randomSeed: randomSeed + questionType.charCodeAt(0), // Different seed per question type
-            ensureRandom: true,
-            timestamp: Date.now()
-          },
-        });
+      // Function to get random questions from ALL chapters
+      const getRandomQuestionsFromChapters = async (
+        questionType: string,
+        count: number,
+        chapterIds: string[]
+      ): Promise<Question[]> => {
+        if (count <= 0) return [];
         
-        let questions = response.data || [];
-        
-        console.log(`📊 ${questionType}: Got ${questions.length} questions from API, need ${count}`);
-        
-        if (questions.length === 0) {
-          console.warn(`No ${questionType} questions found`);
-          return [];
-        }
-        
-        // Ensure we have questions from multiple chapters
-        if (chapterIds.length > 1) {
-          // Group questions by chapter to see distribution
-          const questionsByChapter: Record<string, Question[]> = {};
-          questions.forEach(q => {
-            if (!questionsByChapter[q.chapter_id]) questionsByChapter[q.chapter_id] = [];
-            questionsByChapter[q.chapter_id].push(q);
+        try {
+          // Get a LARGE pool of questions from ALL selected chapters
+          const response = await axios.get(`/api/questions`, {
+            params: {
+              subjectId: watchedSubjectId,
+              classId: watchedClassId,
+              questionType,
+              chapterIds: chapterIds.join(','),
+              language,
+              includeUrdu: language !== 'english',
+              sourceType: sourceType !== 'all' ? sourceType : undefined,
+              limit: 100, // Get a large pool to ensure good random distribution
+              random: true,
+              shuffle: true,
+              randomSeed: randomSeed + questionType.charCodeAt(0), // Different seed per question type
+              ensureRandom: true,
+              timestamp: Date.now()
+            },
           });
           
-          console.log(`📊 ${questionType}: Questions distributed across ${Object.keys(questionsByChapter).length} chapters`);
+          let questions = response.data || [];
+          
+          console.log(`📊 ${questionType}: Got ${questions.length} questions from API, need ${count}`);
+          
+          if (questions.length === 0) {
+            console.warn(`No ${questionType} questions found`);
+            return [];
+          }
+          
+          // Ensure we have questions from multiple chapters
+          if (chapterIds.length > 1) {
+            // Group questions by chapter to see distribution
+            const questionsByChapter: Record<string, Question[]> = {};
+            questions.forEach(q => {
+              if (!questionsByChapter[q.chapter_id]) questionsByChapter[q.chapter_id] = [];
+              questionsByChapter[q.chapter_id].push(q);
+            });
+            
+            console.log(`📊 ${questionType}: Questions distributed across ${Object.keys(questionsByChapter).length} chapters`);
+          }
+          
+          // Shuffle again on client side for extra randomness
+          const shuffledQuestions = [...questions].sort(() => Math.random() - 0.5);
+          
+          // Take the required number of questions
+          const selectedQuestions = shuffledQuestions.slice(0, count);
+          
+          // Log which chapters we got questions from
+          const selectedChapters = new Set(selectedQuestions.map(q => q.chapter_id));
+          console.log(`✅ ${questionType}: Selected ${selectedQuestions.length} questions from ${selectedChapters.size} chapters`);
+          
+          return selectedQuestions;
+        } catch (error) {
+          console.error(`Error fetching ${questionType} questions:`, error);
+          return [];
         }
-        
-        // Shuffle again on client side for extra randomness
-        const shuffledQuestions = [...questions].sort(() => Math.random() - 0.5);
-        
-        // Take the required number of questions
-        const selectedQuestions = shuffledQuestions.slice(0, count);
-        
-        // Log which chapters we got questions from
-        const selectedChapters = new Set(selectedQuestions.map(q => q.chapter_id));
-        console.log(`✅ ${questionType}: Selected ${selectedQuestions.length} questions from ${selectedChapters.size} chapters`);
-        
-        return selectedQuestions;
-      } catch (error) {
-        console.error(`Error fetching ${questionType} questions:`, error);
-        return [];
-      }
-    };
+      };
 
-    // Fetch questions for each type in parallel
-    const questionPromises: Promise<Question[]>[] = [];
-    
-    availableQuestionTypes.forEach(type => {
-      const countField = `${type.fieldPrefix}Count`;
-      const count = (formValues as any)[countField] || 0;
-      if (count > 0) {
-        questionPromises.push(getRandomQuestionsFromChapters(type.value as string, count, chapterIds));
-      } else {
-        questionPromises.push(Promise.resolve([]));
-      }
-    });
+      // Fetch questions for each type in parallel
+      const questionPromises: Promise<Question[]>[] = [];
+      
+      availableQuestionTypes.forEach(type => {
+        const countField = `${type.fieldPrefix}Count`;
+        const count = (formValues as any)[countField] || 0;
+        if (count > 0) {
+          questionPromises.push(getRandomQuestionsFromChapters(type.value as string, count, chapterIds));
+        } else {
+          questionPromises.push(Promise.resolve([]));
+        }
+      });
 
-    const results = await Promise.all(questionPromises);
+      const results = await Promise.all(questionPromises);
 
-    const result: Record<string, Question[]> = {};
-    
-    availableQuestionTypes.forEach((type, index) => {
-      result[type.value] = handleLanguageTranslation(results[index] || [], language);
-    });
+      const result: Record<string, Question[]> = {};
+      
+      availableQuestionTypes.forEach((type, index) => {
+        result[type.value] = handleLanguageTranslation(results[index] || [], language);
+      });
 
-    // Log final distribution
-    console.log(`✅ Auto-generation complete with seed: ${randomSeed}`);
-    Object.entries(result).forEach(([type, questions]) => {
-      if (questions.length > 0) {
-        const chaptersUsed = new Set(questions.map(q => q.chapter_id));
-        console.log(`📋 ${type}: ${questions.length} questions from ${chaptersUsed.size} chapters`);
-      }
-    });
+      // Log final distribution
+      console.log(`✅ Auto-generation complete with seed: ${randomSeed}`);
+      Object.entries(result).forEach(([type, questions]) => {
+        if (questions.length > 0) {
+          const chaptersUsed = new Set(questions.map(q => q.chapter_id));
+          console.log(`📋 ${type}: ${questions.length} questions from ${chaptersUsed.size} chapters`);
+        }
+      });
 
-    return result;
-  } catch (error) {
-    console.error('Error loading auto questions:', error);
-    throw error;
-  }
-};
+      return result;
+    } catch (error) {
+      console.error('Error loading auto questions:', error);
+      throw error;
+    }
+  };
 
   const loadPreviewQuestions = async () => {
     try {
@@ -827,88 +874,52 @@ const loadAutoSelectedQuestions = async (chapterIds: string[], formValues: Paper
   };
 
   // FIXED: onSubmit with proper progress simulation
-// FIXED: onSubmit function with proper handling of all question types
-const onSubmit = async (formData: PaperFormData) => {
-  // Validate two_papers layout before anything else
-  if (formData.mcqPlacement === 'two_papers') {
-    const totalQuestions = formData.mcqCount + formData.shortCount + formData.longCount;
-    if (totalQuestions > 15) {
-      alert(`Two Papers Layout: Maximum 15 total questions allowed. You have ${totalQuestions}. Please adjust your question counts.`);
-      return;
+  // FIXED: onSubmit function with proper handling of all question types
+  const onSubmit = async (formData: PaperFormData) => {
+    // Validate two_papers layout before anything else
+    if (formData.mcqPlacement === 'two_papers') {
+      const totalQuestions = formData.mcqCount + formData.shortCount + formData.longCount;
+      if (totalQuestions > 15) {
+        alert(`Two Papers Layout: Maximum 15 total questions allowed. You have ${totalQuestions}. Please adjust your question counts.`);
+        return;
+      }
     }
-  }
 
-  if (!canGeneratePaper()) {
-    setShowSubscriptionModal(true);
-    return;
-  }
-
-  // Start progress simulation
-  startProgressSimulation();
-  setIsLoading(true);
-
-  try {
-    // 1. Get current session with error handling
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError) {
-      console.error('Session error:', sessionError);
-      stopProgressSimulation();
-      setGenerationProgress({
-        percentage: 0,
-        message: 'Authentication error. Please try again.',
-        isVisible: false,
-        estimatedTimeRemaining: 0,
-        startTime: 0
-      });
-      setIsLoading(false);
-      alert('Authentication error. Please try logging in again.');
-      window.location.href = '/login';
+    if (!canGeneratePaper()) {
+      setShowSubscriptionModal(true);
       return;
     }
 
-    if (!session) {
-      console.error('No session found');
-      stopProgressSimulation();
-      setGenerationProgress({
-        percentage: 0,
-        message: 'Session expired. Please log in again.',
-        isVisible: false,
-        estimatedTimeRemaining: 0,
-        startTime: 0
-      });
-      setIsLoading(false);
-      alert('Your session has expired. Please log in again.');
-      window.location.href = '/login';
-      return;
-    }
+    // Start progress simulation
+    startProgressSimulation();
+    setIsLoading(true);
 
-    const user = session.user;
-    let accessToken = session.access_token;
-
-    // 2. Check token validity and refresh if needed
-    if (!accessToken || accessToken.split('.').length !== 3) {
-      console.warn('Invalid or missing access token, attempting refresh...');
-      try {
-        const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession();
-        
-        if (refreshError) {
-          console.error('Token refresh error:', refreshError);
-          throw new Error('Token refresh failed');
-        }
-        
-        if (!refreshedSession?.session) {
-          throw new Error('No session after refresh');
-        }
-        
-        accessToken = refreshedSession.session.access_token;
-        console.log('Token refreshed successfully');
-      } catch (refreshError) {
-        console.error('Token refresh failed:', refreshError);
+    try {
+      // 1. Get current session with error handling
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
         stopProgressSimulation();
         setGenerationProgress({
           percentage: 0,
-          message: 'Session refresh failed.',
+          message: 'Authentication error. Please try again.',
+          isVisible: false,
+          estimatedTimeRemaining: 0,
+          startTime: 0
+        });
+        setIsLoading(false);
+        alert('Authentication error. Please try logging in again.');
+        window.location.href = '/login';
+        return;
+      }
+
+      if (!session) {
+        console.error('No session found');
+        stopProgressSimulation();
+        setGenerationProgress({
+          percentage: 0,
+          message: 'Session expired. Please log in again.',
           isVisible: false,
           estimatedTimeRemaining: 0,
           startTime: 0
@@ -918,457 +929,459 @@ const onSubmit = async (formData: PaperFormData) => {
         window.location.href = '/login';
         return;
       }
-    }
 
-    // 3. Validate token format
-    if (!accessToken || accessToken.split('.').length !== 3) {
-      console.error('Invalid token format');
-      stopProgressSimulation();
-      setGenerationProgress({
-        percentage: 0,
-        message: 'Invalid authentication token.',
-        isVisible: false,
-        estimatedTimeRemaining: 0,
-        startTime: 0
-      });
-      setIsLoading(false);
-      alert('Authentication token is invalid. Please log in again.');
-      window.location.href = '/login';
-      return;
-    }
+      const user = session.user;
+      let accessToken = session.access_token;
 
-    const randomSeed = Date.now();
-    
-    // Get chapter IDs for validation
-    const chapterIds = getChapterIdsToUse();
-    
-    // Validate we have chapters
-    if (chapterIds.length === 0) {
-      stopProgressSimulation();
-      setGenerationProgress({
-        percentage: 0,
-        message: 'No chapters found.',
-        isVisible: false,
-        estimatedTimeRemaining: 0,
-        startTime: 0
-      });
-      setIsLoading(false);
-      alert('No chapters found for the selected subject and class. Please check your selection.');
-      return;
-    }
-
-    // Validate we're requesting questions
-    if (formData.mcqCount === 0 && formData.shortCount === 0 && formData.longCount === 0) {
-      stopProgressSimulation();
-      setGenerationProgress({
-        percentage: 0,
-        message: 'No questions selected.',
-        isVisible: false,
-        estimatedTimeRemaining: 0,
-        startTime: 0
-      });
-      setIsLoading(false);
-      alert('Please select at least one question type with count greater than 0.');
-      return;
-    }
-
-    // Validate attempt counts for ALL question types
-    const allQuestionTypes = getQuestionTypes();
-    let hasInvalidAttemptCount = false;
-    let invalidType = '';
-    
-    allQuestionTypes.forEach(type => {
-      const countField = `${type.fieldPrefix}Count`;
-      const attemptField = `${type.fieldPrefix}ToAttempt`;
-      
-      const count = (formData as any)[countField] || 0;
-      const attempt = (formData as any)[attemptField] || 0;
-      
-      if (attempt > count) {
-        hasInvalidAttemptCount = true;
-        invalidType = type.label;
-      }
-    });
-    
-    if (hasInvalidAttemptCount) {
-      stopProgressSimulation();
-      setGenerationProgress({
-        percentage: 0,
-        message: 'Invalid attempt values.',
-        isVisible: false,
-        estimatedTimeRemaining: 0,
-        startTime: 0
-      });
-      setIsLoading(false);
-      alert(`Please fix the 'To Attempt' value for ${invalidType}. It cannot exceed 'Total Qs'.`);
-      return;
-    }
-
-    // Debug log to verify form data
-    console.log('🎯 Debug - Form submission details:', {
-      mcqPlacement: formData.mcqPlacement,
-      isTwoPapers: formData.mcqPlacement === 'two_papers',
-      questionCounts: {
-        mcq: formData.mcqCount,
-        short: formData.shortCount,
-        long: formData.longCount,
-        total: formData.mcqCount + formData.shortCount + formData.longCount
-      },
-      attemptCounts: {
-        mcq: formData.mcqToAttempt,
-        short: formData.shortToAttempt,
-        long: formData.longToAttempt
-      },
-      timeSettings: {
-        timeMinutes: formData.timeMinutes,
-        mcqTimeMinutes: formData.mcqTimeMinutes,
-        subjectiveTimeMinutes: formData.subjectiveTimeMinutes
-      },
-      layoutLimits: formData.mcqPlacement === 'two_papers' ? 'Max 15 questions' : 'No limit'
-    });
-
-    // Prepare selected questions based on current preview order
-    const selectedQuestionsFromPreview: Record<string, string[]> = {};
-    Object.keys(previewQuestions).forEach(type => {
-      selectedQuestionsFromPreview[type] = previewQuestions[type].map(q => q.id);
-    });
-
-    // CRITICAL FIX: Extract "to attempt" values for ALL question types
-    const toAttemptValues: Record<string, number> = {};
-    const customMarksData: Record<string, Array<{questionId: string, marks: number}>> = {};
-
-    // Get all question types and their toAttempt values
-    allQuestionTypes.forEach(type => {
-      const fieldPrefix = type.fieldPrefix;
-      const typeValue = type.value;
-      
-      // Get the "to attempt" value for this question type
-      const toAttemptField = `${fieldPrefix}ToAttempt`;
-      const countField = `${fieldPrefix}Count`;
-      const marksField = `${fieldPrefix}Marks`;
-      
-      // Use toAttempt if provided, otherwise fall back to count
-      const toAttemptValue = (formData as any)[toAttemptField] !== undefined 
-        ? (formData as any)[toAttemptField] 
-        : (formData as any)[countField] || 0;
-      
-      const marksValue = (formData as any)[marksField] || 
-        (typeValue === 'mcq' ? formData.mcqMarks :
-         typeValue === 'short' ? formData.shortMarks :
-         typeValue === 'long' ? formData.longMarks : 2);
-      
-      // Store the toAttempt value
-      toAttemptValues[typeValue] = toAttemptValue;
-      
-      // Prepare custom marks data for this question type
-      const questionsOfType = previewQuestions[typeValue] || [];
-      if (questionsOfType.length > 0) {
-        customMarksData[typeValue] = questionsOfType.map(q => ({
-          questionId: q.id,
-          marks: q.customMarks || marksValue
-        }));
-      }
-      
-      console.log(`📊 ${type.label} - To Attempt: ${toAttemptValue}, Count: ${(formData as any)[countField] || 0}, Marks: ${marksValue}`);
-    });
-
-    // Log all toAttempt values for debugging
-    console.log('📋 All To Attempt Values:', toAttemptValues);
-    console.log('📋 Custom Marks Data:', customMarksData);
-
-    // Calculate total time based on layout
-    let totalTimeMinutes = formData.timeMinutes;
-    if (formData.mcqPlacement === 'separate') {
-      // For separate layout, sum objective and subjective times
-      totalTimeMinutes = (formData.mcqTimeMinutes || 0) + (formData.subjectiveTimeMinutes || 0);
-    }
-
-    // Prepare questions with custom marks for PDF generation
-    const questionsWithCustomMarks: Record<string, any[]> = {};
-    Object.keys(previewQuestions).forEach(type => {
-      const questionType = allQuestionTypes.find(t => t.value === type);
-      let defaultMarks = formData.mcqMarks;
-      if (type === 'short') defaultMarks = formData.shortMarks;
-      if (type === 'long') defaultMarks = formData.longMarks;
-      // For other types, try to get from questionType configuration
-      if (questionType) {
-        const marksField = `${questionType.fieldPrefix}Marks`;
-        defaultMarks = (formData as any)[marksField] || defaultMarks;
-      }
-      
-      questionsWithCustomMarks[type] = previewQuestions[type].map(q => {
-        return {
-          ...q,
-          marks: q.customMarks || defaultMarks,
-          defaultMarks: defaultMarks
-        };
-      });
-    });
-
-    // CRITICAL: Calculate total marks based on "to attempt" values
-    let totalMarksFromToAttempt = 0;
-    const marksByType: Record<string, number> = {};
-    
-    allQuestionTypes.forEach(type => {
-      const typeValue = type.value;
-      const questionsOfType = questionsWithCustomMarks[typeValue] || [];
-      const toAttemptForType = toAttemptValues[typeValue] || 0;
-      
-      // Get default marks for this type
-      let defaultMarks = formData.mcqMarks;
-      if (typeValue === 'short') defaultMarks = formData.shortMarks;
-      if (typeValue === 'long') defaultMarks = formData.longMarks;
-      
-      // Get custom marks from the customMarksData
-      const customMarksForType = customMarksData[typeValue] || [];
-      
-      // Calculate marks for the questions that will be attempted
-      const attemptedQuestions = questionsOfType.slice(0, toAttemptForType);
-      const typeMarks = attemptedQuestions.reduce((total, q, index) => {
-        const customMark = customMarksForType[index]?.marks || q.marks || defaultMarks;
-        return total + customMark;
-      }, 0);
-      
-      marksByType[typeValue] = typeMarks;
-      totalMarksFromToAttempt += typeMarks;
-      
-      console.log(`📈 ${type.label} Marks: ${typeMarks} (${toAttemptForType} attempted)`);
-    });
-
-    console.log('🎯 Total Marks from To Attempt:', totalMarksFromToAttempt);
-    console.log('🎯 Marks by Type:', marksByType);
-
-    // Prepare the payload with all layout support
-    const payload = {
-      ...formData,
-      // Ensure mcqPlacement is properly included
-      mcqPlacement: formData.mcqPlacement,
-      // Handle time fields properly for all layouts
-      timeMinutes: totalTimeMinutes,
-      // For separate layout, keep individual times
-      mcqTimeMinutes: formData.mcqPlacement === 'separate' ? formData.mcqTimeMinutes : undefined,
-      subjectiveTimeMinutes: formData.mcqPlacement === 'separate' ? formData.subjectiveTimeMinutes : undefined,
-      userId: user.id,
-      randomSeed,
-      // CRITICAL: Include toAttempt values for ALL question types
-      mcqToAttempt: toAttemptValues.mcq || formData.mcqCount || 0,
-      shortToAttempt: toAttemptValues.short || formData.shortCount || 0,
-      longToAttempt: toAttemptValues.long || formData.longCount || 0,
-      // Include the complete toAttemptValues object
-      toAttemptValues,
-      // Include custom marks data
-      customMarksData,
-      // Include questions with their order and marks
-      selectedQuestions: selectedQuestionsFromPreview,
-      language: formData.language,
-      shuffleQuestions: formData.shuffleQuestions,
-      reorderedQuestions: questionsWithCustomMarks,
-      // Pass the calculated total marks based on toAttempt
-      calculatedTotalMarks: totalMarksFromToAttempt,
-      // Pass marks by type for verification
-      marksByType,
-      questionOrder: Object.keys(previewQuestions).reduce((acc, type) => {
-        acc[type] = previewQuestions[type].map((q, index) => {
-          const questionType = allQuestionTypes.find(t => t.value === type);
-          let defaultMarks = formData.mcqMarks;
-          if (type === 'short') defaultMarks = formData.shortMarks;
-          if (type === 'long') defaultMarks = formData.longMarks;
-          if (questionType) {
-            const marksField = `${questionType.fieldPrefix}Marks`;
-            defaultMarks = (formData as any)[marksField] || defaultMarks;
-          }
-          
-          return { 
-            id: q.id, 
-            order: index + 1,
-            marks: q.customMarks || defaultMarks 
-          };
-        });
-        return acc;
-      }, {} as Record<string, any[]>)
-    };
-
-    // Log the final payload for debugging
-    console.log('📤 Final Payload for API:', {
-      toAttemptValues: payload.toAttemptValues,
-      customMarksDataKeys: Object.keys(payload.customMarksData || {}),
-      calculatedTotalMarks: payload.calculatedTotalMarks,
-      layout: payload.mcqPlacement,
-      hasReorderedQuestions: !!payload.reorderedQuestions
-    });
-
-    // Prepare headers with token
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json"
-    };
-    
-    if (accessToken) {
-      headers.Authorization = `Bearer ${accessToken}`;
-      console.log('🔐 Using token for API request:', {
-        tokenLength: accessToken.length,
-        tokenPrefix: accessToken.substring(0, 20) + '...'
-      });
-    } else {
-      console.error('No access token available for request');
-      stopProgressSimulation();
-      setGenerationProgress({
-        percentage: 0,
-        message: 'Missing authentication token.',
-        isVisible: false,
-        estimatedTimeRemaining: 0,
-        startTime: 0
-      });
-      setIsLoading(false);
-      alert('Authentication token missing. Please log in again.');
-      window.location.href = '/login';
-      return;
-    }
-
-    // Perform the fetch with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 240000); // 4 minute timeout
-
-    let response;
-    try {
-      response = await fetch("/api/generate-paper", {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      stopProgressSimulation();
-      
-      if (fetchError.name === 'AbortError') {
-        console.error('Request timeout');
-        setGenerationProgress({
-          percentage: 0,
-          message: 'Request timed out after 4 minutes.',
-          isVisible: false,
-          estimatedTimeRemaining: 0,
-          startTime: 0
-        });
-        alert('Request timed out after 4 minutes. Please try again.');
-      } else {
-        console.error('Fetch error:', fetchError);
-        setGenerationProgress({
-          percentage: 0,
-          message: 'Network error occurred.',
-          isVisible: false,
-          estimatedTimeRemaining: 0,
-          startTime: 0
-        });
-        alert('Network error. Please check your connection and try again.');
-      }
-      
-      setIsLoading(false);
-      return;
-    }
-    
-    clearTimeout(timeoutId);
-    
-    const contentType = response.headers.get("content-type") || "";
-    
-    if (response.ok) {
-      // Update progress to 100% when response is received
-      stopProgressSimulation();
-      setGenerationProgress(prev => ({
-        ...prev,
-        percentage: 100,
-        message: 'Paper generated successfully! Downloading PDF...',
-        estimatedTimeRemaining: 0
-      }));
-      
-      await refreshTrialStatus();
-    }
-    
-    // Handle API errors
-    if (!response.ok) {
-      const contentType = response.headers.get('content-type') || '';
-      
-      console.error('API Error:', {
-        status: response.status,
-        statusText: response.statusText,
-        contentType,
-        headers: Object.fromEntries(response.headers.entries())
-      });
-      
-      stopProgressSimulation();
-      
-      if (contentType.includes('application/json')) {
+      // 2. Check token validity and refresh if needed
+      if (!accessToken || accessToken.split('.').length !== 3) {
+        console.warn('Invalid or missing access token, attempting refresh...');
         try {
-          const json = await response.json();
-          console.error('API error response JSON:', json);
+          const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession();
           
-          // Handle authentication errors
-          if (response.status === 401 || response.status === 403) {
-            if (json.message?.includes('session') || json.error?.includes('Auth') || Object.keys(json).length === 0) {
-              setGenerationProgress({
-                percentage: 0,
-                message: 'Session expired. Please log in again.',
-                isVisible: false,
-                estimatedTimeRemaining: 0,
-                startTime: 0
-              });
-              alert('Your session has expired. Please log in again.');
-              window.location.href = '/login';
-            } else {
-              setGenerationProgress({
-                percentage: 0,
-                message: 'Authentication failed.',
-                isVisible: false,
-                estimatedTimeRemaining: 0,
-                startTime: 0
-              });
-              alert(json.error || json.message || 'Authentication failed.');
-            }
-          } else {
-            setGenerationProgress({
-              percentage: 0,
-              message: `Server error (${response.status})`,
-              isVisible: false,
-              estimatedTimeRemaining: 0,
-              startTime: 0
-            });
-            alert(json.error || json.message || `Server error (${response.status})`);
+          if (refreshError) {
+            console.error('Token refresh error:', refreshError);
+            throw new Error('Token refresh failed');
           }
-        } catch (jsonError) {
-          console.error('Failed to parse JSON error:', jsonError);
+          
+          if (!refreshedSession?.session) {
+            throw new Error('No session after refresh');
+          }
+          
+          accessToken = refreshedSession.session.access_token;
+          console.log('Token refreshed successfully');
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+          stopProgressSimulation();
           setGenerationProgress({
             percentage: 0,
-            message: `Server error (${response.status})`,
+            message: 'Session refresh failed.',
             isVisible: false,
             estimatedTimeRemaining: 0,
             startTime: 0
           });
-          alert(`Server error (${response.status}). Please try again.`);
+          setIsLoading(false);
+          alert('Your session has expired. Please log in again.');
+          window.location.href = '/login';
+          return;
         }
+      }
+
+      // 3. Validate token format
+      if (!accessToken || accessToken.split('.').length !== 3) {
+        console.error('Invalid token format');
+        stopProgressSimulation();
+        setGenerationProgress({
+          percentage: 0,
+          message: 'Invalid authentication token.',
+          isVisible: false,
+          estimatedTimeRemaining: 0,
+          startTime: 0
+        });
+        setIsLoading(false);
+        alert('Authentication token is invalid. Please log in again.');
+        window.location.href = '/login';
+        return;
+      }
+
+      const randomSeed = Date.now();
+      
+      // Get chapter IDs for validation
+      const chapterIds = getChapterIdsToUse();
+      
+      // Validate we have chapters
+      if (chapterIds.length === 0) {
+        stopProgressSimulation();
+        setGenerationProgress({
+          percentage: 0,
+          message: 'No chapters found.',
+          isVisible: false,
+          estimatedTimeRemaining: 0,
+          startTime: 0
+        });
+        setIsLoading(false);
+        alert('No chapters found for the selected subject and class. Please check your selection.');
+        return;
+      }
+
+      // Validate we're requesting questions
+      if (formData.mcqCount === 0 && formData.shortCount === 0 && formData.longCount === 0) {
+        stopProgressSimulation();
+        setGenerationProgress({
+          percentage: 0,
+          message: 'No questions selected.',
+          isVisible: false,
+          estimatedTimeRemaining: 0,
+          startTime: 0
+        });
+        setIsLoading(false);
+        alert('Please select at least one question type with count greater than 0.');
+        return;
+      }
+
+      // Validate attempt counts for ALL question types
+      const allQuestionTypes = getQuestionTypes();
+      let hasInvalidAttemptCount = false;
+      let invalidType = '';
+      
+      allQuestionTypes.forEach(type => {
+        const countField = `${type.fieldPrefix}Count`;
+        const attemptField = `${type.fieldPrefix}ToAttempt`;
+        
+        const count = (formData as any)[countField] || 0;
+        const attempt = (formData as any)[attemptField] || 0;
+        
+        if (attempt > count) {
+          hasInvalidAttemptCount = true;
+          invalidType = type.label;
+        }
+      });
+      
+      if (hasInvalidAttemptCount) {
+        stopProgressSimulation();
+        setGenerationProgress({
+          percentage: 0,
+          message: 'Invalid attempt values.',
+          isVisible: false,
+          estimatedTimeRemaining: 0,
+          startTime: 0
+        });
+        setIsLoading(false);
+        alert(`Please fix the 'To Attempt' value for ${invalidType}. It cannot exceed 'Total Qs'.`);
+        return;
+      }
+
+      // Debug log to verify form data
+      console.log('🎯 Debug - Form submission details:', {
+        mcqPlacement: formData.mcqPlacement,
+        isTwoPapers: formData.mcqPlacement === 'two_papers',
+        questionCounts: {
+          mcq: formData.mcqCount,
+          short: formData.shortCount,
+          long: formData.longCount,
+          total: formData.mcqCount + formData.shortCount + formData.longCount
+        },
+        attemptCounts: {
+          mcq: formData.mcqToAttempt,
+          short: formData.shortToAttempt,
+          long: formData.longToAttempt
+        },
+        timeSettings: {
+          timeMinutes: formData.timeMinutes,
+          mcqTimeMinutes: formData.mcqTimeMinutes,
+          subjectiveTimeMinutes: formData.subjectiveTimeMinutes
+        },
+        layoutLimits: formData.mcqPlacement === 'two_papers' ? 'Max 15 questions' : 'No limit'
+      });
+
+      // Prepare selected questions based on current preview order
+      const selectedQuestionsFromPreview: Record<string, string[]> = {};
+      Object.keys(previewQuestions).forEach(type => {
+        selectedQuestionsFromPreview[type] = previewQuestions[type].map(q => q.id);
+      });
+
+      // CRITICAL FIX: Extract "to attempt" values for ALL question types
+      const toAttemptValues: Record<string, number> = {};
+      const customMarksData: Record<string, Array<{questionId: string, marks: number}>> = {};
+
+      // Get all question types and their toAttempt values
+      allQuestionTypes.forEach(type => {
+        const fieldPrefix = type.fieldPrefix;
+        const typeValue = type.value;
+        
+        // Get the "to attempt" value for this question type
+        const toAttemptField = `${fieldPrefix}ToAttempt`;
+        const countField = `${fieldPrefix}Count`;
+        const marksField = `${fieldPrefix}Marks`;
+        
+        // Use toAttempt if provided, otherwise fall back to count
+        const toAttemptValue = (formData as any)[toAttemptField] !== undefined 
+          ? (formData as any)[toAttemptField] 
+          : (formData as any)[countField] || 0;
+        
+        const marksValue = (formData as any)[marksField] || 
+          (typeValue === 'mcq' ? formData.mcqMarks :
+           typeValue === 'short' ? formData.shortMarks :
+           typeValue === 'long' ? formData.longMarks : 2);
+        
+        // Store the toAttempt value
+        toAttemptValues[typeValue] = toAttemptValue;
+        
+        // Prepare custom marks data for this question type
+        const questionsOfType = previewQuestions[typeValue] || [];
+        if (questionsOfType.length > 0) {
+          customMarksData[typeValue] = questionsOfType.map(q => ({
+            questionId: q.id,
+            marks: q.customMarks || marksValue
+          }));
+        }
+        
+        console.log(`📊 ${type.label} - To Attempt: ${toAttemptValue}, Count: ${(formData as any)[countField] || 0}, Marks: ${marksValue}`);
+      });
+
+      // Log all toAttempt values for debugging
+      console.log('📋 All To Attempt Values:', toAttemptValues);
+      console.log('📋 Custom Marks Data:', customMarksData);
+
+      // Calculate total time based on layout
+      let totalTimeMinutes = formData.timeMinutes;
+      if (formData.mcqPlacement === 'separate') {
+        // For separate layout, sum objective and subjective times
+        totalTimeMinutes = (formData.mcqTimeMinutes || 0) + (formData.subjectiveTimeMinutes || 0);
+      }
+
+      // Prepare questions with custom marks for PDF generation
+      const questionsWithCustomMarks: Record<string, any[]> = {};
+      Object.keys(previewQuestions).forEach(type => {
+        const questionType = allQuestionTypes.find(t => t.value === type);
+        let defaultMarks = formData.mcqMarks;
+        if (type === 'short') defaultMarks = formData.shortMarks;
+        if (type === 'long') defaultMarks = formData.longMarks;
+        // For other types, try to get from questionType configuration
+        if (questionType) {
+          const marksField = `${questionType.fieldPrefix}Marks`;
+          defaultMarks = (formData as any)[marksField] || defaultMarks;
+        }
+        
+        questionsWithCustomMarks[type] = previewQuestions[type].map(q => {
+          return {
+            ...q,
+            marks: q.customMarks || defaultMarks,
+            defaultMarks: defaultMarks
+          };
+        });
+      });
+
+      // CRITICAL: Calculate total marks based on "to attempt" values
+      let totalMarksFromToAttempt = 0;
+      const marksByType: Record<string, number> = {};
+      
+      allQuestionTypes.forEach(type => {
+        const typeValue = type.value;
+        const questionsOfType = questionsWithCustomMarks[typeValue] || [];
+        const toAttemptForType = toAttemptValues[typeValue] || 0;
+        
+        // Get default marks for this type
+        let defaultMarks = formData.mcqMarks;
+        if (typeValue === 'short') defaultMarks = formData.shortMarks;
+        if (typeValue === 'long') defaultMarks = formData.longMarks;
+        
+        // Get custom marks from the customMarksData
+        const customMarksForType = customMarksData[typeValue] || [];
+        
+        // Calculate marks for the questions that will be attempted
+        const attemptedQuestions = questionsOfType.slice(0, toAttemptForType);
+        const typeMarks = attemptedQuestions.reduce((total, q, index) => {
+          const customMark = customMarksForType[index]?.marks || q.marks || defaultMarks;
+          return total + customMark;
+        }, 0);
+        
+        marksByType[typeValue] = typeMarks;
+        totalMarksFromToAttempt += typeMarks;
+        
+        console.log(`📈 ${type.label} Marks: ${typeMarks} (${toAttemptForType} attempted)`);
+      });
+
+      console.log('🎯 Total Marks from To Attempt:', totalMarksFromToAttempt);
+      console.log('🎯 Marks by Type:', marksByType);
+
+      // Prepare the payload with all layout support
+      const payload = {
+        ...formData,
+        // Ensure mcqPlacement is properly included
+        mcqPlacement: formData.mcqPlacement,
+        // Handle time fields properly for all layouts
+        timeMinutes: totalTimeMinutes,
+        // For separate layout, keep individual times
+        mcqTimeMinutes: formData.mcqPlacement === 'separate' ? formData.mcqTimeMinutes : undefined,
+        subjectiveTimeMinutes: formData.mcqPlacement === 'separate' ? formData.subjectiveTimeMinutes : undefined,
+        userId: user.id,
+        randomSeed,
+        // CRITICAL: Include toAttempt values for ALL question types
+        mcqToAttempt: toAttemptValues.mcq || formData.mcqCount || 0,
+        shortToAttempt: toAttemptValues.short || formData.shortCount || 0,
+        longToAttempt: toAttemptValues.long || formData.longCount || 0,
+        // Include the complete toAttemptValues object
+        toAttemptValues,
+        // Include custom marks data
+        customMarksData,
+        // Include questions with their order and marks
+        selectedQuestions: selectedQuestionsFromPreview,
+        language: formData.language,
+        shuffleQuestions: formData.shuffleQuestions,
+        reorderedQuestions: questionsWithCustomMarks,
+        // Pass the calculated total marks based on toAttempt
+        calculatedTotalMarks: totalMarksFromToAttempt,
+        // Pass marks by type for verification
+        marksByType,
+        questionOrder: Object.keys(previewQuestions).reduce((acc, type) => {
+          acc[type] = previewQuestions[type].map((q, index) => {
+            const questionType = allQuestionTypes.find(t => t.value === type);
+            let defaultMarks = formData.mcqMarks;
+            if (type === 'short') defaultMarks = formData.shortMarks;
+            if (type === 'long') defaultMarks = formData.longMarks;
+            if (questionType) {
+              const marksField = `${questionType.fieldPrefix}Marks`;
+              defaultMarks = (formData as any)[marksField] || defaultMarks;
+            }
+            
+            return { 
+              id: q.id, 
+              order: index + 1,
+              marks: q.customMarks || defaultMarks 
+            };
+          });
+          return acc;
+        }, {} as Record<string, any[]>)
+      };
+
+      // Log the final payload for debugging
+      console.log('📤 Final Payload for API:', {
+        toAttemptValues: payload.toAttemptValues,
+        customMarksDataKeys: Object.keys(payload.customMarksData || {}),
+        calculatedTotalMarks: payload.calculatedTotalMarks,
+        layout: payload.mcqPlacement,
+        hasReorderedQuestions: !!payload.reorderedQuestions
+      });
+
+      // Prepare headers with token
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
+      
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+        console.log('🔐 Using token for API request:', {
+          tokenLength: accessToken.length,
+          tokenPrefix: accessToken.substring(0, 20) + '...'
+        });
       } else {
-        try {
-          const text = await response.text();
-          console.error('API error response text:', text);
-          
-          if (response.status === 401 || response.status === 403) {
-            setGenerationProgress({
-              percentage: 0,
-              message: 'Authentication failed.',
-              isVisible: false,
-              estimatedTimeRemaining: 0,
-              startTime: 0
-            });
-            alert('Authentication failed. Please log in again.');
-            window.location.href = '/login';
-          } else if (text) {
-            setGenerationProgress({
-              percentage: 0,
-              message: text,
-              isVisible: false,
-              estimatedTimeRemaining: 0,
-              startTime: 0
-            });
-            alert(text);
-          } else {
+        console.error('No access token available for request');
+        stopProgressSimulation();
+        setGenerationProgress({
+          percentage: 0,
+          message: 'Missing authentication token.',
+          isVisible: false,
+          estimatedTimeRemaining: 0,
+          startTime: 0
+        });
+        setIsLoading(false);
+        alert('Authentication token missing. Please log in again.');
+        window.location.href = '/login';
+        return;
+      }
+
+      // Perform the fetch with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 240000); // 4 minute timeout
+
+      let response;
+      try {
+        response = await fetch("/api/generate-paper", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        stopProgressSimulation();
+        
+        if (fetchError.name === 'AbortError') {
+          console.error('Request timeout');
+          setGenerationProgress({
+            percentage: 0,
+            message: 'Request timed out after 4 minutes.',
+            isVisible: false,
+            estimatedTimeRemaining: 0,
+            startTime: 0
+          });
+          alert('Request timed out after 4 minutes. Please try again.');
+        } else {
+          console.error('Fetch error:', fetchError);
+          setGenerationProgress({
+            percentage: 0,
+            message: 'Network error occurred.',
+            isVisible: false,
+            estimatedTimeRemaining: 0,
+            startTime: 0
+          });
+          alert('Network error. Please check your connection and try again.');
+        }
+        
+        setIsLoading(false);
+        return;
+      }
+      
+      clearTimeout(timeoutId);
+      
+      const contentType = response.headers.get("content-type") || "";
+      
+      if (response.ok) {
+        // Update progress to 100% when response is received
+        stopProgressSimulation();
+        setGenerationProgress(prev => ({
+          ...prev,
+          percentage: 100,
+          message: 'Paper generated successfully! Downloading PDF...',
+          estimatedTimeRemaining: 0
+        }));
+        
+        await refreshTrialStatus();
+      }
+      
+      // Handle API errors
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        
+        console.error('API Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          contentType,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+        
+        stopProgressSimulation();
+        
+        if (contentType.includes('application/json')) {
+          try {
+            const json = await response.json();
+            console.error('API error response JSON:', json);
+            
+            // Handle authentication errors
+            if (response.status === 401 || response.status === 403) {
+              if (json.message?.includes('session') || json.error?.includes('Auth') || Object.keys(json).length === 0) {
+                setGenerationProgress({
+                  percentage: 0,
+                  message: 'Session expired. Please log in again.',
+                  isVisible: false,
+                  estimatedTimeRemaining: 0,
+                  startTime: 0
+                });
+                alert('Your session has expired. Please log in again.');
+                window.location.href = '/login';
+              } else {
+                setGenerationProgress({
+                  percentage: 0,
+                  message: 'Authentication failed.',
+                  isVisible: false,
+                  estimatedTimeRemaining: 0,
+                  startTime: 0
+                });
+                alert(json.error || json.message || 'Authentication failed.');
+              }
+            } else {
+              setGenerationProgress({
+                percentage: 0,
+                message: `Server error (${response.status})`,
+                isVisible: false,
+                estimatedTimeRemaining: 0,
+                startTime: 0
+              });
+              alert(json.error || json.message || `Server error (${response.status})`);
+            }
+          } catch (jsonError) {
+            console.error('Failed to parse JSON error:', jsonError);
             setGenerationProgress({
               percentage: 0,
               message: `Server error (${response.status})`,
@@ -1378,122 +1391,156 @@ const onSubmit = async (formData: PaperFormData) => {
             });
             alert(`Server error (${response.status}). Please try again.`);
           }
-        } catch (textError) {
-          console.error('Failed to read error text:', textError);
+        } else {
+          try {
+            const text = await response.text();
+            console.error('API error response text:', text);
+            
+            if (response.status === 401 || response.status === 403) {
+              setGenerationProgress({
+                percentage: 0,
+                message: 'Authentication failed.',
+                isVisible: false,
+                estimatedTimeRemaining: 0,
+                startTime: 0
+              });
+              alert('Authentication failed. Please log in again.');
+              window.location.href = '/login';
+            } else if (text) {
+              setGenerationProgress({
+                percentage: 0,
+                message: text,
+                isVisible: false,
+                estimatedTimeRemaining: 0,
+                startTime: 0
+              });
+              alert(text);
+            } else {
+              setGenerationProgress({
+                percentage: 0,
+                message: `Server error (${response.status})`,
+                isVisible: false,
+                estimatedTimeRemaining: 0,
+                startTime: 0
+              });
+              alert(`Server error (${response.status}). Please try again.`);
+            }
+          } catch (textError) {
+            console.error('Failed to read error text:', textError);
+            setGenerationProgress({
+              percentage: 0,
+              message: `Server error (${response.status})`,
+              isVisible: false,
+              estimatedTimeRemaining: 0,
+              startTime: 0
+            });
+            alert(`Server error (${response.status}). Please try again.`);
+          }
+        }
+        
+        setIsLoading(false);
+        return;
+      }
+      
+      // Handle successful PDF response
+      if (response.ok && contentType.includes("application/pdf")) {
+        try {
+          const blob = await response.blob();
+          
+          if (blob.size === 0) {
+            throw new Error('Empty PDF received');
+          }
+          
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `paper-${formData.title?.replace(/[^a-z0-9]/gi, '_') || 'paper'}-${new Date().getTime()}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+          
+          // Show success message for 2 seconds then hide
+          setTimeout(() => {
+            setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+          }, 2000);
+          
+        } catch (blobError) {
+          console.error('Error processing PDF blob:', blobError);
           setGenerationProgress({
             percentage: 0,
-            message: `Server error (${response.status})`,
+            message: 'Failed to download PDF.',
             isVisible: false,
             estimatedTimeRemaining: 0,
             startTime: 0
           });
-          alert(`Server error (${response.status}). Please try again.`);
+          alert('Failed to download PDF. Please try again.');
+        }
+      } else if (contentType.includes("application/json")) {
+        try {
+          const result = await response.json();
+          setGenerationProgress({
+            percentage: 0,
+            message: result.error || result.message || 'No PDF returned.',
+            isVisible: false,
+            estimatedTimeRemaining: 0,
+            startTime: 0
+          });
+          alert(result.error || result.message || "Paper generated, but no PDF was returned.");
+        } catch (jsonError) {
+          console.error('Failed to parse JSON response:', jsonError);
+          setGenerationProgress({
+            percentage: 0,
+            message: 'Unexpected server response.',
+            isVisible: false,
+            estimatedTimeRemaining: 0,
+            startTime: 0
+          });
+          alert('Server returned unexpected response.');
+        }
+      } else {
+        try {
+          const text = await response.text();
+          setGenerationProgress({
+            percentage: 0,
+            message: text || 'Unknown error occurred.',
+            isVisible: false,
+            estimatedTimeRemaining: 0,
+            startTime: 0
+          });
+          alert(text || "Failed to generate paper (unknown error)");
+        } catch (textError) {
+          console.error('Failed to read response text:', textError);
+          setGenerationProgress({
+            percentage: 0,
+            message: 'Server error occurred.',
+            isVisible: false,
+            estimatedTimeRemaining: 0,
+            startTime: 0
+          });
+          alert('Server error occurred. Please try again.');
         }
       }
-      
+    } catch (error) {
+      console.error('Unexpected error generating paper:', error);
+      stopProgressSimulation();
+      setGenerationProgress({
+        percentage: 0,
+        message: 'An unexpected error occurred.',
+        isVisible: false,
+        estimatedTimeRemaining: 0,
+        startTime: 0
+      });
+      alert("An unexpected error occurred. Please try again.");
+    } finally {
       setIsLoading(false);
-      return;
+      
+      // Hide progress modal after 3 seconds if still visible
+      setTimeout(() => {
+        setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+      }, 3000);
     }
-    
-    // Handle successful PDF response
-    if (response.ok && contentType.includes("application/pdf")) {
-      try {
-        const blob = await response.blob();
-        
-        if (blob.size === 0) {
-          throw new Error('Empty PDF received');
-        }
-        
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `paper-${formData.title?.replace(/[^a-z0-9]/gi, '_') || 'paper'}-${new Date().getTime()}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-        
-        // Show success message for 2 seconds then hide
-        setTimeout(() => {
-          setGenerationProgress(prev => ({ ...prev, isVisible: false }));
-        }, 2000);
-        
-      } catch (blobError) {
-        console.error('Error processing PDF blob:', blobError);
-        setGenerationProgress({
-          percentage: 0,
-          message: 'Failed to download PDF.',
-          isVisible: false,
-          estimatedTimeRemaining: 0,
-          startTime: 0
-        });
-        alert('Failed to download PDF. Please try again.');
-      }
-    } else if (contentType.includes("application/json")) {
-      try {
-        const result = await response.json();
-        setGenerationProgress({
-          percentage: 0,
-          message: result.error || result.message || 'No PDF returned.',
-          isVisible: false,
-          estimatedTimeRemaining: 0,
-          startTime: 0
-        });
-        alert(result.error || result.message || "Paper generated, but no PDF was returned.");
-      } catch (jsonError) {
-        console.error('Failed to parse JSON response:', jsonError);
-        setGenerationProgress({
-          percentage: 0,
-          message: 'Unexpected server response.',
-          isVisible: false,
-          estimatedTimeRemaining: 0,
-          startTime: 0
-        });
-        alert('Server returned unexpected response.');
-      }
-    } else {
-      try {
-        const text = await response.text();
-        setGenerationProgress({
-          percentage: 0,
-          message: text || 'Unknown error occurred.',
-          isVisible: false,
-          estimatedTimeRemaining: 0,
-          startTime: 0
-        });
-        alert(text || "Failed to generate paper (unknown error)");
-      } catch (textError) {
-        console.error('Failed to read response text:', textError);
-        setGenerationProgress({
-          percentage: 0,
-          message: 'Server error occurred.',
-          isVisible: false,
-          estimatedTimeRemaining: 0,
-          startTime: 0
-        });
-        alert('Server error occurred. Please try again.');
-      }
-    }
-  } catch (error) {
-    console.error('Unexpected error generating paper:', error);
-    stopProgressSimulation();
-    setGenerationProgress({
-      percentage: 0,
-      message: 'An unexpected error occurred.',
-      isVisible: false,
-      estimatedTimeRemaining: 0,
-      startTime: 0
-    });
-    alert("An unexpected error occurred. Please try again.");
-  } finally {
-    setIsLoading(false);
-    
-    // Hide progress modal after 3 seconds if still visible
-    setTimeout(() => {
-      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
-    }, 3000);
-  }
-};
+  };
 
   const handleChapterSelection = (chapterId: string) => {
     if (watchedChapterOption === 'single_chapter') {
@@ -1636,15 +1683,9 @@ const onSubmit = async (formData: PaperFormData) => {
           }
         `}</style>
 
-       
-
         <GenerationProgressModal progress={generationProgress} />
-        {!isAuthenticated && (
-          <div className="alert alert-warning mb-2">
-            <i className="bi bi-exclamation-triangle me-2"></i>
-            Please <a href="/login" className="alert-link">login</a> to generate papers.
-          </div>
-        )}
+
+        {/* REMOVED: The authentication warning alert since we're now redirecting */}
 
         <div style={{ 
           opacity: canGeneratePaper() && isAuthenticated ? 1 : 0.6,

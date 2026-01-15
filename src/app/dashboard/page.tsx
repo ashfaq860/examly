@@ -39,6 +39,7 @@ export default function AcademyDashboard() {
   const { trialStatus, isLoading: trialLoading } = useUser();
 
   const [loading, setLoading] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [analytics, setAnalytics] = useState<Analytics>({
     totalPapers: 0,
     totalQuestions: 0,
@@ -54,12 +55,15 @@ export default function AcademyDashboard() {
     }
   }, [trialStatus, router]);
 
-  // Fetch papers and questions for dashboard
+  // Check authorization and fetch data
   useEffect(() => {
-    const fetchData = async () => {
+    const checkAuthAndFetchData = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
+        // First, check if user is authenticated
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+          console.log('No user found, redirecting to login');
           router.push('/auth/login');
           return;
         }
@@ -71,9 +75,13 @@ export default function AcademyDashboard() {
         );
 
         if (roleError || roleData !== 'teacher') {
+          console.log('User is not a teacher, redirecting to home');
           router.push('/');
           return;
         }
+
+        // User is authorized - set flag to show content
+        setIsAuthorized(true);
 
         // Fetch questions count and papers
         const [{ count: totalQuestions }, { data: papers }] = await Promise.all([
@@ -124,15 +132,17 @@ export default function AcademyDashboard() {
           recentActivity,
         });
       } catch (error) {
-        console.error('Error fetching dashboard:', error);
+        console.error('Error checking auth or fetching dashboard:', error);
+        router.push('/auth/login');
       } finally {
         setLoading(false);
       }
     };
 
-    if (!trialLoading) fetchData();
+    if (!trialLoading) checkAuthAndFetchData();
   }, [router, trialStatus, trialLoading, supabase]);
 
+  // Show loading spinner while checking auth and fetching data
   if (loading || trialLoading) {
     return (
       <AcademyLayout>
@@ -141,6 +151,11 @@ export default function AcademyDashboard() {
         </div>
       </AcademyLayout>
     );
+  }
+
+  // Don't render any content if not authorized
+  if (!isAuthorized) {
+    return null; // Or you can return a minimal loading state
   }
 
   // Subscription info for cards and referral section
