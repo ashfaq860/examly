@@ -21,7 +21,6 @@ import { SelectionMethodStep } from './components/steps/SelectionMethodStep';
 import { ReviewStep } from './components/steps/ReviewStep';
 import { ManualQuestionSelection } from './components/ManualQuestionSelection';
 import { ArrowLeft } from 'lucide-react';
-import { useRouter } from 'next/navigation'; // Add this import
 
 const supabase = createClientComponentClient();
 
@@ -153,7 +152,8 @@ const GeneratePaperPage = () => {
   const [questionsCache, setQuestionsCache] = useState<Record<string, Record<string, Question[]>>>({});
   const [lastPreviewLoad, setLastPreviewLoad] = useState<any>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false); // Add this state
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   
   const [generationProgress, setGenerationProgress] = useState({
     percentage: 0,
@@ -167,7 +167,6 @@ const GeneratePaperPage = () => {
   
   const { trialStatus, isLoading: trialLoading, refreshTrialStatus } = useUser();
   const [isFormInitialized, setIsFormInitialized] = useState(false);
-  const router = useRouter(); // Initialize router
 
   const {
     register,
@@ -211,15 +210,21 @@ const GeneratePaperPage = () => {
     },
   });
 
-  // Check authentication status - UPDATED
+  // Fixed: Check authentication status with proper error handling
   useEffect(() => {
+    let isMounted = true;
+    
     const checkAuth = async () => {
+      if (!isMounted) return;
+      
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error || !session) {
-          console.log('No user found, redirecting to login');
-          router.push('/auth/login');
+          if (isMounted) {
+            setAuthError('Please log in to access this page');
+            setAuthChecked(true);
+          }
           return;
         }
 
@@ -230,46 +235,32 @@ const GeneratePaperPage = () => {
         );
 
         if (roleError || roleData !== 'teacher') {
-          console.log('User is not a teacher, redirecting to home');
-          router.push('/');
+          if (isMounted) {
+            setAuthError('This page is only available to teachers');
+            setAuthChecked(true);
+          }
           return;
         }
 
-        setIsAuthenticated(true);
+        if (isMounted) {
+          setIsAuthenticated(true);
+          setAuthChecked(true);
+        }
       } catch (error) {
         console.error('Error checking auth:', error);
-        router.push('/auth/login');
-      } finally {
-        setAuthChecked(true);
+        if (isMounted) {
+          setAuthError('Authentication error. Please try again.');
+          setAuthChecked(true);
+        }
       }
     };
     
     checkAuth();
-  }, [router]);
-
-  // Show loading until auth is checked
-  if (!authChecked || trialLoading) {
-    return (
-      <AcademyLayout>
-        <div className="container-fluid text-center py-5">
-          <div className="spinner-border text-primary" />
-        </div>
-      </AcademyLayout>
-    );
-  }
-
-  // Don't render anything if not authenticated (will redirect in useEffect)
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  // Rest of the component remains the same from here...
-  const getQuestionTypes = () => {
-    const subjectId = watch('subjectId');
-    if (isEnglishSubject(subjects, subjectId)) return englishTypes;
-    if (isUrduSubject(subjects, subjectId)) return urduTypes;
-    return defaultTypes;
-  };
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Empty dependency array to run once on mount
 
   // Initialize form with profile
   useEffect(() => {
@@ -328,7 +319,7 @@ const GeneratePaperPage = () => {
 
   // Check if user can generate paper
   const canGeneratePaper = () => {
-    if (!trialStatus) return false;
+    if (!trialStatus || !isAuthenticated) return false;
     
     if (trialStatus.hasActiveSubscription) return true;
     
@@ -413,25 +404,18 @@ const GeneratePaperPage = () => {
     let selectedChapterIds: string[] = [];
     
     if (watchedChapterOption === 'full_book') {
-      // FIX: Return ALL chapters for full book
       selectedChapterIds = subjectChapters.map(c => c.id);
-      console.log(`📚 Full book selected: ${selectedChapterIds.length} chapters`);
     } else if (watchedChapterOption === 'half_book') {
       const halfIndex = Math.ceil(subjectChapters.length / 2);
       selectedChapterIds = subjectChapters.slice(0, halfIndex).map(c => c.id);
-      console.log(`📚 Half book selected: ${selectedChapterIds.length} chapters`);
     } else if (watchedChapterOption === 'single_chapter' && watch('selectedChapters') && watch('selectedChapters')!.length > 0) {
       selectedChapterIds = watch('selectedChapters')!;
-      console.log(`📚 Single chapter selected: ${selectedChapterIds.length} chapters`);
     } else if (watchedChapterOption === 'custom' && watch('selectedChapters') && watch('selectedChapters')!.length > 0) {
       selectedChapterIds = watch('selectedChapters')!;
-      console.log(`📚 Custom chapters selected: ${selectedChapterIds.length} chapters`);
     } else {
-      console.log(`📚 No valid chapter selection`);
       return [];
     }
     
-    console.log(`📚 Selected chapter IDs:`, selectedChapterIds);
     return selectedChapterIds;
   }, [chapters, watchedSubjectId, watchedClassId, watchedChapterOption, watch]);
 
@@ -516,13 +500,8 @@ const GeneratePaperPage = () => {
       const sourceType = formValues.source_type;
       const availableQuestionTypes = getQuestionTypes();
 
-      // Generate a unique random seed for this request
       const randomSeed = Date.now();
 
-      console.log(`🎲 Starting auto-generation with seed: ${randomSeed}`);
-      console.log(`📚 Total chapters selected: ${chapterIds.length}`);
-
-      // Function to get random questions from ALL chapters
       const getRandomQuestionsFromChapters = async (
         questionType: string,
         count: number,
@@ -531,7 +510,6 @@ const GeneratePaperPage = () => {
         if (count <= 0) return [];
         
         try {
-          // Get a LARGE pool of questions from ALL selected chapters
           const response = await axios.get(`/api/questions`, {
             params: {
               subjectId: watchedSubjectId,
@@ -541,10 +519,10 @@ const GeneratePaperPage = () => {
               language,
               includeUrdu: language !== 'english',
               sourceType: sourceType !== 'all' ? sourceType : undefined,
-              limit: 100, // Get a large pool to ensure good random distribution
+              limit: 100,
               random: true,
               shuffle: true,
-              randomSeed: randomSeed + questionType.charCodeAt(0), // Different seed per question type
+              randomSeed: randomSeed + questionType.charCodeAt(0),
               ensureRandom: true,
               timestamp: Date.now()
             },
@@ -552,34 +530,12 @@ const GeneratePaperPage = () => {
           
           let questions = response.data || [];
           
-          console.log(`📊 ${questionType}: Got ${questions.length} questions from API, need ${count}`);
-          
           if (questions.length === 0) {
-            console.warn(`No ${questionType} questions found`);
             return [];
           }
           
-          // Ensure we have questions from multiple chapters
-          if (chapterIds.length > 1) {
-            // Group questions by chapter to see distribution
-            const questionsByChapter: Record<string, Question[]> = {};
-            questions.forEach(q => {
-              if (!questionsByChapter[q.chapter_id]) questionsByChapter[q.chapter_id] = [];
-              questionsByChapter[q.chapter_id].push(q);
-            });
-            
-            console.log(`📊 ${questionType}: Questions distributed across ${Object.keys(questionsByChapter).length} chapters`);
-          }
-          
-          // Shuffle again on client side for extra randomness
           const shuffledQuestions = [...questions].sort(() => Math.random() - 0.5);
-          
-          // Take the required number of questions
           const selectedQuestions = shuffledQuestions.slice(0, count);
-          
-          // Log which chapters we got questions from
-          const selectedChapters = new Set(selectedQuestions.map(q => q.chapter_id));
-          console.log(`✅ ${questionType}: Selected ${selectedQuestions.length} questions from ${selectedChapters.size} chapters`);
           
           return selectedQuestions;
         } catch (error) {
@@ -588,7 +544,6 @@ const GeneratePaperPage = () => {
         }
       };
 
-      // Fetch questions for each type in parallel
       const questionPromises: Promise<Question[]>[] = [];
       
       availableQuestionTypes.forEach(type => {
@@ -607,15 +562,6 @@ const GeneratePaperPage = () => {
       
       availableQuestionTypes.forEach((type, index) => {
         result[type.value] = handleLanguageTranslation(results[index] || [], language);
-      });
-
-      // Log final distribution
-      console.log(`✅ Auto-generation complete with seed: ${randomSeed}`);
-      Object.entries(result).forEach(([type, questions]) => {
-        if (questions.length > 0) {
-          const chaptersUsed = new Set(questions.map(q => q.chapter_id));
-          console.log(`📋 ${type}: ${questions.length} questions from ${chaptersUsed.size} chapters`);
-        }
       });
 
       return result;
@@ -650,13 +596,11 @@ const GeneratePaperPage = () => {
       
     } catch (error) {
       console.error('Error loading preview questions:', error);
-      alert('Failed to load questions for preview. Please try again.');
     } finally {
       setIsLoadingPreview(false);
     }
   };
 
-  // Force refresh preview when paper type changes
   useEffect(() => {
     if (step === 7 && watchedPaperType) {
       setQuestionsCache({});
@@ -665,7 +609,6 @@ const GeneratePaperPage = () => {
     }
   }, [watchedPaperType]);
 
-  // Fixed useEffect for step 7 loading
   useEffect(() => {
     if (step === 7 && watchedSubjectId && watchedClassId) {
       setQuestionsCache({});
@@ -683,7 +626,6 @@ const GeneratePaperPage = () => {
     }
   }, [step, watchedSubjectId, watchedClassId]);
 
-  // Listen for form value changes and reload preview
   useEffect(() => {
     if (step === 7) {
       const timer = setTimeout(() => {
@@ -694,7 +636,6 @@ const GeneratePaperPage = () => {
     }
   }, [watchedMcqCount, watchedShortCount, watchedLongCount, watchedPaperType, step]);
 
-  // Additional effect to reload when question counts change while on step 7
   useEffect(() => {
     if (step === 7) {
       const timer = setTimeout(() => {
@@ -705,7 +646,6 @@ const GeneratePaperPage = () => {
     }
   }, [watchedMcqCount, watchedShortCount, watchedLongCount, step]);
 
-  // Auto-advance steps when selections are made
   useEffect(() => {
     if (step === 1 && watchedClassId) {
       setTimeout(() => setStep(2), 300);
@@ -717,6 +657,13 @@ const GeneratePaperPage = () => {
       setTimeout(() => setStep(3), 300);
     }
   }, [watchedSubjectId, step, isManualNavigation]);
+
+  const getQuestionTypes = () => {
+    const subjectId = watch('subjectId');
+    if (isEnglishSubject(subjects, subjectId)) return englishTypes;
+    if (isUrduSubject(subjects, subjectId)) return urduTypes;
+    return defaultTypes;
+  };
 
   const startProgressSimulation = () => {
     const startTime = Date.now();
@@ -732,7 +679,6 @@ const GeneratePaperPage = () => {
       clearInterval(progressIntervalRef.current);
     }
 
-    let currentStep = 0;
     progressIntervalRef.current = setInterval(() => {
       setGenerationProgress(prev => {
         const elapsedSeconds = (Date.now() - startTime) / 1000;
@@ -873,10 +819,7 @@ const GeneratePaperPage = () => {
     }
   };
 
-  // FIXED: onSubmit with proper progress simulation
-  // FIXED: onSubmit function with proper handling of all question types
   const onSubmit = async (formData: PaperFormData) => {
-    // Validate two_papers layout before anything else
     if (formData.mcqPlacement === 'two_papers') {
       const totalQuestions = formData.mcqCount + formData.shortCount + formData.longCount;
       if (totalQuestions > 15) {
@@ -890,16 +833,13 @@ const GeneratePaperPage = () => {
       return;
     }
 
-    // Start progress simulation
     startProgressSimulation();
     setIsLoading(true);
 
     try {
-      // 1. Get current session with error handling
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      if (sessionError) {
-        console.error('Session error:', sessionError);
+      if (sessionError || !session) {
         stopProgressSimulation();
         setGenerationProgress({
           percentage: 0,
@@ -909,49 +849,23 @@ const GeneratePaperPage = () => {
           startTime: 0
         });
         setIsLoading(false);
-        alert('Authentication error. Please try logging in again.');
-        window.location.href = '/login';
-        return;
-      }
-
-      if (!session) {
-        console.error('No session found');
-        stopProgressSimulation();
-        setGenerationProgress({
-          percentage: 0,
-          message: 'Session expired. Please log in again.',
-          isVisible: false,
-          estimatedTimeRemaining: 0,
-          startTime: 0
-        });
-        setIsLoading(false);
-        alert('Your session has expired. Please log in again.');
-        window.location.href = '/login';
+        alert('Please log in again.');
         return;
       }
 
       const user = session.user;
       let accessToken = session.access_token;
 
-      // 2. Check token validity and refresh if needed
       if (!accessToken || accessToken.split('.').length !== 3) {
-        console.warn('Invalid or missing access token, attempting refresh...');
         try {
           const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession();
           
-          if (refreshError) {
-            console.error('Token refresh error:', refreshError);
+          if (refreshError || !refreshedSession?.session) {
             throw new Error('Token refresh failed');
           }
           
-          if (!refreshedSession?.session) {
-            throw new Error('No session after refresh');
-          }
-          
           accessToken = refreshedSession.session.access_token;
-          console.log('Token refreshed successfully');
         } catch (refreshError) {
-          console.error('Token refresh failed:', refreshError);
           stopProgressSimulation();
           setGenerationProgress({
             percentage: 0,
@@ -962,34 +876,13 @@ const GeneratePaperPage = () => {
           });
           setIsLoading(false);
           alert('Your session has expired. Please log in again.');
-          window.location.href = '/login';
           return;
         }
       }
 
-      // 3. Validate token format
-      if (!accessToken || accessToken.split('.').length !== 3) {
-        console.error('Invalid token format');
-        stopProgressSimulation();
-        setGenerationProgress({
-          percentage: 0,
-          message: 'Invalid authentication token.',
-          isVisible: false,
-          estimatedTimeRemaining: 0,
-          startTime: 0
-        });
-        setIsLoading(false);
-        alert('Authentication token is invalid. Please log in again.');
-        window.location.href = '/login';
-        return;
-      }
-
       const randomSeed = Date.now();
-      
-      // Get chapter IDs for validation
       const chapterIds = getChapterIdsToUse();
       
-      // Validate we have chapters
       if (chapterIds.length === 0) {
         stopProgressSimulation();
         setGenerationProgress({
@@ -1004,7 +897,6 @@ const GeneratePaperPage = () => {
         return;
       }
 
-      // Validate we're requesting questions
       if (formData.mcqCount === 0 && formData.shortCount === 0 && formData.longCount === 0) {
         stopProgressSimulation();
         setGenerationProgress({
@@ -1019,7 +911,6 @@ const GeneratePaperPage = () => {
         return;
       }
 
-      // Validate attempt counts for ALL question types
       const allQuestionTypes = getQuestionTypes();
       let hasInvalidAttemptCount = false;
       let invalidType = '';
@@ -1051,50 +942,22 @@ const GeneratePaperPage = () => {
         return;
       }
 
-      // Debug log to verify form data
-      console.log('🎯 Debug - Form submission details:', {
-        mcqPlacement: formData.mcqPlacement,
-        isTwoPapers: formData.mcqPlacement === 'two_papers',
-        questionCounts: {
-          mcq: formData.mcqCount,
-          short: formData.shortCount,
-          long: formData.longCount,
-          total: formData.mcqCount + formData.shortCount + formData.longCount
-        },
-        attemptCounts: {
-          mcq: formData.mcqToAttempt,
-          short: formData.shortToAttempt,
-          long: formData.longToAttempt
-        },
-        timeSettings: {
-          timeMinutes: formData.timeMinutes,
-          mcqTimeMinutes: formData.mcqTimeMinutes,
-          subjectiveTimeMinutes: formData.subjectiveTimeMinutes
-        },
-        layoutLimits: formData.mcqPlacement === 'two_papers' ? 'Max 15 questions' : 'No limit'
-      });
-
-      // Prepare selected questions based on current preview order
       const selectedQuestionsFromPreview: Record<string, string[]> = {};
       Object.keys(previewQuestions).forEach(type => {
         selectedQuestionsFromPreview[type] = previewQuestions[type].map(q => q.id);
       });
 
-      // CRITICAL FIX: Extract "to attempt" values for ALL question types
       const toAttemptValues: Record<string, number> = {};
       const customMarksData: Record<string, Array<{questionId: string, marks: number}>> = {};
 
-      // Get all question types and their toAttempt values
       allQuestionTypes.forEach(type => {
         const fieldPrefix = type.fieldPrefix;
         const typeValue = type.value;
         
-        // Get the "to attempt" value for this question type
         const toAttemptField = `${fieldPrefix}ToAttempt`;
         const countField = `${fieldPrefix}Count`;
         const marksField = `${fieldPrefix}Marks`;
         
-        // Use toAttempt if provided, otherwise fall back to count
         const toAttemptValue = (formData as any)[toAttemptField] !== undefined 
           ? (formData as any)[toAttemptField] 
           : (formData as any)[countField] || 0;
@@ -1104,10 +967,8 @@ const GeneratePaperPage = () => {
            typeValue === 'short' ? formData.shortMarks :
            typeValue === 'long' ? formData.longMarks : 2);
         
-        // Store the toAttempt value
         toAttemptValues[typeValue] = toAttemptValue;
         
-        // Prepare custom marks data for this question type
         const questionsOfType = previewQuestions[typeValue] || [];
         if (questionsOfType.length > 0) {
           customMarksData[typeValue] = questionsOfType.map(q => ({
@@ -1115,29 +976,19 @@ const GeneratePaperPage = () => {
             marks: q.customMarks || marksValue
           }));
         }
-        
-        console.log(`📊 ${type.label} - To Attempt: ${toAttemptValue}, Count: ${(formData as any)[countField] || 0}, Marks: ${marksValue}`);
       });
 
-      // Log all toAttempt values for debugging
-      console.log('📋 All To Attempt Values:', toAttemptValues);
-      console.log('📋 Custom Marks Data:', customMarksData);
-
-      // Calculate total time based on layout
       let totalTimeMinutes = formData.timeMinutes;
       if (formData.mcqPlacement === 'separate') {
-        // For separate layout, sum objective and subjective times
         totalTimeMinutes = (formData.mcqTimeMinutes || 0) + (formData.subjectiveTimeMinutes || 0);
       }
 
-      // Prepare questions with custom marks for PDF generation
       const questionsWithCustomMarks: Record<string, any[]> = {};
       Object.keys(previewQuestions).forEach(type => {
         const questionType = allQuestionTypes.find(t => t.value === type);
         let defaultMarks = formData.mcqMarks;
         if (type === 'short') defaultMarks = formData.shortMarks;
         if (type === 'long') defaultMarks = formData.longMarks;
-        // For other types, try to get from questionType configuration
         if (questionType) {
           const marksField = `${questionType.fieldPrefix}Marks`;
           defaultMarks = (formData as any)[marksField] || defaultMarks;
@@ -1152,7 +1003,6 @@ const GeneratePaperPage = () => {
         });
       });
 
-      // CRITICAL: Calculate total marks based on "to attempt" values
       let totalMarksFromToAttempt = 0;
       const marksByType: Record<string, number> = {};
       
@@ -1161,15 +1011,12 @@ const GeneratePaperPage = () => {
         const questionsOfType = questionsWithCustomMarks[typeValue] || [];
         const toAttemptForType = toAttemptValues[typeValue] || 0;
         
-        // Get default marks for this type
         let defaultMarks = formData.mcqMarks;
         if (typeValue === 'short') defaultMarks = formData.shortMarks;
         if (typeValue === 'long') defaultMarks = formData.longMarks;
         
-        // Get custom marks from the customMarksData
         const customMarksForType = customMarksData[typeValue] || [];
         
-        // Calculate marks for the questions that will be attempted
         const attemptedQuestions = questionsOfType.slice(0, toAttemptForType);
         const typeMarks = attemptedQuestions.reduce((total, q, index) => {
           const customMark = customMarksForType[index]?.marks || q.marks || defaultMarks;
@@ -1178,41 +1025,26 @@ const GeneratePaperPage = () => {
         
         marksByType[typeValue] = typeMarks;
         totalMarksFromToAttempt += typeMarks;
-        
-        console.log(`📈 ${type.label} Marks: ${typeMarks} (${toAttemptForType} attempted)`);
       });
 
-      console.log('🎯 Total Marks from To Attempt:', totalMarksFromToAttempt);
-      console.log('🎯 Marks by Type:', marksByType);
-
-      // Prepare the payload with all layout support
       const payload = {
         ...formData,
-        // Ensure mcqPlacement is properly included
         mcqPlacement: formData.mcqPlacement,
-        // Handle time fields properly for all layouts
         timeMinutes: totalTimeMinutes,
-        // For separate layout, keep individual times
         mcqTimeMinutes: formData.mcqPlacement === 'separate' ? formData.mcqTimeMinutes : undefined,
         subjectiveTimeMinutes: formData.mcqPlacement === 'separate' ? formData.subjectiveTimeMinutes : undefined,
         userId: user.id,
         randomSeed,
-        // CRITICAL: Include toAttempt values for ALL question types
         mcqToAttempt: toAttemptValues.mcq || formData.mcqCount || 0,
         shortToAttempt: toAttemptValues.short || formData.shortCount || 0,
         longToAttempt: toAttemptValues.long || formData.longCount || 0,
-        // Include the complete toAttemptValues object
         toAttemptValues,
-        // Include custom marks data
         customMarksData,
-        // Include questions with their order and marks
         selectedQuestions: selectedQuestionsFromPreview,
         language: formData.language,
         shuffleQuestions: formData.shuffleQuestions,
         reorderedQuestions: questionsWithCustomMarks,
-        // Pass the calculated total marks based on toAttempt
         calculatedTotalMarks: totalMarksFromToAttempt,
-        // Pass marks by type for verification
         marksByType,
         questionOrder: Object.keys(previewQuestions).reduce((acc, type) => {
           acc[type] = previewQuestions[type].map((q, index) => {
@@ -1235,45 +1067,16 @@ const GeneratePaperPage = () => {
         }, {} as Record<string, any[]>)
       };
 
-      // Log the final payload for debugging
-      console.log('📤 Final Payload for API:', {
-        toAttemptValues: payload.toAttemptValues,
-        customMarksDataKeys: Object.keys(payload.customMarksData || {}),
-        calculatedTotalMarks: payload.calculatedTotalMarks,
-        layout: payload.mcqPlacement,
-        hasReorderedQuestions: !!payload.reorderedQuestions
-      });
-
-      // Prepare headers with token
       const headers: Record<string, string> = {
         "Content-Type": "application/json"
       };
       
       if (accessToken) {
         headers.Authorization = `Bearer ${accessToken}`;
-        console.log('🔐 Using token for API request:', {
-          tokenLength: accessToken.length,
-          tokenPrefix: accessToken.substring(0, 20) + '...'
-        });
-      } else {
-        console.error('No access token available for request');
-        stopProgressSimulation();
-        setGenerationProgress({
-          percentage: 0,
-          message: 'Missing authentication token.',
-          isVisible: false,
-          estimatedTimeRemaining: 0,
-          startTime: 0
-        });
-        setIsLoading(false);
-        alert('Authentication token missing. Please log in again.');
-        window.location.href = '/login';
-        return;
       }
 
-      // Perform the fetch with timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 240000); // 4 minute timeout
+      const timeoutId = setTimeout(() => controller.abort(), 240000);
 
       let response;
       try {
@@ -1283,29 +1086,13 @@ const GeneratePaperPage = () => {
           body: JSON.stringify(payload),
           signal: controller.signal
         });
-      } catch (fetchError) {
+      } catch (fetchError: any) {
         clearTimeout(timeoutId);
         stopProgressSimulation();
         
         if (fetchError.name === 'AbortError') {
-          console.error('Request timeout');
-          setGenerationProgress({
-            percentage: 0,
-            message: 'Request timed out after 4 minutes.',
-            isVisible: false,
-            estimatedTimeRemaining: 0,
-            startTime: 0
-          });
           alert('Request timed out after 4 minutes. Please try again.');
         } else {
-          console.error('Fetch error:', fetchError);
-          setGenerationProgress({
-            percentage: 0,
-            message: 'Network error occurred.',
-            isVisible: false,
-            estimatedTimeRemaining: 0,
-            startTime: 0
-          });
           alert('Network error. Please check your connection and try again.');
         }
         
@@ -1318,7 +1105,6 @@ const GeneratePaperPage = () => {
       const contentType = response.headers.get("content-type") || "";
       
       if (response.ok) {
-        // Update progress to 100% when response is received
         stopProgressSimulation();
         setGenerationProgress(prev => ({
           ...prev,
@@ -1330,110 +1116,26 @@ const GeneratePaperPage = () => {
         await refreshTrialStatus();
       }
       
-      // Handle API errors
       if (!response.ok) {
-        const contentType = response.headers.get('content-type') || '';
-        
-        console.error('API Error:', {
-          status: response.status,
-          statusText: response.statusText,
-          contentType,
-          headers: Object.fromEntries(response.headers.entries())
-        });
-        
         stopProgressSimulation();
         
         if (contentType.includes('application/json')) {
           try {
             const json = await response.json();
-            console.error('API error response JSON:', json);
             
-            // Handle authentication errors
             if (response.status === 401 || response.status === 403) {
-              if (json.message?.includes('session') || json.error?.includes('Auth') || Object.keys(json).length === 0) {
-                setGenerationProgress({
-                  percentage: 0,
-                  message: 'Session expired. Please log in again.',
-                  isVisible: false,
-                  estimatedTimeRemaining: 0,
-                  startTime: 0
-                });
-                alert('Your session has expired. Please log in again.');
-                window.location.href = '/login';
-              } else {
-                setGenerationProgress({
-                  percentage: 0,
-                  message: 'Authentication failed.',
-                  isVisible: false,
-                  estimatedTimeRemaining: 0,
-                  startTime: 0
-                });
-                alert(json.error || json.message || 'Authentication failed.');
-              }
+              alert(json.error || json.message || 'Authentication failed.');
             } else {
-              setGenerationProgress({
-                percentage: 0,
-                message: `Server error (${response.status})`,
-                isVisible: false,
-                estimatedTimeRemaining: 0,
-                startTime: 0
-              });
               alert(json.error || json.message || `Server error (${response.status})`);
             }
           } catch (jsonError) {
-            console.error('Failed to parse JSON error:', jsonError);
-            setGenerationProgress({
-              percentage: 0,
-              message: `Server error (${response.status})`,
-              isVisible: false,
-              estimatedTimeRemaining: 0,
-              startTime: 0
-            });
             alert(`Server error (${response.status}). Please try again.`);
           }
         } else {
           try {
             const text = await response.text();
-            console.error('API error response text:', text);
-            
-            if (response.status === 401 || response.status === 403) {
-              setGenerationProgress({
-                percentage: 0,
-                message: 'Authentication failed.',
-                isVisible: false,
-                estimatedTimeRemaining: 0,
-                startTime: 0
-              });
-              alert('Authentication failed. Please log in again.');
-              window.location.href = '/login';
-            } else if (text) {
-              setGenerationProgress({
-                percentage: 0,
-                message: text,
-                isVisible: false,
-                estimatedTimeRemaining: 0,
-                startTime: 0
-              });
-              alert(text);
-            } else {
-              setGenerationProgress({
-                percentage: 0,
-                message: `Server error (${response.status})`,
-                isVisible: false,
-                estimatedTimeRemaining: 0,
-                startTime: 0
-              });
-              alert(`Server error (${response.status}). Please try again.`);
-            }
+            alert(text || `Server error (${response.status}). Please try again.`);
           } catch (textError) {
-            console.error('Failed to read error text:', textError);
-            setGenerationProgress({
-              percentage: 0,
-              message: `Server error (${response.status})`,
-              isVisible: false,
-              estimatedTimeRemaining: 0,
-              startTime: 0
-            });
             alert(`Server error (${response.status}). Please try again.`);
           }
         }
@@ -1442,7 +1144,6 @@ const GeneratePaperPage = () => {
         return;
       }
       
-      // Handle successful PDF response
       if (response.ok && contentType.includes("application/pdf")) {
         try {
           const blob = await response.blob();
@@ -1460,82 +1161,35 @@ const GeneratePaperPage = () => {
           a.remove();
           window.URL.revokeObjectURL(url);
           
-          // Show success message for 2 seconds then hide
           setTimeout(() => {
             setGenerationProgress(prev => ({ ...prev, isVisible: false }));
           }, 2000);
           
         } catch (blobError) {
-          console.error('Error processing PDF blob:', blobError);
-          setGenerationProgress({
-            percentage: 0,
-            message: 'Failed to download PDF.',
-            isVisible: false,
-            estimatedTimeRemaining: 0,
-            startTime: 0
-          });
           alert('Failed to download PDF. Please try again.');
         }
       } else if (contentType.includes("application/json")) {
         try {
           const result = await response.json();
-          setGenerationProgress({
-            percentage: 0,
-            message: result.error || result.message || 'No PDF returned.',
-            isVisible: false,
-            estimatedTimeRemaining: 0,
-            startTime: 0
-          });
           alert(result.error || result.message || "Paper generated, but no PDF was returned.");
         } catch (jsonError) {
-          console.error('Failed to parse JSON response:', jsonError);
-          setGenerationProgress({
-            percentage: 0,
-            message: 'Unexpected server response.',
-            isVisible: false,
-            estimatedTimeRemaining: 0,
-            startTime: 0
-          });
           alert('Server returned unexpected response.');
         }
       } else {
         try {
           const text = await response.text();
-          setGenerationProgress({
-            percentage: 0,
-            message: text || 'Unknown error occurred.',
-            isVisible: false,
-            estimatedTimeRemaining: 0,
-            startTime: 0
-          });
           alert(text || "Failed to generate paper (unknown error)");
         } catch (textError) {
-          console.error('Failed to read response text:', textError);
-          setGenerationProgress({
-            percentage: 0,
-            message: 'Server error occurred.',
-            isVisible: false,
-            estimatedTimeRemaining: 0,
-            startTime: 0
-          });
           alert('Server error occurred. Please try again.');
         }
       }
     } catch (error) {
       console.error('Unexpected error generating paper:', error);
       stopProgressSimulation();
-      setGenerationProgress({
-        percentage: 0,
-        message: 'An unexpected error occurred.',
-        isVisible: false,
-        estimatedTimeRemaining: 0,
-        startTime: 0
-      });
       alert("An unexpected error occurred. Please try again.");
     } finally {
       setIsLoading(false);
       
-      // Hide progress modal after 3 seconds if still visible
       setTimeout(() => {
         setGenerationProgress(prev => ({ ...prev, isVisible: false }));
       }, 3000);
@@ -1587,6 +1241,38 @@ const GeneratePaperPage = () => {
       total: totalMarks
     };
   };
+
+  // Show loading until auth is checked
+  if (!authChecked || trialLoading) {
+    return (
+      <AcademyLayout>
+        <div className="container-fluid text-center py-5">
+          <div className="spinner-border text-primary" />
+          <p className="mt-2">Loading...</p>
+        </div>
+      </AcademyLayout>
+    );
+  }
+
+  // Show auth error if not authenticated
+  if (!isAuthenticated && authError) {
+    return (
+      <AcademyLayout>
+        <div className="container-fluid py-5">
+          <div className="alert alert-danger">
+            <h4>Access Denied</h4>
+            <p>{authError}</p>
+            <button 
+              className="btn btn-primary"
+              onClick={() => window.location.href = '/auth/login'}
+            >
+              Go to Login
+            </button>
+          </div>
+        </div>
+      </AcademyLayout>
+    );
+  }
 
   return (
     <AcademyLayout>
@@ -1685,8 +1371,6 @@ const GeneratePaperPage = () => {
 
         <GenerationProgressModal progress={generationProgress} />
 
-        {/* REMOVED: The authentication warning alert since we're now redirecting */}
-
         <div style={{ 
           opacity: canGeneratePaper() && isAuthenticated ? 1 : 0.6,
           pointerEvents: canGeneratePaper() && isAuthenticated ? 'auto' : 'none'
@@ -1753,8 +1437,8 @@ const GeneratePaperPage = () => {
             <PaperTypeStep
               watch={watch}
               setValue={setValue}
-                register={register} // Add this
-                errors={errors} // Add this
+                register={register}
+                errors={errors}
               setStep={setStep}
               setSelectedQuestions={setSelectedQuestions}
               setQuestionsCache={setQuestionsCache}
