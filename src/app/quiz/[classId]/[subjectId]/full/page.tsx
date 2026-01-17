@@ -1,100 +1,155 @@
-"use client";
+'use client';
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import Footer from "@/components/Footer";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import BreadcrumbAuto from "@/components/BreadcrumbAuto";
 
 export default function FullSubjectQuizPage() {
   const supabase = createClientComponentClient();
   const { subjectId } = useParams();
+
   const [questions, setQuestions] = useState<any[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState(15 * 60);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [lang, setLang] = useState<"en" | "ur">("en");
+  const [forceUrdu, setForceUrdu] = useState(false);
   const [monkeyExpression, setMonkeyExpression] = useState("🙃");
   const [monkeyHealth, setMonkeyHealth] = useState(50);
   const [bounce, setBounce] = useState(false);
   const [saving, setSaving] = useState(false);
   const [user, setUser] = useState<any>(null);
 
-  // Fetch user
+  /* ================= USER ================= */
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (!error && user) setUser(user);
-    };
-    getUser();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) setUser(data.user);
+    });
   }, [supabase]);
 
-  // Fetch questions
+  /* ================= RESOLVE SUBJECTS ================= */
   useEffect(() => {
-    const fetchQuestions = async () => {
+    if (!subjectId) return;
+
+    const resolveSubjects = async () => {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data: subject, error } = await supabase
+        .from("subjects")
+        .select("id, name")
+        .eq("id", subjectId)
+        .single();
+
+      if (error || !subject) {
+        console.error("Subject not found");
+        setLoading(false);
+        return;
+      }
+
+      const urduSubjects = ["urdu", "islamiyat", "pakistan studies"];
+      if (urduSubjects.includes(subject.name.toLowerCase())) {
+        setForceUrdu(true);
+        setLang("ur");
+        const { data: relatedSubjects } = await supabase
+          .from("subjects")
+          .select("id")
+          .in("name", ["Urdu", "Islamiyat", "Pakistan Studies"]);
+
+        fetchQuestions(relatedSubjects?.map(s => s.id) || []);
+      } else {
+        setForceUrdu(false);
+        fetchQuestions([subject.id]);
+      }
+    };
+
+    const fetchQuestions = async (subjectIds: string[]) => {
+      const { data } = await supabase
         .from("questions")
         .select("*")
-        .eq("subject_id", subjectId)
+        .in("subject_id", subjectIds)
         .eq("question_type", "mcq");
 
-      if (!error && data) {
+      if (data) {
         const shuffled = [...data].sort(() => 0.5 - Math.random());
         setQuestions(shuffled.slice(0, 30));
       }
+
       setLoading(false);
     };
-    if (subjectId) fetchQuestions();
+
+    resolveSubjects();
   }, [subjectId, supabase]);
 
-  // Timer
+  /* ================= TIMER ================= */
   useEffect(() => {
     if (submitted || loading) return;
     if (timeLeft <= 0) {
       handleSubmit();
       return;
     }
-    const timer = setInterval(() => setTimeLeft((t) => t - 1), 1000);
+    const timer = setInterval(() => setTimeLeft(t => t - 1), 1000);
     return () => clearInterval(timer);
   }, [timeLeft, submitted, loading]);
 
+  /* ================= HANDLE SELECTION ================= */
   const handleSelect = (qId: string, opt: string) => {
-    if (submitted || timeLeft <= 0 || answers[qId]) return;
-    setAnswers((prev) => {
-      const updated = { ...prev, [qId]: opt };
-      const question = questions.find((q) => q.id === qId);
-      if (question) {
-        if (opt === question.correct_option) {
-          setMonkeyExpression("😄");
-          setMonkeyHealth((h) => Math.min(100, h + 10));
-        } else {
-          setMonkeyExpression("😢");
-          setMonkeyHealth((h) => Math.max(0, h - 10));
-        }
+    if (answers[qId] || submitted || timeLeft <= 0) return;
+
+    const question = questions.find(q => q.id === qId);
+    if (!question) return;
+
+    setAnswers(prev => ({ ...prev, [qId]: opt }));
+
+    if (opt === question.correct_option) setCorrectCount(c => c + 1);
+
+    // monkey animation/feedback
+    if (question) {
+      if (opt === question.correct_option) {
+        setMonkeyExpression("😄");
+        setMonkeyHealth(h => Math.min(100, h + 10));
+      } else {
+        setMonkeyExpression("😢");
+        setMonkeyHealth(h => Math.max(0, h - 10));
       }
       setBounce(true);
       setTimeout(() => setBounce(false), 300);
-      return updated;
-    });
+    }
+
+    // auto next question
     setTimeout(() => {
       if (currentQuestion < questions.length - 1)
-        setCurrentQuestion((p) => p + 1);
+        setCurrentQuestion(p => p + 1);
     }, 600);
   };
 
+  /* ================= SUBMIT ================= */
   const handleSubmit = async () => {
     if (submitted || !user) return;
     setSaving(true);
-    const finalScore = questions.filter((q) => answers[q.id] === q.correct_option).length;
+    const finalScore = Object.entries(answers).filter(([qid, opt]) => {
+      const q = questions.find(q => q.id === qid);
+      return q?.correct_option === opt;
+    }).length;
+
     setScore(finalScore);
     setSubmitted(true);
+
     await supabase.from("results").insert([
-      { user_id: user.id, subject_id: subjectId, score: finalScore, total_questions: questions.length, in_progress: false },
+      {
+        user_id: user.id,
+        subject_id: subjectId,
+        score: finalScore,
+        total_questions: questions.length,
+        in_progress: false,
+      },
     ]);
+
     setSaving(false);
   };
 
@@ -103,142 +158,166 @@ export default function FullSubjectQuizPage() {
     setAnswers({});
     setSubmitted(false);
     setScore(0);
+    setCorrectCount(0);
     setCurrentQuestion(0);
     setTimeLeft(15 * 60);
     setMonkeyHealth(50);
     setMonkeyExpression("🙃");
+
     const shuffled = [...questions].sort(() => 0.5 - Math.random());
     setQuestions(shuffled.slice(0, 30));
   };
 
-  const q = questions[currentQuestion];
-  const progress = ((currentQuestion + 1) / questions.length) * 100;
-  const formatTime = (secs: number) =>
-    `${Math.floor(secs / 60).toString().padStart(2, "0")}:${(secs % 60)
-      .toString()
-      .padStart(2, "0")}`;
-  const isTimeUp = timeLeft <= 0 || submitted;
-
+  /* ================= UI HELPERS ================= */
   if (loading)
     return (
       <div className="container text-center py-5">
         <div className="spinner-border text-primary" />
-        <p className="mt-3 fw-semibold text-muted">Loading questions...</p>
+        <p className="mt-3 text-muted">Loading questions...</p>
       </div>
     );
 
   if (!questions.length)
     return (
-      <div className="container text-center py-5">
-        <div className="alert alert-warning shadow-sm rounded-3">
-          No questions found for this subject.
-        </div>
+      <div className="container py-5 text-center">
+        <div className="alert alert-warning">No questions found.</div>
       </div>
     );
 
+  const q = questions[currentQuestion];
+  const progress = ((currentQuestion + 1) / questions.length) * 100;
+  const formatTime = (s: number) =>
+    `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60)
+      .toString()
+      .padStart(2, "0")}`;
+
   const optionKeys = [
-    { key: "A", text: lang === "en" ? q.option_a || q.option1 : q.option_a_ur || q.option1_ur },
-    { key: "B", text: lang === "en" ? q.option_b || q.option2 : q.option_b_ur || q.option2_ur },
-    { key: "C", text: lang === "en" ? q.option_c || q.option3 : q.option_c_ur || q.option3_ur },
-    { key: "D", text: lang === "en" ? q.option_d || q.option4 : q.option_d_ur || q.option4_ur },
+    { key: "A", text: lang === "en" ? q.option_a : q.option_a_ur },
+    { key: "B", text: lang === "en" ? q.option_b : q.option_b_ur },
+    { key: "C", text: lang === "en" ? q.option_c : q.option_c_ur },
+    { key: "D", text: lang === "en" ? q.option_d : q.option_d_ur },
   ];
 
-  const questionText = lang === "en" ? q.question_text || q.question : q.question_ur || q.question_text_ur;
+  const questionText = lang === "en" ? q.question_text : q.question_text_ur;
 
   return (
     <>
       <Header darkMode={false} setDarkMode={() => {}} />
-      <div className="container py-5" style={{ marginTop: "100px" }}>
-        {/* Timer and Language */}
-        <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap">
-          <div className="alert alert-info py-2 px-3 shadow-sm mb-2">
-            ⏳ Time Left: <strong>{formatTime(timeLeft)}</strong>
-          </div>
-          <button
-            onClick={() => setLang(lang === "en" ? "ur" : "en")}
-            className="btn btn-outline-secondary rounded-5 px-4 py-2"
-          >
-            {lang === "en" ? "🇵🇰 اردو" : "🇬🇧 English"}
-          </button>
+
+      <div
+        className="container py-5"
+        style={{ marginTop: 100, direction: lang === "ur" ? "rtl" : "ltr" }}
+      >
+        <div className="mb-4" style={{ direction: "ltr", textAlign: "left" }}>
+          <BreadcrumbAuto />
         </div>
 
-        {/* Progress Bar + Monkey */}
-        <div className="position-relative mb-4" style={{ height: "40px" }}>
-          <div className="progress" style={{ height: "10px" }}>
-            <div className="progress-bar bg-primary" style={{ width: `${progress}%` }} />
+        {/* INFO BAR: Timer Left / Score Center / Language Right */}
+        <div 
+          className="alert alert-info d-flex align-items-center shadow-sm rounded-3 px-3"
+          style={{ direction: "ltr", justifyContent: "space-between", textAlign: "left", flexWrap: "wrap" }}
+        >
+          {/* Left: Timer */}
+          <div className="flex-grow-0  mb-0">
+            ⏳ {formatTime(timeLeft)}
+          </div>
+
+          {/* Center: Score */}
+          <div className="flex-grow-1 text-center mb-0">
+            ✔ Correct: {correctCount} / {questions.length}
+          </div>
+
+          {/* Right: Language Switch */}
+          {!forceUrdu && (
+            <div className="flex-grow-0">
+              <button
+                onClick={() => setLang(lang === "en" ? "ur" : "en")}
+                className="btn btn-outline-secondary rounded-5"
+              >
+                {lang === "en" ? "🇵🇰 اردو" : "🇬🇧 English"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* PROGRESS BAR + MONKEY */}
+        <div className="position-relative mb-4">
+          <div className="progress" style={{ height: 10 , direction: "ltr" }}>
+            <div
+              className="progress-bar bg-primary"
+              style={{ width: `${progress}%` }}
+            />
           </div>
           <div
             className={`monkey ${bounce ? "bounce" : ""}`}
             style={{
               position: "absolute",
               left: `${progress}%`,
-              bottom: "100%",
+              bottom: "120%",
               transform: "translateX(-50%)",
               fontSize: `${16 + monkeyHealth / 5}px`,
-              transition: "all 0.5s ease",
             }}
           >
             {monkeyExpression}
           </div>
         </div>
 
-        {/* Question */}
+        {/* QUESTION CARD */}
         <div
           className={`card shadow-lg border-0 rounded-4 p-4 ${
             lang === "ur" ? "urdu-text" : ""
           }`}
           dir={lang === "ur" ? "rtl" : "ltr"}
         >
-          <h5 className="mb-4 fw-bold text-primary">{questionText}</h5>
+          <h5
+            className="mb-4 fw-bold text-primary"
+            dangerouslySetInnerHTML={{ __html: questionText }}
+          ></h5>
+
           <div className="row">
-            {optionKeys.map(({ key, text }) => (
-              <div key={key} className="col-12 col-md-6 mb-3">
-                <div
-                  className={`card p-3 shadow-sm option-card ${
-                    answers[q.id]
-                      ? answers[q.id] === key
-                        ? key === q.correct_option
-                          ? "border-success bg-success text-white"
-                          : "border-danger bg-danger text-white"
-                        : key === q.correct_option
-                        ? "border-success bg-light"
-                        : "border-light"
-                      : "border-light"
-                  }`}
-                  onClick={() => handleSelect(q.id, key)}
-                  style={{
-                    cursor: isTimeUp || answers[q.id] ? "not-allowed" : "pointer",
-                    transition: "all 0.3s ease",
-                  }}
-                >
-                  <strong className="me-2">{key}.</strong> {text}
+            {optionKeys.map(({ key, text }) => {
+              const selected = answers[q.id];
+              const isCorrect = key === q.correct_option;
+              const isWrong = selected === key && !isCorrect;
+
+              return (
+                <div key={key} className="col-md-6 mb-3">
+                  <div
+                    className={`card p-3 shadow-sm option-card ${
+                      selected && isCorrect ? "bg-success text-white" : ""
+                    } ${isWrong ? "bg-danger text-white" : ""}`}
+                    onClick={() => handleSelect(q.id, key)}
+                    style={{ cursor: selected ? "not-allowed" : "pointer" }}
+                    dangerouslySetInnerHTML={{ __html: `<strong>${key}.</strong> ${text}` }}
+                  />
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          {/* Navigation */}
+          {/* NAVIGATION */}
           <div className="d-flex justify-content-between mt-4">
             <button
-              className="btn btn-outline-secondary px-4"
-              onClick={() => setCurrentQuestion((p) => p - 1)}
-              disabled={currentQuestion === 0 || isTimeUp}
+              className="btn btn-outline-secondary"
+              onClick={() => setCurrentQuestion(p => p - 1)}
+              disabled={currentQuestion === 0}
             >
               ⬅ Previous
             </button>
+
             {currentQuestion < questions.length - 1 ? (
               <button
-                className="btn btn-outline-primary px-4"
-                onClick={() => setCurrentQuestion((p) => p + 1)}
-                disabled={!answers[q.id] || isTimeUp}
+                className="btn btn-outline-primary"
+                onClick={() => setCurrentQuestion(p => p + 1)}
+                disabled={!answers[q.id]}
               >
                 Next ➡
               </button>
             ) : (
               <button
-                className="btn btn-success px-4"
+                className="btn btn-success"
                 onClick={handleSubmit}
-                disabled={saving || !answers[q.id] || isTimeUp}
+                disabled={saving}
               >
                 {saving ? "Saving..." : "Finish & Save"}
               </button>
@@ -246,10 +325,10 @@ export default function FullSubjectQuizPage() {
           </div>
         </div>
 
-        {/* Result */}
         {submitted && (
-          <div className="alert alert-success text-center mt-4 rounded-3 shadow-sm">
-            <h4>🎉 Score: {score}/{questions.length}</h4>
+          <div className="alert alert-success text-center mt-4">
+            🎉 Score: {score}/{questions.length}
+            <br />
             <button className="btn btn-outline-primary mt-3" onClick={handleNewQuiz}>
               🔄 Start Again
             </button>
@@ -273,9 +352,10 @@ export default function FullSubjectQuizPage() {
         }
         .option-card:hover {
           transform: scale(1.02);
-          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12) !important;
         }
-        .monkey { transition: all 0.5s ease; }
+        .monkey {
+          transition: all 0.5s ease;
+        }
         .bounce {
           animation: bounce 0.3s ease;
         }

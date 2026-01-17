@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
-
+import BreadcrumbAuto from '@/components/BreadcrumbAuto';
 export default function SubjectsPage() {
   const { classId } = useParams();
   const router = useRouter();
@@ -59,31 +59,52 @@ export default function SubjectsPage() {
   };
 
   useEffect(() => {
-    if (!classId) return;
+  if (!classId) return; // classId here is actually class name/number
 
-    const fetchData = async () => {
-      setLoading(true); // ✅ show loading spinner
+  const fetchData = async () => {
+    setLoading(true);
+
+    try {
+      // 1️⃣ Get class by name (integer)
+      const { data: classData, error: classError } = await supabase
+        .from("classes")
+        .select("id, name")
+        .eq("name", classId)
+        .single();
+
+      if (classError || !classData) {
+        console.error("Class not found:", classError?.message);
+        setLoading(false);
+        return;
+      }
+
+      const classUUID = classData.id;
+      setClassName(classData.name);
+
+      // 2️⃣ Get subjects using class_id
       const { data: subjectData, error: subjectError } = await supabase
         .from("class_subjects")
         .select(`
-          subjects ( id, name, description ),
-          classes ( id, name )
+          subjects ( id, name, description )
         `)
-        .eq("class_id", classId);
+        .eq("class_id", classUUID);
 
       if (subjectError) {
         console.error("Supabase error:", subjectError.message);
       } else {
-        setSubjects(subjectData.map((row) => row.subjects));
-        if (subjectData.length > 0 && subjectData[0].classes) {
-          setClassName(subjectData[0].classes.name);
-        }
+        setSubjects(subjectData.map(row => row.subjects));
       }
-      setLoading(false); // ✅ hide loader
-    };
 
-    fetchData();
-  }, [classId]);
+    } catch (err) {
+      console.error("Unexpected error:", err);
+    }
+
+    setLoading(false);
+  };
+
+  fetchData();
+}, [classId]);
+
 
   return (
     <>
@@ -91,6 +112,7 @@ export default function SubjectsPage() {
 
       <div className="container py-5" style={{ marginTop: "100px" }}>
         {/* Title */}
+           <BreadcrumbAuto />
         <div className="text-center mb-5">
           <h2 className="fw-bold text-primary">
             📘 Subjects for {className || `Class ${classId}`} Class

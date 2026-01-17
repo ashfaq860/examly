@@ -4,9 +4,9 @@ import Link from "next/link";
 
 const defaultSlides = [
   {
-    title: "Examly — Smart Paper Maker & Online Test Generator for Educators",
+    title: "Examly — Smart Paper Maker & Online Test Generator",
     description:
-      "Create professional exam papers in minutes with Examly, the advanced online test maker and question paper generator. Generate full-book, half-book, chapter-wise, custom chapters, and randomized papers tailored to your curriculum. Perfect for schools, colleges, and academies, Examly ensures balanced difficulty, fair assessments, and high-quality, printable exams to save teachers time and enhance student learning outcomes.",
+      "Create professional exam papers in minutes with Examly. Generate full-book, half-book, chapter-wise, and custom papers tailored for schools, colleges, and academies. Balanced difficulty, fair assessments, and printable exams save teachers time while enhancing student performance.",
     image: "/smartPaperMaker.png",
     cta: "Try Now",
     link: "/auth/login",
@@ -15,9 +15,9 @@ const defaultSlides = [
     imageStyle: "floating",
   },
   {
-    title: "Register & Get 3 Month Free — Unlimited Test & Paper Generation",
+    title: "Register & Get 3 Months Free — Make Unlimited Test",
     description:
-      "Sign up today and get 3 months of free access to Examly's online test maker and question paper generator. Refer a friend and earn an additional 1 month free! Effortlessly create unlimited full-book, half-book, chapter-wise, and custom chapters exam papers. Ideal for teachers, academies, and educational institutes looking to save time while producing professional, balanced, and printable assessments for students.",
+      "Sign up and get 3 months of free access to Examly's online test maker. Refer a friend and earn an extra month free! Create unlimited full-book, half-book, chapter-wise, and custom exam papers effortlessly. Perfect for teachers and academies producing professional, printable assessments.",
     image: "/sliderFreeOffer.jpg",
     cta: "Claim Offer",
     link: "/auth/signup",
@@ -26,9 +26,9 @@ const defaultSlides = [
     imageStyle: "perspective",
   },
   {
-    title: "Assess Your MCQ Preparation with Examly — Online Quizzes & Tests",
+    title: "Assess Your MCQ Preparation — Online Quizzes & Tests",
     description:
-      "Prepare effectively for exams using Examly's online quizzes and full-book MCQ tests. Identify knowledge gaps, track progress, and ensure readiness for final exams. Our smart test maker provides balanced question distribution, instant results, and printable quizzes. Perfect for students and educators seeking efficient online assessment tools and high-quality question papers to improve exam performance.",
+      "Prepare for exams with Examly's online quizzes and MCQ tests. Track progress, identify knowledge gaps, and get printable quizzes. Ideal for students and educators seeking efficient online assessment tools and high-quality question papers.",
     image: "/student.jpg",
     cta: "Try Full Book Quiz",
     link: "/auth/login",
@@ -159,7 +159,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
                           {index === 0 ? "For Educators" : index === 1 ? "Special Offer" : "For Students"}
                         </span>
                       </div>
-                      <h1 className="display-4 fw-bold mb-4 leading-tight">{slide.title}</h1>
+                      <h2 className="display1-4 fw-bold mb-2 leading-tight">{slide.title}</h2>
                       <p className="lead mb-5 opacity-90 text-lg">{slide.description}</p>
                       <div className="slide-actions" style={{zIndex:'10000'}}>
                         <Link href={slide.link} className="btn btn-light btn-lg px-5 py-3 rounded-lg font-semibold shadow-lg hover-lift">

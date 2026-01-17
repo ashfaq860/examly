@@ -883,12 +883,13 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
             fontFamily: "'Times New Roman', Times, serif",
             fontSize: '13px'
           }}>
-            <small className="text-muted">
-              {toAttempt} of {questions.length} questions to attempt. Each question carries {marksPerQuestion} mark{marksPerQuestion > 1 ? 's' : ''}.
-            </small>
+            <h6 className="text-muted">
+              {questions.length>toAttempt?`Attempt Any ${toAttempt} Questions`:'Attempt All Qestions'} . Each question carries {marksPerQuestion} mark{marksPerQuestion > 1 ? 's' : ''}.
+          
             <span className="badge bg-primary ms-2" style={{ fontSize: '12px' }}>
               {toAttempt} × {marksPerQuestion} = {sectionMarks} marks
             </span>
+              </h6>
           </div>
         </div>
         

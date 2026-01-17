@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
-
+import BreadcrumbAuto from '@/components/BreadcrumbAuto';
 export default function ChaptersPage() {
   const { classId, subjectId } = useParams();
   const router = useRouter();
@@ -24,6 +24,19 @@ export default function ChaptersPage() {
       setErrorMessage("");
 
       try {
+
+    const { data: classData, error: classError } = await supabase
+        .from("classes")
+        .select("id, name")
+        .eq("name", classId)
+        .single();
+
+      if (classError || !classData) {
+        console.error("Class not found:", classError?.message);
+        setLoading(false);
+        return;
+      }
+       const classUUID = classData.id;
         // ✅ Step 1: Get the specific class-subject relationship
         const { data: classSubjectData, error: relError } = await supabase
           .from("class_subjects")
@@ -32,7 +45,7 @@ export default function ChaptersPage() {
             classes:class_id (id, name),
             subjects:subject_id (id, name)
           `)
-          .eq("class_id", classId)
+          .eq("class_id", classUUID)
           .eq("subject_id", subjectId)
           .single();
 
@@ -121,6 +134,7 @@ export default function ChaptersPage() {
 
       <div className="container py-5" style={{ marginTop: "100px" }}>
         {/* Title */}
+        <BreadcrumbAuto />
         <div className="text-center mb-5">
           <h2 className="fw-bold text-primary">
             📖 Chapters for {subjectName || "Subject"}
