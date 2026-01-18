@@ -4,7 +4,7 @@ import Link from "next/link";
 
 const defaultSlides = [
   {
-    title: "Examly — Smart Paper Maker & Online Test Generator",
+    title: "Examly-Smart Paper Maker & Online Test Generator",
     description:
       "Create professional exam papers in minutes with Examly. Generate full-book, half-book, chapter-wise, and custom papers tailored for schools, colleges, and academies. Balanced difficulty, fair assessments, and printable exams save teachers time while enhancing student performance.",
     image: "/smartPaperMaker.png",
@@ -31,7 +31,7 @@ const defaultSlides = [
       "Prepare for exams with Examly's online quizzes and MCQ tests. Track progress, identify knowledge gaps, and get printable quizzes. Ideal for students and educators seeking efficient online assessment tools and high-quality question papers.",
     image: "/student.jpg",
     cta: "Try Full Book Quiz",
-    link: "/quiz",
+    link: "/auth/login",
     bgClass: "bg-halfbook",
     icon: "⚡",
     imageStyle: "layered",
@@ -159,7 +159,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
                           {index === 0 ? "For Educators" : index === 1 ? "Special Offer" : "For Students"}
                         </span>
                       </div>
-                      <h2 className="display1-4 fw-bold mb-2 leading-tight">{slide.title}</h2>
+                      <h2 className="display-4 fw-bold mb-2 leading-tight">{slide.title}</h2>
                       <p className="lead mb-5 opacity-90 text-lg">{slide.description}</p>
                       <div className="slide-actions" style={{zIndex:'10000'}}>
                         <Link href={slide.link} className="btn btn-light btn-lg px-5 py-3 rounded-lg font-semibold shadow-lg hover-lift">
