@@ -16,7 +16,7 @@ import type { Browser, Page } from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import PDFDocument from 'pdfkit';
-import { is } from 'zod/v4/locales';
+
 
 // --- Optimizations ---
 
@@ -1386,8 +1386,8 @@ async function generatePaperHTML(paper: any, userId: string, requestData: PaperG
     customMarksMap,
     additionalToAttemptMap
   );
-  
-  /*///console.log('📊 Section marks calculated:', {
+  /*
+ console.log('📊 Section marks calculated:', {
     mcqSectionMarks,
     subjectiveSectionMarks,
     totalMarks: paper.total_marks,
@@ -1448,85 +1448,28 @@ const DejaVuSansBase64 = loadFontAsBase64('DejaVuSans.ttf');
    
   let paperClass = '';
   let subject = '';
-  let subject_ur = '';
+  let subject_ur:any = '';
   paperClass = className;
   subject = subjectName;
-  const cachedTranslation = translationCache.get(subjectName);
-  if (cachedTranslation) {
-    subject_ur = cachedTranslation;
-    ////console.log('Using cached translation for subject:', subject_ur);
-  } else {
-    const translatedSubject = await translate(subject, { to: 'ur' });
-    subject_ur = translatedSubject.text;
-    translationCache.set(subjectName, subject_ur);
-  }
-  /*/console.log('My new subjects and class Subject and Class for paper generation:', {
-    subject,
-    subject_ur,
-    paperClass
-  });
-  */
-  /*
   try {
-    // Fetch subject details
-    ////console.log('Fetching subject details for subject_id:', paper.subject_id);
-    const { data: subjectData, error: subjectError } = await supabaseAdmin
-      .from('subjects')
-      .select('name')
-      .eq('id', paper.subject_id)
-      .single();
-////console.log('Fetched subject data:', subjectData, 'Error:', subjectError);
-    if (!subjectError && subjectData) {
-      subject = subjectData.name;
-      const cachedTranslation = translationCache.get(subject);
-      ////console.log('subject currently generated paper:',subject);
-      if (cachedTranslation) {
-        subject_ur = cachedTranslation;
-        ////console.log('Using cached translation for subject:', subject_ur);
-      } else {
-        const translatedSubject = await translate(subject, { to: 'ur' });
-        subject_ur = translatedSubject.text;
-        translationCache.set(subject, subject_ur);
-      }
-    } else {
-      console.warn('Using fallback subject data due to error:', subjectError);
-      //subject = 'Subject';
-      //subject_ur = 'مضمون';
-      subject = subjectName;
-     const cachedTranslation = translationCache.get(subjectName);
-      //////console.log('subject currently generated paper:',subject);
-      if (cachedTranslation) {
-        subject_ur = cachedTranslation;
-        ////console.log('subject not found from papers table:', subject_ur);
-      } else {
-        const translatedSubject = await translate(subject, { to: 'ur' });
-        subject_ur = translatedSubject.text;
-        translationCache.set(subject, subject_ur);
-      }
-    
-    }
+  const { data, error } = await supabase
+    .from('subjects')
+    .select('name_ur')
+    .eq('name', subject)
+    .maybeSingle(); // safer than .single()
 
-    // Fetch class details
-    const { data: classData, error: classError } = await supabaseAdmin
-      .from('classes')
-      .select('name')
-      .eq('id', paper.class_id)
-      .single();
-
-    if (!classError && classData) {
-      paperClass = classData.name.toString();
-    } else {
-      console.warn('Using fallback class data due to error:', classError);
-      paperClass = 'Class';
-    }
-  } catch (error) {
-    console.error('Error fetching subject/class details:', error);
-    // Continue with fallback values
-    subject = 'Subject';
-    subject_ur = 'مضمون';
-    paperClass = 'Class';
+  if (error) {
+    console.error('Supabase error fetching subject Urdu name:', error);
+    subject_ur = null;
+  } else {
+    subject_ur = data?.name_ur || null;
   }
-*/
+
+} catch (err) {
+  console.error('Unexpected error:', err);
+  subject_ur = null;
+}
+
   // Get questions by type from the final ordered list
   const mcqQuestions = finalQuestions.filter((pq: any) => 
     pq.question_type === 'mcq' && pq.questions
@@ -1536,11 +1479,6 @@ const DejaVuSansBase64 = loadFontAsBase64('DejaVuSans.ttf');
     pq.question_type !== 'mcq' && pq.questions
   );
 
-  // Log the counts for debugging
-  ////console.log(`📊 Question counts for PDF generation:`);
-  ////console.log(`   - MCQ Questions: ${mcqQuestions.length}`);
-  ////console.log(`   - Subjective Questions: ${subjectiveQuestions.length}`);
-  ////console.log(`   - Total Questions: ${finalQuestions.length}`);
 
   // Check if there are MCQs
   const hasMCQs = mcqQuestions.length > 0;
@@ -1588,7 +1526,7 @@ const DejaVuSansBase64 = loadFontAsBase64('DejaVuSans.ttf');
 <html lang="${isUrdu ? 'ur' : 'en'}">
 <head>
   <meta charset="UTF-8">
-  <title>${isUrdu ? subject_ur : subject} </title>
+  <title>${isUrdu ? subject_ur : subject} ${className} </title>
    <style>
  
    @font-face {
@@ -1706,8 +1644,7 @@ const DejaVuSansBase64 = loadFontAsBase64('DejaVuSans.ttf');
     }
     ol li{ font-size:9px; }
     .student-info{ margin-top: 10px; margin-bottom:10px; display: flex; justify-content: space-between;  flex-direction: ${isEnglish ? 'row-reverse' : 'row'}; }
-  
-    .options { margin-top: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '0px' : mcqQuestions.length>10?'1px':'2px'};  display: flex; justify-content: space-between; font-size:  ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '10px' :mcqQuestions.length>10? '10px':'12px'}; }
+  .options { margin-top: ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '0px' : mcqQuestions.length>10?'1px':'2px'};  display: flex; justify-content: space-between; font-size:  ${mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? '10px' :mcqQuestions.length>10? '10px':'12px'}; }
     .footer { 
       text-align: left; 
       margin-top: 10px; 
@@ -1810,11 +1747,11 @@ let htmlNoThreePapers = `  <!-- Row 2 -->
   <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
       ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' ? 
         (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${mcqSectionMarks}</span>` : '') : 
-        (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${paper.total_marks}</span>` : '')
+        (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${mcqSectionMarks+subjectiveSectionMarks}</span>` : '')
       }
       ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' ? 
         (isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${mcqSectionMarks}</span>` : '') : 
-        (isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${paper.total_marks}</span>` : '')
+        (isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${mcqSectionMarks+subjectiveSectionMarks}</span>` : '')
       }
     </td>
    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">

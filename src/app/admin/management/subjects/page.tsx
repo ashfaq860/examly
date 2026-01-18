@@ -1,22 +1,25 @@
 'use client';
+
 import { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { supabase } from '@/lib/supabaseClient';
 import { FiEdit, FiTrash2, FiPlus } from 'react-icons/fi';
 import toast from 'react-hot-toast';
-import { useRouter } from "next/navigation";
-import { isUserAdmin } from "@/lib/auth-utils";
+import { useRouter } from 'next/navigation';
+import { isUserAdmin } from '@/lib/auth-utils';
 
+// ------------------- Types -------------------
 interface Class {
   id: string;
-  name: number;
-  description?: string;
+  name: number; // table has integer
+  description?: string | null;
 }
 
 interface Subject {
   id: string;
   name: string;
-  description?: string;
+  name_ur?: string | null;
+  description?: string | null;
 }
 
 interface ClassSubject {
@@ -27,6 +30,7 @@ interface ClassSubject {
   class: Class;
 }
 
+// ------------------- Component -------------------
 export default function SubjectManagement() {
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
@@ -34,27 +38,28 @@ export default function SubjectManagement() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [currentSubject, setCurrentSubject] = useState<ClassSubject | null>(null);
-  const [formData, setFormData] = useState({ name: '', description: '', classId: '' });
+  const [formData, setFormData] = useState({ name: '', name_ur: '', description: '', classId: '' });
 
+  const router = useRouter();
 
-const router= useRouter();
-    // ✅ Check admin
-    useEffect(() => {
-      async function init() {
-        setLoading(true);
-        const admin = await isUserAdmin();
-        if (!admin) {
-          router.replace("/unauthorized");
-          return;
-        }
-        setLoading(false);
+  // ------------------- Check Admin -------------------
+  useEffect(() => {
+    async function init() {
+      setLoading(true);
+      const admin = await isUserAdmin();
+      if (!admin) {
+        router.replace('/unauthorized');
+        return;
       }
-      init();
-    }, [router]);
+      setLoading(false);
+    }
+    init();
+  }, [router]);
 
-
-  // Fetch classes
-  useEffect(() => { fetchClasses(); }, []);
+  // ------------------- Fetch Classes -------------------
+  useEffect(() => {
+    fetchClasses();
+  }, []);
 
   const fetchClasses = async () => {
     setLoading(true);
@@ -75,41 +80,40 @@ const router= useRouter();
     }
   };
 
-  // Fetch subjects whenever selected class changes
+  // ------------------- Fetch Subjects -------------------
   useEffect(() => {
-  fetchSubjects(selectedClass || undefined);
-}, [selectedClass]);
+    fetchSubjects(selectedClass || undefined);
+  }, [selectedClass]);
+
   const fetchSubjects = async (classId?: string) => {
-  setLoading(true);
-  try {
-    let query = supabase
-      .from('class_subjects')
-      .select(`
-        id,
-        class_id,
-        subject_id,
-        subject:subjects(*),
-        class:classes(*)
-      `)
-      .order('name', { foreignTable: 'subject', ascending: true });
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('class_subjects')
+        .select(`
+          id,
+          class_id,
+          subject_id,
+          subject:subjects(*),
+          class:classes(*)
+        `)
+        .order('name', { foreignTable: 'subject', ascending: true });
 
-    if (classId) {
-      query = query.eq('class_id', classId);
+      if (classId) query = query.eq('class_id', classId);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      setSubjects(data as ClassSubject[]);
+    } catch (err) {
+      console.log(err);
+      toast.error('Failed to fetch subjects');
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const { data, error } = await query;
-    if (error) throw error;
-
-    setSubjects(data as ClassSubject[]);
-  } catch (err) {
-    console.log(err);
-    toast.error('Failed to fetch subjects');
-  } finally {
-    setLoading(false);
-  }
-};
-
-  // Add or edit subject
+  // ------------------- Add/Edit Subject -------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.classId) {
@@ -121,11 +125,15 @@ const router= useRouter();
     try {
       let subjectId = '';
 
-      // If editing
       if (currentSubject) {
+        // Edit existing subject
         const { error: updateError } = await supabase
           .from('subjects')
-          .update({ name: formData.name, description: formData.description })
+          .update({
+            name: formData.name,
+            name_ur: formData.name_ur || null,
+            description: formData.description || null,
+          })
           .eq('id', currentSubject.subject_id);
         if (updateError) throw updateError;
 
@@ -140,44 +148,25 @@ const router= useRouter();
 
         toast.success('Subject updated successfully');
       } else {
-        // Check if subject exists
-        const { data: existingSubjects } = await supabase
+        // Add new subject
+        const { data: newSubject, error: insertError } = await supabase
           .from('subjects')
-          .select('*')
-          .eq('name', formData.name)
-          .limit(1);
+          .insert([{
+            name: formData.name,
+            name_ur: formData.name_ur || null,
+            description: formData.description || null,
+          }])
+          .select()
+          .single();
+        if (insertError) throw insertError;
 
-        if (existingSubjects && existingSubjects.length > 0) {
-          subjectId = existingSubjects[0].id;
-          // Update description if needed
-          await supabase
-            .from('subjects')
-            .update({ description: formData.description })
-            .eq('id', subjectId);
-        } else {
-          const { data: newSubject, error: insertError } = await supabase
-            .from('subjects')
-            .insert([{ name: formData.name, description: formData.description }])
-            .select()
-            .single();
-          if (insertError) throw insertError;
-          subjectId = newSubject.id;
-        }
+        subjectId = newSubject.id;
 
-        // Link subject to class
-        const { data: existingLink } = await supabase
+        // Link to class
+        const { error: linkError } = await supabase
           .from('class_subjects')
-          .select('*')
-          .eq('class_id', formData.classId)
-          .eq('subject_id', subjectId)
-          .limit(1);
-
-        if (!existingLink || existingLink.length === 0) {
-          const { error: linkError } = await supabase
-            .from('class_subjects')
-            .insert([{ class_id: formData.classId, subject_id: subjectId }]);
-          if (linkError) throw linkError;
-        }
+          .insert([{ class_id: formData.classId, subject_id: subjectId }]);
+        if (linkError) throw linkError;
 
         toast.success('Subject added successfully');
       }
@@ -193,7 +182,7 @@ const router= useRouter();
     }
   };
 
-  // Delete subject from class
+  // ------------------- Delete Subject -------------------
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to remove this subject from this class?')) return;
     try {
@@ -210,10 +199,12 @@ const router= useRouter();
     }
   };
 
+  // ------------------- Render -------------------
   return (
     <AdminLayout activeTab="management">
       <div className="container py-4">
-<h2>Subject Management</h2>
+        <h2>Subject Management</h2>
+
         {/* Class selector */}
         <div className="mb-3">
           <label className="form-label">Select Class</label>
@@ -223,58 +214,99 @@ const router= useRouter();
             onChange={(e) => setSelectedClass(e.target.value)}
           >
             <option value="">All Classes</option>
-            {classes.map(c => <option key={c.id} value={c.id}>{c.name}-{c.description}</option>)}
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} - {c.description || '-'}
+              </option>
+            ))}
           </select>
         </div>
 
-        {/* Header */}
+        {/* Header + Add Button */}
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h2>
-  Subjects for {classes.find(c => c.id === selectedClass)
-    ? `${classes.find(c => c.id === selectedClass)?.name} - ${classes.find(c => c.id === selectedClass)?.description || ''}`
-    : 'All Classes'}
-</h2>
-          <button className="btn btn-primary" onClick={() => {
-            setCurrentSubject(null);
-            setFormData({ name: '', description: '', classId: selectedClass || '' });
-            setShowForm(true);
-          }}>
+            Subjects for{' '}
+            {classes.find((c) => c.id === selectedClass)
+              ? `${classes.find((c) => c.id === selectedClass)?.name} - ${classes.find((c) => c.id === selectedClass)?.description || ''}`
+              : 'All Classes'}
+          </h2>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setCurrentSubject(null);
+              setFormData({ name: '', name_ur: '', description: '', classId: selectedClass || '' });
+              setShowForm(true);
+            }}
+          >
             <FiPlus className="me-1" /> Add Subject
           </button>
         </div>
 
-        {/* Form */}
+        {/* Add/Edit Form */}
         {showForm && (
           <div className="card mb-4">
             <div className="card-body">
               <form onSubmit={handleSubmit}>
                 <div className="row g-3">
-                  <div className="col-md-6">
+                  <div className="col-md-4">
                     <label className="form-label">Class</label>
-                    <select className="form-select" required
+                    <select
+                      className="form-select"
+                      required
                       value={formData.classId}
-                      onChange={(e) => setFormData({ ...formData, classId: e.target.value })}>
+                      onChange={(e) => setFormData({ ...formData, classId: e.target.value })}
+                    >
                       <option value="">Select Class</option>
-                      {classes.map(c => <option key={c.id} value={c.id}>{c.name}-{c.description}</option>)}
+                      {classes.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} - {c.description || '-'}
+                        </option>
+                      ))}
                     </select>
                   </div>
-                  <div className="col-md-6">
-                    <label className="form-label">Subject Name</label>
-                    <input type="text" className="form-control" required
+                  <div className="col-md-4">
+                    <label className="form-label">Subject Name (English)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label">Subject Name (Urdu)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formData.name_ur}
+                      onChange={(e) => setFormData({ ...formData, name_ur: e.target.value })}
+                    />
                   </div>
                   <div className="col-md-12">
                     <label className="form-label">Subject Description</label>
-                    <textarea className="form-control" rows={2}
+                    <textarea
+                      className="form-control"
+                      rows={2}
                       value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    />
                   </div>
-
                   <div className="col-md-12 d-flex justify-content-end gap-2">
-                    <button type="button" className="btn btn-secondary"
-                      onClick={() => { setShowForm(false); setCurrentSubject(null); }} disabled={loading}>Cancel</button>
-                    <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Saving...' : 'Save'}</button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setShowForm(false);
+                        setCurrentSubject(null);
+                      }}
+                      disabled={loading}
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary" disabled={loading}>
+                      {loading ? 'Saving...' : 'Save'}
+                    </button>
                   </div>
                 </div>
               </form>
@@ -282,7 +314,7 @@ const router= useRouter();
           </div>
         )}
 
-        {/* Subjects table */}
+        {/* Subjects Table */}
         {loading ? (
           <div className="text-center py-5">
             <div className="spinner-border text-primary" role="status">
@@ -296,7 +328,8 @@ const router= useRouter();
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>Subject Name</th>
+                    <th>Subject Name (EN)</th>
+                    <th>Subject Name (UR)</th>
                     <th>Subject Description</th>
                     <th>Class</th>
                     <th>Class Description</th>
@@ -304,35 +337,40 @@ const router= useRouter();
                   </tr>
                 </thead>
                 <tbody>
-                  {subjects.length > 0 ? subjects.map((cs,i) => (
-                    <tr key={cs.id}>
-                      <td>{i+1}</td>
-                      <td>{cs.subject.name}</td>
-                      <td>{cs.subject.description || '-'}</td>
-                      <td>{cs.class.name}</td>
-                      <td>{cs.class.description || '-'}</td>
-                      <td>
-                        <button className="btn btn-sm btn-outline-primary me-2"
-                          onClick={() => {
-                            setCurrentSubject(cs);
-                            setFormData({ 
-                              name: cs.subject.name, 
-                              description: cs.subject.description || '', 
-                              classId: cs.class_id 
-                            });
-                            setShowForm(true);
-                          }}>
-                          <FiEdit />
-                        </button>
-                        <button className="btn btn-sm btn-outline-danger"
-                          onClick={() => handleDelete(cs.id)}>
-                          <FiTrash2 />
-                        </button>
-                      </td>
-                    </tr>
-                  )) : (
+                  {subjects.length > 0 ? (
+                    subjects.map((cs, i) => (
+                      <tr key={cs.id}>
+                        <td>{i + 1}</td>
+                        <td>{cs.subject.name}</td>
+                        <td>{cs.subject.name_ur || '-'}</td>
+                        <td>{cs.subject.description || '-'}</td>
+                        <td>{cs.class.name}</td>
+                        <td>{cs.class.description || '-'}</td>
+                        <td>
+                          <button
+                            className="btn btn-sm btn-outline-primary me-2"
+                            onClick={() => {
+                              setCurrentSubject(cs);
+                              setFormData({
+                                name: cs.subject.name,
+                                name_ur: cs.subject.name_ur || '',
+                                description: cs.subject.description || '',
+                                classId: cs.class_id,
+                              });
+                              setShowForm(true);
+                            }}
+                          >
+                            <FiEdit />
+                          </button>
+                          <button className="btn btn-sm btn-outline-danger" onClick={() => handleDelete(cs.id)}>
+                            <FiTrash2 />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
                     <tr>
-                      <td colSpan={5} className="py-4">
+                      <td colSpan={7} className="py-4">
                         <div className="alert alert-info">No subjects found for this class</div>
                       </td>
                     </tr>
@@ -342,7 +380,6 @@ const router= useRouter();
             </div>
           </div>
         )}
-
       </div>
     </AdminLayout>
   );
