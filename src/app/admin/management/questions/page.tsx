@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, ChangeEvent } from 'react';
+import { useState, useEffect, ChangeEvent, useMemo } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { supabase } from '@/lib/supabaseClient';
 import { 
@@ -9,10 +9,11 @@ import {
 import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
 import * as XLSX from 'xlsx';
-//import QuestionForm from '@/components/QuestionForm';
-const QuestionForm = dynamic(() => import('@/components/QuestionForm'), { ssr: false });
+import DOMPurify from 'dompurify';
 import { useRouter } from "next/navigation";
 import { isUserAdmin } from "@/lib/auth-utils";
+
+const QuestionForm = dynamic(() => import('@/components/QuestionForm'), { ssr: false });
 
 interface Question {
   id: string;
@@ -77,6 +78,52 @@ interface Filters {
   source_type?: string;
 }
 
+// Helper function to strip HTML tags for text display
+const stripHtmlTags = (html: string | null | undefined): string => {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+};
+
+// Helper function to safely render HTML content
+const SafeHtmlRender: React.FC<{ 
+  html: string | null | undefined;
+  maxLength?: number;
+  className?: string;
+}> = ({ html, maxLength, className = '' }) => {
+  if (!html) return null;
+  
+  const sanitizedHtml = DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: [
+      'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'ul', 'ol', 'li', 
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'span', 'table',
+      'tr', 'td', 'th', 'tbody', 'thead', 'img', 'a'
+    ],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt', 'style', 'class', 'width', 'height']
+  });
+
+  let displayHtml = sanitizedHtml;
+  let isTruncated = false;
+  
+  if (maxLength && sanitizedHtml.length > maxLength) {
+    const textContent = stripHtmlTags(sanitizedHtml);
+    if (textContent.length > maxLength) {
+      displayHtml = textContent.substring(0, maxLength) + '...';
+      isTruncated = true;
+    }
+  }
+
+  if (isTruncated) {
+    return <span className={className} title={stripHtmlTags(html)}>{displayHtml}</span>;
+  }
+
+  return (
+    <div 
+      className={`question-content ${className}`}
+      dangerouslySetInnerHTML={{ __html: displayHtml }}
+    />
+  );
+};
+
 export default function QuestionBank() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -97,6 +144,7 @@ export default function QuestionBank() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalQuestions, setTotalQuestions] = useState(0);
+  const [totalFilteredQuestions, setTotalFilteredQuestions] = useState(0);
   
   const router = useRouter();
 
@@ -161,7 +209,6 @@ export default function QuestionBank() {
 
   const fetchClassSubjects = async () => {
     try {
-      console.log('Fetching class subjects...');
       const { data, error } = await supabase
         .from('class_subjects')
         .select(`
@@ -178,7 +225,6 @@ export default function QuestionBank() {
         throw error;
       }
       
-      console.log('Class subjects fetched:', data);
       setClassSubjects(data as ClassSubject[]);
       
     } catch (error) {
@@ -201,14 +247,12 @@ export default function QuestionBank() {
   const getFilteredChapters = () => {
     if (!filters.class || !filters.subject) return [];
     
-    // Find the class_subject_id for the selected class and subject
     const classSubject = classSubjects.find(
       cs => cs.class_id === filters.class && cs.subject_id === filters.subject
     );
     
     if (!classSubject) return [];
     
-    // Filter chapters by class_subject_id
     return chapters.filter(chapter => chapter.class_subject_id === classSubject.id);
   };
 
@@ -217,11 +261,9 @@ export default function QuestionBank() {
     return topics.filter(topic => topic.chapter_id === filters.chapter);
   };
 
-  const fetchQuestions = async (page = 1) => {
+  const fetchQuestions = async (page = 1, isSearchOrTabChange = false) => {
     setLoading(true);
     try {
-      console.log('Fetching questions with filters:', filters);
-      
       // Build the base query for counting total
       let countQuery = supabase
         .from('questions')
@@ -273,9 +315,9 @@ export default function QuestionBank() {
           countQuery = countQuery.in('class_subject_id', classSubjectIds);
           dataQuery = dataQuery.in('class_subject_id', classSubjectIds);
         } else {
-          // No class subjects found for this class
           setQuestions([]);
           setTotalQuestions(0);
+          setTotalFilteredQuestions(0);
           setLoading(false);
           return;
         }
@@ -290,9 +332,9 @@ export default function QuestionBank() {
           countQuery = countQuery.in('class_subject_id', classSubjectIds);
           dataQuery = dataQuery.in('class_subject_id', classSubjectIds);
         } else {
-          // No class subjects found for this subject
           setQuestions([]);
           setTotalQuestions(0);
+          setTotalFilteredQuestions(0);
           setLoading(false);
           return;
         }
@@ -320,13 +362,29 @@ export default function QuestionBank() {
         dataQuery = dataQuery.eq('source_type', filters.source_type);
       }
 
+      // Apply search filter if exists
+      if (searchTerm.trim()) {
+        const searchPattern = `%${searchTerm.trim()}%`;
+        countQuery = countQuery.or(`question_text.ilike.${searchPattern},question_text_ur.ilike.${searchPattern},subject:name.ilike.${searchPattern},chapter:name.ilike.${searchPattern},topic:name.ilike.${searchPattern}`);
+        dataQuery = dataQuery.or(`question_text.ilike.${searchPattern},question_text_ur.ilike.${searchPattern},subject:name.ilike.${searchPattern},chapter:name.ilike.${searchPattern},topic:name.ilike.${searchPattern}`);
+      }
+
+      // Apply active tab filter if not 'all'
+      if (activeTab !== 'all') {
+        countQuery = countQuery.eq('question_type', activeTab);
+        dataQuery = dataQuery.eq('question_type', activeTab);
+      }
+
       // Get total count
       const { count, error: countError } = await countQuery;
       if (countError) {
         console.error('Count query error:', countError);
         throw countError;
       }
-      setTotalQuestions(count || 0);
+      
+      const total = count || 0;
+      setTotalQuestions(total);
+      setTotalFilteredQuestions(total);
 
       // Calculate pagination
       const from = (page - 1) * itemsPerPage;
@@ -339,8 +397,6 @@ export default function QuestionBank() {
         console.error('Supabase query error details:', error);
         throw error;
       }
-
-      console.log('Raw data from Supabase:', data);
       
       const processedData = (data as any[]).map(q => ({
         ...q,
@@ -349,9 +405,13 @@ export default function QuestionBank() {
         subject: q.subject || { name: '-' }
       })) as Question[];
 
-      console.log('Processed data:', processedData);
       setQuestions(processedData);
       setCurrentPage(page);
+
+      // If this was triggered by search/tab change and we got no results, reset to page 1
+      if (isSearchOrTabChange && processedData.length === 0 && page > 1) {
+        setCurrentPage(1);
+      }
 
     } catch (error: any) {
       console.error('Error fetching questions:', error);
@@ -412,7 +472,7 @@ export default function QuestionBank() {
   // Refetch questions when filters change
   useEffect(() => {
     if (classSubjects.length > 0) {
-      setCurrentPage(1); // Reset to first page when filters change
+      setCurrentPage(1);
       fetchQuestions(1);
     }
   }, [filters, classSubjects]);
@@ -424,13 +484,32 @@ export default function QuestionBank() {
     }
   }, [itemsPerPage]);
 
+  // Refetch questions when search term changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (classSubjects.length > 0) {
+        setCurrentPage(1);
+        fetchQuestions(1, true);
+      }
+    }, 500); // Debounce search
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Refetch questions when active tab changes
+  useEffect(() => {
+    if (classSubjects.length > 0) {
+      setCurrentPage(1);
+      fetchQuestions(1, true);
+    }
+  }, [activeTab]);
+
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this question?')) return;
     try {
       const { error } = await supabase.from('questions').delete().eq('id', id);
       if (error) throw error;
       
-      // Refetch questions to update the list and pagination
       await fetchQuestions(currentPage);
       toast.success('Question deleted');
     } catch (error) {
@@ -442,7 +521,6 @@ export default function QuestionBank() {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      // Fetch all questions without pagination for export
       let query = supabase
         .from('questions')
         .select(`
@@ -478,7 +556,7 @@ export default function QuestionBank() {
         `)
         .order('created_at', { ascending: false });
 
-      // Apply filters if any
+      // Apply all filters for export
       if (filters.class) {
         const classSubjectIds = classSubjects
           .filter(cs => cs.class_id === filters.class)
@@ -503,40 +581,78 @@ export default function QuestionBank() {
       if (filters.question_type) query = query.eq('question_type', filters.question_type);
       if (filters.source_type) query = query.eq('source_type', filters.source_type);
 
+      if (searchTerm.trim()) {
+        const searchPattern = `%${searchTerm.trim()}%`;
+        query = query.or(`question_text.ilike.${searchPattern},question_text_ur.ilike.${searchPattern}`);
+      }
+
+      if (activeTab !== 'all') {
+        query = query.eq('question_type', activeTab);
+      }
+
       const { data, error } = await query;
       
       if (error) throw error;
 
       const dataToExport = (data as any[]).map(q => ({
-        Question: q.question_text,
-        'Question (Urdu)': q.question_text_ur,
-        'Option A': q.option_a,
-        'Option B': q.option_b,
-        'Option C': q.option_c,
-        'Option D': q.option_d,
-        'Option A (Urdu)': q.option_a_ur,
-        'Option B (Urdu)': q.option_b_ur,
-        'Option C (Urdu)': q.option_c_ur,
-        'Option D (Urdu)': q.option_d_ur,
+        ID: q.id,
+        Question: stripHtmlTags(q.question_text),
+        'Question (Urdu)': stripHtmlTags(q.question_text_ur),
+        'Option A': stripHtmlTags(q.option_a),
+        'Option B': stripHtmlTags(q.option_b),
+        'Option C': stripHtmlTags(q.option_c),
+        'Option D': stripHtmlTags(q.option_d),
+        'Option A (Urdu)': stripHtmlTags(q.option_a_ur),
+        'Option B (Urdu)': stripHtmlTags(q.option_b_ur),
+        'Option C (Urdu)': stripHtmlTags(q.option_c_ur),
+        'Option D (Urdu)': stripHtmlTags(q.option_d_ur),
         'Correct Option': q.correct_option,
-        'Class ID': classSubjects.find(cs => cs.subject_id === q.subject_id)?.class_id || '',
-        Class: q.class_subject?.class?.name || '-',
-        'Subject ID': q.subject_id || '',
-        Subject: q.subject?.name || '-',
-        Chapter: q.chapter?.name || '-',
-        Topic: q.topic?.name || '-',
-        Difficulty: q.difficulty,
+        'Class': q.class_subject?.class?.name || '-',
+        'Subject': q.subject?.name || '-',
+        'Chapter': q.chapter?.name || '-',
+        'Topic': q.topic?.name || '-',
+        'Difficulty': q.difficulty,
         'Question Type': q.question_type,
         'Source Type': q.source_type,
         'Source Year': q.source_year,
-        'Answer Text': q.answer_text,
-        'Answer Text (Urdu)': q.answer_text_ur
+        'Answer Text': stripHtmlTags(q.answer_text),
+        'Answer Text (Urdu)': stripHtmlTags(q.answer_text_ur),
+        'Created At': new Date(q.created_at).toLocaleDateString()
       }));
 
       const ws = XLSX.utils.json_to_sheet(dataToExport);
+      
+      // Set column widths
+      const wscols = [
+        { wch: 10 }, // ID
+        { wch: 50 }, // Question
+        { wch: 50 }, // Question Urdu
+        { wch: 20 }, // Option A
+        { wch: 20 }, // Option B
+        { wch: 20 }, // Option C
+        { wch: 20 }, // Option D
+        { wch: 20 }, // Option A Urdu
+        { wch: 20 }, // Option B Urdu
+        { wch: 20 }, // Option C Urdu
+        { wch: 20 }, // Option D Urdu
+        { wch: 15 }, // Correct Option
+        { wch: 15 }, // Class
+        { wch: 20 }, // Subject
+        { wch: 20 }, // Chapter
+        { wch: 20 }, // Topic
+        { wch: 10 }, // Difficulty
+        { wch: 10 }, // Question Type
+        { wch: 15 }, // Source Type
+        { wch: 10 }, // Source Year
+        { wch: 50 }, // Answer Text
+        { wch: 50 }, // Answer Text Urdu
+        { wch: 15 }, // Created At
+      ];
+      ws['!cols'] = wscols;
+
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Questions');
-      XLSX.writeFile(wb, 'question_bank_export.xlsx');
+      XLSX.writeFile(wb, `question_bank_${new Date().toISOString().split('T')[0]}.xlsx`);
       toast.success(`Exported ${dataToExport.length} questions successfully`);
     } catch (error) {
       console.error('Error exporting questions:', error);
@@ -569,7 +685,6 @@ export default function QuestionBank() {
         const topicId =
           topics.find(t => t.name === row.Topic)?.id || null;
 
-        // Find class_subject_id based on class and subject
         let classSubjectId = null;
         if (row['Class ID'] && subjectId) {
           const classSubject = classSubjects.find(
@@ -606,7 +721,6 @@ export default function QuestionBank() {
       const { error } = await supabase.from('questions').insert(insertData);
       if (error) throw error;
       toast.success(`${(rows as any[]).length} questions imported successfully`);
-      // Refetch questions after import
       await fetchQuestions(currentPage);
     } catch (error) {
       console.error('Error importing questions:', error);
@@ -618,21 +732,9 @@ export default function QuestionBank() {
   };
 
   // Pagination calculations
-  const totalPages = Math.ceil(totalQuestions / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = Math.min(startIndex + itemsPerPage, totalQuestions);
-
-  // Filter questions based on active tab and search term (client-side filtering for displayed questions)
-  const filteredQuestions = questions
-    .filter(q => activeTab === 'all' || q?.question_type === activeTab)
-    .filter(q =>
-      q?.question_text?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (q?.question_text_ur && q?.question_text_ur.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (q?.class && q?.class?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (q?.subject?.name && q?.subject?.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (q?.chapter?.name && q?.chapter?.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (q?.topic?.name && q?.topic?.name.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+  const totalPages = Math.ceil(totalFilteredQuestions / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage + 1;
+  const endIndex = Math.min(currentPage * itemsPerPage, totalFilteredQuestions);
 
   const clearAllFilters = () => {
     setFilters({});
@@ -649,12 +751,49 @@ export default function QuestionBank() {
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
       fetchQuestions(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const handleItemsPerPageChange = (value: number) => {
     setItemsPerPage(value);
     setCurrentPage(1);
+  };
+
+  // Generate pagination range
+  const getPaginationRange = () => {
+    const delta = 2;
+    const range = [];
+    const rangeWithDots = [];
+    let l;
+
+    range.push(1);
+    
+    for (let i = currentPage - delta; i <= currentPage + delta; i++) {
+      if (i > 1 && i < totalPages) {
+        range.push(i);
+      }
+    }
+    
+    if (totalPages > 1) {
+      range.push(totalPages);
+    }
+    
+    range.sort((a, b) => a - b);
+    
+    for (let i of range) {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1);
+        } else if (i - l !== 1) {
+          rangeWithDots.push('...');
+        }
+      }
+      rangeWithDots.push(i);
+      l = i;
+    }
+    
+    return rangeWithDots;
   };
 
   return (
@@ -690,7 +829,7 @@ export default function QuestionBank() {
             <button 
               className="btn btn-success" 
               onClick={handleExport}
-              disabled={isExporting || totalQuestions === 0}
+              disabled={isExporting || totalFilteredQuestions === 0}
             >
               <FiDownload className="me-1" /> 
               {isExporting ? 'Exporting...' : 'Export'}
@@ -874,7 +1013,14 @@ export default function QuestionBank() {
         {/* Results Info and Items Per Page */}
         <div className="d-flex justify-content-between align-items-center mb-3">
           <div className="text-muted">
-            Showing {startIndex + 1} to {endIndex} of {totalQuestions} questions
+            {totalFilteredQuestions > 0 ? (
+              <>
+                Showing <strong>{startIndex}</strong> to <strong>{endIndex}</strong> of{' '}
+                <strong>{totalFilteredQuestions}</strong> questions
+              </>
+            ) : (
+              'No questions found'
+            )}
           </div>
           <div className="d-flex align-items-center gap-2">
             <span className="text-muted">Items per page:</span>
@@ -906,55 +1052,72 @@ export default function QuestionBank() {
                 <table className="table table-hover">
                   <thead>
                     <tr>
-                      <th>#</th>
+                      <th style={{ width: '50px' }}>#</th>
                       <th>Question</th>
-                      <th>Class</th>
-                      <th>Subject</th>
-                      <th>Chapter</th>
-                      <th>Topic</th>
-                      <th>Type</th>
-                      <th>Difficulty</th>
-                      <th>Source</th>
-                      <th>Actions</th>
+                      <th style={{ width: '100px' }}>Class</th>
+                      <th style={{ width: '100px' }}>Subject</th>
+                      <th style={{ width: '100px' }}>Chapter</th>
+                      <th style={{ width: '100px' }}>Topic</th>
+                      <th style={{ width: '80px' }}>Type</th>
+                      <th style={{ width: '100px' }}>Difficulty</th>
+                      <th style={{ width: '120px' }}>Source</th>
+                      <th style={{ width: '100px' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredQuestions.length > 0 ? filteredQuestions.map((q, i) => (
+                    {questions.length > 0 ? questions.map((q, i) => (
                       <tr key={q?.id}>
-                        <td>{startIndex + i + 1}</td>
-                        <td className="text-truncate" style={{maxWidth: '300px'}} title={q?.question_text}>
-                          {q?.question_text}
-                          {q?.question_text_ur && (
-                            <div className="text-muted small urdu-text" style={{direction: 'rtl'}}>
-                              {q?.question_text_ur}
-                            </div>
-                          )}
+                        <td>{startIndex + i}</td>
+                        <td>
+                          <div className="question-text-container" style={{ maxWidth: '400px' }}>
+                            <SafeHtmlRender 
+                              html={q?.question_text}
+                              maxLength={150}
+                              className="text-truncate"
+                            />
+                            {q?.question_text_ur && (
+                              <div className="text-muted small urdu-text mt-1" style={{ direction: 'rtl' }}>
+                                <SafeHtmlRender 
+                                  html={q?.question_text_ur}
+                                  maxLength={100}
+                                  className="text-truncate"
+                                />
+                              </div>
+                            )}
+                          </div>
                         </td>
-                        <td>{q?.class || '-'}-{q?.class_description || '-'} </td>
+                        <td>
+                          <span className="badge bg-secondary">
+                            {q?.class || '-'}
+                          </span>
+                        </td>
                         <td>{q?.subject?.name || '-'}</td>
                         <td>{q?.chapter?.name || '-'}</td>
                         <td>{q?.topic?.name || '-'}</td>
                         <td>
-                          <span className={`badge ${q.question_type === 'mcq' ? 'bg-primary' : 'bg-info'}`}>
+                          <span className={`badge ${
+                            q.question_type === 'mcq' ? 'bg-primary' : 
+                            q.question_type === 'short' ? 'bg-info' : 'bg-warning'
+                          }`}>
                             {q?.question_type.toUpperCase()}
                           </span>
                         </td>
                         <td>
                           <span className={`badge ${
                             q?.difficulty === 'easy' ? 'bg-success' : 
-                            q?.difficulty === 'medium' ? 'bg-warning' : 'bg-danger'
+                            q?.difficulty === 'medium' ? 'bg-warning text-dark' : 'bg-danger'
                           }`}>
-                            {q?.difficulty}
+                            {q?.difficulty.charAt(0).toUpperCase() + q?.difficulty.slice(1)}
                           </span>
                         </td>
                         <td>
-                          <span className="badge bg-secondary">
+                          <span className="badge bg-dark">
                             {q?.source_type.replace('_', ' ')}
-                            {q?.source_year ? ` ${q.source_year}` : ''}
+                            {q?.source_year ? ` (${q.source_year})` : ''}
                           </span>
                         </td>
                         <td>
-                          <div className="d-flex gap-2">
+                          <div className="d-flex gap-1">
                             <button 
                               className="btn btn-sm btn-outline-primary" 
                               onClick={() => { setSelectedQuestion(q); setShowModal(true); }}
@@ -974,9 +1137,21 @@ export default function QuestionBank() {
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={10} className="text-center py-4">
-                          <div className="alert alert-info mb-0">
-                            No questions found matching your criteria
+                        <td colSpan={10} className="text-center py-5">
+                          <div className="alert alert-info mb-0 d-flex flex-column align-items-center">
+                            <div className="mb-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" className="bi bi-question-circle" viewBox="0 0 16 16">
+                                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                                <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z"/>
+                              </svg>
+                            </div>
+                            <div>No questions found matching your criteria</div>
+                            <button 
+                              className="btn btn-sm btn-primary mt-3"
+                              onClick={() => { setSelectedQuestion(null); setShowModal(true); }}
+                            >
+                              <FiPlus className="me-1" /> Add First Question
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -987,73 +1162,85 @@ export default function QuestionBank() {
             </div>
 
             {/* Pagination Controls */}
-            {totalQuestions > 0 && (
-              <nav aria-label="Question pagination">
-                <ul className="pagination justify-content-center">
-                  <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                    <button 
-                      className="page-link" 
-                      onClick={() => handlePageChange(1)}
-                      disabled={currentPage === 1}
-                    >
-                      <FiChevronsLeft />
-                    </button>
-                  </li>
-                  <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                    <button 
-                      className="page-link" 
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage === 1}
-                    >
-                      <FiChevronLeft />
-                    </button>
-                  </li>
-                  
-                  {/* Page numbers */}
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i;
-                    } else {
-                      pageNum = currentPage - 2 + i;
-                    }
-                    
-                    return (
-                      <li key={pageNum} className={`page-item ${currentPage === pageNum ? 'active' : ''}`}>
-                        <button 
-                          className="page-link" 
-                          onClick={() => handlePageChange(pageNum)}
-                        >
-                          {pageNum}
-                        </button>
+            {totalFilteredQuestions > 0 && totalPages > 1 && (
+              <div className="d-flex justify-content-between align-items-center">
+                <div className="text-muted small">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <nav aria-label="Question pagination">
+                  <ul className="pagination mb-0">
+                    {/* First Page */}
+                    <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                      <button 
+                        className="page-link" 
+                        onClick={() => handlePageChange(1)}
+                        disabled={currentPage === 1}
+                        aria-label="First Page"
+                      >
+                        <FiChevronsLeft />
+                      </button>
+                    </li>
+
+                    {/* Previous Page */}
+                    <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                      <button 
+                        className="page-link" 
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        aria-label="Previous Page"
+                      >
+                        <FiChevronLeft />
+                      </button>
+                    </li>
+
+                    {/* Page Numbers */}
+                    {getPaginationRange().map((pageNum, index) => (
+                      <li 
+                        key={index} 
+                        className={`page-item ${pageNum === '...' ? 'disabled' : ''} ${currentPage === pageNum ? 'active' : ''}`}
+                      >
+                        {pageNum === '...' ? (
+                          <span className="page-link">...</span>
+                        ) : (
+                          <button 
+                            className="page-link" 
+                            onClick={() => handlePageChange(pageNum as number)}
+                          >
+                            {pageNum}
+                          </button>
+                        )}
                       </li>
-                    );
-                  })}
-                  
-                  <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                    <button 
-                      className="page-link" 
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                    >
-                      <FiChevronRight />
-                    </button>
-                  </li>
-                  <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                    <button 
-                      className="page-link" 
-                      onClick={() => handlePageChange(totalPages)}
-                      disabled={currentPage === totalPages}
-                    >
-                      <FiChevronsRight />
-                    </button>
-                  </li>
-                </ul>
-              </nav>
+                    ))}
+
+                    {/* Next Page */}
+                    <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                      <button 
+                        className="page-link" 
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        aria-label="Next Page"
+                      >
+                        <FiChevronRight />
+                      </button>
+                    </li>
+
+                    {/* Last Page */}
+                    <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                      <button 
+                        className="page-link" 
+                        onClick={() => handlePageChange(totalPages)}
+                        disabled={currentPage === totalPages}
+                        aria-label="Last Page"
+                      >
+                        <FiChevronsRight />
+                      </button>
+                    </li>
+                  </ul>
+                </nav>
+                <div className="text-muted small">
+                  {itemsPerPage} per page
+                </div>
+              </div>
             )}
           </>
         )}
