@@ -4,9 +4,9 @@ import Link from "next/link";
 
 const defaultSlides = [
   {
-    title: "Examly-Smart Paper Maker & Online Test Generator",
+    title: "Examly — Smart Paper Maker & Online Test Generator for Educators",
     description:
-      "Create professional exam papers in minutes with Examly. Generate full-book, half-book, chapter-wise, and custom papers tailored for schools, colleges, and academies. Balanced difficulty, fair assessments, and printable exams save teachers time while enhancing student performance.",
+      "Create professional exam papers in minutes with Examly, the advanced online test maker and question paper generator. Generate full-book, half-book, chapter-wise, custom chapters, and randomized papers tailored to your curriculum. Perfect for schools, colleges, and academies, Examly ensures balanced difficulty, fair assessments, and high-quality, printable exams to save teachers time and enhance student learning outcomes.",
     image: "/smartPaperMaker.png",
     cta: "Try Now",
     link: "/auth/login",
@@ -15,9 +15,9 @@ const defaultSlides = [
     imageStyle: "floating",
   },
   {
-    title: "Register & Get 3 Months Free — Make Unlimited Test",
+    title: "Register & Get 3 Month Free — Unlimited Test & Paper Generation",
     description:
-      "Sign up and get 3 months of free access to Examly's online test maker. Refer a friend and earn an extra month free! Create unlimited full-book, half-book, chapter-wise, and custom exam papers effortlessly. Perfect for teachers and academies producing professional, printable assessments.",
+      "Sign up today and get 3 months of free access to Examly's online test maker and question paper generator. Refer a friend and earn an additional 1 month free! Effortlessly create unlimited full-book, half-book, chapter-wise, and custom chapters exam papers. Ideal for teachers, academies, and educational institutes looking to save time while producing professional, balanced, and printable assessments for students.",
     image: "/sliderFreeOffer.jpg",
     cta: "Claim Offer",
     link: "/auth/signup",
@@ -26,9 +26,9 @@ const defaultSlides = [
     imageStyle: "perspective",
   },
   {
-    title: "Assess Your MCQ Preparation — Online Quizzes & Tests",
+    title: "Assess Your MCQ Preparation with Examly — Online Quizzes & Tests",
     description:
-      "Prepare for exams with Examly's online quizzes and MCQ tests. Track progress, identify knowledge gaps, and get printable quizzes. Ideal for students and educators seeking efficient online assessment tools and high-quality question papers.",
+      "Prepare effectively for exams using Examly's online quizzes and full-book MCQ tests. Identify knowledge gaps, track progress, and ensure readiness for final exams. Our smart test maker provides balanced question distribution, instant results, and printable quizzes. Perfect for students and educators seeking efficient online assessment tools and high-quality question papers to improve exam performance.",
     image: "/student.jpg",
     cta: "Try Full Book Quiz",
     link: "/auth/login",
@@ -41,6 +41,7 @@ const defaultSlides = [
 export default function CubeSlider({ slides = defaultSlides, autoRotateInterval = 6000, transitionMs = 1200 }) {
   const [activeSlide, setActiveSlide] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [direction, setDirection] = useState<'next' | 'prev'>('next');
 
   // Refs for stable values inside intervals / listeners
   const sliderRef = useRef<HTMLDivElement | null>(null);
@@ -63,25 +64,12 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
     setIsAnimating(false);
   };
 
-  useEffect(() => {
-    const node = sliderRef.current;
-    if (!node) return;
-
-    const onTransitionEnd = (e: TransitionEvent) => {
-      if (e.propertyName && e.propertyName.includes("transform")) {
-        endAnimating();
-      }
-    };
-
-    node.addEventListener("transitionend", onTransitionEnd);
-    return () => node.removeEventListener("transitionend", onTransitionEnd);
-  }, []);
-
-  const goToSlide = (index: number) => {
+  const goToSlide = (index: number, dir: 'next' | 'prev' = 'next') => {
     if (index === activeSlideRef.current || isAnimatingRef.current) return;
 
     isAnimatingRef.current = true;
     setIsAnimating(true);
+    setDirection(dir);
     setActiveSlide(index);
 
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -90,8 +78,8 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
     }, transitionMs + 100);
   };
 
-  const nextSlide = () => goToSlide((activeSlideRef.current + 1) % slides.length);
-  const prevSlide = () => goToSlide((activeSlideRef.current - 1 + slides.length) % slides.length);
+  const nextSlide = () => goToSlide((activeSlideRef.current + 1) % slides.length, 'next');
+  const prevSlide = () => goToSlide((activeSlideRef.current - 1 + slides.length) % slides.length, 'prev');
 
   const startAutoRotate = () => {
     if (intervalRef.current) return;
@@ -132,91 +120,106 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
   };
 
   return (
-    <div className="cube-slider-container position-relative overflow-hidden" ref={containerRef}>
-      <div className={`cube-slider show-${activeSlide}`} ref={sliderRef}>
-        {slides.map((slide, index) => (
-          <div
-  key={index}
-  className={`cube-face cube-face-${index} ${slide.bgClass} ${
-    index === activeSlide ? "active" : ""
-  }`}
->
-
-            <div className="slide-overlay"></div>
-            <div className="cube-content" >
-              <div className="container h-100 position-relative z-10">
-                <div className="row align-items-center h-100 min-h-96">
-                  <div className="col-lg-6 text-white">
-                    <div className="slide-content" style={{ position: 'relative', zIndex: 9999, pointerEvents: 'all' }}>
-                      <div className="slide-icon mb-4">
-                        <div className="icon-container">
-                          <span className="icon-display">{slide.icon}</span>
-                          <div className="icon-glow"></div>
+    <div className="slider-container position-relative overflow-hidden" ref={containerRef}>
+      <div className="slider-wrapper" ref={sliderRef}>
+        {slides.map((slide, index) => {
+          const isActive = index === activeSlide;
+          return (
+            <div
+              key={index}
+              className={`slider-slide ${slide.bgClass} ${isActive ? 'active' : 'inactive'}`}
+              style={{
+                opacity: isActive ? 1 : 0,
+                transform: isActive ? 'translateX(0)' : index < activeSlide ? 'translateX(-100%)' : 'translateX(100%)',
+                zIndex: isActive ? 10 : 0,
+                pointerEvents: isActive ? 'auto' : 'none',
+              }}
+            >
+              <div className="slide-content-wrapper">
+                <div className="container h-100 position-relative">
+                  <div className="row align-items-center h-100 min-h-96">
+                    <div className="col-lg-6 text-white">
+                      <div className="slide-content">
+                        <div className="slide-icon mb-4">
+                          <div className="icon-container">
+                            <span className="icon-display">{slide.icon}</span>
+                            <div className="icon-glow"></div>
+                          </div>
+                        </div>
+                        <div className="slide-badge mb-3">
+                          <span className="badge bg-white/20 backdrop-blur-sm px-3 py-2 rounded-full text-sm font-medium border border-white/30">
+                            {index === 0 ? "For Educators" : index === 1 ? "Special Offer" : "For Students"}
+                          </span>
+                        </div>
+                        <h1 className="display-4 fw-bold mb-4 leading-tight">{slide.title}</h1>
+                        <p className="lead mb-5 opacity-90 text-lg">{slide.description}</p>
+                        <div className="slide-actions">
+                          <Link 
+                            href={slide.link} 
+                            className="btn btn-light btn-lg px-5 py-3 rounded-lg font-semibold shadow-lg hover-lift"
+                            style={{ pointerEvents: isActive ? 'auto' : 'none' }}
+                            onClick={(e) => {
+                              if (!isActive) {
+                                e.preventDefault();
+                              }
+                            }}
+                            tabIndex={isActive ? 0 : -1}
+                          >
+                            {slide.cta} <i className="bi bi-arrow-right ms-2"></i>
+                          </Link>
                         </div>
                       </div>
-                      <div className="slide-badge mb-3">
-                        <span className="badge bg-white/20 backdrop-blur-sm px-3 py-2 rounded-full text-sm font-medium border border-white/30">
-                          {index === 0 ? "For Educators" : index === 1 ? "Special Offer" : "For Students"}
-                        </span>
-                      </div>
-                      <h2 className="display-4 fw-bold mb-2 leading-tight">{slide.title}</h2>
-                      <p className="lead mb-5 opacity-90 text-lg">{slide.description}</p>
-                      <div className="slide-actions" style={{zIndex:'10000'}}>
-                        <Link href={slide.link} className="btn btn-light btn-lg px-5 py-3 rounded-lg font-semibold shadow-lg hover-lift">
-                          {slide.cta} <i className="bi bi-arrow-right ms-2"></i>
-                        </Link>
-                      </div>
                     </div>
-                  </div>
 
-                  <div className="col-lg-6 d-none d-lg-block">
-                    <div className={`slide-image-container ${getImageStyleClass(slide.imageStyle)}`}>
-                      <img 
-                        src={slide.image} 
-                        alt={slide.title} 
-                        className="slide-image"
-                      />
-                      <div className="image-glow"></div>
-                      
-                      {/* Floating elements for visual interest */}
-                      <div className="floating-element el-1"></div>
-                      <div className="floating-element el-2"></div>
-                      <div className="floating-element el-3"></div>
-                      
-                      {/* Decorative shapes */}
-                      <div className="deco-shape shape-1"></div>
-                      <div className="deco-shape shape-2"></div>
+                    <div className="col-lg-6 d-none d-lg-block">
+                      <div className={`slide-image-container ${getImageStyleClass(slide.imageStyle)}`}>
+                        <img 
+                          src={slide.image} 
+                          alt={slide.title} 
+                          className="slide-image"
+                        />
+                        <div className="image-glow"></div>
+                        
+                        {/* Floating elements for visual interest */}
+                        <div className="floating-element el-1"></div>
+                        <div className="floating-element el-2"></div>
+                        <div className="floating-element el-3"></div>
+                        
+                        {/* Decorative shapes */}
+                        <div className="deco-shape shape-1"></div>
+                        <div className="deco-shape shape-2"></div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Navigation Buttons */}
-      <div className="cube-navigation-container">
-        <button className="cube-nav-btn cube-prev" onClick={prevSlide} disabled={isAnimating}>
+      <div className="slider-navigation-container">
+        <button className="slider-nav-btn slider-prev" onClick={prevSlide} disabled={isAnimating}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M15 18l-6-6 6-6"/>
           </svg>
         </button>
-        <button className="cube-nav-btn cube-next" onClick={nextSlide} disabled={isAnimating}>
+        <button className="slider-nav-btn slider-next" onClick={nextSlide} disabled={isAnimating}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M9 18l6-6-6-6"/>
           </svg>
         </button>
       </div>
 
-      {/* Cube Indicators */}
-      <div className="cube-indicators-container">
+      {/* Indicators */}
+      <div className="slider-indicators-container">
         <div className="indicators-wrapper">
           {slides.map((_, index) => (
             <button
               key={index}
-              className={`cube-indicator ${activeSlide === index ? "active" : ""}`}
-              onClick={() => goToSlide(index)}
+              className={`slider-indicator ${activeSlide === index ? "active" : ""}`}
+              onClick={() => goToSlide(index, index > activeSlide ? 'next' : 'prev')}
               disabled={isAnimating}
             >
               <div className="indicator-progress"></div>
@@ -226,7 +229,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
       </div>
 
       {/* Slide Counter */}
-      <div className="cube-counter">
+      <div className="slider-counter">
         <span className="current-slide">0{activeSlide + 1}</span>
         <span className="counter-divider">/</span>
         <span className="total-slides">0{slides.length}</span>
@@ -234,50 +237,82 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
 
       {/* Enhanced Styles */}
       <style jsx>{`
-        .cube-slider-container { 
-          perspective: 1400px; 
+        .slider-container { 
           height: 700px; 
           overflow: hidden; 
           position: relative; 
           background: #000; 
           margin-top: 70px; 
         }
-        .cube-slider { 
-          width: 100%; 
-          height: 100%; 
-          position: relative; 
-          transform-style: preserve-3d; 
-          transition: transform ${transitionMs}ms cubic-bezier(0.68, -0.55, 0.27, 1.55); 
-          transform: translateZ(-300px); 
+        
+        .slider-wrapper {
+          width: 100%;
+          height: 100%;
+          position: relative;
         }
-        .cube-face { 
-          position: absolute; 
-          width: 100%; 
-          height: 100%; 
-          backface-visibility: hidden; 
-          display: flex; 
-          align-items: center; 
-          justify-content: center; 
-          overflow: hidden; 
+        
+        .slider-slide {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          transition: transform ${transitionMs}ms cubic-bezier(0.68, -0.55, 0.27, 1.55), 
+                     opacity ${transitionMs}ms cubic-bezier(0.68, -0.55, 0.27, 1.55);
+          will-change: transform, opacity;
         }
-
-        .cube-slider.show-0 { transform: translateZ(-300px) rotateY(0deg); }
-        .cube-slider.show-1 { transform: translateZ(-300px) rotateY(-120deg); }
-        .cube-slider.show-2 { transform: translateZ(-300px) rotateY(-240deg); }
-
-        .cube-face-0 { 
-          transform: rotateY(0deg) translateZ(300px); 
-          //background: linear-gradient(135deg, #073E8C 0%, #2f5babff 100%); 
-        background: linear-gradient(135deg, #1BA69A 0%, #2f5babff 100%);
-          }
-        .cube-face-1 { 
-          transform: rotateY(120deg) translateZ(300px); 
-          //background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-        background: linear-gradient(135deg, #1BA69A 0%, #2f5babff 100%);
-          }
-        .cube-face-2 { 
-          transform: rotateY(240deg) translateZ(300px); 
-          background: linear-gradient(135deg, #073E8C 0%, #00f2fe 100%); 
+        
+        .slider-slide.inactive {
+          opacity: 0;
+          z-index: 0;
+          pointer-events: none;
+        }
+        
+        .slider-slide.active {
+          opacity: 1;
+          z-index: 10;
+          pointer-events: auto;
+        }
+        
+        .slider-slide.active * {
+          pointer-events: auto;
+        }
+        
+        .slide-content-wrapper {
+          width: 100%;
+          height: 100%;
+          pointer-events: auto;
+        }
+        
+        .slide-content {
+          pointer-events: auto;
+          user-select: text;
+          -webkit-user-select: text;
+          -moz-user-select: text;
+          -ms-user-select: text;
+        }
+        
+        .slide-content h1,
+        .slide-content p {
+          pointer-events: auto;
+          cursor: default;
+        }
+        
+        /* Background gradients */
+        .bg-educator {
+          background: linear-gradient(135deg, #1BA69A 0%, #2f5babff 100%);
+        }
+        
+        .bg-fullbook {
+          background: linear-gradient(135deg, #1BA69A 0%, #2f5babff 100%);
+        }
+        
+        .bg-halfbook {
+          background: linear-gradient(135deg, #073E8C 0%, #00f2fe 100%);
         }
 
         /* Base Image Container */
@@ -496,17 +531,17 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
         }
 
         /* Enhanced Navigation */
-        .cube-navigation-container { 
+        .slider-navigation-container { 
           position: absolute; 
           top: 50%; 
           left: 0; 
           right: 0; 
           transform: translateY(-50%); 
-          z-index: 20; 
+          z-index: 100; 
           pointer-events: none; 
         }
         
-        .cube-nav-btn {
+        .slider-nav-btn {
           pointer-events: all;
           position: absolute;
           top: 50%;
@@ -523,29 +558,30 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           color: white;
           transition: all 0.3s ease;
           cursor: pointer;
+          z-index: 101;
         }
 
-        .cube-nav-btn:hover:not(:disabled) {
+        .slider-nav-btn:hover:not(:disabled) {
           background: rgba(255, 255, 255, 0.25);
           transform: translateY(-50%) scale(1.1);
         }
 
-        .cube-prev { left: 2rem; }
-        .cube-next { right: 2rem; }
+        .slider-prev { left: 2rem; }
+        .slider-next { right: 2rem; }
 
-        .cube-indicators-container { 
+        .slider-indicators-container { 
           position: absolute; 
           bottom: 2rem; 
           left: 0; 
           right: 0; 
-          z-index: 20; 
+          z-index: 100; 
         }
         
-        .cube-counter { 
+        .slider-counter { 
           position: absolute; 
           top: 2rem; 
           right: 2rem; 
-          z-index: 20; 
+          z-index: 100; 
           color: white;
           font-size: 1.1rem;
           font-weight: 600;
@@ -557,7 +593,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
         }
 
         /* Accessibility */
-        .cube-nav-btn:disabled { 
+        .slider-nav-btn:disabled { 
           opacity: 0.3; 
           cursor: not-allowed; 
         }
@@ -569,20 +605,31 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           letter-spacing: 0.5px;
           backdrop-filter: blur(10px);
         }
-       .cube-slider {
-  pointer-events: none; /* cube itself won’t block clicks */
-}
-
-.cube-face {
-  pointer-events: none; /* hidden slides won't receive clicks */
-}
-
-.cube-face.active {
-  pointer-events: all; /* only visible face clickable */
-  z-index: 100;
-}
-
+        
+        /* Ensure text is selectable */
+        .slide-content h1,
+        .slide-content p,
+        .slide-content .badge,
+        .slide-content .slide-icon {
+          pointer-events: auto !important;
+          cursor: default;
+          user-select: text;
+          -webkit-user-select: text;
+          -moz-user-select: text;
+          -ms-user-select: text;
+        }
+        
+        /* Make sure the entire content area is interactive */
+        .slider-slide.active .slide-content-wrapper {
+          pointer-events: auto;
+        }
+        
+        .slider-slide.active .slide-content-wrapper * {
+          pointer-events: auto;
+        }
+          .indicators-wrapper{display:none !important;}
       `}</style>
     </div>
   );
+  
 }
