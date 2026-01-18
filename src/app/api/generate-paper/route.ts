@@ -1749,9 +1749,9 @@ let htmlNoThreePapers = `  <!-- Row 2 -->
         (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${mcqSectionMarks}</span>` : '') : 
         (isUrdu || isBilingual ? `<span class="metaUrdu">کل نمبر: ${mcqSectionMarks+subjectiveSectionMarks}</span>` : '')
       }
-      ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' ? 
+      ${mcqPlacement === 'separate' || mcqPlacement === 'two_papers' || mcqPlacement === 'three_papers' ? 
         (isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${mcqSectionMarks}</span>` : '') : 
-        (isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${mcqSectionMarks+subjectiveSectionMarks}</span>` : '')
+        (isEnglish || isBilingual ? `<span class="metaEng">Maximum Marks: ${mcqSectionMarks + subjectiveSectionMarks}</span>` : '')
       }
     </td>
    <td style="border:none !important; display:flex; justify-content:space-between; align-items:center; flex:1;">
