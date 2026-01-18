@@ -31,7 +31,7 @@ const defaultSlides = [
       "Prepare for exams with Examly's online quizzes and MCQ tests. Track progress, identify knowledge gaps, and get printable quizzes. Ideal for students and educators seeking efficient online assessment tools and high-quality question papers.",
     image: "/student.jpg",
     cta: "Try Full Book Quiz",
-    link: "/auth/login",
+    link: "/quiz",
     bgClass: "bg-halfbook",
     icon: "⚡",
     imageStyle: "layered",

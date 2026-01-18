@@ -216,21 +216,38 @@ export default function SubscriptionPage() {
 
         {/* Benefits Section */}
         <div id="benefits" className="mt-5 py-5 bg-light rounded-3 shadow-sm">
-          <div className="container text-center">
-            <h3 className="fw-bold mb-4">Why Subscribe?</h3>
-            <div className="row row-cols-1 row-cols-md-4 g-4">
-              {["📚 Unlimited Papers", "💧 No Watermarks", "⚡ Priority Support", "🚀 Advanced Features"].map(
-                (title, i) => (
-                  <div key={i} className="col">
-                    <div className="p-3 border rounded h-100 bg-white shadow-sm">
-                      <h4>{title}</h4>
-                      <p>Benefit description here.</p>
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
-          </div>
+         <div className="container text-center">
+  <h3 className="fw-bold mb-4">Why Subscribe?</h3>
+
+  <div className="row row-cols-1 row-cols-md-4 g-4">
+    {[
+      {
+        title: "📚 Unlimited Papers",
+        desc: "Create and access unlimited question papers with complete control. Generate, edit, and manage papers freely without any restrictions."
+      },
+      {
+        title: "💧 Watermark Control",
+        desc: "Use your own custom watermark or remove it completely. Print professional-looking papers exactly the way you want."
+      },
+      {
+        title: "⚡ Priority Support",
+        desc: "Premium users get fast and dedicated support. Our team is always available to assist you whenever you need help."
+      },
+      {
+        title: "🚀 Advanced Features",
+        desc: "Unlock full access to advanced paper-generation tools, complete customization options, and powerful controls for professionals."
+      }
+    ].map((item, i) => (
+      <div key={i} className="col">
+        <div className="p-3 border rounded h-100 bg-white shadow-sm">
+          <h4 className="fw-semibold">{item.title}</h4>
+          <p className="text-muted mb-0">{item.desc}</p>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
+
         </div>
       </div>
     </AcademyLayout>
