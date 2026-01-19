@@ -4,9 +4,10 @@ import Link from "next/link";
 
 const defaultSlides = [
   {
-    title: "Examly — Smart Paper Maker & Online Test Generator for Educators",
+    title: "Examly — AI-Powered Test Generator for Educators",
     description:
-      "Create professional exam papers in minutes with Examly, the advanced online test maker and question paper generator. Generate full-book, half-book, chapter-wise, custom chapters, and randomized papers tailored to your curriculum. Perfect for schools, colleges, and academies, Examly ensures balanced difficulty, fair assessments, and high-quality, printable exams to save teachers time and enhance student learning outcomes.",
+      "Create exam papers in minutes with Examly's smart question paper generator. Generate full-book, half-book, and chapter-wise tests automatically. Save time with balanced assessments tailored to your curriculum.",
+    shortDescription: "AI-powered test generator for educators - create exam papers in minutes",
     image: "/smartPaperMaker.png",
     cta: "Try Now",
     link: "/auth/login",
@@ -15,9 +16,10 @@ const defaultSlides = [
     imageStyle: "floating",
   },
   {
-    title: "Register & Get 3 Month Free — Unlimited Test & Paper Generation",
+    title: "3 Months Free — Unlimited Test Generation",
     description:
-      "Sign up today and get 3 months of free access to Examly's online test maker and question paper generator. Refer a friend and earn an additional 1 month free! Effortlessly create unlimited full-book, half-book, chapter-wise, and custom chapters exam papers. Ideal for teachers, academies, and educational institutes looking to save time while producing professional, balanced, and printable assessments for students.",
+      "Get 3 months free access to Examly's test generator. Create unlimited exam papers for schools and colleges. Refer friends for extra free months. Professional, printable assessments made easy.",
+    shortDescription: "3 months free unlimited test generation offer for educators",
     image: "/sliderFreeOffer.jpg",
     cta: "Claim Offer",
     link: "/auth/signup",
@@ -26,11 +28,12 @@ const defaultSlides = [
     imageStyle: "perspective",
   },
   {
-    title: "Assess Your MCQ Preparation with Examly — Online Quizzes & Tests",
+    title: "Online MCQ Tests & Practice Quizzes",
     description:
-      "Prepare effectively for exams using Examly's online quizzes and full-book MCQ tests. Identify knowledge gaps, track progress, and ensure readiness for final exams. Our smart test maker provides balanced question distribution, instant results, and printable quizzes. Perfect for students and educators seeking efficient online assessment tools and high-quality question papers to improve exam performance.",
+      "Prepare for exams with full-book MCQ tests and online quizzes. Track progress, identify gaps, and improve performance. Instant results with printable quizzes for effective study.",
+    shortDescription: "Online MCQ tests and practice quizzes for exam preparation",
     image: "/student.jpg",
-    cta: "Try Full Book Quiz",
+    cta: "Try Quiz",
     link: "/auth/login",
     bgClass: "bg-halfbook",
     icon: "⚡",
@@ -137,10 +140,10 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
             >
               <div className="slide-content-wrapper">
                 <div className="container h-100 position-relative">
-                  <div className="row align-items-center h-100 min-h-96">
-                    <div className="col-lg-6 text-white">
+                  <div className="row align-items-center h-100 min-h-slider">
+                    <div className="col-lg-6 col-md-8 col-12 text-white">
                       <div className="slide-content">
-                        <div className="slide-icon mb-4">
+                        <div className="slide-icon mb-3 mb-md-4">
                           <div className="icon-container">
                             <span className="icon-display">{slide.icon}</span>
                             <div className="icon-glow"></div>
@@ -151,12 +154,22 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
                             {index === 0 ? "For Educators" : index === 1 ? "Special Offer" : "For Students"}
                           </span>
                         </div>
-                        <h1 className="display-4 fw-bold mb-4 leading-tight">{slide.title}</h1>
-                        <p className="lead mb-5 opacity-90 text-lg">{slide.description}</p>
+                        <h1 className="slider-title fw-bold mb-3 mb-md-4 leading-tight">{slide.title}</h1>
+                        
+                        {/* Desktop description - full for SEO */}
+                        <p className="slider-description desktop-description lead mb-4 mb-md-5 opacity-90">
+                          {slide.description}
+                        </p>
+                        
+                        {/* Mobile description - shorter for better UX */}
+                        <p className="slider-description mobile-description lead mb-4 opacity-90">
+                          {slide.shortDescription}
+                        </p>
+                        
                         <div className="slide-actions">
                           <Link 
                             href={slide.link} 
-                            className="btn btn-light btn-lg px-5 py-3 rounded-lg font-semibold shadow-lg hover-lift"
+                            className="btn btn-light btn-lg px-4 px-md-5 py-2 py-md-3 rounded-lg font-semibold shadow-lg hover-lift"
                             style={{ pointerEvents: isActive ? 'auto' : 'none' }}
                             onClick={(e) => {
                               if (!isActive) {
@@ -164,6 +177,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
                               }
                             }}
                             tabIndex={isActive ? 0 : -1}
+                            aria-label={`${slide.cta} - ${slide.shortDescription}`}
                           >
                             {slide.cta} <i className="bi bi-arrow-right ms-2"></i>
                           </Link>
@@ -175,8 +189,11 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
                       <div className={`slide-image-container ${getImageStyleClass(slide.imageStyle)}`}>
                         <img 
                           src={slide.image} 
-                          alt={slide.title} 
+                          alt={slide.shortDescription} 
                           className="slide-image"
+                          loading={index === 0 ? "eager" : "lazy"}
+                          width="500"
+                          height="500"
                         />
                         <div className="image-glow"></div>
                         
@@ -200,12 +217,22 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
 
       {/* Navigation Buttons */}
       <div className="slider-navigation-container">
-        <button className="slider-nav-btn slider-prev" onClick={prevSlide} disabled={isAnimating}>
+        <button 
+          className="slider-nav-btn slider-prev" 
+          onClick={prevSlide} 
+          disabled={isAnimating}
+          aria-label="Previous slide"
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M15 18l-6-6 6-6"/>
           </svg>
         </button>
-        <button className="slider-nav-btn slider-next" onClick={nextSlide} disabled={isAnimating}>
+        <button 
+          className="slider-nav-btn slider-next" 
+          onClick={nextSlide} 
+          disabled={isAnimating}
+          aria-label="Next slide"
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M9 18l6-6-6-6"/>
           </svg>
@@ -221,6 +248,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
               className={`slider-indicator ${activeSlide === index ? "active" : ""}`}
               onClick={() => goToSlide(index, index > activeSlide ? 'next' : 'prev')}
               disabled={isAnimating}
+              aria-label={`Go to slide ${index + 1}`}
             >
               <div className="indicator-progress"></div>
             </button>
@@ -235,7 +263,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
         <span className="total-slides">0{slides.length}</span>
       </div>
 
-      {/* Enhanced Styles */}
+      {/* Enhanced Responsive Styles */}
       <style jsx>{`
         .slider-container { 
           height: 700px; 
@@ -286,6 +314,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           width: 100%;
           height: 100%;
           pointer-events: auto;
+          padding: 1rem;
         }
         
         .slide-content {
@@ -294,12 +323,6 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           -webkit-user-select: text;
           -moz-user-select: text;
           -ms-user-select: text;
-        }
-        
-        .slide-content h1,
-        .slide-content p {
-          pointer-events: auto;
-          cursor: default;
         }
         
         /* Background gradients */
@@ -566,8 +589,8 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           transform: translateY(-50%) scale(1.1);
         }
 
-        .slider-prev { left: 2rem; }
-        .slider-next { right: 2rem; }
+        .slider-prev { left: 1rem; }
+        .slider-next { right: 1rem; }
 
         .slider-indicators-container { 
           position: absolute; 
@@ -606,17 +629,19 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           backdrop-filter: blur(10px);
         }
         
-        /* Ensure text is selectable */
-        .slide-content h1,
-        .slide-content p,
-        .slide-content .badge,
-        .slide-content .slide-icon {
-          pointer-events: auto !important;
-          cursor: default;
-          user-select: text;
-          -webkit-user-select: text;
-          -moz-user-select: text;
-          -ms-user-select: text;
+        /* SEO optimized text styling */
+        .slider-title {
+          font-size: 3rem;
+          line-height: 1.2;
+        }
+        
+        .slider-description {
+          font-size: 1.25rem;
+          line-height: 1.6;
+        }
+        
+        .mobile-description {
+          display: none;
         }
         
         /* Make sure the entire content area is interactive */
@@ -627,9 +652,228 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
         .slider-slide.active .slide-content-wrapper * {
           pointer-events: auto;
         }
-          .indicators-wrapper{display:none !important;}
+        
+        .indicators-wrapper{display:none !important;}
+        
+        .min-h-slider {
+          min-height: 400px;
+        }
+        
+        /* ===== RESPONSIVE STYLES ===== */
+        
+        /* Tablet Devices */
+        @media (max-width: 1024px) {
+          .slider-container { 
+            height: 600px; 
+            margin-top: 60px;
+          }
+          
+          .slider-title {
+            font-size: 2.5rem;
+          }
+          
+          .slider-description {
+            font-size: 1.1rem;
+          }
+          
+          .slide-image-container {
+            height: 400px;
+          }
+          
+          .icon-display {
+            font-size: 3rem;
+          }
+          
+          .slider-nav-btn {
+            width: 45px;
+            height: 45px;
+          }
+          
+          .min-h-slider {
+            min-height: 350px;
+          }
+        }
+        
+        /* Small Tablets */
+        @media (max-width: 768px) {
+          .slider-container { 
+            height: 500px; 
+            margin-top: 50px;
+          }
+          
+          .slider-title {
+            font-size: 2rem;
+            margin-bottom: 1rem !important;
+          }
+          
+          .slider-description {
+            font-size: 1rem;
+            margin-bottom: 1.5rem !important;
+          }
+          
+          .desktop-description {
+            display: none;
+          }
+          
+          .mobile-description {
+            display: block;
+          }
+          
+          .slide-content-wrapper {
+            padding: 1.5rem;
+          }
+          
+          .slide-icon {
+            margin-bottom: 1rem !important;
+          }
+          
+          .slide-badge {
+            margin-bottom: 1rem !important;
+          }
+          
+          .icon-display {
+            font-size: 2.5rem;
+          }
+          
+          .slider-nav-btn {
+            width: 40px;
+            height: 40px;
+          }
+          
+          .slider-prev { left: 0.5rem; }
+          .slider-next { right: 0.5rem; }
+          
+          .slider-counter { 
+            top: 1rem; 
+            right: 1rem; 
+            font-size: 0.9rem;
+            padding: 0.4rem 0.8rem;
+          }
+          
+          .min-h-slider {
+            min-height: 300px;
+          }
+          
+          .btn-lg {
+            padding: 0.75rem 1.5rem !important;
+            font-size: 1rem !important;
+          }
+        }
+        
+        /* Mobile Devices */
+        @media (max-width: 576px) {
+          .slider-container { 
+            height: 450px; 
+            margin-top: 40px;
+          }
+          
+          .slider-title {
+            font-size: 1.75rem;
+            line-height: 1.3;
+          }
+          
+          .slider-description {
+            font-size: 0.95rem;
+            line-height: 1.5;
+          }
+          
+          .slide-content-wrapper {
+            padding: 1rem;
+          }
+          
+          .icon-display {
+            font-size: 2rem;
+          }
+          
+          .icon-glow {
+            width: 60px;
+            height: 60px;
+          }
+          
+          .slider-nav-btn {
+            width: 35px;
+            height: 35px;
+          }
+          
+          .slider-nav-btn svg {
+            width: 16px;
+            height: 16px;
+          }
+          
+          .slider-counter { 
+            top: 0.75rem; 
+            right: 0.75rem; 
+            font-size: 0.8rem;
+            padding: 0.3rem 0.6rem;
+          }
+          
+          .slide-badge .badge {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.75rem;
+          }
+          
+          .min-h-slider {
+            min-height: 250px;
+          }
+          
+          .btn-lg {
+            padding: 0.6rem 1.25rem !important;
+            font-size: 0.9rem !important;
+          }
+        }
+        
+        /* Very Small Mobile Devices */
+        @media (max-width: 375px) {
+          .slider-container { 
+            height: 400px; 
+          }
+          
+          .slider-title {
+            font-size: 1.5rem;
+          }
+          
+          .slider-description {
+            font-size: 0.875rem;
+          }
+          
+          .slide-icon {
+            margin-bottom: 0.75rem !important;
+          }
+          
+          .icon-display {
+            font-size: 1.75rem;
+          }
+          
+          .min-h-slider {
+            min-height: 200px;
+          }
+        }
+        
+        /* Landscape Mode */
+        @media (max-height: 600px) and (orientation: landscape) {
+          .slider-container { 
+            height: 400px; 
+          }
+          
+          .min-h-slider {
+            min-height: 250px;
+          }
+          
+          .slider-title {
+            font-size: 1.75rem;
+            margin-bottom: 0.75rem !important;
+          }
+          
+          .slider-description {
+            font-size: 0.9rem;
+            margin-bottom: 1rem !important;
+          }
+          
+          .slide-actions {
+            margin-top: 0.5rem;
+          }
+        }
       `}</style>
     </div>
   );
-  
 }
