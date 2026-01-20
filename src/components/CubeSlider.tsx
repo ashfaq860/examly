@@ -256,7 +256,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
         </div>
       </div>
 
-      {/* Slide Counter */}
+      {/* Slide Counter - Fixed positioning */}
       <div className="slider-counter">
         <span className="current-slide">0{activeSlide + 1}</span>
         <span className="counter-divider">/</span>
@@ -270,7 +270,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           overflow: hidden; 
           position: relative; 
           background: #000; 
-          margin-top: 70px; 
+          margin-top: 0;
         }
         
         .slider-wrapper {
@@ -600,11 +600,12 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           z-index: 100; 
         }
         
+        /* Slide Counter - Fixed position below header */
         .slider-counter { 
           position: absolute; 
-          top: 2rem; 
+          top: 95px; /* Positioned below typical header height */
           right: 2rem; 
-          z-index: 100; 
+          z-index: 999; 
           color: white;
           font-size: 1.1rem;
           font-weight: 600;
@@ -613,6 +614,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           border-radius: 20px;
           backdrop-filter: blur(10px);
           border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
         /* Accessibility */
@@ -661,11 +663,25 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
         
         /* ===== RESPONSIVE STYLES ===== */
         
+        /* Large Desktop */
+        @media (min-width: 1440px) {
+          .slider-container { 
+            height: 750px; 
+          }
+          
+          .slider-title {
+            font-size: 3.5rem;
+          }
+          
+          .slide-image-container {
+            height: 550px;
+          }
+        }
+        
         /* Tablet Devices */
         @media (max-width: 1024px) {
           .slider-container { 
             height: 600px; 
-            margin-top: 60px;
           }
           
           .slider-title {
@@ -692,13 +708,18 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           .min-h-slider {
             min-height: 350px;
           }
+          
+          .slider-counter {
+            top: 80px;
+            right: 1.5rem;
+            font-size: 1rem;
+          }
         }
         
         /* Small Tablets */
         @media (max-width: 768px) {
           .slider-container { 
             height: 500px; 
-            margin-top: 50px;
           }
           
           .slider-title {
@@ -744,7 +765,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           .slider-next { right: 0.5rem; }
           
           .slider-counter { 
-            top: 1rem; 
+            top: 80px; 
             right: 1rem; 
             font-size: 0.9rem;
             padding: 0.4rem 0.8rem;
@@ -764,7 +785,6 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
         @media (max-width: 576px) {
           .slider-container { 
             height: 450px; 
-            margin-top: 40px;
           }
           
           .slider-title {
@@ -801,7 +821,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           }
           
           .slider-counter { 
-            top: 0.75rem; 
+            top: 75px; 
             right: 0.75rem; 
             font-size: 0.8rem;
             padding: 0.3rem 0.6rem;
@@ -844,6 +864,13 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
             font-size: 1.75rem;
           }
           
+          .slider-counter { 
+            top: 60px; 
+            right: 0.5rem; 
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+          }
+          
           .min-h-slider {
             min-height: 200px;
           }
@@ -871,6 +898,24 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           
           .slide-actions {
             margin-top: 0.5rem;
+          }
+          
+          .slider-counter {
+            top: 80px;
+          }
+        }
+        
+        /* Adjust for fixed header */
+        @media (max-width: 991px) {
+          .slider-counter {
+            top: 80px;
+          }
+        }
+        
+        /* Extra adjustment for very small screens */
+        @media (max-width: 320px) {
+          .slider-counter {
+            display: none; /* Hide on very small screens */
           }
         }
       `}</style>

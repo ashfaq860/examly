@@ -71,7 +71,7 @@ export default function HomeClientWrapper() {
           className="scroll-animate fade-up py-5 bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-800"
         >
           <div className="container">
-            <div className="text-center mb-3" data-animate>
+            <div className="text-center mb-3">
               <h1 className="display-5 fw-bold text-success">
                 ✨ Advanced <span className="text-primary">Test Maker</span> &{' '}
                 <span className="text-primary">Question Paper Generator</span>
