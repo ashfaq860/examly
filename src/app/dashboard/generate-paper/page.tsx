@@ -167,7 +167,7 @@ const GeneratePaperPage = () => {
   
   const { trialStatus, isLoading: trialLoading, refreshTrialStatus } = useUser();
   const [isFormInitialized, setIsFormInitialized] = useState(false);
-
+const [paperTypeStep, setPaperTypeStep] = useState(0); // 0: initial, 1: layout, 2: custom settings new addition
   const {
     register,
     handleSubmit,
@@ -791,33 +791,45 @@ const GeneratePaperPage = () => {
     }
   };
 
-  const prevStep = () => {
-    if (step === 2) {
-      setValue('classId', '');
-      setValue('subjectId', '');
-      setSubjects([]);
-      setChapters([]);
-      setStep(1);
-    } else if (step === 3) {
-      setIsManualNavigation(true);
-      setValue('chapterOption', 'full_book');
-      setValue('selectedChapters', []);
-      setStep(2);
-      setTimeout(() => setIsManualNavigation(false), 1000);
-    } else if (step === 4) {
+// Update the step handling in your main component
+const prevStep = () => {
+  if (step === 2) {
+    setValue('classId', '');
+    setValue('subjectId', '');
+    setSubjects([]);
+    setChapters([]);
+    setStep(1);
+  } else if (step === 3) {
+    setIsManualNavigation(true);
+    setValue('chapterOption', 'full_book');
+    setValue('selectedChapters', []);
+    setStep(2);
+    setTimeout(() => setIsManualNavigation(false), 1000);
+  } else if (step === 4) {
+    if (paperTypeStep > 0) {
+      // Go back through sub-steps
+      setPaperTypeStep(paperTypeStep - 1);
+    } else {
+      // Go back to chapter selection
       setStep(3);
-    } else if (step === 5) {
-      setStep(4);
-    } else if (step === 6) {
-      setStep(5);
-    } else if (step === 7) {
-      if (watchedSelectionMethod === 'manual') {
-        setStep(6);
-      } else {
-        setStep(5);
-      }
     }
-  };
+  } else if (step === 5) {
+    setStep(4);
+    setPaperTypeStep(0); // Reset paper type steps
+  } else if (step === 6) {
+    setStep(5);
+  } else if (step === 7) {
+    if (watchedSelectionMethod === 'manual') {
+      setStep(6);
+    } else {
+      setStep(5);
+    }
+  }
+};
+const handleStep3To4 = () => {
+  setStep(4);
+  setPaperTypeStep(0); // Start with initial paper type selection
+};
 
   const onSubmit = async (formData: PaperFormData) => {
     if (formData.mcqPlacement === 'two_papers') {
@@ -1433,22 +1445,24 @@ const GeneratePaperPage = () => {
           )}
 
           {/* Step 4: Paper Type Selection */}
-          {step === 4 && (
-            <PaperTypeStep
-              watch={watch}
-              setValue={setValue}
-                register={register}
-                errors={errors}
-              setStep={setStep}
-              setSelectedQuestions={setSelectedQuestions}
-              setQuestionsCache={setQuestionsCache}
-              setLastPreviewLoad={setLastPreviewLoad}
-              setPreviewQuestions={setPreviewQuestions}
-              subjects={subjects}
-              classes={classes}
-              getQuestionTypes={getQuestionTypes}
-            />
-          )}
+{step === 4 && (
+  <PaperTypeStep
+    watch={watch}
+    setValue={setValue}
+    register={register}
+    errors={errors}
+    setStep={setStep}
+    setSelectedQuestions={setSelectedQuestions}
+    setQuestionsCache={setQuestionsCache}
+    setLastPreviewLoad={setLastPreviewLoad}
+    setPreviewQuestions={setPreviewQuestions}
+    subjects={subjects}
+    classes={classes}
+    getQuestionTypes={getQuestionTypes}
+    paperTypeStep={paperTypeStep}
+    setPaperTypeStep={setPaperTypeStep}
+  />
+)}
 
           {/* Step 5: Selection method */}
           {step === 5 && (

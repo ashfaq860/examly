@@ -494,3 +494,37 @@ svg.lucide-circle-alert{
   transform: translateY(-10px) scale(1.02);
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
 }
+
+/* dashboard moving ticker css*/
+.ticker-wrapper {
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 10px 0;
+}
+
+.ticker {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+  animation: tickerMove 14s linear infinite;
+}
+
+.ticker-item {
+  font-size: 0.95rem;
+}
+
+.ticker-separator {
+  opacity: 0.6;
+}
+
+.ticker-wrapper:hover .ticker {
+  animation-play-state: paused;
+}
+@keyframes tickerMove {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}

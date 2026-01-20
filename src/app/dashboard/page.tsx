@@ -1,29 +1,14 @@
 'use client';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AcademyLayout from '@/components/AcademyLayout';
-import StatCard from '@/components/academy/StatCard';
-import ChartCard from '@/components/academy/ChartCard';
 import ReferralSection from '@/components/ReferralSection';
 import { useUser } from '../context/userContext';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+import { FilePlus, BookOpen, Settings, Activity } from 'lucide-react';
 
 interface Analytics {
-  totalPapers: number;
-  totalQuestions: number;
-  papersByClass: { class: string; count: number }[];
-  papersBySubject: { subject: string; count: number }[];
   recentActivity: {
     id: string;
     title: string;
@@ -40,78 +25,35 @@ export default function AcademyDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
-  const [analytics, setAnalytics] = useState<Analytics>({
-    totalPapers: 0,
-    totalQuestions: 0,
-    papersByClass: [],
-    papersBySubject: [],
-    recentActivity: [],
-  });
+  const [analytics, setAnalytics] = useState<Analytics>({ recentActivity: [] });
 
-  // Redirect if trial message exists and no active subscription
   useEffect(() => {
     if (trialStatus?.message && !trialStatus.hasActiveSubscription) {
       router.push('/dashboard/settings');
     }
   }, [trialStatus, router]);
 
-  // Check authorization and fetch data
   useEffect(() => {
-    const checkAuthAndFetchData = async () => {
+    const initDashboard = async () => {
       try {
-        // First, check if user is authenticated
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        
-        if (authError || !user) {
-          console.log('No user found, redirecting to login');
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
           router.push('/auth/login');
           return;
         }
 
-        // Check user role
-        const { data: roleData, error: roleError } = await supabase.rpc(
-          'get_user_role',
-          { user_id: user.id }
-        );
-
-        if (roleError || roleData !== 'teacher') {
-          console.log('User is not a teacher, redirecting to home');
+        const { data: role } = await supabase.rpc('get_user_role', { user_id: user.id });
+        if (role !== 'teacher') {
           router.push('/');
           return;
         }
 
-        // User is authorized - set flag to show content
         setIsAuthorized(true);
 
-        // Fetch questions count and papers
-        const [{ count: totalQuestions }, { data: papers }] = await Promise.all([
-          supabase.from('questions').select('*', { count: 'exact', head: true }),
-          supabase
-            .from('papers')
-            .select('id, title, class_name, subject_name, created_at')
-            .eq('created_by', user.id),
-        ]);
-
-        // Process papers by class and subject
-        const papersByClassMap: Record<string, number> = {};
-        const papersBySubjectMap: Record<string, number> = {};
-
-        papers?.forEach((p: any) => {
-          const cls = p.class_name || 'N/A';
-          const subj = p.subject_name || 'N/A';
-          papersByClassMap[cls] = (papersByClassMap[cls] || 0) + 1;
-          papersBySubjectMap[subj] = (papersBySubjectMap[subj] || 0) + 1;
-        });
-
-        const papersByClass = Object.keys(papersByClassMap).map((cls) => ({
-          class: cls,
-          count: papersByClassMap[cls],
-        }));
-
-        const papersBySubject = Object.keys(papersBySubjectMap).map((subj) => ({
-          subject: subj,
-          count: papersBySubjectMap[subj],
-        }));
+        const { data: papers } = await supabase
+          .from('papers')
+          .select('id, title, class_name, subject_name, created_at')
+          .eq('created_by', user.id);
 
         const recentActivity = (papers || [])
           .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -124,25 +66,18 @@ export default function AcademyDashboard() {
             date: paper.created_at,
           }));
 
-        setAnalytics({
-          totalPapers: trialStatus?.papersGenerated || papers?.length || 0,
-          totalQuestions: totalQuestions || 0,
-          papersByClass,
-          papersBySubject,
-          recentActivity,
-        });
-      } catch (error) {
-        console.error('Error checking auth or fetching dashboard:', error);
+        setAnalytics({ recentActivity });
+      } catch (err) {
+        console.error('Dashboard error:', err);
         router.push('/auth/login');
       } finally {
         setLoading(false);
       }
     };
 
-    if (!trialLoading) checkAuthAndFetchData();
-  }, [router, trialStatus, trialLoading, supabase]);
+    if (!trialLoading) initDashboard();
+  }, [supabase, router, trialLoading]);
 
-  // Show loading spinner while checking auth and fetching data
   if (loading || trialLoading) {
     return (
       <AcademyLayout>
@@ -153,189 +88,142 @@ export default function AcademyDashboard() {
     );
   }
 
-  // Don't render any content if not authorized
-  if (!isAuthorized) {
-    return null; // Or you can return a minimal loading state
-  }
+  if (!isAuthorized) return null;
 
-  // Subscription info for cards and referral section
   const subscriptionInfo = trialStatus
     ? {
-        type: trialStatus.isTrial ? 'Trial' : trialStatus.subscriptionName || 'Premium',
-        status: trialStatus.hasActiveSubscription ? 'active' : 'inactive',
-        papersLeft:
-          trialStatus.papersRemaining === 'unlimited'
-            ? 'Unlimited'
-            : trialStatus.papersRemaining,
+        papersLeft: trialStatus.papersRemaining === 'unlimited' ? 'Unlimited' : trialStatus.papersRemaining,
         isTrial: trialStatus.isTrial,
         trialDaysLeft: trialStatus.daysRemaining,
+        status: trialStatus.hasActiveSubscription ? 'Active' : 'Inactive',
         referralCode: trialStatus.referral_code || '',
       }
     : null;
+
+  const hoverEffect = (e: React.MouseEvent<HTMLDivElement, MouseEvent>, enter: boolean) => {
+    const el = e.currentTarget;
+    el.style.transform = enter ? 'scale(1.05)' : 'scale(1)';
+    el.style.boxShadow = enter
+      ? '0 10px 20px rgba(0,0,0,0.15)'
+      : '0 4px 6px rgba(0,0,0,0.1)';
+  };
 
   return (
     <AcademyLayout>
       <div className="container-fluid">
 
         {trialStatus?.message && (
-          <div className="alert alert-warning mb-4">{trialStatus.message}</div>
+          <div className="alert alert-warning mb-4">
+            {trialStatus.message}
+          </div>
         )}
 
         <ReferralSection referralCode={subscriptionInfo?.referralCode || ''} />
 
-        {/* Stats Cards */}
-        <div className="row g-4 mb-4">
-          <div className="col-md-3">
-            <StatCard
-              title="Total Papers"
-              value={analytics.totalPapers}
-              icon="file-text"
-              color="primary"
-            />
-          </div>
-          <div className="col-md-3">
-            <StatCard
-              title={subscriptionInfo?.isTrial ? 'Trial Papers Left' : 'Papers Left'}
-              value={subscriptionInfo?.papersLeft}
-              icon="file-earmark-check"
-              color={subscriptionInfo?.isTrial ? 'warning' : 'success'}
-            />
-          </div>
-          <div className="col-md-3">
-            <StatCard
-              title="Questions"
-              value={analytics.totalQuestions}
-              icon="question-circle"
-              color="info"
-            />
-          </div>
-          <div className="col-md-3">
-            <StatCard
-              title={subscriptionInfo?.isTrial ? 'Trial Days Left' : 'Plan Status'}
-              value={subscriptionInfo?.isTrial ? subscriptionInfo.trialDaysLeft : subscriptionInfo?.status}
-              icon={subscriptionInfo?.isTrial ? 'clock' : 'shield-check'}
-              color={subscriptionInfo?.isTrial ? 'warning' : 'success'}
-            />
-          </div>
-        </div>
+        {/* Full-width Papers Left & Plan Status */}
+      <div className="alert alert-info ticker-wrapper mb-4">
+  <div className="ticker">
+    <span className="ticker-item">
+      <strong>Papers Left:</strong> {subscriptionInfo?.papersLeft}
+    </span>
+    <span className="ticker-separator">•</span>
+    <span className="ticker-item">
+      <strong>Plan Status:</strong> {subscriptionInfo?.status}
+    </span>
+  </div>
+</div>
 
-        {/* Charts */}
+        {/* Dashboard Cards */}
         <div className="row g-4 mb-4">
-          {/* Papers by Class */}
-          <div className="col-lg-6">
-            <ChartCard title="Papers by Class">
-              <div className="row g-3">
-                {analytics.papersByClass.length === 0 ? (
-                  <div className="col-12 text-center text-muted py-3">No data available</div>
-                ) : (
-                  analytics.papersByClass.map((item, idx) => {
-                    const total = analytics.papersByClass.reduce((sum, i) => sum + i.count, 0);
-                    const percentage = total ? ((item.count / total) * 100).toFixed(1) : 0;
-                    const colors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'];
-                    const color = colors[idx % colors.length];
-                    return (
-                      <div key={item.class} className="m-0">
-                        <div className="d-flex justify-content-between fw-semibold mb-1">
-                          <span>{item.class}</span>
-                          <span>{item.count} ({percentage}%)</span>
-                        </div>
-                        <div className="progress rounded-pill" style={{ height: '10px', overflow: 'hidden' }}>
-                          <div
-                            className="progress-bar"
-                            style={{ width: `${percentage}%`, backgroundColor: color, transition: 'width 0.6s ease' }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+
+          {/* Generate Paper */}
+          <div className="col-12 col-md-6 col-lg-4">
+            <div
+              className="card h-100 text-center shadow"
+              role="button"
+              style={{ borderTop: '4px solid #3b82f6', transition: 'transform 0.3s, box-shadow 0.3s' }}
+              onMouseEnter={(e) => hoverEffect(e, true)}
+              onMouseLeave={(e) => hoverEffect(e, false)}
+              onClick={() => router.push('/dashboard/generate-paper')}
+            >
+              <div className="card-body py-5 d-flex flex-column align-items-center">
+                <FilePlus size={40} className="mb-3 text-primary" />
+                <h5 className="fw-bold">Generate Paper</h5>
+                <p className="mb-0 text-muted">Create question papers instantly</p>
               </div>
-            </ChartCard>
+            </div>
           </div>
 
-          {/* Papers by Subject */}
-          <div className="col-lg-6">
-            <ChartCard title="Papers by Subject">
-              {analytics.papersBySubject.length === 0 ? (
-                <div className="text-center text-muted py-4">No data available</div>
-              ) : (
-                <div className="row g-3">
-                  {analytics.papersBySubject.map((item, idx) => {
-                    const total = analytics.papersBySubject.reduce((sum, i) => sum + i.count, 0);
-                    const percentage = total ? ((item.count / total) * 100).toFixed(1) : 0;
-                    const colors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'];
-                    const color = colors[idx % colors.length];
-                    return (
-                      <div key={item.subject} className="m-0">
-                        <div className="d-flex justify-content-between fw-semibold mb-1">
-                          <span>{item.subject}</span>
-                          <span>{item.count} ({percentage}%)</span>
-                        </div>
-                        <div className="progress rounded-pill" style={{ height: '12px', overflow: 'hidden' }}>
-                          <div
-                            className="progress-bar"
-                            style={{ width: `${percentage}%`, backgroundColor: color, transition: 'width 0.6s ease' }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </ChartCard>
+          {/* Generated Papers */}
+          <div className="col-12 col-md-6 col-lg-4">
+            <div
+              className="card h-100 text-center shadow"
+              role="button"
+              style={{ borderTop: '4px solid #10b981', transition: 'transform 0.3s, box-shadow 0.3s' }}
+              onMouseEnter={(e) => hoverEffect(e, true)}
+              onMouseLeave={(e) => hoverEffect(e, false)}
+              onClick={() => router.push('/dashboard/generated-papers')}
+            >
+              <div className="card-body py-5 d-flex flex-column align-items-center">
+                <BookOpen size={40} className="mb-3 text-success" />
+                <h5 className="fw-bold">Generated Papers</h5>
+                <p className="mb-0 text-muted">View all your papers</p>
+              </div>
+            </div>
           </div>
+
+          {/* Profile Settings */}
+          <div className="col-12 col-md-6 col-lg-4">
+            <div
+              className="card h-100 text-center shadow"
+              role="button"
+              style={{ borderTop: '4px solid #f59e0b', transition: 'transform 0.3s, box-shadow 0.3s' }}
+              onMouseEnter={(e) => hoverEffect(e, true)}
+              onMouseLeave={(e) => hoverEffect(e, false)}
+              onClick={() => router.push('/dashboard/settings')}
+            >
+              <div className="card-body py-5 d-flex flex-column align-items-center">
+                <Settings size={40} className="mb-3 text-warning" />
+                <h5 className="fw-bold">Profile Settings</h5>
+                <p className="mb-0 text-muted">Manage your account preferences</p>
+              </div>
+            </div>
+          </div>
+
         </div>
 
         {/* Recent Activity */}
         <div className="card shadow-sm mt-4">
           <div className="card-header bg-white d-flex align-items-center">
-            <i className="bi bi-activity me-2 text-primary fs-5"></i>
+            <Activity size={20} className="me-2 text-primary" />
             <h5 className="mb-0 fw-semibold">Recent Activity</h5>
           </div>
           <div className="card-body p-0">
             {analytics.recentActivity.length === 0 ? (
               <div className="text-center text-muted py-5">
-                <i className="bi bi-file-earmark-x fs-1 mb-3 d-block"></i>
                 <p className="fw-semibold mb-1">No papers generated yet</p>
                 <small>Generate your first paper to see activity</small>
               </div>
             ) : (
               <ul className="list-group list-group-flush">
                 {analytics.recentActivity.map((activity) => (
-                  <li key={activity.id} className="list-group-item px-3 py-1 activity-item">
+                  <li key={activity.id} className="list-group-item px-3 py-2">
                     <div className="row align-items-center g-3">
                       <div className="col-auto">
-                        <div className="activity-icon bg-primary text-white rounded-circle d-flex align-items-center justify-content-center">
-                          <i className="bi bi-file-earmark-text"></i>
+                        <div className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style={{ width: 36, height: 36 }}>
+                          <BookOpen size={18} />
                         </div>
                       </div>
                       <div className="col-12 col-lg-4">
                         <div className="fw-semibold">Paper Generated</div>
-                        <small className="text-muted d-block text-truncate">
-                          Institute: {activity.title}
-                        </small>
+                        <small className="text-muted d-block text-truncate">{activity.title}</small>
                       </div>
                       <div className="col-12 col-lg-4">
-                        <div className="d-flex gap-2 flex-wrap">
-                          <span className="badge bg-info-subtle text-info rounded-pill">
-                            <i className="bi bi-mortarboard me-1"></i>
-                            Class {activity.class}
-                          </span>
-                          <span className="badge bg-success-subtle text-success rounded-pill">
-                            <i className="bi bi-book me-1"></i>
-                            {activity.subject}
-                          </span>
-                        </div>
+                        <span className="badge bg-info-subtle text-info rounded-pill me-2">Class {activity.class}</span>
+                        <span className="badge bg-success-subtle text-success rounded-pill">{activity.subject}</span>
                       </div>
                       <div className="col-12 col-lg-3 text-lg-end">
-                        <small className="text-muted">
-                          <i className="bi bi-calendar-event me-1"></i>
-                          {new Date(activity.date).toLocaleDateString('en-US', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        </small>
+                        <small className="text-muted">{new Date(activity.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</small>
                       </div>
                     </div>
                   </li>

@@ -1,92 +1,114 @@
-// src/components/ReferralSection.tsx
 "use client";
 
-import { motion } from "framer-motion";
-import { Share2, Mail as MailIcon, Link as LinkIcon } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Gift,
+  Share2,
+  Mail,
+  Link as LinkIcon,
+  X,
+} from "lucide-react";
 import toast from "react-hot-toast";
 
-interface ReferralSectionProps {
+interface FloatingReferralButtonProps {
   referralCode: string;
 }
 
-export default function ReferralSection({ referralCode }: ReferralSectionProps) {
-  const getReferralLink = () => `${window.location.origin}/auth/signup?ref=${referralCode}`;
+export default function FloatingReferralButton({
+  referralCode,
+}: FloatingReferralButtonProps) {
+  const [open, setOpen] = useState(false);
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Link copied!");
+  const referralLink =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/auth/signup?ref=${referralCode}`
+      : "";
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(referralLink);
+    toast.success("Referral link copied!");
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="bg-white rounded shadow-sm p-4 mt-1 mb-4 border border-success"
+    <div
+      className="position-fixed end-0 top-50 translate-middle-y"
+      style={{ zIndex: 1050 }}
     >
-      <h5 className="fw-bold text-success mb-2">
-        🎁 Invite Friends & Get 1 Month Free
-      </h5>
-      <p className="text-muted mb-3">
-        Share your referral code or link. When someone signs up using it, you earn{" "}
-        <strong>1 month free</strong>.
-      </p>
+      {/* Floating Main Button */}
+      <motion.button
+        whileTap={{ scale: 0.92 }}
+        onClick={() => setOpen(!open)}
+        className="btn btn-success rounded-circle shadow d-flex align-items-center justify-content-center"
+        style={{
+          width: "56px",
+          height: "56px",
+        }}
+        aria-label="Refer & Earn"
+      >
+        {open ? <X size={22} /> : <Gift size={22} />}
+      </motion.button>
 
-      {/* Share Buttons + Referral Link */}
-      <div className="d-flex align-items-center gap-2 flex-wrap mb-3">
-        <a
-          href={`https://wa.me/?text=Join%20using%20my%20referral%20link%20and%20get%201%20month%20free%20trial:%20${encodeURIComponent(
-            getReferralLink()
-          )}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn btn-success d-flex align-items-center gap-1 flex-shrink-0"
-        >
-          <Share2 size={16} /> WhatsApp
-        </a>
-
-        <a
-          href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
-            getReferralLink()
-          )}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn btn-primary d-flex align-items-center gap-1 flex-shrink-0"
-        >
-          <Share2 size={16} /> Facebook
-        </a>
-
-        <a
-          href={`mailto:?subject=Join and Get 1 Month Free Trial&body=Sign up using my referral link and get 1 month free trial: ${encodeURIComponent(
-            getReferralLink()
-          )}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn btn-outline-secondary d-flex align-items-center gap-1 flex-shrink-0"
-        >
-          <Share2 size={16} /> Email <MailIcon size={16} />
-        </a>
-
-        {/* Referral Link & Copy */}
-        <div
-          className="d-flex align-items-center gap-2 px-3 py-2 rounded flex-shrink-0"
-          style={{ background: "#f1f5f9", fontSize: "1rem" }}
-        >
-          <span className="text-dark text-truncate" style={{ maxWidth: "200px" }}>
-            {getReferralLink()}
-          </span>
-          <button
-            className="btn btn-outline-success btn-sm d-flex align-items-center gap-1"
-            onClick={() => copyToClipboard(getReferralLink())}
+      {/* Slide-out Panel */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 30 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="bg-white shadow-lg rounded-4 p-3 mt-2 me-2 border"
+            style={{ width: "260px" }}
           >
-            <LinkIcon size={16} /> Copy
-          </button>
-        </div>
-      </div>
+            <div className="text-center mb-3">
+              <div className="fw-bold text-success">
+                🎁 Get 1 Month Free
+              </div>
+              <small className="text-muted">
+                Invite friends & earn rewards
+              </small>
+            </div>
 
-      <small className="text-muted d-block mt-2">
-        Referral code/link can be used by multiple users. You earn rewards every time.
-      </small>
-    </motion.div>
+            <div className="d-grid gap-2">
+              <a
+                href={`https://wa.me/?text=Join%20using%20my%20referral%20link:%20${encodeURIComponent(
+                  referralLink
+                )}`}
+                target="_blank"
+                className="btn btn-success btn-sm d-flex align-items-center justify-content-center gap-2 rounded-3"
+              >
+                <Share2 size={16} /> WhatsApp
+              </a>
+
+              <a
+                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+                  referralLink
+                )}`}
+                target="_blank"
+                className="btn btn-primary btn-sm d-flex align-items-center justify-content-center gap-2 rounded-3"
+              >
+                <Share2 size={16} /> Facebook
+              </a>
+
+              <a
+                href={`mailto:?subject=Get 1 Month Free&body=Join using my referral link: ${encodeURIComponent(
+                  referralLink
+                )}`}
+                className="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center gap-2 rounded-3"
+              >
+                <Mail size={16} /> Email
+              </a>
+
+              <button
+                onClick={copyToClipboard}
+                className="btn btn-outline-success btn-sm d-flex align-items-center justify-content-center gap-2 rounded-3"
+              >
+                <LinkIcon size={16} /> Copy Link
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

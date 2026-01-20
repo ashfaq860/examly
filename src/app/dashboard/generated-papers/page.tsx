@@ -1,4 +1,3 @@
-// dashboard/generated-papers/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -40,13 +39,11 @@ export default function GeneratedPapersPage() {
 
       if (error) throw error;
 
-      const processed = (data || []).map(paper => ({
+      setPapers((data || []).map(paper => ({
         ...paper,
         class_name: paper.class_name || '—',
         subject_name: paper.subject_name || '—'
-      }));
-
-      setPapers(processed);
+      })));
 
     } catch (err) {
       console.error('Error fetching papers:', err);
@@ -56,7 +53,6 @@ export default function GeneratedPapersPage() {
     }
   };
 
-  /* ================= EFFECT: FETCH ON TRIAL/SUBSCRIPTION ================= */
   useEffect(() => {
     const isTrialActive = trialStatus?.isTrial && new Date(trialStatus.trialEndsAt || 0) > new Date();
     if (trialStatus && (trialStatus.hasActiveSubscription || isTrialActive)) {
@@ -141,7 +137,6 @@ export default function GeneratedPapersPage() {
     }
   };
 
-  /* ================= LOADING ================= */
   if (loading || userLoading) {
     return (
       <AcademyLayout>
@@ -152,9 +147,7 @@ export default function GeneratedPapersPage() {
     );
   }
 
-  /* ================= RESTRICTED ACCESS ================= */
   const isTrialActive = trialStatus?.isTrial && new Date(trialStatus.trialEndsAt || 0) > new Date();
-console.log('check is trial active',trialStatus,"check if there is active subscription",trialStatus?.hasActiveSubscription,'active trial subs',isTrialActive)
   if (trialStatus && isTrialActive) {
     return (
       <AcademyLayout>
@@ -175,12 +168,12 @@ console.log('check is trial active',trialStatus,"check if there is active subscr
 
         {/* Header */}
         <div className="d-flex justify-content-between align-items-center mb-4">
-          <h4 className="mb-0">Generated Papers</h4>
+          <h4 className="mb-0 fs-6 fs-md-5">Generated Papers</h4>
           <button
-            className="btn btn-primary"
+            className="btn btn-primary btn-sm btn-md"
             onClick={() => router.push('/dashboard/generate-paper')}
           >
-            + Generate New Paper
+            + Generate
           </button>
         </div>
 
@@ -211,42 +204,43 @@ console.log('check is trial active',trialStatus,"check if there is active subscr
 
                   {papers.map(paper => (
                     <tr key={paper.id}>
-                      <td><strong>{paper.title}</strong></td>
+                      {/* Title */}
+                      <td className="fs-6 fs-md-5">{paper.title}</td>
                       <td>{paper.class_name}</td>
                       <td>{paper.subject_name}</td>
 
                       {/* PDF Download */}
                       <td>
-                        {paper.paperPdf ? (
+                        {paper.paperPdf && (
                           <button
                             className="btn btn-sm btn-outline-success d-flex align-items-center gap-1"
                             disabled={downloadingPdfId === paper.id}
                             onClick={() => handleDownloadPDF(paper)}
                           >
-                            {downloadingPdfId === paper.id
-                              ? <>Downloading <span className="spinner-border spinner-border-sm" /></>
-                              : 'Download Paper'}
-                            <FileText color="green" size={16} />
-                            <Download color="green" size={16} />
+                            <FileText className="d-md-none" size={16} />
+                            <Download className="d-md-none" size={16} />
+                            <span className="d-none d-md-inline">
+                              {downloadingPdfId === paper.id ? 'Downloading...' : 'Download Paper'}
+                            </span>
                           </button>
-                        ) : '—'}
+                        )}
                       </td>
 
                       {/* Paper Key */}
                       <td>
-                        {paper.paperKey ? (
+                        {paper.paperKey && (
                           <button
                             className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
                             disabled={downloadingKeyId === paper.id}
                             onClick={() => handleDownloadKey(paper)}
                           >
-                            {downloadingKeyId === paper.id
-                              ? <>Downloading Key <span className="spinner-border spinner-border-sm" /></>
-                              : 'Download Key'}
-                            <FileText color="blue" size={16} />
-                            <Download color="blue" size={16} />
+                            <FileText className="d-md-none" size={16} />
+                            <Download className="d-md-none" size={16} />
+                            <span className="d-none d-md-inline">
+                              {downloadingKeyId === paper.id ? 'Downloading...' : 'Download Key'}
+                            </span>
                           </button>
-                        ) : '—'}
+                        )}
                       </td>
 
                       <td>{new Date(paper.created_at).toLocaleDateString()}</td>
@@ -258,14 +252,15 @@ console.log('check is trial active',trialStatus,"check if there is active subscr
                           disabled={deletingId === paper.id}
                           onClick={() => handleDeletePaper(paper)}
                         >
-                          {deletingId === paper.id
-                            ? <span className="spinner-border spinner-border-sm" />
-                            : 'Delete'}
-                          <Trash2 color="red" size={16} />
+                          <Trash2 className="d-md-none" size={16} />
+                          <span className="d-none d-md-inline">
+                            {deletingId === paper.id ? 'Deleting...' : 'Delete'}
+                          </span>
                         </button>
                       </td>
                     </tr>
                   ))}
+
                 </tbody>
               </table>
             </div>
