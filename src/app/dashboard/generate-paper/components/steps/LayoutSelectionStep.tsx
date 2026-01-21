@@ -65,27 +65,27 @@ export const LayoutSelectionStep: React.FC<LayoutSelectionStepProps> = ({
           const hasMCQs = layout.mcqMax > 0;
           
           return (
-            <div className="col-12 col-sm-6 col-lg-3" key={layout.value}>
+            <div className="col-12 col-sm-6 col-lg-3 mt-2" key={layout.value}>
               <div 
-                className={`card h-100 cursor-pointer p-1 ${
+                className={`card h-100 cursor-pointer p-2 m-2 ${
                   watch("mcqPlacement") === layout.value 
                     ? "border-primary bg-primary bg-opacity-10 shadow" 
-                    : "border"
+                    : "border border-secondary"
                 }`}
                 onClick={() => handleLayoutSelect(layout.value)}
                 style={{ 
                   cursor: 'pointer',
                   transition: 'all 0.3s ease',
-                  minHeight: '200px'
+                
                 }}
               >
-                <div className="card-body text-center p-0">
+                <div className="card-body text-center p-2 pb-0">
                   <div className="mb-2">
                     <div className="position-relative" style={{ height: '60px' }}>
                       {hasMCQs ? (
                         <>
                           <div className="position-absolute start-0 top-0 border rounded p-2" style={{ 
-                            width: '45%', 
+                            width: '49%', 
                             height: '100%',
                             background: layout.value === 'two_papers' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 
                                       layout.value === 'three_papers' ? 'linear-gradient(135deg, #6c757d 0%, #495057 100%)' : 
@@ -93,7 +93,7 @@ export const LayoutSelectionStep: React.FC<LayoutSelectionStepProps> = ({
                             color: 'white'
                           }}>
                             <div className="small">MCQs</div>
-                            <div className="fw-bold"><span className="d-none d-sm-inline">Max </span>{layout.mcqMax}</div>
+                            <div className="fw-bold"><span className=" d-sm-inline">Max </span>{layout.mcqMax}</div>
                           </div>
                           <div className="position-absolute end-0 top-0 border rounded p-2" style={{ 
                             width: '45%', 
@@ -103,9 +103,9 @@ export const LayoutSelectionStep: React.FC<LayoutSelectionStepProps> = ({
                                       layout.value === 'separate' ? '#198754' : '#198754',
                             color: 'white'
                           }}>
-                            <div className="small d-none d-sm-block">Subjective</div>
-                            <div className="small d-sm-none">Subj</div>
-                            <div className="fw-bold"><span className="d-none d-sm-inline">Max</span> {maxSubjective}</div>
+                            <div className="small d-sm-block">Subjective</div>
+                           
+                            <div className="fw-bold"><span className=" d-sm-inline">Max</span> {maxSubjective}</div>
                           </div>
                         </>
                       ) : (
@@ -123,32 +123,15 @@ export const LayoutSelectionStep: React.FC<LayoutSelectionStepProps> = ({
                   </div>
                   
                   <h6 className="fw-bold mb-1 mt-2">{layout.title}</h6>
-                  <p className="small text-muted mb-2" style={{ 
+                  <p className="small text-muted mb-0" style={{ 
                     wordBreak: 'break-word',
                     hyphens: 'auto',
-                    minHeight: '40px'
+                
                   }}>
                     {layout.description}
                   </p>
                   
-                  <div className="mt-auto">
-                    {hasMCQs && (
-                      <span className="badge me-1 mb-1" style={{ 
-                        backgroundColor: layout.value === 'two_papers' ? '#667eea' : 
-                                       layout.value === 'three_papers' ? '#6c757d' : 
-                                       layout.value === 'separate' ? '#0dcaf0' : '#0d6efd'
-                      }}>
-                        <span className="d-none d-sm-inline">MCQs: </span>Max {layout.mcqMax}
-                      </span>
-                    )}
-                    <span className="badge mb-1" style={{ 
-                      backgroundColor: layout.value === 'two_papers' ? '#f093fb' : 
-                                     layout.value === 'three_papers' ? '#ffb347' : 
-                                     layout.value === 'separate' ? '#198754' : '#198754'
-                    }}>
-                      <span className="d-none d-sm-inline">Subjective: </span>Max {maxSubjective}
-                    </span>
-                  </div>
+                        
                 </div>
               </div>
             </div>

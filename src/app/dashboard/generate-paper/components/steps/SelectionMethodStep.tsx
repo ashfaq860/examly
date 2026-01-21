@@ -15,15 +15,15 @@ export const SelectionMethodStep: React.FC<SelectionMethodStepProps> = ({
   return (
     <div className="step-transition">
       <div className="text-center mb-3">
-        <h5 className="fw-bold mb-3">🎯 Selection Method</h5>
+        <h5 className="fw-bold mb-3">🎯 Q<span className='d-none d-md-inline'>uestion</span>s Selection Method</h5>
         <p className="text-muted d-none d-sm-inline">Choose how you want to select questions for your paper</p>
       </div>
 
       <div className="row row-cols-1 row-cols-md-2 g-4">
         <div className="col">
           <div 
-            className={`card h-100 cursor-pointer p-4 transition-all ${
-              watchedSelectionMethod === 'auto' ? 'border-primary bg-primary bg-opacity-10 shadow' : 'border-light'
+            className={`card h-100 cursor-pointer p-0 transition-all ${
+              watchedSelectionMethod === 'auto' ? 'border-primary bg-primary bg-opacity-10 shadow' : ' border border-secondary'
             }`}
             onClick={() => {
               setValue('selectionMethod', 'auto');
@@ -34,11 +34,11 @@ export const SelectionMethodStep: React.FC<SelectionMethodStepProps> = ({
             <div className="card-body text-center">
               <span className="display-6 mb-3">🤖</span>
               <h4 className="card-title fw-bold">Auto Generate</h4>
-              <p className="card-text text-muted">
+              <p className="card-text text-muted d-none d-md-block">
                 System will automatically select questions randomly from ALL chapters based on your criteria. 
                 Perfect for quick paper generation with balanced difficulty distribution.
               </p>
-              <div className="mt-4">
+              <div className="mt-1">
                 <span className="badge bg-primary px-3 py-2">
                   <i className="bi bi-lightning me-2"></i>
                   Fast & Automated
@@ -49,8 +49,8 @@ export const SelectionMethodStep: React.FC<SelectionMethodStepProps> = ({
         </div>
         <div className="col">
           <div 
-            className={`card h-100 cursor-pointer p-4 transition-all ${
-              watchedSelectionMethod === 'manual' ? 'border-primary bg-primary bg-opacity-10 shadow' : 'border-light'
+            className={`card h-100 cursor-pointer p-0 transition-all ${
+              watchedSelectionMethod === 'manual' ? 'border-primary bg-primary bg-opacity-10 shadow' : 'border border-secondary'
             }`}
             onClick={() => {
               setValue('selectionMethod', 'manual');
@@ -61,11 +61,11 @@ export const SelectionMethodStep: React.FC<SelectionMethodStepProps> = ({
             <div className="card-body text-center">
               <span className="display-6 mb-3">✍️</span>
               <h4 className="card-title fw-bold">Manual Selection</h4>
-              <p className="card-text text-muted">
+              <p className="card-text text-muted d-none d-md-block">
                 You will manually select each question from available pool. 
                 Perfect for when you want full control over question selection.
               </p>
-              <div className="mt-4">
+              <div className="mt-1">
                 <span className="badge bg-success px-3 py-2">
                   <i className="bi bi-eye me-2"></i>
                   Full Control

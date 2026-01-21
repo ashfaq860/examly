@@ -940,41 +940,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="step-transition">
-      <div className="d-lg-none mobile-action-buttons">
-        <div className="container">
-          <div className="row g-2">
-            <div className="col-6">
-              <button 
-                className="btn btn-success w-100" 
-                type="submit" 
-                disabled={isLoading || isLoadingPreview}
-              >
-                {isLoading ? (
-                  <span className="spinner-border spinner-border-sm me-1"></span>
-                ) : (
-                  <i className="bi bi-file-earmark-pdf me-1"></i>
-                )}
-                <span className="d-sm-inline"> Paper</span>
-              </button>
-            </div>
-            <div className="col-6">
-              <button
-                className="btn btn-info w-100 text-white"
-                type="button"
-                onClick={onDownloadKey}
-                disabled={isLoading || isDownloadingKey || watch('mcqCount') === 0 || isLoadingPreview}
-              >
-                {isDownloadingKey ? (
-                  <span className="spinner-border spinner-border-sm me-1"></span>
-                ) : (
-                  <i className="bi bi-key me-1"></i>
-                )}
-                <span className="d-sm-inline"> Key</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      
 
       <div className='row'>
         <div className="col-12 mb-3">
@@ -1039,7 +1005,34 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                     )}
                   </div>
                 </div>
-                
+
+ {/* Watermark Removal Checkbox - ALWAYS VISIBLE */}
+              <div className="watermark-control mb-0">
+                <div className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id="removeWatermark"
+                    checked={removeWatermark}
+                    onChange={handleWatermarkChange}
+                    style={{ cursor: isPaidUser ? 'pointer' : 'not-allowed' }}
+                  />
+                  <label 
+                    className="form-check-label d-flex align-items-center" 
+                    htmlFor="removeWatermark"
+                    style={{ cursor: isPaidUser ? 'pointer' : 'not-allowed' }}
+                  >
+                    <div>
+                      <span className="fw-bold">Remove Watermark</span>
+                      {!isPaidUser && (
+                        <span className="badge bg-warning text-dark ms-2">Premium</span>
+                      )}
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+                {/* Mobile Generate paper buttons Buttons */}
                 <div className="d-flex justify-content-between mb-2">
                   <div className="d-flex gap-2">
                     <button 
@@ -1052,7 +1045,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                       ) : (
                         <>
                           <i className="bi bi-file-earmark-pdf me-1"></i>
-                          Generate PDF
+                          Generate Paper PDF
                         </>
                       )}
                     </button>
@@ -1569,20 +1562,20 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
           
           .bilingual-option, .single-option {
             width: 100% !important;
-            margin-bottom: 4px !important;
+            margin-bottom: 0px !important;
           }
           
           .option-content {
-            margin-left: 10px !important;
+            margin-left: 0px !important;
           }
           
           .english-option, .urdu-option {
-            padding: 0 5px !important;
+            padding: 0 0px !important;
           }
           
           .urdu-text {
             font-size: 14px !important;
-            line-height: 1.8 !important;
+            line-height: 1.4 !important;
           }
           
           .english-text {
@@ -1640,7 +1633,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
         
         /* Question item spacing */
         .question-item {
-          margin-bottom: 2px !important;
+          margin-bottom: 1px !important;
         }
         
         /* Professional paper styling */
