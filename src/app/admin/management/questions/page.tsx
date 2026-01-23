@@ -32,7 +32,7 @@ interface Question {
   chapter_id?: string | null;
   topic_id?: string | null;
   difficulty: 'easy' | 'medium' | 'hard';
-  question_type: 'mcq' | 'short' | 'long';
+  question_type: string; // Updated to string to include all types
   answer_text?: string | null;
   answer_text_ur?: string | null;
   source_type: 'book' | 'past_paper' | 'model_paper' | 'custom';
@@ -124,6 +124,47 @@ const SafeHtmlRender: React.FC<{
   );
 };
 
+// All possible question types from schema
+const ALL_QUESTION_TYPES = [
+  'mcq',
+  'short',
+  'long',
+  'translate_urdu',
+  'translate_english',
+  'idiom_phrases',
+  'passage',
+  'poetry_explanation',
+  'prose_explanation',
+  'sentence_correction',
+  'sentence_completion',
+  'directInDirect',
+  'activePassive',
+  'darkhwast_khat',
+  'kahani_makalma'
+];
+
+// Map question type to display label
+const getQuestionTypeLabel = (type: string): string => {
+  const typeMap: Record<string, string> = {
+    'mcq': 'MCQ',
+    'short': 'Short Answer',
+    'long': 'Long Answer',
+    'translate_urdu': 'Translate to Urdu',
+    'translate_english': 'Translate to English',
+    'idiom_phrases': 'Idiom/Phrases',
+    'passage': 'Passage',
+    'poetry_explanation': 'Poetry Explanation',
+    'prose_explanation': 'Prose Explanation',
+    'sentence_correction': 'Sentence Correction',
+    'sentence_completion': 'Sentence Completion',
+    'directInDirect': 'Direct/Indirect',
+    'activePassive': 'Active/Passive',
+    'darkhwast_khat': 'درخواست/خط',
+    'kahani_makalma': 'کہانی/مکالمہ'
+  };
+  return typeMap[type] || type;
+};
+
 export default function QuestionBank() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -138,7 +179,7 @@ export default function QuestionBank() {
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'all' | 'mcq' | 'short' | 'long'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'mcq' | 'short' | 'long' | 'translate' | 'passage' | 'urdu'>('all');
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -371,8 +412,25 @@ export default function QuestionBank() {
 
       // Apply active tab filter if not 'all'
       if (activeTab !== 'all') {
-        countQuery = countQuery.eq('question_type', activeTab);
-        dataQuery = dataQuery.eq('question_type', activeTab);
+        if (activeTab === 'mcq') {
+          countQuery = countQuery.eq('question_type', 'mcq');
+          dataQuery = dataQuery.eq('question_type', 'mcq');
+        } else if (activeTab === 'short') {
+          countQuery = countQuery.eq('question_type', 'short');
+          dataQuery = dataQuery.eq('question_type', 'short');
+        } else if (activeTab === 'long') {
+          countQuery = countQuery.eq('question_type', 'long');
+          dataQuery = dataQuery.eq('question_type', 'long');
+        } else if (activeTab === 'translate') {
+          countQuery = countQuery.or('question_type.eq.translate_urdu,question_type.eq.translate_english');
+          dataQuery = dataQuery.or('question_type.eq.translate_urdu,question_type.eq.translate_english');
+        } else if (activeTab === 'passage') {
+          countQuery = countQuery.eq('question_type', 'passage');
+          dataQuery = dataQuery.eq('question_type', 'passage');
+        } else if (activeTab === 'urdu') {
+          countQuery = countQuery.in('question_type', ['poetry_explanation', 'prose_explanation', 'darkhwast_khat', 'kahani_makalma']);
+          dataQuery = dataQuery.in('question_type', ['poetry_explanation', 'prose_explanation', 'darkhwast_khat', 'kahani_makalma']);
+        }
       }
 
       // Get total count
@@ -587,7 +645,19 @@ export default function QuestionBank() {
       }
 
       if (activeTab !== 'all') {
-        query = query.eq('question_type', activeTab);
+        if (activeTab === 'mcq') {
+          query = query.eq('question_type', 'mcq');
+        } else if (activeTab === 'short') {
+          query = query.eq('question_type', 'short');
+        } else if (activeTab === 'long') {
+          query = query.eq('question_type', 'long');
+        } else if (activeTab === 'translate') {
+          query = query.or('question_type.eq.translate_urdu,question_type.eq.translate_english');
+        } else if (activeTab === 'passage') {
+          query = query.eq('question_type', 'passage');
+        } else if (activeTab === 'urdu') {
+          query = query.in('question_type', ['poetry_explanation', 'prose_explanation', 'darkhwast_khat', 'kahani_makalma']);
+        }
       }
 
       const { data, error } = await query;
@@ -612,7 +682,7 @@ export default function QuestionBank() {
         'Chapter': q.chapter?.name || '-',
         'Topic': q.topic?.name || '-',
         'Difficulty': q.difficulty,
-        'Question Type': q.question_type,
+        'Question Type': getQuestionTypeLabel(q.question_type),
         'Source Type': q.source_type,
         'Source Year': q.source_year,
         'Answer Text': stripHtmlTags(q.answer_text),
@@ -641,7 +711,7 @@ export default function QuestionBank() {
         { wch: 20 }, // Chapter
         { wch: 20 }, // Topic
         { wch: 10 }, // Difficulty
-        { wch: 10 }, // Question Type
+        { wch: 20 }, // Question Type
         { wch: 15 }, // Source Type
         { wch: 10 }, // Source Year
         { wch: 50 }, // Answer Text
@@ -796,6 +866,28 @@ export default function QuestionBank() {
     return rangeWithDots;
   };
 
+  // Get badge color based on question type
+  const getQuestionTypeBadgeColor = (type: string) => {
+    switch (type) {
+      case 'mcq': return 'bg-primary';
+      case 'short': return 'bg-info';
+      case 'long': return 'bg-warning text-dark';
+      case 'translate_urdu':
+      case 'translate_english': return 'bg-success';
+      case 'idiom_phrases': return 'bg-dark';
+      case 'passage': return 'bg-secondary';
+      case 'poetry_explanation':
+      case 'prose_explanation': return 'bg-purple';
+      case 'sentence_correction':
+      case 'sentence_completion': return 'bg-indigo';
+      case 'directInDirect':
+      case 'activePassive': return 'bg-teal';
+      case 'darkhwast_khat':
+      case 'kahani_makalma': return 'bg-brown';
+      default: return 'bg-secondary';
+    }
+  };
+
   return (
     <AdminLayout activeTab="questions">
       <div className="container py-4">
@@ -869,6 +961,30 @@ export default function QuestionBank() {
               onClick={() => setActiveTab('long')}
             >
               Long Questions
+            </button>
+          </li>
+          <li className="nav-item">
+            <button 
+              className={getNavLinkClass('translate')}
+              onClick={() => setActiveTab('translate')}
+            >
+              Translation
+            </button>
+          </li>
+          <li className="nav-item">
+            <button 
+              className={getNavLinkClass('passage')}
+              onClick={() => setActiveTab('passage')}
+            >
+              Passage
+            </button>
+          </li>
+          <li className="nav-item">
+            <button 
+              className={getNavLinkClass('urdu')}
+              onClick={() => setActiveTab('urdu')}
+            >
+              Urdu Special
             </button>
           </li>
         </ul>
@@ -980,16 +1096,18 @@ export default function QuestionBank() {
                 </select>
               </div>
 
-              <div className="col-md-2">
+              <div className="col-md-3">
                 <select
                   className="form-select"
                   value={filters.question_type || ''}
                   onChange={e => setFilters({...filters, question_type: e.target.value || undefined})}
                 >
-                  <option value="">All Types</option>
-                  <option value="mcq">MCQ</option>
-                  <option value="short">Short</option>
-                  <option value="long">Long</option>
+                  <option value="">All Question Types</option>
+                  {ALL_QUESTION_TYPES.map(type => (
+                    <option key={type} value={type}>
+                      {getQuestionTypeLabel(type)}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -1048,18 +1166,18 @@ export default function QuestionBank() {
         ) : (
           <>
             <div className="card mb-4">
-              <div className="card-body table-responsive">
-                <table className="table table-hover">
+              <div className="card-body table-responsive" style={{ overflowX: 'auto' }}>
+                <table className="table table-hover" style={{ tableLayout: 'fixed', width: '100%' }}>
                   <thead>
                     <tr>
                       <th style={{ width: '50px' }}>#</th>
-                      <th>Question</th>
+                      <th style={{ width: '350px', minWidth: '350px', maxWidth: '350px' }}>Question</th>
                       <th style={{ width: '100px' }}>Class</th>
                       <th style={{ width: '100px' }}>Subject</th>
                       <th style={{ width: '100px' }}>Chapter</th>
                       <th style={{ width: '100px' }}>Topic</th>
-                      <th style={{ width: '80px' }}>Type</th>
-                      <th style={{ width: '100px' }}>Difficulty</th>
+                      <th style={{ width: '120px' }}>Type</th>
+                      <th style={{ width: '80px' }}>Difficulty</th>
                       <th style={{ width: '120px' }}>Source</th>
                       <th style={{ width: '100px' }}>Actions</th>
                     </tr>
@@ -1068,19 +1186,34 @@ export default function QuestionBank() {
                     {questions.length > 0 ? questions.map((q, i) => (
                       <tr key={q?.id}>
                         <td>{startIndex + i}</td>
-                        <td>
-                          <div className="question-text-container" style={{ maxWidth: '400px' }}>
-                            <SafeHtmlRender 
-                              html={q?.question_text}
-                              maxLength={150}
-                              className="text-truncate"
-                            />
+                        <td style={{ 
+                          maxWidth: '350px',
+                          minWidth: '350px',
+                          wordWrap: 'break-word',
+                          overflowWrap: 'break-word',
+                          whiteSpace: 'normal'
+                        }}>
+                          <div className="question-text-container" style={{ 
+                            maxWidth: '100%',
+                            overflow: 'hidden'
+                          }}>
+                            <div className="mb-1">
+                              <SafeHtmlRender 
+                                html={q?.question_text}
+                                maxLength={200}
+                                className="text-break"
+                              />
+                            </div>
                             {q?.question_text_ur && (
-                              <div className="text-muted small urdu-text mt-1" style={{ direction: 'rtl' }}>
+                              <div className="text-muted small urdu-text" style={{ 
+                                direction: 'rtl',
+                                wordWrap: 'break-word',
+                                overflowWrap: 'break-word'
+                              }}>
                                 <SafeHtmlRender 
                                   html={q?.question_text_ur}
-                                  maxLength={100}
-                                  className="text-truncate"
+                                  maxLength={150}
+                                  className="text-break"
                                 />
                               </div>
                             )}
@@ -1091,15 +1224,18 @@ export default function QuestionBank() {
                             {q?.class || '-'}
                           </span>
                         </td>
-                        <td>{q?.subject?.name || '-'}</td>
-                        <td>{q?.chapter?.name || '-'}</td>
-                        <td>{q?.topic?.name || '-'}</td>
+                        <td className="text-truncate" style={{ maxWidth: '100px' }} title={q?.subject?.name || '-'}>
+                          {q?.subject?.name || '-'}
+                        </td>
+                        <td className="text-truncate" style={{ maxWidth: '100px' }} title={q?.chapter?.name || '-'}>
+                          {q?.chapter?.name || '-'}
+                        </td>
+                        <td className="text-truncate" style={{ maxWidth: '100px' }} title={q?.topic?.name || '-'}>
+                          {q?.topic?.name || '-'}
+                        </td>
                         <td>
-                          <span className={`badge ${
-                            q.question_type === 'mcq' ? 'bg-primary' : 
-                            q.question_type === 'short' ? 'bg-info' : 'bg-warning'
-                          }`}>
-                            {q?.question_type.toUpperCase()}
+                          <span className={`badge ${getQuestionTypeBadgeColor(q.question_type)}`} style={{ fontSize: '0.75em' }}>
+                            {getQuestionTypeLabel(q.question_type)}
                           </span>
                         </td>
                         <td>
@@ -1283,6 +1419,21 @@ export default function QuestionBank() {
           </div>
         )}
       </div>
+      <style jsx global>{`
+        .bg-purple { background-color: #6f42c1 !important; }
+        .bg-indigo { background-color: #6610f2 !important; }
+        .bg-teal { background-color: #20c997 !important; }
+        .bg-brown { background-color: #795548 !important; }
+        .question-content img { max-width: 100%; height: auto; }
+        .urdu-text { font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif; }
+        .table th, .table td {
+          vertical-align: middle;
+        }
+        .text-break {
+          word-break: break-word;
+          overflow-wrap: break-word;
+        }
+      `}</style>
     </AdminLayout>
   );
 }
