@@ -29,7 +29,9 @@ type QuestionType =
   | 'sentence_correction' 
   | 'sentence_completion'
   | 'directInDirect'
-  | 'activePassive';
+  | 'activePassive'
+  | 'darkhwast_khat'       // New: درخواست/خط
+  | 'kahani_makalma';      // New: کہانی/مکالمہ
 
 export default function QuestionForm({
   question,
@@ -70,6 +72,9 @@ export default function QuestionForm({
     indirect_sentence: '',
     active_sentence: '',
     passive_sentence: '',
+    // New fields for Urdu subject types
+    darkhwast_khat_text: '',        // New field for درخواست/خط
+    kahani_makalma_text: '',        // New field for کہانی/مکالمہ
   };
 
   const [formData, setFormData] = useState({
@@ -194,6 +199,8 @@ export default function QuestionForm({
       indirect_sentence: '',
       active_sentence: '',
       passive_sentence: '',
+      darkhwast_khat_text: '',
+      kahani_makalma_text: '',
       correct_option: (prev.question_type === 'mcq') ? '' : prev.correct_option,
       passage_questions_count: 1,
     }));
@@ -297,6 +304,8 @@ export default function QuestionForm({
     let passiveSentence = '';
     let passageQuestionText = '';
     let passageQuestionTextUr = '';
+    let darkhwastKhatText = '';
+    let kahaniMakalmaText = '';
 
     // Parse specialized fields from stored text
     if (question.question_type === 'poetry_explanation' && question.question_text_ur) {
@@ -333,6 +342,10 @@ export default function QuestionForm({
         passageTextUr = parts[0] || '';
         passageQuestionTextUr = parts[1] || '';
       }
+    } else if (question.question_type === 'darkhwast_khat' && question.question_text_ur) {
+      darkhwastKhatText = question.question_text_ur;
+    } else if (question.question_type === 'kahani_makalma' && question.question_text_ur) {
+      kahaniMakalmaText = question.question_text_ur;
     }
 
     // Prefer deriving class via class_subject_id (authoritative)
@@ -387,6 +400,8 @@ export default function QuestionForm({
       indirect_sentence: indirectSentence,
       active_sentence: activeSentence,
       passive_sentence: passiveSentence,
+      darkhwast_khat_text: darkhwastKhatText,
+      kahani_makalma_text: kahaniMakalmaText,
       passage_questions_count: 1,
     });
   }, [question, classSubjects]);
@@ -760,6 +775,42 @@ export default function QuestionForm({
             };
             break;
 
+          case 'darkhwast_khat':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: formData.darkhwast_khat_text,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'kahani_makalma':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: formData.kahani_makalma_text,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
           case 'sentence_correction':
             typeSpecificPayload = {
               question_text: null,
@@ -913,7 +964,9 @@ export default function QuestionForm({
         { value: 'poetry_explanation', label: 'اشعار کی تشریح' },
         { value: 'prose_explanation', label: 'نثرپاروں کی تشریح' },
         { value: 'short', label: 'مختصر سوالات' },
-        { value: 'long', label: 'تفصیلی جوابات' },
+        { value: 'long', label: 'نظم کا خلاصہ / مرکزی خیال' },
+        { value: 'darkhwast_khat', label: 'درخواست/خط' },
+        { value: 'kahani_makalma', label: 'کہانی/مکالمہ' },
         { value: 'sentence_correction', label: 'جملوں کی درستگی' },
         { value: 'sentence_completion', label: 'جملوں کی تکمیل' },
         { value: 'passage', label: 'نثر پارہ اور سوالات' },
@@ -942,6 +995,180 @@ export default function QuestionForm({
     <form onSubmit={handleSubmit}>
       <div className="modal-body">
         <div className="row g-3">
+          {/* Selection Fields First */}
+          
+          {/* Class */}
+          <div className="col-md-6">
+            <label className="form-label">Class *</label>
+            <select
+              className="form-select"
+              name="class_id"
+              value={formData.class_id}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select Class</option>
+              {classes.map((cls) => (
+                <option key={toId(cls.id)} value={toId(cls.id)}>
+                  {cls.name}
+                  {cls.description ? ` — ${cls.description}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Subject */}
+          <div className="col-md-6">
+            <label className="form-label">Subject *</label>
+            <select
+              className="form-select"
+              name="subject_id"
+              value={formData.subject_id}
+              onChange={handleChange}
+              required
+              disabled={!formData.class_id}
+            >
+              <option value="">Select Subject</option>
+              {filteredSubjects.map((subject) => (
+                <option key={toId(subject.id)} value={toId(subject.id)}>
+                  {subject.name}
+                  {subject.description ? ` — ${subject.description}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Chapter */}
+          <div className="col-md-6">
+            <label className="form-label">Chapter</label>
+            <select
+              className={`form-select ${isUrduSubject() ? 'urdu-text' : ''}`}
+              name="chapter_id"
+              value={formData.chapter_id}
+              onChange={handleChange}
+              disabled={!formData.class_id || !formData.subject_id}
+            >
+              <option value="">{isUrduSubject()?'چیپٹر کا انتخاب کریں':'Select Chapter'}</option>
+              {filteredChapters.map((chapter,index) => (
+                <option key={toId(chapter.id)} value={toId(chapter.id)}>
+                 {index+1}-{chapter.name}
+                  {chapter.description ? ` — ${chapter.description}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Topic */}
+          <div className="col-md-6">
+            <label className="form-label">Topic</label>
+            <select
+              className={`form-select ${isUrduSubject() ? 'urdu-text' : ''}`}
+              name="topic_id"
+              value={formData.topic_id}
+              onChange={handleChange}
+              disabled={!formData.chapter_id}
+            >
+              <option value="">{isUrduSubject()?'موضوع کا انتخاب کریں':'Select Topic'}</option>
+              {filteredTopics.map((topic) => (
+                <option key={toId(topic.id)} value={toId(topic.id)}>
+                  {topic.name}
+                  {topic.description ? ` — ${topic.description}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Question Type */}
+          <div className="col-md-6">
+            <label className="form-label">Question Type *</label>
+            <select
+              className={`form-select ${isUrduSubject() ? 'urdu-text' : ''}`}
+              name="question_type"
+              value={formData.question_type}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select Question Type</option>
+              {getAvailableQuestionTypes().map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+            {isEnglishSubject() && (
+              <small className="text-muted d-block mt-1">
+                English subject supports specialized question types
+              </small>
+            )}
+            {isUrduSubject() && (
+              <small className="text-muted d-block mt-1">
+                Urdu subject supports specialized question types
+              </small>
+            )}
+            {isMathScienceSubject() && (
+              <small className="text-success d-block mt-1">
+                Math/Science subject: Formula editor enabled
+              </small>
+            )}
+          </div>
+
+          {/* Difficulty */}
+          <div className="col-md-6">
+            <label className="form-label">Difficulty *</label>
+            <select
+              className="form-select"
+              name="difficulty"
+              value={formData.difficulty}
+              onChange={handleChange}
+              required
+            >
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+
+          {/* Source Type */}
+          <div className="col-md-6">
+            <label className="form-label">Source Type *</label>
+            <select
+              className="form-select"
+              name="source_type"
+              value={formData.source_type}
+              onChange={handleChange}
+              required
+            >
+              <option value="book">Book</option>
+              <option value="past_paper">Past Paper</option>
+              <option value="model_paper">Model Paper</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+
+          {/* Source Year */}
+          {['past_paper', 'model_paper'].includes(formData.source_type) && (
+            <div className="col-md-6">
+              <label className="form-label">Year</label>
+              <input
+                type="number"
+                className="form-control"
+                name="source_year"
+                value={formData.source_year}
+                onChange={handleChange}
+                min="1900"
+                max={new Date().getFullYear()}
+              />
+            </div>
+          )}
+
+          {/* Question Text Areas - Now after selection fields */}
+          
+          {/* Separator */}
+          <div className="col-12 mt-3 mb-2">
+            <hr />
+            <h5>Question Content</h5>
+          </div>
+
           {/* Question fields based on subject */}
           {isEnglishSubject() && (
             <>
@@ -1111,8 +1338,8 @@ export default function QuestionForm({
                 </>
               )}
 
-              {/* Short and Long Questions */}
-              {(formData.question_type === 'short' || formData.question_type === 'long') && (
+              {/* Short Questions */}
+              {formData.question_type === 'short' && (
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">سوال *</label>
@@ -1120,6 +1347,51 @@ export default function QuestionForm({
                       tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.question_text_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
+                      init={urduEditorConfig}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Long Questions (نظم کا خلاصہ / مرکزی خیال) */}
+              {formData.question_type === 'long' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">نظم کا خلاصہ / مرکزی خیال *</label>
+                    <Editor
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                      value={formData.question_text_ur}
+                      onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
+                      init={urduEditorConfig}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* درخواست/خط */}
+              {formData.question_type === 'darkhwast_khat' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">درخواست/خط کا متن *</label>
+                    <Editor
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                      value={formData.darkhwast_khat_text}
+                      onEditorChange={(content) => handleEditorChange(content, 'darkhwast_khat_text')}
+                      init={urduEditorConfig}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* کہانی/مکالمہ */}
+              {formData.question_type === 'kahani_makalma' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">کہانی/مکالمہ کا متن *</label>
+                    <Editor
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                      value={formData.kahani_makalma_text}
+                      onEditorChange={(content) => handleEditorChange(content, 'kahani_makalma_text')}
                       init={urduEditorConfig}
                     />
                   </div>
@@ -1196,174 +1468,13 @@ export default function QuestionForm({
             </>
           )}
 
-          {/* Class */}
-          <div className="col-md-6">
-            <label className="form-label">Class *</label>
-            <select
-              className="form-select"
-              name="class_id"
-              value={formData.class_id}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select Class</option>
-              {classes.map((cls) => (
-                <option key={toId(cls.id)} value={toId(cls.id)}>
-                  {cls.name}
-                  {cls.description ? ` — ${cls.description}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Subject */}
-          <div className="col-md-6">
-            <label className="form-label">Subject *</label>
-            <select
-              className="form-select"
-              name="subject_id"
-              value={formData.subject_id}
-              onChange={handleChange}
-              required
-              disabled={!formData.class_id}
-            >
-              <option value="">Select Subject</option>
-              {filteredSubjects.map((subject) => (
-                <option key={toId(subject.id)} value={toId(subject.id)}>
-                  {subject.name}
-                  {subject.description ? ` — ${subject.description}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Chapter */}
-          <div className="col-md-6">
-            <label className="form-label">Chapter</label>
-            <select
-              className={`form-select ${isUrduSubject() ? 'urdu-text' : ''}`}
-              name="chapter_id"
-              value={formData.chapter_id}
-              onChange={handleChange}
-              disabled={!formData.class_id || !formData.subject_id}
-            >
-              <option value="">{isUrduSubject()?'چیپٹر کا انتخاب کریں':'Select Chapter'}</option>
-              {filteredChapters.map((chapter,index) => (
-                <option key={toId(chapter.id)} value={toId(chapter.id)}>
-                 {index+1}-{chapter.name}
-                  {chapter.description ? ` — ${chapter.description}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Topic */}
-          <div className="col-md-6">
-            <label className="form-label">Topic</label>
-            <select
-              className={`form-select ${isUrduSubject() ? 'urdu-text' : ''}`}
-              name="topic_id"
-              value={formData.topic_id}
-              onChange={handleChange}
-              disabled={!formData.chapter_id}
-            >
-              <option value="">{isUrduSubject()?'موضوع کا انتخاب کریں':'Select Topic'}</option>
-              {filteredTopics.map((topic) => (
-                <option key={toId(topic.id)} value={toId(topic.id)}>
-                  {topic.name}
-                  {topic.description ? ` — ${topic.description}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Question Type */}
-          <div className="col-md-6">
-            <label className="form-label">Question Type *</label>
-            <select
-              className={`form-select ${isUrduSubject() ? 'urdu-text' : ''}`}
-              name="question_type"
-              value={formData.question_type}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select Question Type</option>
-              {getAvailableQuestionTypes().map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-            {isEnglishSubject() && (
-              <small className="text-muted d-block mt-1">
-                English subject supports specialized question types
-              </small>
-            )}
-            {isUrduSubject() && (
-              <small className="text-muted d-block mt-1">
-                Urdu subject supports specialized question types
-              </small>
-            )}
-            {isMathScienceSubject() && (
-              <small className="text-success d-block mt-1">
-                Math/Science subject: Formula editor enabled
-              </small>
-            )}
-          </div>
-
-          {/* Difficulty */}
-          <div className="col-md-6">
-            <label className="form-label">Difficulty *</label>
-            <select
-              className="form-select"
-              name="difficulty"
-              value={formData.difficulty}
-              onChange={handleChange}
-              required
-            >
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </select>
-          </div>
-
-          {/* Source Type */}
-          <div className="col-md-6">
-            <label className="form-label">Source Type *</label>
-            <select
-              className="form-select"
-              name="source_type"
-              value={formData.source_type}
-              onChange={handleChange}
-              required
-            >
-              <option value="book">Book</option>
-              <option value="past_paper">Past Paper</option>
-              <option value="model_paper">Model Paper</option>
-              <option value="custom">Custom</option>
-            </select>
-          </div>
-
-          {/* Source Year */}
-          {['past_paper', 'model_paper'].includes(formData.source_type) && (
-            <div className="col-md-6">
-              <label className="form-label">Year</label>
-              <input
-                type="number"
-                className="form-control"
-                name="source_year"
-                value={formData.source_year}
-                onChange={handleChange}
-                min="1900"
-                max={new Date().getFullYear()}
-              />
-            </div>
-          )}
-        </div>
-        <div className="row g-3 mt-2">
-          {/* English and Other Subjects MCQ Options */}
+          {/* Options and other fields */}
           {(formData.question_type === 'mcq' && (isEnglishSubject() || (!isEnglishSubject() && !isUrduSubject()))) && (
             <>
+              <div className="col-12 mt-3 mb-2">
+                <hr />
+                <h5>Multiple Choice Options</h5>
+              </div>
               <div className="col-md-6">
                 <label className="form-label">Option A (English) *</label>
                 <Editor
@@ -1511,6 +1622,10 @@ export default function QuestionForm({
           {/* Urdu Subject MCQ Options */}
           {formData.question_type === 'mcq' && isUrduSubject() && (
             <>
+              <div className="col-12 mt-3 mb-2">
+                <hr />
+                <h5 className="urdu-text" style={{ direction: 'rtl' }}>آپشنز</h5>
+              </div>
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن اے (اردو) *</label>
                 <Editor
@@ -1593,6 +1708,10 @@ export default function QuestionForm({
           {/* Answer fields for non-MCQ questions */}
           {formData.question_type !== 'mcq' && (
             <>
+              <div className="col-12 mt-3 mb-2">
+                <hr />
+                <h5>Answer</h5>
+              </div>
               {isEnglishSubject() && (
                 <div className="col-md-12">
                   <label className="form-label">Answer (English) *</label>
