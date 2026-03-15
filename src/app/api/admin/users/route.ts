@@ -12,7 +12,7 @@ export async function GET() {
 
     return NextResponse.json({ users: data });
   } catch (err) {
-    console.error("Error fetching users:", err);
+ //   console.error("Error fetching users:", err);
     return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 });
   }
 }

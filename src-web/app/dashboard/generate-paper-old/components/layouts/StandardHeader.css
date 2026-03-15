@@ -1,0 +1,86 @@
+/* StandardHeader.css */
+
+/* --- Screen styles --- */
+.standard-header {
+  font-family: var(--heading-font, Arial);
+  border: 1px solid black;
+  padding: 5px;
+  margin-bottom: 20px;
+  background-color: white;
+  color: black;
+  direction: ltr;
+}
+
+.standard-header.rtl {
+  direction: rtl;
+}
+
+.branding {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
+}
+
+.logo-container {
+  border: 1px solid black;
+  border-radius: 50%;
+  width: 120px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 15px;
+}
+
+.rtl .logo-container {
+  margin-left: 15px;
+  margin-right: 0;
+}
+
+.institution-name {
+  text-align: center;
+}
+
+.institution-name h1 {
+  font-weight: bold;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.meta-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  table-layout: fixed;
+}
+
+.meta-table td {
+  padding: 4px;
+  text-align: center;
+  font-weight: bold;
+  border: 1px solid black;
+  font-size: var(--meta-font-size, 12px);
+}
+
+/* --- Print styles --- */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .standard-header,
+  .logo-container,
+  .meta-table,
+  .meta-table td,
+  .meta-table th,
+  .branding,
+  .institution-name {
+    border: 1px solid black !important;
+  }
+
+  .meta-table {
+    border-collapse: collapse !important;
+  }
+}

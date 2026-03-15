@@ -1,0 +1,591 @@
+/* src/styles/globals.css */
+:root{
+  --primary-600: #0b63d4;
+  --primary-400: #2aa7ff;
+  --accent: #00c98a;
+  --muted: #6b7280;
+  --card-bg: rgba(255,255,255,0.85);
+  --glass: rgba(255,255,255,0.65);
+}
+
+* { box-sizing: border-box; }
+html,body,#root { height: 100%; }
+body{
+  font-family: "Times New Roman", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial !important;
+  background: linear-gradient(180deg,#f7fbff 0%, #ffffff 100%);
+  color: #0f172a;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Header 
+
+/* CTA 
+.cta {
+  background: linear-gradient(90deg, rgba(11,99,212,0.08), rgba(0,201,138,0.04));
+  padding: 2rem;
+  border-radius: 12px;
+}
+
+ Footer
+ */ 
+.app-footer {
+  background: #073E8C;
+  color: #dbeafe;
+  padding: 2rem 0;
+}
+.app-footer a { color: #dbeafe; text-decoration: none; }
+.small-muted { color: #9fb6e6; }
+
+/* Responsive tweaks 
+
+
+/* Step Card wrapper */
+.step-card {
+  background: #fff;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+/* Option cards (class/subject/etc.) */
+.option-card {
+  cursor: pointer;
+  border: 2px solid #dee2e6;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  text-align: center;
+  background: #f8f9fa;
+  transition: all 0.3s ease;
+}
+.option-card:hover {
+  transform: translateY(-5px);
+  border-color: #073E8C;
+  background: #e9f2ff;
+}
+.option-card.active {
+  border-color: #073E8C;
+  background: #e9f2ff;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* Loading spinner block */
+.loading-state {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+/* Summary badges */
+.list-group-item strong {
+  color: #073E8C;
+}
+
+/** step 4 form css */
+.option-card {
+  background: #fff;
+  border: 2px solid #dee2e6;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.option-card:hover {
+  border-color: #073E8C;
+  background: #f0f8ff;
+  transform: translateY(-3px);
+}
+.option-card.active {
+  border-color: #073E8C;
+  background: #e9f2ff;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.preview-card {
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.distribution-card {
+  border: 1px dashed #adb5bd;
+}
+
+/** Header css?*/
+ .header-nav {
+          background: white;
+          color: black;
+          padding: 5px 0;
+          position: fixed;
+          width: 100%;
+          top: 0;
+          z-index: 1000;
+          border-bottom: 3px solid transparent;
+          background-image: linear-gradient(white, white), 
+                            linear-gradient(90deg, #3b82f6, #073E8C, #3b82f6);
+          background-origin: border-box;
+          background-clip: padding-box, border-box;
+        } 
+        
+        .dark .header-nav {
+          background-image: linear-gradient(#1e3a8a, #1e3a8a), 
+                            linear-gradient(90deg, #3b82f6, #1e40af, #3b82f6);
+          background-origin: border-box;
+          background-clip: padding-box, border-box;
+          color: white;
+        }
+
+        .navbar-nav .nav-item {
+          position: relative;
+        }
+
+        .navbar-nav .nav-item a.nav-link,
+        .navbar-nav .nav-item button.nav-link {
+          color: rgba(33, 27, 41, 0.75) !important;
+          padding: 8px 16px;
+          position: relative;
+          transition: color 0.3s ease;
+          text-decoration: none;
+          border: none;
+          background: transparent;
+          font-size: 16px;
+          font-weight: bold;
+        }
+
+        .dark .navbar-nav .nav-item a.nav-link,
+        .dark .navbar-nav .nav-item button.nav-link {
+          color: white !important;
+        }
+
+        /* Hover effects for all nav links */
+        .navbar-nav .nav-item a.nav-link:hover,
+        .navbar-nav .nav-item button.nav-link:hover,
+        /* Active state styles */
+        .navbar-nav .nav-item a.nav-link.active,
+        .navbar-nav .nav-item button.nav-link.active {
+          color: #073E8C !important;
+        }
+
+/* Underline effect on hover AND active state - Desktop only */
+@media (min-width: 992px) {
+  .navbar-nav .nav-item a.nav-link:hover::before,
+  .navbar-nav .nav-item button.nav-link:hover::before,
+  .navbar-nav .nav-item a.nav-link.active::before,
+  .navbar-nav .nav-item button.nav-link.active::before {
+    content: '';
+    position: absolute;
+    top: -15px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: #073E8C;
+    border-radius: 2px 2px 0 0;
+  }
+}
+
+        /* Underline effect on hover AND active state 
+        .navbar-nav .nav-item a.nav-link:hover::before,
+        .navbar-nav .nav-item button.nav-link:hover::before,
+        .navbar-nav .nav-item a.nav-link.active::before,
+        .navbar-nav .nav-item button.nav-link.active::before {
+          content: '';
+          position: absolute;
+          top: -15px;
+          left: 0;
+          width: 100%;
+          height: 3px;
+          background: #073E8C;
+          border-radius: 2px 2px 0 0;
+        }
+*/
+        /* Active state for brand logo */
+        .navbar-brand.active {
+          color: #073E8C !important;
+        }
+
+        /* Active state for signup button */
+        .navbar-nav .nav-item a.btn.active {
+          background-color: #073E8C !important;
+          color: white !important;
+          border-color: #073E8C !important;
+        }
+
+        .dark .navbar-nav .nav-item a.btn.active {
+          background-color: #073E8C !important;
+          border-color: #073E8C !important;
+        }
+
+        .navbar-toggler-icon {
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(0, 0, 0, 0.7)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+        }
+        
+        .dark .navbar-toggler-icon {
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 1)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+        }
+
+
+
+  /* Start Paper generateion Dashboard sidebar navigation style */
+/* Sidebar link hover */
+.nav-pills .nav-link:hover {
+  background-color: #0d6efd !important; /* Bootstrap primary blue */
+  color: #fff !important;
+}
+
+/* Ensure icon also becomes white on hover */
+.nav-pills .nav-link:hover i {
+  color: #fff !important;
+}
+
+ /* Start Paper generateion Dashboard sidebar navigation style */
+
+   
+        /* Default (light mode) */
+/* Professional Gradient Button */
+.btn-gradient {
+  background: linear-gradient(135deg, #073E8C, #06b6d4); /* modern blue-cyan */
+  color: #fff !important;
+  font-weight: 600;
+  padding: 0.8rem 1.5rem;
+  border: none;
+  border-radius: 12px;
+  letter-spacing: 0.6px;
+  transition: all 0.35s ease;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+  position: relative;
+  overflow: hidden;
+  display: inline-block;
+}
+
+/* Subtle hover effect */
+.btn-gradient:hover {
+  background: linear-gradient(135deg, #06b6d4, #073E8C);
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* Active state (click) */
+.btn-gradient:active {
+  transform: scale(0.97);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Focus (accessibility) */
+.btn-gradient:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.35);
+}
+
+/* Subtle animated shine */
+.btn-gradient::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    120deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  transform: skewX(-25deg);
+  transition: all 0.6s ease;
+}
+
+.btn-gradient:hover::after {
+  left: 120%;
+}
+
+
+/*Register password eye on off css */
+.password-input-container {
+  position: relative;
+}
+
+.password-input-container input {
+  width: 100%;
+  padding-right: 2.5rem; /* room for the icon */
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #6c757d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.password-toggle-btn:hover {
+  color: #0d6efd;
+}
+
+/* Dashboard Paper generation progress bar responsiveness*/
+.progress-scroll {
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin; /* Firefox */
+  -webkit-overflow-scrolling: touch; /* Smooth scroll for mobile */
+}
+
+.progress-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.progress-scroll::-webkit-scrollbar-thumb {
+  background: #0d6efd; /* Bootstrap primary */
+  border-radius: 10px;
+}
+
+/** Npx progress bar styles*/
+#nprogress {
+  pointer-events: none;
+}
+
+#nprogress .bar {
+  background: #0070f3;
+  position: fixed;
+  z-index: 9999;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+}
+
+#nprogress .peg {
+  display: block;
+  position: absolute;
+  right: 0px;
+  width: 100px;
+  height: 100%;
+  opacity: 1.0;
+  -webkit-transform: rotate(3deg) translate(0px, -4px);
+  -ms-transform: rotate(3deg) translate(0px, -4px);
+  transform: rotate(3deg) translate(0px, -4px);
+}
+/** style to include norinastialq urdu font for admin  styles */
+/* Add this to your global CSS file */
+@font-face {
+  font-family: 'Norinastaliq';
+  src: url('/fonts/JameelNooriNastaleeqKasheeda.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.urdu-text {
+  font-family: 'Norinastaliq', 'Jameel Noori Nastaleeq', 'Urdu Typesetting', 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 1.25rem;
+  line-height: 1.8;
+  text-align: right;
+  direction: rtl;
+}
+
+textarea.urdu-text {
+  min-height: 100px;
+  font-size: 1.3rem;
+  line-height: 2;
+  resize: vertical;
+}
+
+input.urdu-text {
+  height: 45px;
+  font-size: 1.3rem;
+}
+
+.urdu-label {
+  font-family: 'Norinastaliq', 'Jameel Noori Nastaleeq', sans-serif;
+  font-size: 1.1rem;
+  direction: rtl;
+  text-align: right;
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+/** Paper Preview edit or preview mode detail smoothly toggle */
+.edit-mode-alert {
+  transition: all 0.5s ease-in-out;
+  overflow: hidden;
+}
+
+.alert-enter {
+  opacity: 1;
+  max-height: 200px;
+  padding: 1rem;
+  margin: 1rem 1rem 0 1rem;
+}
+
+.alert-exit {
+  opacity: 0;
+  max-height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+/* profile setting remove number danger double icons */
+svg.lucide-circle-alert{
+  display: none;
+}
+
+/* Dashboard recent activity style */
+.activity-item {
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.activity-item:hover {
+  background-color: #f8f9fb;
+  transform: translateY(-1px);
+}
+
+.activity-icon {
+  width: 38px;
+  height: 38px;
+  font-size: 16px;
+}
+
+/* Home Page animation effect */
+.scroll-progress-bar {
+  position: fixed;
+  top: 70px;
+  width: 100%;
+  height: 3px;
+  z-index: 999;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.scroll-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1ba699, #159380);
+}
+
+.scroll-animate {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scroll-animate.in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.zoom-in {
+  transform: scale(0.92);
+}
+
+.zoom-in.in-view {
+  transform: scale(1);
+}
+
+.feature-card:hover {
+  transform: translateY(-10px) scale(1.02);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
+}
+
+/* dashboard moving ticker css*/
+.ticker-wrapper {
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 10px 0;
+}
+
+.ticker {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+  animation: tickerMove 14s linear infinite;
+}
+
+.ticker-item {
+  font-size: 0.95rem;
+}
+
+.ticker-separator {
+  opacity: 0.6;
+}
+
+.ticker-wrapper:hover .ticker {
+  animation-play-state: paused;
+}
+@keyframes tickerMove {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+:global(.react-hot-toast) {
+  z-index: 100000 !important;
+}
+
+/** dark and light mode settings */
+/* Force text visibility based on Bootstrap's theme attribute */
+[data-bs-theme='dark'] body {
+    color: #f8f9fa !important;
+    background-color: #121212 !important;
+}
+
+[data-bs-theme='dark'] .text-muted {
+    color: #adb5bd !important;
+}
+
+/* Ensure card and sidebar text is bright */
+[data-bs-theme='dark'] .sidebar-desktop,
+[data-bs-theme='dark'] .offcanvas {
+    color: #ffffff;
+}
+
+
+@media print {
+  /* 1. Kill the height constraints from globals.css */
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important; /* Remove the gradient */
+  }
+
+  /* 2. Remove fixed headers that globals.css forces */
+  .header-nav, 
+  .scroll-progress-bar,
+  #nprogress {
+    display: none !important;
+  }
+
+  /* 3. Reset the root container spacing */
+  #root, 
+  .min-vh-100 {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* 4. Ensure text is pure black for the printer */
+  #printable-paper {
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  /* 5. Force the paper to the very top, ignoring any 
+        fixed header gaps from globals.css */
+  main {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    display: block !important;
+  }
+}

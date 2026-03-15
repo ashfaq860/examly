@@ -1,11 +1,12 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, memo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
+
 /* Dynamically load CubeSlider only on client */
 const CubeSlider = dynamic(() => import('@/components/CubeSlider'), {
   ssr: false,
@@ -15,7 +16,7 @@ const CubeSlider = dynamic(() => import('@/components/CubeSlider'), {
 export default function HomeClientWrapper() {
   const [scrollProgress, setScrollProgress] = useState(0);
 
-  /* -------------------- SCROLL PROGRESS -------------------- */
+  /* -------------------- SCROLL PROGRESS WITH DEBOUNCE -------------------- */
   useEffect(() => {
     let ticking = false;
     const onScroll = () => {
@@ -29,26 +30,36 @@ export default function HomeClientWrapper() {
       }
     };
 
-    window.addEventListener('scroll', onScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  /* -------------------- SCROLL ANIMATIONS -------------------- */
+  /* -------------------- SCROLL ANIMATIONS WITH OPTIMIZED OBSERVER -------------------- */
   useEffect(() => {
+    // Use a single observer for better performance
     const observer = new IntersectionObserver(
-      (entries, obs) => {
+      (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             entry.target.classList.add('in-view');
-            obs.unobserve(entry.target);
+            // Unobserve after animation to free memory
+            observer.unobserve(entry.target);
           }
         });
       },
-      { threshold: 0.15 }
+      { 
+        threshold: 0.1,  // Reduced from 0.15 for earlier trigger
+        rootMargin: '50px' // Prepare elements before they're visible
+      }
     );
 
-    document.querySelectorAll('[data-animate]').forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
+    const elements = document.querySelectorAll('[data-animate]');
+    elements.forEach((el) => observer.observe(el));
+    
+    return () => {
+      elements.forEach((el) => observer.unobserve(el));
+      observer.disconnect();
+    };
   }, []);
 
   return (
@@ -189,6 +200,8 @@ export default function HomeClientWrapper() {
         width={400}
         height={160}
         className="img-fluid mb-4"
+        loading="lazy"
+        style={{ height: 'auto' }}
       />
       <h2 className="display-5 fw-bold text-success">
         Student Exam Preparation
@@ -317,8 +330,8 @@ export default function HomeClientWrapper() {
   );
 }
 
-/* ================= REUSABLE COMPONENTS ================= */
-function FeatureCard({ img, title, subtitle, list, href, delay, highlight }: any) {
+/* ================= REUSABLE COMPONENTS (MEMOIZED) ================= */
+const FeatureCard = memo(function FeatureCard({ img, title, subtitle, list, href, delay, highlight }: any) {
   return (
     <div className="col-md-4">
       <div
@@ -326,7 +339,16 @@ function FeatureCard({ img, title, subtitle, list, href, delay, highlight }: any
         style={{ transitionDelay: `${delay}ms` }}
         className={`scroll-animate zoom-in card feature-card border-0 rounded-4 shadow-lg ${highlight ? 'highlight' : ''}`}
       >
-        <Image src={img} alt={title} width={400} height={320} className="card-img-top" loading="lazy" />
+        <Image 
+          src={img} 
+          alt={title} 
+          width={400} 
+          height={320} 
+          className="card-img-top" 
+          loading="lazy"
+          quality={75}
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+        />
         <div className="card-body p-4">
           <h3 className="fw-bold">{title}</h3>
           <p className="text-primary fw-semibold">{subtitle}</p>
@@ -336,9 +358,43 @@ function FeatureCard({ img, title, subtitle, list, href, delay, highlight }: any
       </div>
     </div>
   );
-}
+});
 
-function PaperLayoutCard({ title, description, youtubeId, delay }: any) {
+// Lazy load YouTube iframe placeholder
+const LazyYoutubeEmbed = memo(function LazyYoutubeEmbed({ youtubeId, title }: any) {
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  return (
+    <div className="ratio ratio-16x9 position-relative bg-dark">
+      {!isLoaded ? (
+        <div 
+          onClick={() => setIsLoaded(true)}
+          style={{
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#000',
+            color: '#fff',
+            fontSize: '1.5rem'
+          }}
+        >
+          ▶ Click to load video
+        </div>
+      ) : (
+        <iframe
+          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=0`}
+          title={title}
+          allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          loading="lazy"
+        />
+      )}
+    </div>
+  );
+});
+
+const PaperLayoutCard = memo(function PaperLayoutCard({ title, description, youtubeId, delay }: any) {
   return (
     <div className="col-md-6 col-lg-3">
       <div
@@ -346,22 +402,7 @@ function PaperLayoutCard({ title, description, youtubeId, delay }: any) {
         style={{ transitionDelay: `${delay}ms` }}
         className="scroll-animate zoom-in card paper-card h-100 border-0 shadow-lg rounded-0"
       >
-        <div className="ratio ratio-16x9 position-relative">
-          <iframe
-            src={`https://www.youtube.com/embed/${youtubeId}`}
-            title={title}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-          <div
-            className="watch-demo-overlay"
-            onClick={() =>
-              window.open(`https://www.youtube.com/watch?v=${youtubeId}`, "_blank")
-            }
-          >
-            ▶ Watch Demo
-          </div>
-        </div>
+        <LazyYoutubeEmbed youtubeId={youtubeId} title={title} />
         <div className="card-body p-3">
           <h5 className="fw-bold">{title}</h5>
           <p className="text-muted small">{description}</p>
@@ -369,18 +410,18 @@ function PaperLayoutCard({ title, description, youtubeId, delay }: any) {
       </div>
     </div>
   );
-}
+});
 
-function StudentCard({ img, title, description, btn, delay, link=null }: any) {
+const StudentCard = memo(function StudentCard({ img, title, description, btn, delay, link = null }: any) {
   const router = useRouter();
 
-  const handleClick = () => {
+  const handleClick = useCallback(() => {
     if (link) {
       router.push(link);
     } else {
       toast.success('Coming soon!');
     }
-  };
+  }, [link, router]);
 
   return (
     <div className="col-md-4">
@@ -396,6 +437,8 @@ function StudentCard({ img, title, description, btn, delay, link=null }: any) {
           height={260}
           className="card-img-top"
           loading="lazy"
+          quality={75}
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
         />
         <div className="card-body p-4">
           <h3 className="fw-bold">{title}</h3>
@@ -407,5 +450,6 @@ function StudentCard({ img, title, description, btn, delay, link=null }: any) {
       </div>
     </div>
   );
-}
+});
+
 

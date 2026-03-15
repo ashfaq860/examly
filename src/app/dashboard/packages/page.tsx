@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import AcademyLayout from '@/components/AcademyLayout';
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import Loading from '@/app/dashboard/generate-paper/loading'; 
 const supabase = createClientComponentClient();
 interface Package {
   id: string;
@@ -111,9 +112,7 @@ export default function SubscriptionPage() {
     return (
       <AcademyLayout>
         <div className="container text-center py-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
+         {<Loading />}
         </div>
       </AcademyLayout>
     );

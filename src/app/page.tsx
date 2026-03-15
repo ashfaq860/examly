@@ -1,6 +1,12 @@
 import Header from '@/components/Header';
-import Footer from '@/components/Footer';
+import dynamic from 'next/dynamic';
 import HomeClientWrapper from './HomeClientWrapper';
+
+// Lazy load Footer to improve initial page load
+const Footer = dynamic(() => import('@/components/Footer'), {
+  ssr: true,
+  loading: () => <div style={{ height: '200px' }} />,
+});
 
 export default function Home() {
   return (

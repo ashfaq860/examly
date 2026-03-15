@@ -1,0 +1,259 @@
+/* src/app/admin/subject-rules/subject-rules.css */
+
+/* Custom styles for Subject Rules page */
+.chapter-row:hover {
+  background-color: #f8f9fa;
+}
+
+.chapter-badge .badge {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.rule-input {
+  transition: all 0.2s ease;
+  border: 1px solid #dee2e6;
+  padding: 0.25rem;
+  height: 32px;
+}
+
+.rule-input:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+  transform: scale(1.05);
+}
+
+.rule-input:disabled {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+}
+
+.card {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.card-title {
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.table th {
+  font-weight: 600;
+  color: #495057;
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #dee2e6;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.table td {
+  vertical-align: middle;
+  border-color: #f1f3f4;
+}
+
+.btn {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  min-height: 32px;
+}
+
+.form-select, .form-control {
+  border-radius: 8px;
+  border: 1px solid #ced4da;
+}
+
+.form-select:focus, .form-control:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.input-group-text {
+  border-radius: 8px 0 0 8px;
+}
+
+/* Custom spinner animation */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Progress bar customizations */
+.progress {
+  border-radius: 10px;
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.progress-bar {
+  border-radius: 10px;
+}
+
+/* Badge customizations */
+.badge {
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+/* List group customizations */
+.list-group-item {
+  background-color: transparent;
+}
+
+/* Card hover effects */
+.card.shadow-sm {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card.shadow-sm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .table-responsive {
+    font-size: 0.875rem;
+  }
+  
+  .rule-input {
+    width: 50px !important;
+    font-size: 0.875rem;
+    padding: 0.25rem;
+  }
+  
+  .chapter-badge .badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  .btn-group .btn {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  .card-body {
+    padding: 1rem !important;
+  }
+  
+  .table th, .table td {
+    padding: 0.5rem !important;
+  }
+}
+
+@media (max-width: 576px) {
+  .d-flex.gap-2 {
+    gap: 0.5rem !important;
+  }
+  
+  .form-select, .form-control {
+    font-size: 0.875rem;
+  }
+  
+  .table th, .table td {
+    padding: 0.5rem 0.25rem !important;
+  }
+  
+  .btn {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* Print styles */
+@media print {
+  .btn, .input-group, .alert {
+    display: none !important;
+  }
+  
+  .card {
+    border: 1px solid #dee2e6 !important;
+    box-shadow: none !important;
+  }
+  
+  .table {
+    font-size: 12px;
+  }
+}
+
+/* Custom scrollbar for table */
+.table-responsive {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.table-responsive::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Empty state styling */
+.text-center.py-5 .text-muted {
+  color: #6c757d !important;
+}
+
+/* Alert customizations */
+.alert {
+  border-radius: 8px;
+  border: none;
+}
+
+.alert-info {
+  background-color: #e7f1ff;
+  color: #0a58ca;
+}
+
+/* Loading state */
+.btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Focus states for accessibility */
+.btn:focus, .form-control:focus, .form-select:focus {
+  outline: 2px solid #0d6efd;
+  outline-offset: 2px;
+}
+
+/* Animation for table rows */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.chapter-row {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Debug info styling */
+pre {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  overflow-x: auto;
+}

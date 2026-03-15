@@ -15,6 +15,7 @@ body{
   background: linear-gradient(180deg,#f7fbff 0%, #ffffff 100%);
   color: #0f172a;
   margin: 0;
+  padding-top: 0px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -119,7 +120,7 @@ body{
  .header-nav {
           background: white;
           color: black;
-          padding: 5px 0;
+          padding: 0.4rem 0;
           position: fixed;
           width: 100%;
           top: 0;
@@ -129,6 +130,20 @@ body{
                             linear-gradient(90deg, #3b82f6, #073E8C, #3b82f6);
           background-origin: border-box;
           background-clip: padding-box, border-box;
+        }
+        
+        .header-nav .navbar {
+          padding: 0 !important;
+        }
+        
+        .header-nav .navbar-brand {
+          padding: 0.25rem 0 !important;
+          display: flex;
+          align-items: center;
+        }
+        
+        .header-nav .navbar-nav {
+          gap: 0.2rem;
         } 
         
         .dark .header-nav {
@@ -146,13 +161,13 @@ body{
         .navbar-nav .nav-item a.nav-link,
         .navbar-nav .nav-item button.nav-link {
           color: rgba(33, 27, 41, 0.75) !important;
-          padding: 8px 16px;
+          padding: 6px 12px;
           position: relative;
           transition: color 0.3s ease;
           text-decoration: none;
           border: none;
           background: transparent;
-          font-size: 16px;
+          font-size: 14px;
           font-weight: bold;
         }
 
@@ -527,4 +542,62 @@ svg.lucide-circle-alert{
   100% {
     transform: translateX(-100%);
   }
+}
+:global(.react-hot-toast) {
+  z-index: 100000 !important;
+}
+
+/** dark and light mode settings */
+/* Force text visibility based on Bootstrap's theme attribute */
+[data-bs-theme='dark'] body {
+    color: #f8f9fa !important;
+    background-color: #121212 !important;
+}
+
+[data-bs-theme='dark'] .text-muted {
+    color: #adb5bd !important;
+}
+
+/* Ensure card and sidebar text is bright */
+[data-bs-theme='dark'] .sidebar-desktop,
+[data-bs-theme='dark'] .offcanvas {
+    color: #ffffff;
+}
+
+
+
+@media print {
+  /* Hide all navigation and UI elements */
+  .sidebar-desktop,
+  .mobile-header,
+  .offcanvas-backdrop,
+  footer,
+  .fixed-back-btn,
+  .position-fixed,
+  [class*="sticky"],
+  nav,
+  header:not(.paper-header) {
+    display: none !important;
+  }
+  
+  /* Reset body margins */
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+  
+  /* Main content area */
+  .main-canvas,
+  .container-fluid,
+  .flex-grow-1 {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+}
+/* Add this to your global styles or a style tag */
+.no-select {
+  user-select: none; /* Prevents text highlighting */
+  -webkit-user-select: none;
 }

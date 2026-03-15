@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     }
 
     if (existingProfile) {
-      console.log('Profile already exists, updating instead');
+   //   console.log('Profile already exists, updating instead');
       // Update existing profile
       const { error: updateError } = await supabaseAdmin
         .from('profiles')
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
         .eq('id', id);
 
       if (updateError) {
-        console.error('Error updating profile:', updateError);
+       // console.error('Error updating profile:', updateError);
         return NextResponse.json({ 
           error: `Failed to update profile: ${updateError.message}`,
           code: updateError.code
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
         });
 
       if (insertError) {
-        console.error("Error creating profile:", insertError);
+   //     console.error("Error creating profile:", insertError);
         
         // If there's still a foreign key error, the user might not be fully created yet
         if (insertError.code === '23503') {
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Profile created successfully' }, { status: 200 });
 
     } catch (insertErr) {
-      console.error("Insert operation failed:", insertErr);
+      //console.error("Insert operation failed:", insertErr);
       return NextResponse.json({ 
         error: 'Insert operation failed',
         details: String(insertErr)
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
 
   } catch (err) {
     const error = err instanceof Error ? err : new Error(JSON.stringify(err));
-    console.error('Create profile API error:', error.message);
+//    console.error('Create profile API error:', error.message);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

@@ -18,8 +18,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
+        {/* Preconnect to external font resources */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Load only necessary font weights for better performance */}
         <link
           href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap"
           rel="stylesheet"
@@ -27,7 +29,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
 
       <body>
-        <Toaster />
+        <Toaster 
+  position="top-center" 
+  reverseOrder={false} 
+  containerStyle={{
+    zIndex: 999999, // Higher than your modal's 9999
+  }}
+  toastOptions={{
+    // This ensures individual toasts also respect the depth
+    style: {
+      zIndex: 999999,
+    },
+  }}
+/>
         <UserProvider>
           <ClientLayoutWrapper>
             {children}

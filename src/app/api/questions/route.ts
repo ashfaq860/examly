@@ -7,184 +7,138 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
   try {
+    // --- 1. Extract and Clean Query Params ---
     const subjectId = searchParams.get('subjectId');
     const classId = searchParams.get('classId');
     const questionType = searchParams.get('questionType');
     const difficulty = searchParams.get('difficulty');
-    const chapterIds = searchParams.get('chapterIds');
-    const sourceType = searchParams.get('source_type');
-    const questionIds = searchParams.get('questionIds');
+    const chapterIdsParam = searchParams.get('chapterIds');
+    const questionIdsParam = searchParams.get('questionIds');
     const limit = parseInt(searchParams.get('limit') || '1000', 10);
     const random = searchParams.get('random') === 'true';
-    const shuffle = searchParams.get('shuffle') === 'true';
     const randomSeed = searchParams.get('randomSeed');
     const ensureRandom = searchParams.get('ensureRandom') === 'true';
-    const timestamp = searchParams.get('timestamp');
 
-    // Handle fetching by question IDs (for manual selection preview)
-    if (questionIds) {
-      const ids = questionIds.split(',').map((id) => id.trim()).filter(id => id);
-      
-      if (ids.length === 0) {
-        return NextResponse.json([], { status: 200 });
-      }
+    // --- 2. Robust Source Type Extraction ---
+    // This handles: source_type=book,past_paper OR source_type[]=book&source_type[]=past_paper
+    let sourceTypes: string[] = [];
+    const stRaw = searchParams.get('source_type');
+    const stArray = searchParams.getAll('source_type[]');
 
-      // Fetch questions by IDs - don't filter by class_id since it's not in questions table
-      let query = supabaseAdmin
+    if (stRaw) {
+      sourceTypes = stRaw.split(',').map(s => s.trim()).filter(Boolean);
+    } else if (stArray.length > 0) {
+      sourceTypes = stArray;
+    }
+
+   // console.log('Final parsed sourceTypes:', sourceTypes);
+
+    // --- 3. Handle Manual Selection (Fetching by IDs) ---
+    if (questionIdsParam) {
+      const ids = questionIdsParam.split(',').map(id => id.trim()).filter(Boolean);
+      if (ids.length === 0) return NextResponse.json([]);
+
+      const { data, error } = await supabaseAdmin
         .from('questions')
         .select(`
           *,
-          chapters (
-            id,
-            name,
-            chapterNo,
-            class_id,
-            subject_id
-          )
+          chapters (id, name, chapterNo, class_id, subject_id)
         `)
         .in('id', ids);
 
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Supabase query error:', error);
-        throw error;
-      }
-
+      if (error) throw error;
       return NextResponse.json(data || []);
     }
 
-    // Original logic for filtering by criteria
-    if (!subjectId || !questionType || !classId) {
+    // --- 4. Validation ---
+    if (!subjectId || !classId || !questionType) {
       return NextResponse.json(
-        { error: 'subjectId, classId and questionType are required when not using questionIds' },
+        { error: 'subjectId, classId and questionType are required' },
         { status: 400 }
       );
     }
 
-    // Step 1: Get chapter IDs for the given class and subject
+    // --- 5. Resolve Chapters ---
     const { data: chaptersData, error: chaptersError } = await supabaseAdmin
       .from('chapters')
       .select('id')
       .eq('subject_id', subjectId)
       .eq('class_id', classId);
 
-    if (chaptersError) {
-      console.error('Supabase chapters query error:', chaptersError);
-      throw chaptersError;
+    if (chaptersError) throw chaptersError;
+
+    const dbChapterIds = chaptersData?.map(ch => ch.id) || [];
+    if (dbChapterIds.length === 0) return NextResponse.json([]);
+
+    // Intersect with user-selected chapters if provided
+    let filteredChapterIds = dbChapterIds;
+    if (chapterIdsParam) {
+      const requestedIds = chapterIdsParam.split(',').map(id => id.trim());
+      filteredChapterIds = dbChapterIds.filter(id => requestedIds.includes(id));
+      if (filteredChapterIds.length === 0) return NextResponse.json([]);
     }
 
-    const chapterIdArray = chaptersData?.map(chapter => chapter.id) || [];
-    
-    if (chapterIdArray.length === 0) {
-      return NextResponse.json([]);
-    }
-
-    // Step 2: Get questions for these chapters
+    // --- 6. Build and Execute Query ---
     let query = supabaseAdmin
       .from('questions')
       .select(`
         *,
-        chapters (
-          id,
-          name,
-          chapterNo,
-          class_id,
-          subject_id
-        )
+        chapters (id, name, chapterNo, class_id, subject_id)
       `)
-      .in('chapter_id', chapterIdArray)
+      .in('chapter_id', filteredChapterIds)
       .eq('question_type', questionType)
       .limit(limit);
 
-    // Apply additional filters
+    // Apply Filters
     if (difficulty && difficulty !== 'any') {
       query = query.eq('difficulty', difficulty);
     }
 
-    // If specific chapterIds are provided, intersect with those
-    if (chapterIds) {
-      const specificChapterIds = chapterIds.split(',').map((id) => id.trim());
-      if (specificChapterIds.length > 0) {
-        // Filter to only include questions from both the class/subject chapters AND specific chapters
-        const filteredChapterIds = chapterIdArray.filter(id => specificChapterIds.includes(id));
-        if (filteredChapterIds.length > 0) {
-          query = query.in('chapter_id', filteredChapterIds);
-        } else {
-          // No overlap, return empty array
-          return NextResponse.json([]);
-        }
-      }
+    // Fix: Only apply source filter if it's not 'all' and contains items
+    if (sourceTypes.length > 0 && !sourceTypes.includes('all')) {
+      query = query.in('source_type', sourceTypes);
     }
 
-    if (sourceType && sourceType !== 'all') {
-      query = query.eq('source_type', sourceType);
-    }
-
-    // IMPORTANT: Declare shuffleSeed at the top level of the try block
-    let shuffleSeed = randomSeed ? parseInt(randomSeed) : Date.now();
+    // --- 7. Randomization & Fetch ---
+    let questionsData: any[] = [];
     
-    // Add order by RANDOM() if random parameter is true
     if (random) {
-      // For Supabase, we can use the RPC function for random ordering
-      // First get all the filtered questions
-      const { data: allFilteredQuestions, error: allQuestionsError } = await query;
-      
-      if (allQuestionsError) {
-        console.error('Supabase questions query error:', allQuestionsError);
-        throw allQuestionsError;
+      // For true randomness with seed, we fetch all valid candidates first
+      const { data: allQuestions, error: allQuestionsError } = await query;
+      if (allQuestionsError) throw allQuestionsError;
+
+      questionsData = allQuestions || [];
+
+      // Seeded shuffle logic
+      const seed = randomSeed ? parseInt(randomSeed) : Date.now();
+      const seededRandom = (s: number) => {
+        const x = Math.sin(s) * 10000;
+        return x - Math.floor(x);
+      };
+
+      for (let i = questionsData.length - 1; i > 0; i--) {
+        const j = Math.floor(seededRandom(seed + i) * (i + 1));
+        [questionsData[i], questionsData[j]] = [questionsData[j], questionsData[i]];
       }
 
-      let questions = allFilteredQuestions || [];
-
-      // Apply Fisher-Yates shuffle for true randomness
-      if (questions.length > 0) {
-        // Use seeded random if provided, otherwise use Math.random()
-        const seededRandom = (seed: number) => {
-          const x = Math.sin(seed) * 10000;
-          return x - Math.floor(x);
-        };
-        
-        // First pass with seeded random
-        for (let i = questions.length - 1; i > 0; i--) {
-          const j = Math.floor(seededRandom(shuffleSeed + i) * (i + 1));
-          [questions[i], questions[j]] = [questions[j], questions[i]];
-        }
-        
-        // If ensureRandom is true, add extra shuffling
-        if (ensureRandom) {
-          // Second pass of shuffling for extra randomness
-          for (let i = questions.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [questions[i], questions[j]] = [questions[j], questions[i]];
-          }
-        }
+      if (ensureRandom) {
+        questionsData.sort(() => Math.random() - 0.5);
       }
 
-      // Apply limit after shuffling
-      const limitedQuestions = questions.slice(0, limit);
-      
-      console.log(`🎲 API: Returning ${limitedQuestions.length} random questions out of ${questions.length} total`);
-      console.log(`📊 Shuffle seed: ${shuffleSeed}, Random: ${random}, EnsureRandom: ${ensureRandom}`);
-
-      return NextResponse.json(limitedQuestions);
+      questionsData = questionsData.slice(0, limit);
     } else {
-      // Non-random query - order by id to maintain consistency
-      query = query.order('id', { ascending: true });
-      
-      const { data: questionsData, error: questionsError } = await query;
-
-      if (questionsError) {
-        console.error('Supabase questions query error:', questionsError);
-        throw questionsError;
-      }
-
-      return NextResponse.json(questionsData || []);
+      // Standard fetch
+      const { data, error } = await query.order('id', { ascending: true });
+      if (error) throw error;
+      questionsData = data || [];
     }
-  } catch (error) {
-    console.error('Error fetching questions:', error);
+
+    return NextResponse.json(questionsData);
+
+  } catch (error: any) {
+   // console.error('API Error:', error.message);
     return NextResponse.json(
-      { error: 'Failed to fetch questions' },
+      { error: 'Internal Server Error', details: error.message }, 
       { status: 500 }
     );
   }

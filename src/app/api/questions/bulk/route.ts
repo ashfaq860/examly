@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
         const { data, error } = await typeQuery.limit(limit);
 
         if (error) {
-          console.error(`Error fetching ${questionType} questions:`, error);
+        //  console.error(`Error fetching ${questionType} questions:`, error);
           return [];
         }
 
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error in bulk questions API:', error);
+  //  console.error('Error in bulk questions API:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

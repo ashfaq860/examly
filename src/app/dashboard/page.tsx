@@ -1,12 +1,13 @@
+//dashboard/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AcademyLayout from '@/components/AcademyLayout';
-import ReferralSection from '@/components/ReferralSection';
 import { useUser } from '../context/userContext';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { FilePlus, BookOpen, Settings, Activity } from 'lucide-react';
+import Loading from './generate-paper/loading';
 
 interface Analytics {
   recentActivity: {
@@ -23,7 +24,7 @@ export default function AcademyDashboard() {
   const router = useRouter();
   const { trialStatus, isLoading: trialLoading } = useUser();
 
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [analytics, setAnalytics] = useState<Analytics>({ recentActivity: [] });
 
@@ -71,18 +72,18 @@ export default function AcademyDashboard() {
         console.error('Dashboard error:', err);
         router.push('/auth/login');
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
     if (!trialLoading) initDashboard();
   }, [supabase, router, trialLoading]);
 
-  if (loading || trialLoading) {
+  if (isLoading || trialLoading) {
     return (
       <AcademyLayout>
         <div className="container-fluid text-center py-5">
-          <div className="spinner-border text-primary" />
+         { <Loading />}
         </div>
       </AcademyLayout>
     );
@@ -118,20 +119,20 @@ export default function AcademyDashboard() {
           </div>
         )}
 
-        <ReferralSection referralCode={subscriptionInfo?.referralCode || ''} />
 
-        {/* Full-width Papers Left & Plan Status */}
-      <div className="alert alert-info ticker-wrapper mb-4">
-  <div className="ticker">
-    <span className="ticker-item">
-      <strong>Papers Left:</strong> {subscriptionInfo?.papersLeft}
-    </span>
-    <span className="ticker-separator">•</span>
-    <span className="ticker-item">
-      <strong>Plan Status:</strong> {subscriptionInfo?.status}
-    </span>
-  </div>
-</div>
+
+              {/* Full-width Papers Left & Plan Status */}
+            <div className="alert alert-info ticker-wrapper mb-4">
+        <div className="ticker">
+          <span className="ticker-item">
+            <strong>Papers Left:</strong> {subscriptionInfo?.papersLeft}
+          </span>
+          <span className="ticker-separator">•</span>
+          <span className="ticker-item">
+            <strong>Plan Status:</strong> {subscriptionInfo?.status}
+          </span>
+        </div>
+      </div>
 
         {/* Dashboard Cards */}
         <div className="row g-4 mb-4">
@@ -162,11 +163,11 @@ export default function AcademyDashboard() {
               style={{ borderTop: '4px solid #10b981', transition: 'transform 0.3s, box-shadow 0.3s' }}
               onMouseEnter={(e) => hoverEffect(e, true)}
               onMouseLeave={(e) => hoverEffect(e, false)}
-              onClick={() => router.push('/dashboard/generated-papers')}
+              onClick={() => router.push('/dashboard/saved-papers')}
             >
               <div className="card-body py-5 d-flex flex-column align-items-center">
                 <BookOpen size={40} className="mb-3 text-success" />
-                <h5 className="fw-bold">Generated Papers</h5>
+                <h5 className="fw-bold">Saved Papers</h5>
                 <p className="mb-0 text-muted">View all your papers</p>
               </div>
             </div>
