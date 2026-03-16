@@ -420,7 +420,7 @@ export const QuestionSelectorModal: React.FC<any> = ({
       <style jsx>{`
         :global(#react-hot-toast) { z-index: 999999 !important; }
         .app-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 12px; }
-        .app-modal-container { background: #fff; width: 100%; max-width: 950px; height: 85vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+        .app-modal-container { background: #fff; width: 100%; max-width: 950px; height: 85dvh; max-height: 90%; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
         .app-modal-header { padding: 12px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #fff; }
         .header-left { display: flex; align-items: center; gap: 12px; }
         .icon-badge { padding: 8px; background: #f1f5f9; border-radius: 8px; color: #64748b; }
@@ -475,7 +475,7 @@ export const QuestionSelectorModal: React.FC<any> = ({
         
         @media (max-width: 640px) {
           .app-modal-overlay { padding: 0px; }
-          .app-modal-container { height: 100vh; border-radius: 0; }
+          .app-modal-container { height: 100dvh; border-radius: 0; }
           .full-lbl { display: none; }
           .short-lbl { display: inline; }
           .toolbar-row-top { padding: 10px; }
