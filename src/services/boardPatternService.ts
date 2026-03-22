@@ -5,10 +5,10 @@ export class BoardPatternService {
   static getQuestionDetails(subjectName: string, className: string, currentSubject: any): BoardPatternDetails {
     const baseDetails: BoardPatternDetails = {
       mcq: {
-        count: subjectName === 'english' ? 16 : subjectName === 'urdu' ? 15 : subjectName === 'computer' ? 10 : 12,
+        count: subjectName === 'english' ? 19: subjectName === 'urdu' ? 15 : subjectName === 'computer' ? 10 : 12,
         attempt: subjectName === 'english' ? 16 : subjectName === 'urdu' ? 15 : subjectName === 'computer' ? 10 : 12,
         marks: 1,
-        total: subjectName === 'english' ? 16 : subjectName === 'urdu' ? 15 : subjectName === 'computer' ? 10 : 12
+        total: subjectName === 'english' ? 19: subjectName === 'urdu' ? 15 : subjectName === 'computer' ? 10 : 12
       },
       short: { count: 0, attempt: 0, marks: 2, total: 0 },
       long: { 

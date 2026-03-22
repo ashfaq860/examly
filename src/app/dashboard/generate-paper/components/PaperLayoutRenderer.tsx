@@ -72,48 +72,63 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
 
 
 };
-  const SectionBlock = ({ section, index }: { section: PaperSection; index: number }) => (
-    <div key={section.id} className="section-block" style={{ border: isEditMode ? "1px dashed #ccc" : "none", marginBottom: '5px' }}>
-      <SectionHeader
-        sectionId={section.id}
-        sectionIndex={index}
-        sectionType={section.type}
-        totalQuestions={section.totalQuestions}
-        attemptCount={section.attemptCount}
-        totalMarks={section.totalMarks}
-        headingFontSize={settings.headingFontSize}
-        headingFontFamily={settings.headingFontFamily}
-        paperLanguage={paperLanguage}
-        customEnHeader={section.customEnHeader}
-        customUrHeader={section.customUrHeader}
-        onHeaderChange={handleHeaderChange}
-        isEditMode={isEditMode}
-      />
-      <div className="questions-list">
-        {section?.questions?.map((q, qIdx) => (
-          <QuestionRenderer
-            key={q.id || qIdx}
-            question={q}
-            index={qIdx}
-            sectionType={section.type}
-            sectionId={section.id}
-            paperLanguage={paperLanguage}
-            isEditMode={isEditMode}
-            config={config}
-            fontSize={settings.fontSize}
-            metaFontSize={settings.metaFontSize}
-            questionFontFamily={settings.fontFamily}
-            questionLineSpacing={settings.lineHeight}
-            mcqFontSize={settings.mcqFontSize}
-            mcqLineHeight={settings.mcqLineHeight}
-            onTextChange={onTextChange}
-            renderInlineBilingual={renderInlineBilingual}
-          />
-        ))}
-      </div>
-    </div>
-  );
+const SectionBlock = ({ section, index }: { section: PaperSection; index: number }) => {
+    // Defensive check: If section is missing, render nothing
+    if (!section) return null;
 
+    // Ensure questions is always an array to prevent .map() crashes
+    const questions = Array.isArray(section.questions) ? section.questions : [];
+
+    return (
+      <div 
+        key={section.id} 
+        className="section-block" 
+        style={{ 
+          border: isEditMode ? "1px dashed #ccc" : "none", 
+          marginBottom: '5px',
+          width: '100%' 
+        }}
+      >
+        <SectionHeader
+          sectionId={section.id}
+          sectionIndex={index}
+          sectionType={section.type}
+          totalQuestions={section.totalQuestions}
+          attemptCount={section.attemptCount}
+          totalMarks={section.totalMarks}
+          headingFontSize={settings.headingFontSize}
+          headingFontFamily={settings.headingFontFamily}
+          paperLanguage={paperLanguage}
+          customEnHeader={section.customEnHeader}
+          customUrHeader={section.customUrHeader}
+          onHeaderChange={handleHeaderChange}
+          isEditMode={isEditMode}
+        />
+        <div className="questions-list">
+          {questions.map((q, qIdx) => (
+            <QuestionRenderer
+              key={q?.id || `q-${index}-${qIdx}`}
+              question={q}
+              index={qIdx}
+              sectionType={section.type}
+              sectionId={section.id}
+              paperLanguage={paperLanguage}
+              isEditMode={isEditMode}
+              config={config}
+              fontSize={settings.fontSize}
+              metaFontSize={settings.metaFontSize}
+              questionFontFamily={settings.fontFamily}
+              questionLineSpacing={settings.lineHeight}
+              mcqFontSize={settings.mcqFontSize}
+              mcqLineHeight={settings.mcqLineHeight}
+              onTextChange={onTextChange}
+              renderInlineBilingual={renderInlineBilingual}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  };
  const DashedLine = () => (
   <div 
     className="w-100 my-2 border-top border-dark position-relative" 
@@ -169,8 +184,7 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
         );
       });
     }
-
-    if (currentLayout === 'separate') {
+if (currentLayout === 'separate') {
       return (
         <>
           {mcqs.length > 0 && (
@@ -188,7 +202,6 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
         </>
       );
     }
-
     return (
       <div className="paper-sheet print-break" style={sheetBaseStyle}>
         <PaperHeader totalMarks={totalMarks} subject={subject} paperSections={paperSections} isEditMode={isEditMode} settings={settings} paperLanguage={paperLanguage} config={config} currentLayout={currentLayout} currentClass={currentClass} profile={profile} />
@@ -196,7 +209,6 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
       </div>
     );
   };
-
   return (
     <div className="paper-builder-renderer  bg-secondary-subtle">
       <style>{`
@@ -212,7 +224,6 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
             size: A4;
             margin: 0mm !important; /* Margin handled by padding in sheetBaseStyle */
           }
-          
           body {
             margin: 0 !important;
             padding: 0 !important;
@@ -220,14 +231,12 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-
-          .paper-builder-renderer {
+         .paper-builder-renderer {
             padding: 0 !important;
             margin: 0 !important;
             background: white !important;
           }
-
-          .paper-sheet {
+         .paper-sheet {
             margin: 0 !important;
             border: none !important;
             box-shadow: none !important;
@@ -236,14 +245,12 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
             page-break-after: always !important;
             display: flex !important;
           }
-
-          /* Hide UI elements */
+         /* Hide UI elements */
           .no-print, nav, .sidebar, .btn, .fixed, .sticky {
             display: none !important;
           }
         }
       `}</style>
-      
       {renderContent()}
     </div>
   );

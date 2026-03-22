@@ -1,6 +1,6 @@
 // components/QuestionForm.tsx
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import toast from 'react-hot-toast';
 import { Editor } from '@tinymce/tinymce-react';
@@ -30,9 +30,9 @@ type QuestionType =
   | 'sentence_completion'
   | 'directInDirect'
   | 'activePassive'
-  | 'darkhwast_khat'       // درخواست/خط
-  | 'kahani_makalma'       // کہانی/مکالمہ
-  | 'Nasarkhulasa_markziKhyal'; // نثر کا خلاصہ یا مرکزی خیال
+  | 'darkhwast_khat'
+  | 'kahani_makalma'
+  | 'Nasarkhulasa_markziKhyal';
 
 export default function QuestionForm({
   question,
@@ -43,10 +43,10 @@ export default function QuestionForm({
   classSubjects,
   onClose
 }: QuestionFormProps) {
-  const toId = (v: any) => (v === null || v === undefined ? '' : String(v));
+  const toId = useCallback((v: any) => (v === null || v === undefined ? '' : String(v)), []);
 
   // Initial form state for text fields only
-  const initialTextFields = {
+  const initialTextFields = useMemo(() => ({
     question_text: '',
     question_text_ur: '',
     option_a: '',
@@ -68,16 +68,14 @@ export default function QuestionForm({
     poetry_text: '',
     prose_text: '',
     sentence_text: '',
-    // New fields for direct/indirect and active/passive
     direct_sentence: '',
     indirect_sentence: '',
     active_sentence: '',
     passive_sentence: '',
-    // New fields for Urdu subject types
-    darkhwast_khat_text: '',        // درخواست/خط
-    kahani_makalma_text: '',        // کہانی/مکالمہ
-    nasar_khulasa_text: '',         // نثر کا خلاصہ یا مرکزی خیال
-  };
+    darkhwast_text: '',
+    kahani_text: '',
+    nasar_text: '',
+  }), []);
 
   const [formData, setFormData] = useState({
     ...initialTextFields,
@@ -103,7 +101,7 @@ export default function QuestionForm({
   const TINYMCE_SCRIPT_SRC = 'https://cdn.jsdelivr.net/npm/tinymce@6.8.3/tinymce.min.js';
   
   // TinyMCE configuration for English/Math/Science (GPL version)
-  const englishEditorConfig = {
+  const englishEditorConfig = useMemo(() => ({
     height: 300,
     menubar: true,
     plugins: [
@@ -117,9 +115,7 @@ export default function QuestionForm({
       'bullist numlist outdent indent | removeformat help',
     content_style: 'body { font-family: Helvetica, Arial, sans-serif; font-size: 16px; }',
     directionality: 'ltr',
-    // Remove license key check for GPL version
     license_key: 'gpl',
-    // Enable file upload for images
     images_upload_url: '/api/upload',
     images_upload_handler: async (blobInfo: any) => {
       try {
@@ -138,10 +134,10 @@ export default function QuestionForm({
         return '';
       }
     }
-  };
+  }), []);
 
   // TinyMCE configuration for Urdu (RTL)
-  const urduEditorConfig = {
+  const urduEditorConfig = useMemo(() => ({
     ...englishEditorConfig,
     content_style: 'body { font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif; font-size: 16pt; direction: rtl; }',
     directionality: 'rtl',
@@ -149,32 +145,32 @@ export default function QuestionForm({
       'undo redo | blocks | bold italic underline strikethrough | ' +
       'forecolor backcolor | alignright aligncenter alignleft alignjustify | ' +
       'bullist numlist outdent indent | removeformat help',
-  };
+  }), [englishEditorConfig]);
 
   // Check if selected subject is English
-  const isEnglishSubject = () => {
+  const isEnglishSubject = useCallback(() => {
     const selectedSubject = subjects.find(s => toId(s.id) === formData.subject_id);
     return selectedSubject?.name?.toLowerCase().includes('english') || false;
-  };
+  }, [formData.subject_id, subjects, toId]);
 
   // Check if selected subject is Urdu
-  const isUrduSubject = () => {
+  const isUrduSubject = useCallback(() => {
     const selectedSubject = subjects.find(s => toId(s.id) === formData.subject_id);
     return selectedSubject?.name?.toLowerCase().includes('urdu') || false;
-  };
+  }, [formData.subject_id, subjects, toId]);
 
   // Check if subject is Math/Science
-  const isMathScienceSubject = () => {
+  const isMathScienceSubject = useCallback(() => {
     const selectedSubject = subjects.find(s => toId(s.id) === formData.subject_id);
     const subjectName = selectedSubject?.name?.toLowerCase() || '';
     return subjectName.includes('math') || 
            subjectName.includes('physics') || 
            subjectName.includes('chemistry') ||
            subjectName.includes('science');
-  };
+  }, [formData.subject_id, subjects, toId]);
 
   // Function to reset only text fields
-  const resetTextFields = () => {
+  const resetTextFields = useCallback(() => {
     setFormData(prev => ({
       ...prev,
       question_text: '',
@@ -189,7 +185,6 @@ export default function QuestionForm({
       option_d_ur: '',
       answer_text: '',
       answer_text_ur: '',
-      // Form-only fields
       passage_text: '',
       passage_text_ur: '',
       idiom_phrase: '',
@@ -201,16 +196,16 @@ export default function QuestionForm({
       indirect_sentence: '',
       active_sentence: '',
       passive_sentence: '',
-      darkhwast_khat_text: '',
-      kahani_makalma_text: '',
-      nasar_khulasa_text: '',
+      darkhwast_text: '',
+      kahani_text: '',
+      nasar_text: '',
       correct_option: (prev.question_type === 'mcq') ? '' : prev.correct_option,
       passage_questions_count: 1,
     }));
-  };
+  }, []);
 
   // Function to translate English to Urdu using MyMemory API
-  const translateToUrdu = async (text: string): Promise<string> => {
+  const translateToUrdu = useCallback(async (text: string): Promise<string> => {
     if (!text) return '';
     
     try {
@@ -235,10 +230,10 @@ export default function QuestionForm({
       console.error('Translation error:', err);
       return text;
     }
-  };
+  }, []);
 
   // Manual translation function (only for non-English/Urdu subjects)
-  const handleTranslateAll = async () => {
+  const handleTranslateAll = useCallback(async () => {
     if (!isEnglishSubject() && !isUrduSubject()) {
       setIsTranslating(true);
       try {
@@ -284,12 +279,9 @@ export default function QuestionForm({
         setIsTranslating(false);
       }
     }
-  };
+  }, [isEnglishSubject, isUrduSubject, formData, translateToUrdu]);
 
-  // Check if we're in edit mode
-  const isEditMode = Boolean(question);
-
-  // Initialize form (Edit mode)
+  // Initialize form (Edit mode) - Fixed dependency array
   useEffect(() => {
     if (!question) return;
 
@@ -305,11 +297,11 @@ export default function QuestionForm({
     let indirectSentence = '';
     let activeSentence = '';
     let passiveSentence = '';
+    let darkhwastText = '';
+    let kahaniText = '';
+    let nasarText = '';
     let passageQuestionText = '';
     let passageQuestionTextUr = '';
-    let darkhwastKhatText = '';
-    let kahaniMakalmaText = '';
-    let nasarKhulasaText = '';
 
     // Parse specialized fields from stored text
     if (question.question_type === 'poetry_explanation' && question.question_text_ur) {
@@ -318,8 +310,6 @@ export default function QuestionForm({
     } else if (question.question_type === 'prose_explanation' && question.question_text_ur) {
       const match = question.question_text_ur.match(/اس نثر پارے کی تشریح کریں: (.*)/);
       proseText = match ? match[1] : question.question_text_ur;
-    } else if (question.question_type === 'Nasarkhulasa_markziKhyal' && question.question_text_ur) {
-      nasarKhulasaText = question.question_text_ur;
     } else if ((question.question_type === 'sentence_correction' || question.question_type === 'sentence_completion') && question.question_text_ur) {
       const match = question.question_text_ur.match(/(درج ذیل جملے کو درست کریں|درج ذیل جملے کو مکمل کریں): (.*)/);
       sentenceText = match ? match[2] : question.question_text_ur;
@@ -335,6 +325,12 @@ export default function QuestionForm({
       const match = question.question_text.match(/Convert the following active voice into passive voice: (.*)/);
       activeSentence = match ? match[1] : question.question_text.replace('Convert the following active voice into passive voice: ', '');
       passiveSentence = question.answer_text || '';
+    } else if (question.question_type === 'darkhwast_khat' && question.question_text_ur) {
+      darkhwastText = question.question_text_ur;
+    } else if (question.question_type === 'kahani_makalma' && question.question_text_ur) {
+      kahaniText = question.question_text_ur;
+    } else if (question.question_type === 'Nasarkhulasa_markziKhyal' && question.question_text_ur) {
+      nasarText = question.question_text_ur;
     } else if (question.question_type === 'passage') {
       // Parse passage and question from stored text
       if (question.question_text) {
@@ -348,29 +344,12 @@ export default function QuestionForm({
         passageTextUr = parts[0] || '';
         passageQuestionTextUr = parts[1] || '';
       }
-    } else if (question.question_type === 'darkhwast_khat' && question.question_text_ur) {
-      darkhwastKhatText = question.question_text_ur;
-    } else if (question.question_type === 'kahani_makalma' && question.question_text_ur) {
-      kahaniMakalmaText = question.question_text_ur;
     }
 
-    // Prefer deriving class via class_subject_id (authoritative)
-    const fromClassSubjectLink = classSubjects.find(
-      (cs) => toId(cs.id) === toId(question.class_subject_id)
-    );
-    // Fallbacks if class_subject_id missing in question payload
-    const fromSubjectMap = classSubjects.find(
-      (cs) => toId(cs.subject_id) === toId(question.subject_id)
-    );
-    const fromSubjectJoin = toId(
-      question.subject?.class_subjects?.[0]?.class_id
-    );
-
-    const derivedClassId =
-      toId(fromClassSubjectLink?.class_id) ||
-      toId(fromSubjectMap?.class_id) ||
-      fromSubjectJoin ||
-      '';
+    // Get topic info to derive class and subject
+    const currentTopic = topics.find(t => toId(t.id) === toId(question.topic_id));
+    const currentChapter = currentTopic ? chapters.find(c => toId(c.id) === toId(currentTopic.chapter_id)) : null;
+    const classSubject = currentChapter ? classSubjects.find(cs => toId(cs.id) === toId(currentChapter.class_subject_id)) : null;
 
     setFormData({
       question_text: passageQuestionText || question.question_text || '',
@@ -384,9 +363,9 @@ export default function QuestionForm({
       option_c_ur: question.option_c_ur || '',
       option_d_ur: question.option_d_ur || '',
       correct_option: question.correct_option || '',
-      class_id: derivedClassId,
-      subject_id: toId(question.subject_id) || '',
-      chapter_id: toId(question.chapter_id) || '',
+      class_id: toId(classSubject?.class_id) || '',
+      subject_id: toId(classSubject?.subject_id) || '',
+      chapter_id: toId(currentChapter?.id) || '',
       topic_id: toId(question.topic_id) || '',
       difficulty: question.difficulty || 'medium',
       question_type: (question.question_type || 'mcq') as QuestionType,
@@ -401,17 +380,17 @@ export default function QuestionForm({
       idiom_phrase_explanation: idiomPhraseExplanation,
       poetry_text: poetryText,
       prose_text: proseText,
-      nasar_khulasa_text: nasarKhulasaText,
       sentence_text: sentenceText,
       direct_sentence: directSentence,
       indirect_sentence: indirectSentence,
       active_sentence: activeSentence,
       passive_sentence: passiveSentence,
-      darkhwast_khat_text: darkhwastKhatText,
-      kahani_makalma_text: kahaniMakalmaText,
+      darkhwast_text: darkhwastText,
+      kahani_text: kahaniText,
+      nasar_text: nasarText,
       passage_questions_count: 1,
     });
-  }, [question, classSubjects]);
+  }, [question, classSubjects, chapters, topics, toId]); // Fixed dependencies
 
   // Filter subjects when class changes
   useEffect(() => {
@@ -437,7 +416,7 @@ export default function QuestionForm({
         setFormData((prev) => ({ ...prev, subject_id: '', chapter_id: '', topic_id: '' }));
       }
     }
-  }, [formData.class_id, subjects, classSubjects]);
+  }, [formData.class_id, subjects, classSubjects, toId]);
 
   // Filter chapters when class and subject change
   useEffect(() => {
@@ -473,7 +452,7 @@ export default function QuestionForm({
         setFormData((prev) => ({ ...prev, chapter_id: '', topic_id: '' }));
       }
     }
-  }, [formData.class_id, formData.subject_id, chapters, classSubjects]);
+  }, [formData.class_id, formData.subject_id, chapters, classSubjects, toId]);
 
   // Filter topics when chapter changes
   useEffect(() => {
@@ -497,27 +476,14 @@ export default function QuestionForm({
         setFormData((prev) => ({ ...prev, topic_id: '' }));
       }
     }
-  }, [formData.chapter_id, topics]);
+  }, [formData.chapter_id, topics, toId]);
 
   // Submit
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Determine class_subject_id for the selected class + subject
-      const classSubject = classSubjects.find(
-        (cs) =>
-          toId(cs.class_id) === formData.class_id &&
-          toId(cs.subject_id) === formData.subject_id
-      );
-      
-      if (!classSubject) {
-        toast.error('Please select a valid class and subject combination');
-        setLoading(false);
-        return;
-      }
-
       const { data: { user } } = await supabase.auth.getUser();
       const { data: profile } = await supabase
         .from('profiles')
@@ -527,14 +493,11 @@ export default function QuestionForm({
 
       // Build payload based on question type and subject
       const basePayload = {
-        subject_id: formData.subject_id || null,
-        chapter_id: formData.chapter_id || null,
         topic_id: formData.topic_id || null,
         difficulty: formData.difficulty,
         question_type: formData.question_type,
         source_type: formData.source_type,
         source_year: formData.source_year ? parseInt(formData.source_year) : null,
-        class_subject_id: classSubject.id,
         created_by: profile?.id,
       };
 
@@ -746,42 +709,7 @@ export default function QuestionForm({
             };
             break;
 
-          case 'Nasarkhulasa_markziKhyal':
-            typeSpecificPayload = {
-              question_text: null,
-              question_text_ur: formData.nasar_khulasa_text,
-              answer_text: null,
-              answer_text_ur: formData.answer_text_ur,
-              option_a: null,
-              option_b: null,
-              option_c: null,
-              option_d: null,
-              option_a_ur: null,
-              option_b_ur: null,
-              option_c_ur: null,
-              option_d_ur: null,
-              correct_option: null,
-            };
-            break;
-
           case 'short':
-            typeSpecificPayload = {
-              question_text: null,
-              question_text_ur: formData.question_text_ur,
-              answer_text: null,
-              answer_text_ur: formData.answer_text_ur,
-              option_a: null,
-              option_b: null,
-              option_c: null,
-              option_d: null,
-              option_a_ur: null,
-              option_b_ur: null,
-              option_c_ur: null,
-              option_d_ur: null,
-              correct_option: null,
-            };
-            break;
-
           case 'long':
             typeSpecificPayload = {
               question_text: null,
@@ -800,60 +728,7 @@ export default function QuestionForm({
             };
             break;
 
-          case 'darkhwast_khat':
-            typeSpecificPayload = {
-              question_text: null,
-              question_text_ur: formData.darkhwast_khat_text,
-              answer_text: null,
-              answer_text_ur: formData.answer_text_ur,
-              option_a: null,
-              option_b: null,
-              option_c: null,
-              option_d: null,
-              option_a_ur: null,
-              option_b_ur: null,
-              option_c_ur: null,
-              option_d_ur: null,
-              correct_option: null,
-            };
-            break;
-
-          case 'kahani_makalma':
-            typeSpecificPayload = {
-              question_text: null,
-              question_text_ur: formData.kahani_makalma_text,
-              answer_text: null,
-              answer_text_ur: formData.answer_text_ur,
-              option_a: null,
-              option_b: null,
-              option_c: null,
-              option_d: null,
-              option_a_ur: null,
-              option_b_ur: null,
-              option_c_ur: null,
-              option_d_ur: null,
-              correct_option: null,
-            };
-            break;
-
           case 'sentence_correction':
-            typeSpecificPayload = {
-              question_text: null,
-              question_text_ur: formData.sentence_text,
-              answer_text: null,
-              answer_text_ur: formData.answer_text_ur,
-              option_a: null,
-              option_b: null,
-              option_c: null,
-              option_d: null,
-              option_a_ur: null,
-              option_b_ur: null,
-              option_c_ur: null,
-              option_d_ur: null,
-              correct_option: null,
-            };
-            break;
-
           case 'sentence_completion':
             typeSpecificPayload = {
               question_text: null,
@@ -876,6 +751,60 @@ export default function QuestionForm({
             typeSpecificPayload = {
               question_text: null,
               question_text_ur: `${formData.passage_text_ur}\n\nQUESTION: ${formData.question_text_ur}`,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'darkhwast_khat':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: formData.darkhwast_text,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'kahani_makalma':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: formData.kahani_text,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'Nasarkhulasa_markziKhyal':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: formData.nasar_text,
               answer_text: null,
               answer_text_ur: formData.answer_text_ur,
               option_a: null,
@@ -957,20 +886,20 @@ export default function QuestionForm({
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData, isEnglishSubject, isUrduSubject, question, resetTextFields]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  }, []);
 
   // Special handler for TinyMCE editor changes
-  const handleEditorChange = (content: string, fieldName: string) => {
+  const handleEditorChange = useCallback((content: string, fieldName: string) => {
     setFormData(prev => ({ ...prev, [fieldName]: content }));
-  };
+  }, []);
 
   // Get available question types based on subject
-  const getAvailableQuestionTypes = () => {
+  const getAvailableQuestionTypes = useCallback(() => {
     if (isEnglishSubject()) {
       return [
         { value: 'mcq', label: 'Multiple Choice' },
@@ -988,14 +917,14 @@ export default function QuestionForm({
         { value: 'mcq', label: 'MCQ (اردو)' },
         { value: 'poetry_explanation', label: 'اشعار کی تشریح' },
         { value: 'prose_explanation', label: 'نثرپاروں کی تشریح' },
-        { value: 'Nasarkhulasa_markziKhyal', label: 'نثر کا خلاصہ یا مرکزی خیال' },
         { value: 'short', label: 'مختصر سوالات' },
-        { value: 'long', label: 'نظم کا خلاصہ / مرکزی خیال' },
-        { value: 'darkhwast_khat', label: 'درخواست/خط' },
-        { value: 'kahani_makalma', label: 'کہانی/مکالمہ' },
+        { value: 'long', label: 'تفصیلی جوابات' },
         { value: 'sentence_correction', label: 'جملوں کی درستگی' },
         { value: 'sentence_completion', label: 'جملوں کی تکمیل' },
         { value: 'passage', label: 'نثر پارہ اور سوالات' },
+        { value: 'darkhwast_khat', label: 'درخواست / خط' },
+        { value: 'kahani_makalma', label: 'کہانی / مکالمہ' },
+        { value: 'Nasarkhulasa_markziKhyal', label: 'نثر / خلاصہ / مرکزی خیال' },
       ];
     } else {
       return [
@@ -1004,10 +933,10 @@ export default function QuestionForm({
         { value: 'long', label: 'Long Answer' },
       ];
     }
-  };
+  }, [isEnglishSubject, isUrduSubject]);
 
   // Helper function to determine which fields to show based on question type
-  const shouldShowQuestionTextField = () => {
+  const shouldShowQuestionTextField = useCallback(() => {
     if (isEnglishSubject()) {
       return !['translate_urdu', 'translate_english', 'idiom_phrases', 'directInDirect', 'activePassive', 'passage'].includes(formData.question_type);
     } else if (isUrduSubject()) {
@@ -1015,13 +944,29 @@ export default function QuestionForm({
     } else {
       return true;
     }
-  };
+  }, [isEnglishSubject, isUrduSubject, formData.question_type]);
+
+  // Sort classes function for consistent ordering
+  const sortedClasses = useMemo(() => {
+    return [...classes].sort((a, b) => {
+      const aNum = parseInt(a.name);
+      const bNum = parseInt(b.name);
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return aNum - bNum;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [classes]);
 
   return (
     <form onSubmit={handleSubmit}>
       <div className="modal-body">
-        <div className="row g-3">
-          {/* Selection Fields First */}
+        {/* Selection Fields Section - Moved to Top */}
+        <div className="row g-3 mb-4">
+          <div className="col-12">
+            <h5 className="mb-3">Question Configuration</h5>
+            <hr />
+          </div>
           
           {/* Class */}
           <div className="col-md-6">
@@ -1034,7 +979,7 @@ export default function QuestionForm({
               required
             >
               <option value="">Select Class</option>
-              {classes.map((cls) => (
+              {sortedClasses.map((cls) => (
                 <option key={toId(cls.id)} value={toId(cls.id)}>
                   {cls.name}
                   {cls.description ? ` — ${cls.description}` : ''}
@@ -1186,15 +1131,15 @@ export default function QuestionForm({
               />
             </div>
           )}
+        </div>
 
-          {/* Question Text Areas - Now after selection fields */}
-          
-          {/* Separator */}
-          <div className="col-12 mt-3 mb-2">
+        {/* Question Content Section */}
+        <div className="row g-3">
+          <div className="col-12">
+            <h5 className="mb-3">Question Content</h5>
             <hr />
-            <h5>Question Content</h5>
           </div>
-
+          
           {/* Question fields based on subject */}
           {isEnglishSubject() && (
             <>
@@ -1364,23 +1309,8 @@ export default function QuestionForm({
                 </>
               )}
 
-              {/* Nasar Khulasa Markzi Khyal */}
-              {formData.question_type === 'Nasarkhulasa_markziKhyal' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">نثر کا خلاصہ یا مرکزی خیال *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.nasar_khulasa_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'nasar_khulasa_text')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* Short Questions */}
-              {formData.question_type === 'short' && (
+              {/* Short and Long Questions */}
+              {(formData.question_type === 'short' || formData.question_type === 'long') && (
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">سوال *</label>
@@ -1388,51 +1318,6 @@ export default function QuestionForm({
                       tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.question_text_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* Long Questions (نظم کا خلاصہ / مرکزی خیال) */}
-              {formData.question_type === 'long' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">نظم کا خلاصہ / مرکزی خیال *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.question_text_ur}
-                      onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* درخواست/خط */}
-              {formData.question_type === 'darkhwast_khat' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">درخواست/خط کا متن *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.darkhwast_khat_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'darkhwast_khat_text')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* کہانی/مکالمہ */}
-              {formData.question_type === 'kahani_makalma' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">کہانی/مکالمہ کا متن *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.kahani_makalma_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'kahani_makalma_text')}
                       init={urduEditorConfig}
                     />
                   </div>
@@ -1479,6 +1364,51 @@ export default function QuestionForm({
                   </div>
                 </>
               )}
+
+              {/* Darkhwast/Khat */}
+              {formData.question_type === 'darkhwast_khat' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">درخواست/خط کا متن *</label>
+                    <Editor
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                      value={formData.darkhwast_text}
+                      onEditorChange={(content) => handleEditorChange(content, 'darkhwast_text')}
+                      init={urduEditorConfig}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Kahani/Makalma */}
+              {formData.question_type === 'kahani_makalma' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">کہانی/مکالمہ کا متن *</label>
+                    <Editor
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                      value={formData.kahani_text}
+                      onEditorChange={(content) => handleEditorChange(content, 'kahani_text')}
+                      init={urduEditorConfig}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Nasarkhulasa/Markzi Khyal */}
+              {formData.question_type === 'Nasarkhulasa_markziKhyal' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">نثر/خلاصہ/مرکزی خیال *</label>
+                    <Editor
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                      value={formData.nasar_text}
+                      onEditorChange={(content) => handleEditorChange(content, 'nasar_text')}
+                      init={urduEditorConfig}
+                    />
+                  </div>
+                </>
+              )}
             </>
           )}
 
@@ -1508,14 +1438,13 @@ export default function QuestionForm({
               </div>
             </>
           )}
+        </div>
 
-          {/* Options and other fields */}
+        {/* Options Section for MCQ */}
+        <div className="row g-3 mt-2">
+          {/* English and Other Subjects MCQ Options */}
           {(formData.question_type === 'mcq' && (isEnglishSubject() || (!isEnglishSubject() && !isUrduSubject()))) && (
             <>
-              <div className="col-12 mt-3 mb-2">
-                <hr />
-                <h5>Multiple Choice Options</h5>
-              </div>
               <div className="col-md-6">
                 <label className="form-label">Option A (English) *</label>
                 <Editor
@@ -1663,10 +1592,6 @@ export default function QuestionForm({
           {/* Urdu Subject MCQ Options */}
           {formData.question_type === 'mcq' && isUrduSubject() && (
             <>
-              <div className="col-12 mt-3 mb-2">
-                <hr />
-                <h5 className="urdu-text" style={{ direction: 'rtl' }}>آپشنز</h5>
-              </div>
               <div className="col-md-6">
                 <label className="form-label urdu-label">آپشن اے (اردو) *</label>
                 <Editor
@@ -1749,10 +1674,6 @@ export default function QuestionForm({
           {/* Answer fields for non-MCQ questions */}
           {formData.question_type !== 'mcq' && (
             <>
-              <div className="col-12 mt-3 mb-2">
-                <hr />
-                <h5>Answer</h5>
-              </div>
               {isEnglishSubject() && (
                 <div className="col-md-12">
                   <label className="form-label">Answer (English) *</label>

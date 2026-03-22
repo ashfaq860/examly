@@ -32,7 +32,7 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const { trialStatus, isLoading } = useUser();
-useEffect(() => {
+/*useEffect(() => {
   const handleContextMenu = (e: MouseEvent) => {
     e.preventDefault();
   };
@@ -44,6 +44,7 @@ useEffect(() => {
     document.removeEventListener("contextmenu", handleContextMenu);
   };
 }, []);
+*/
   useEffect(() => {
     const loadUser = async () => {
       const { data } = await supabase.auth.getSession();
@@ -210,7 +211,7 @@ useEffect(() => {
 
         {/* MAIN CONTENT */}
         <main className="flex-grow-1 d-flex flex-column min-vh-100 overflow-hidden">
-          <div className="p-3 p-lg-5 flex-grow-1">
+          <div className="p-0 p-lg-5 flex-grow-1">
             <div className="container-fluid max-w-7xl">
                {children}
             </div>

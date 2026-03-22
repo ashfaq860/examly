@@ -48,8 +48,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   useEffect(() => {
     const scrollEl = scrollRef.current;
     if (!scrollEl) return;
-
-    // Monitor resize of the element itself, not just the window
+ // Monitor resize of the element itself, not just the window
     const resizeObserver = new ResizeObserver(() => checkScroll());
     resizeObserver.observe(scrollEl);
     

@@ -1,7 +1,6 @@
-// src/app/api/subjects/route.ts
 import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-import { supabase } from '@/lib/supabaseClient';
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const classId = searchParams.get('classId');
@@ -14,31 +13,37 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { data, error } = await supabase
+    /**
+     * OPTIMIZED QUERY:
+     * We query 'class_subjects' but use the inner join syntax to 
+     * pull the actual subject details in one go.
+     */
+    const { data, error } = await supabaseAdmin
       .from('class_subjects')
-      .select('subject_id')
+      .select(`
+        id,
+        subject:subjects (
+          id,
+          name,
+          name_ur,
+          description
+        )
+      `)
       .eq('class_id', classId);
 
     if (error) throw error;
 
-    const subjectIds = data.map(item => item.subject_id);
-    
-    if (subjectIds.length === 0) {
-      return NextResponse.json([]);
-    }
-    
-    const { data: subjects, error: subjectsError } = await supabase
-      .from('subjects')
-      .select('*')
-      .in('id', subjectIds);
+    // Flatten the data so the frontend receives an array of subject objects
+    // This removes the "subject" nesting created by the join
+    const formattedSubjects = data
+      ?.map((item: any) => item.subject)
+      .filter(Boolean) || [];
 
-    if (subjectsError) throw subjectsError;
-
-    return NextResponse.json(subjects);
-  } catch (error) {
-    console.error('Error fetching subjects:', error);
+    return NextResponse.json(formattedSubjects);
+  } catch (error: any) {
+    console.error('Error fetching subjects via join:', error.message);
     return NextResponse.json(
-      { error: 'Failed to fetch subjects' },
+      { error: 'Failed to fetch subjects', details: error.message },
       { status: 500 }
     );
   }

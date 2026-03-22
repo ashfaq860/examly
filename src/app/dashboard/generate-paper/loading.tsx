@@ -1,76 +1,92 @@
-//app/dashboard/generate-paper/loading.tsx
 "use client";
 import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
 
-export default function Loading() {
-  // Flapping animation settings
+// Added a prop to control if it should be full screen or local
+export default function Loading({ fullScreen = false, message = "Loading..." }: { fullScreen?: boolean; message?: string }) {
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsReady(true), 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const wingTransition = {
-    duration: 0.8,
+    duration: 0.5,
     repeat: Infinity,
     repeatType: "mirror" as const,
     ease: "easeInOut",
   };
 
   return (
-    <div className="d-flex flex-column justify-content-center align-items-center" style={{ height: '80vh' }}>
-      <div className="position-relative" style={{ width: '200px', height: '200px' }}>
+    <div 
+      className={`d-flex flex-column justify-content-center align-items-center 
+        ${fullScreen ? 'position-fixed top-0 start-0 w-100 vh-100 bg-white' : 'w-100 h-100 py-5'}`} 
+      style={{ zIndex: 9999, overflow: 'hidden', minHeight: fullScreen ? 'auto' : '300px' }}
+    >
+      <motion.div 
+        className="position-relative" 
+        style={{ 
+          width: fullScreen ? '200px' : '120px', // Smaller scale when inside modal
+          height: fullScreen ? '200px' : '120px', 
+          transformStyle: 'preserve-3d' 
+        }}
+        animate={isReady ? { 
+          x: [0, -50, 1000], 
+          y: [0, 50, -1000], 
+          scale: [1, 1.2, 0.3],
+          opacity: [1, 1, 0],
+          transition: { duration: 1.2, ease: "easeIn" }
+        } : { 
+          y: [0, -10, 0] 
+        }}
+        transition={!isReady ? { duration: 2, repeat: Infinity } : {}}
+      >
         
-        {/* PIECE 1: Left Wing */}
+        {/* LEFT WING */}
         <motion.div
-          animate={{ 
-            rotateY: [0, 45], // Flaps "back" in 3D space
-            skewY: [0, -10],  // Adds a natural organic lift
-          }}
+          animate={{ rotateY: [0, 50] }}
           transition={wingTransition}
           className="position-absolute w-100 h-100"
           style={{
-            clipPath: 'inset(0 66% 0 0)',
-            transformOrigin: 'center', // Pivots from the edge of the center pillar
+            clipPath: 'inset(0 65% 0 0)',
+            transformOrigin: '35% center',
+            backfaceVisibility: 'hidden'
           }}
         >
-          <img src="/loading.png" alt="logo-left" className="w-100 h-100 object-fit-contain" />
+          <img src="/loading.png" alt="wing" className="w-100 h-100 object-fit-contain" />
         </motion.div>
 
-        {/* PIECE 2: Center Pillar (Body) */}
+        {/* CENTER BODY */}
         <motion.div
-          animate={{ 
-            y: [0, -10, 0], // Subtle bobbing up and down
-          }}
-          transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
           className="position-absolute w-100 h-100"
-          style={{
-            clipPath: 'inset(0 34% 0 34%)',
-          }}
+          style={{ clipPath: 'inset(0 33% 0 33%)' }}
         >
-          <img src="/loading.png" alt="logo-center" className="w-100 h-100 object-fit-contain" />
+          <img src="/loading.png" alt="body" className="w-100 h-100 object-fit-contain" />
         </motion.div>
 
-        {/* PIECE 3: Right Wing */}
+        {/* RIGHT WING */}
         <motion.div
-          animate={{ 
-            rotateY: [0, -45], 
-            skewY: [0, 10],
-          }}
+          animate={{ rotateY: [0, -50] }}
           transition={wingTransition}
           className="position-absolute w-100 h-100"
           style={{
-            clipPath: 'inset(0 0 0 66%)',
-            transformOrigin: 'center',
+            clipPath: 'inset(0 0 0 65%)',
+            transformOrigin: '65% center',
+            backfaceVisibility: 'hidden'
           }}
         >
-          <img src="/loading.png" alt="logo-right" className="w-100 h-100 object-fit-contain" />
+          <img src="/loading.png" alt="wing" className="w-100 h-100 object-fit-contain" />
         </motion.div>
 
-      </div>
+      </motion.div>
 
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: [0, 1, 0.5] }}
-        transition={{ duration: 2, repeat: Infinity }}
-        className="mt-4 text-muted small fw-bold text-uppercase"
-        style={{ letterSpacing: '3px' }}
+        animate={isReady ? { opacity: 0 } : { opacity: [0, 1, 0.5] }}
+        className="mt-3 text-primary fw-bold small text-uppercase"
+        style={{ letterSpacing: '3px', fontSize: fullScreen ? '14px' : '10px' }}
       >
-        Loading...
+        {isReady ? "Let's Go!" : message}
       </motion.div>
     </div>
   );

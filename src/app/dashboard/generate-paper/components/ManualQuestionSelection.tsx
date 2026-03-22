@@ -7,6 +7,7 @@ import Loading from '../loading';
 interface ManualQuestionSelectionProps {
   subjectId: string;
   classId: string;
+  selectedTopics: string[];
   chapterOption: string;
   selectedChapters: string[];
   chapters: Chapter[];
@@ -25,7 +26,11 @@ interface QuestionWithOptions extends Question {
   option_a_ur?: string; option_b_ur?: string; option_c_ur?: string; option_d_ur?: string;
   question_text_ur?: string;
   chapter_id?: string;
+  chapter_no?: string | number;
+  chapter_name?: string;
+  topic_name?: string;
   source_type?: string;
+  
 }
 
 const HtmlContent: React.FC<{ content?: string; className?: string; dir?: 'rtl' | 'ltr' }> = ({ content, className, dir }) => {
@@ -45,6 +50,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
   subjectId,
   classId,
   selectedChapters,
+  selectedTopics,
   chapters,
   onQuestionsSelected,
   language,
@@ -168,8 +174,10 @@ useEffect(() => {
         params: {
           subjectId,
           classId,
+      
           questionType: typeKey,
           chapterIds: selectedChapters.join(','),
+          topicIds: selectedTopics.join(','),
           language,
           source_type: source_type !== 'all' ? (Array.isArray(source_type) ? source_type.join(',') : source_type) : undefined
         }
@@ -318,10 +326,30 @@ useEffect(() => {
                         </div>
                       )}
 
-                      <div className={`q-meta-tiny ${isUrduMode ? 'justify-start' : ''}`}>
-                        <span>{getChapterMeta(q.chapter_id)}</span>
-                        <span className="sep">|</span>
-                        <span className="source-text">{q.source_type || 'standard'}</span>
+                   <div className={`q-meta-tiny text-capitalize small ${isUrduMode ? 'justify-start' : ''}`}>
+                        {/* Chapter No & Name */}
+                      <span className="meta-item text-capitalize">
+                        Ch:{q.chapterNo || 'N/A'} &nbsp; 
+                        
+                        <span className="d-none d-md-inline">
+                            { q.chapterName || 'General'}
+                        </span>
+                      </span>
+                        
+                        <span className="sep">•</span>
+                        
+                        {/* Topic Name */}
+                        <span className="meta-item">
+                        Topic:  {q.topicName || 'No Topic'}
+                        </span>
+                        
+                        <span className="sep">•</span>
+                        
+                        {/* Source Type with a distinct pill style */}
+                        <span className="source-tag">
+                         Source: {q.source_type || 'Standard'}
+                        </span>
+
                         {isSelected && <span className="selected-indicator">✓ Selected</span>}
                       </div>
                     </div>
@@ -335,25 +363,25 @@ useEffect(() => {
 
       <style jsx global>{`
         .paper-container { background:#fff; width:100%; }
-        .paper-row { display:flex; padding:8px 12px; border-bottom:1px solid #f4f4f5; cursor:pointer; transition:.15s; }
+        .paper-row { display:flex; padding:0px 0px; border-bottom:1px solid #f4f4f5; cursor:pointer; transition:.15s; }
         .paper-row:hover { background: #fafafa; }
         .paper-row.selected { background:#eff6ff; position:relative; }
         .paper-row.selected::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:#2563eb; }
         .q-index { width:25px; font-weight:700; color:#a1a1aa; flex-shrink: 0; font-size: 13px; }
         .q-main-content { flex:1; display: flex; flex-direction: column; gap: 4px; }
-        .question-text-container { display: flex; width: 100%; gap: 20px; }
+        .question-text-container { display: flex; width: 100%; gap: 5px; }
         .bilingual-layout { justify-content: space-between; }
         .bilingual-layout .eng-text { flex: 1; text-align: left; }
         .bilingual-layout .urdu-text { flex: 1; text-align: right; }
         .eng-text, .eng-opt { font-size:15px; color:#18181b; line-height: 1.5; font-weight: 500; }
         .urdu-text, .urdu-opt { font-family:'Jameel Noori Nastaleeq', serif; font-size:17px; line-height:1.6; text-align: right; width: 100%; }
-        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 0px; }
         .opt-box { display: flex; gap: 8px; align-items: flex-start; }
         .opt-label { font-weight: 700; color: #71717a; font-size: 12px; }
         .opt-content { flex: 1; }
         .bilingual-opt .opt-content { display: flex; gap: 10px; }
         .bilingual-opt .opt-content > * { flex: 1; min-width: 0; }
-        .q-meta-tiny { font-size:10px; color:#a1a1aa; font-family:monospace; margin-top: 6px; display:flex; gap:8px; text-transform: uppercase; align-items: center; }
+        .q-meta-tiny { font-size:10px; color:#a1a1aa; font-family:monospace; margin-top: 2px; display:flex; gap:4px; text-transform: uppercase; align-items: center; }
         .selected-indicator { color: #10b981; font-weight: 700; margin-left: auto; }
         .selected-info { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px; margin-bottom: 16px; text-align: center; }
         .selected-badge { display: inline-block; background: #2563eb; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 8px; }

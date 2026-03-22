@@ -11,6 +11,8 @@ import { AppHeader } from './AppHeader';
 import { SettingsPanel } from './SettingsPanel';
 import { BoardPatternService } from '@/services/boardPatternService';
 import { PaperLayoutRenderer } from '@/app/dashboard/generate-paper/components/PaperLayoutRenderer';
+
+import Loading from '@/app/dashboard/generate-paper/loading';
 //import { supabase } from '@/lib/supabaseClient'; // Adjust this import to your supabase client path
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { toast } from 'react-hot-toast'; // Highly recommended for feedback
@@ -159,14 +161,12 @@ const handleSaveToSupabase = async () => {
     }
   }, [settings, isSettingsLoaded]);
 
- 
   const paperRef = useRef<HTMLDivElement>(null);
-
-  const currentLayout =  watch('mcqPlacement') || 'separate';
-  const currentLanguage = watch('language') || 'english';
   const currentSubject = subjects.find(s => s.id === watchedSubjectId);
   const currentClass = classes.find(c => c.id === watchedClassId);
-
+  const currentLayout =  watch('mcqPlacement') || 'separate';
+  const currentLanguage = currentSubject?.name === 'English' ?'english' :currentSubject?.name === 'Urdu' ? 'urdu' :watch('language')||'bilingual';
+ 
   const languageConfigs: Record<string, LanguageConfig> = {
     english: {
       direction: 'ltr',
@@ -190,13 +190,13 @@ const handleSaveToSupabase = async () => {
 
   const config = languageConfigs[paperLanguage] || languageConfigs.english;
 
-const refreshPaperData = useCallback(() => {
-  if (typeof window === 'undefined') return;
-  const saved = localStorage.getItem('questionPapers');
-  if (!saved) {
-    setPaperSections([]);
-    return;
-  }
+  const refreshPaperData = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const saved = localStorage.getItem('questionPapers');
+    if (!saved) {
+      setPaperSections([]);
+      return;
+    }
 
   try {
     const parsed = JSON.parse(saved);
@@ -243,7 +243,7 @@ const handleCancelPaper = useCallback(() => {
 
   const handleBoardPattern = async () => {
     if (!currentSubject || !currentClass) {
-      alert('Please select a subject and class first');
+      toast.error('Please select a class and subject first');
       return;
     }
     setIsGeneratingBoardPattern(true);
@@ -252,10 +252,11 @@ const handleCancelPaper = useCallback(() => {
       const className = String(currentClass.name);
       
       const boardRules = await BoardPatternService.fetchBoardRules(watchedSubjectId, watchedClassId);
+      console.log(boardRules)
       const adjustedPattern = BoardPatternService.getQuestionDetails(
         subjectName, className, { ...currentSubject, board_rules: boardRules }
       );
-
+//console.log(adjustedPattern);
       ['mcq', 'short', 'long'].forEach(type => {
         setValue(`${type}Count`, adjustedPattern[type].count);
         setValue(`${type}AttemptCount`, adjustedPattern[type].attempt);
@@ -271,27 +272,26 @@ const handleCancelPaper = useCallback(() => {
       setIsGeneratingBoardPattern(false);
     }
   };
-useEffect(() => {
-  const fetchProfile = async () => {
-    try {
-      const res = await fetch('/api/profile');
+    useEffect(() => {
+      const fetchProfile = async () => {
+        try {
+          const res = await fetch('/api/profile');
+           if (!res.ok) {
+            console.error('Failed to fetch profile');
+            return;
+          }
 
-      if (!res.ok) {
-        console.error('Failed to fetch profile');
-        return;
-      }
+          const data = await res.json();
+          setProfile(data);
+        } catch (err) {
+          console.error('Error fetching profile:', err);
+        } finally {
+          console.log('Profile fetch attempt completed');
+        }
+      };
 
-      const data = await res.json();
-      setProfile(data);
-    } catch (err) {
-      console.error('Error fetching profile:', err);
-    } finally {
-      console.log('Profile fetch attempt completed');
-    }
-  };
-
-  fetchProfile();
-}, []);
+      fetchProfile();
+    }, []);
 //console.log(profile?.profile)
   const loadBoardPatternQuestions = async (pattern: any) => {
     const chapterIds = selectedChapters.length > 0 ? selectedChapters : chapters.map(ch => ch.id);
@@ -311,35 +311,47 @@ useEffect(() => {
   };
 
   const generateBoardPatternSections = async (pattern: any, loadedQuestions: Record<string, Question[]>) => {
-    const sections: PaperSection[] = [];
-    const types = ['mcq', 'short', 'long'];
+  const sections: PaperSection[] = [];
+  
+  // 1. Get the standard types
+  const standardTypes = ['mcq', 'short', 'long'];
+  
+  // 2. Combine standard types with names from additionalTypes
+  const allTypes = [
+    ...standardTypes, 
+    ...(pattern.additionalTypes?.map((t: any) => t.name) || [])
+  ];
+
+  allTypes.forEach((type, idx) => {
+    // Look for pattern data in either the base object or the additionalTypes array
+    const p = pattern[type] || pattern.additionalTypes.find((t: any) => t.name === type);
     
-    types.forEach((type, idx) => {
-      const p = pattern[type];
-      if (p.count > 0) {
-        sections.push({
-          id: `section-${idx}`,
-          type: type as any,
-          questions: (loadedQuestions[type] || []).slice(0, p.count),
-          totalQuestions: p.count,
-          attemptCount: p.attempt,
-          marksEach: p.marks,
-          totalMarks: p.total,
-          subject: currentSubject?.name || '',
-          language: currentLanguage,
-          layout: currentLayout,
-          timestamp: new Date().toISOString()
-        });
-      }
-    });
-const paperData = {
+    if (p && p.count > 0) {
+      sections.push({
+        id: `section-${type}-${idx}`,
+        type: type as any,
+        questions: (loadedQuestions[type] || []).slice(0, p.count),
+        totalQuestions: p.count,
+        attemptCount: p.attempt,
+        marksEach: p.marks,
+        totalMarks: p.total,
+        subject: currentSubject?.name || '',
+        language: currentLanguage,
+        layout: currentLayout,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  const paperData = {
     layout: currentLayout,
     language: currentLanguage,
     sections: sections
   };
-   localStorage.setItem('questionPapers', JSON.stringify(paperData));
+
+  localStorage.setItem('questionPapers', JSON.stringify(paperData));
   refreshPaperData();
-  };
+};
 
   const handlePrint = () => {
     window.print();
@@ -401,7 +413,22 @@ const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions 
         />
       </div>
     </div>
-
+{/* 1. GLOBAL LOADING OVERLAY */}
+{(isGeneratingBoardPattern || isSaving) && (
+  <div 
+    className="position-fixed top-0 start-0 w-100 vh-100 d-flex flex-column align-items-center justify-content-center"
+    style={{ 
+        zIndex: 9999, 
+        backgroundColor: 'rgba(255, 255, 255, 0.7)',
+        backdropFilter: 'blur(2px)' 
+    }}
+  >
+    <div className="d-flex align-items-center justify-content-center mb-3">
+        <Loading message={isSaving ? 'Saving to Cloud...' : 'Generating Board Pattern...'} /> {/* Your existing Loading component */}
+    </div>
+    
+  </div>
+)}
       {/* 2. SCROLLABLE AREA: Allows both Vertical and Horizontal scrolling */}
       <main className="flex-grow-1 overflow-auto bg-secondary bg-opacity-10 custom-scrollbar d-print-block p-print-0 mt-4">
         {/* Wrapper to center paper on large screens, but allow left-align on small screens */}
@@ -421,13 +448,45 @@ const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions 
               
             }}
           >
+
+
             {paperSections.length === 0 ? (
-              <div className="empty-state d-flex flex-column align-items-center justify-content-center text-muted text-center p-4" style={{ minHeight: '297mm' }}>
-                <BookOpen size={80} className="mb-4 opacity-20" />
-                <h3 className="fw-light">Paper Preview</h3>
-                <p>Select a subject and generate a pattern to begin.</p>
-              </div>
-            ) : (
+  <div 
+    className="empty-state d-flex flex-column align-items-center justify-content-start text-muted text-center p-4 pt-5 mt-5" 
+    style={{ minHeight: '297mm' }}
+  >
+    <BookOpen size={80} className="mb-4 opacity-20" />
+    <h3 className="fw-light">Paper Preview</h3>
+    <p className="mb-4">Select a subject and generate a pattern to begin.</p>
+    
+    {/* --- NEW BUTTONS GROUP --- */}
+    <div className="d-flex flex-column flex-md-row gap-3">
+      <button 
+        className="btn btn-primary btn-lg px-4 shadow-sm d-flex align-items-center gap-2"
+        onClick={handleBoardPattern}
+        disabled={isLoading || isGeneratingBoardPattern}
+        style={{ borderRadius: '12px', fontSize: '0.95rem', fontWeight: 600 }}
+      >
+        {isGeneratingBoardPattern ? (
+          <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        ) : (
+          <i className="bi bi-magic"></i>
+        )}
+        Generate Board Pattern Paper
+      </button>
+
+      <button 
+        className="btn btn-outline-dark btn-lg px-4 d-flex align-items-center gap-2"
+        onClick={() => setShowQuestionSelector(true)}
+        style={{ borderRadius: '12px', fontSize: '0.95rem', fontWeight: 600 }}
+      >
+        <Settings size={18} />
+        Configure Paper Manually
+      </button>
+    </div>
+    {/* ------------------------- */}
+  </div>
+) : (
               <PaperLayoutRenderer
                 paperSections={paperSections}
                 settings={settings}
@@ -626,6 +685,31 @@ const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions 
     padding: 0 12px;
     font-size: 0.8rem;
   }
+}
+
+/* Premium Primary Button for Empty State */
+.empty-state .btn-primary {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.empty-state .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3) !important;
+}
+
+.empty-state .btn-outline-dark {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #1e293b;
+  transition: all 0.3s ease;
+}
+
+.empty-state .btn-outline-dark:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateY(-2px);
 }
 
 `}</style>

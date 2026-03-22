@@ -3,10 +3,17 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import AdminLayout from '@/components/AdminLayout';
-import { Bar, Pie } from 'react-chartjs-2';
-import { Chart, registerables } from 'chart.js';
+import { Bar, Doughnut } from 'react-chartjs-2';
+import { Chart, registerables, ScriptableContext } from 'chart.js';
+import { 
+  Users, BookOpen, Home, FileText, 
+  Activity, Database, Server, RefreshCw,
+  AlertCircle, CheckCircle2, ChevronRight
+} from 'lucide-react';
+
 Chart.register(...registerables);
 
+// --- Interfaces ---
 interface DashboardStats {
   teacherCount: number;
   studentCount: number;
@@ -22,7 +29,6 @@ interface DashboardStats {
     user?: string;
     student?: string;
     academy?: string;
-    count?: number;
     timestamp: string;
     id: string;
   }[];
@@ -36,10 +42,7 @@ interface DashboardStats {
   systemStatus: {
     apiStatus: string;
     databaseStatus: string;
-    storageStatus: string;
     storagePercentage: number;
-    storageUsed: number;
-    storageLimit: number;
     apiResponseTime: number;
     dbResponseTime: number;
   };
@@ -49,575 +52,273 @@ export default function Overview() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [usingMockData, setUsingMockData] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const router = useRouter();
   const supabase = createClientComponentClient();
 
-  // Check if user has admin access
   const checkAdminAccess = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/auth/login');
-        return false;
-      }
-
-      const { data: roleData, error: rpcError } = await supabase
-        .rpc('get_user_role', { user_id: user.id });
-      
-      if (rpcError) {
-        console.error('Error fetching user role:', rpcError);
-        return false;
-      }
-
-      if (roleData !== "admin") {
-        router.push('/unauthorized');
-        return false;
-      }
-
-      setUserRole(roleData);
+      if (!user) { router.push('/auth/login'); return false; }
+      const { data: role } = await supabase.rpc('get_user_role', { user_id: user.id });
+      if (role !== "admin") { router.push('/unauthorized'); return false; }
+      setUserRole(role);
       return true;
-    } catch (error) {
-      console.error('Error checking admin access:', error);
-      return false;
-    }
+    } catch { return false; }
   };
 
-  // Fetch dashboard data from API
-  const fetchDashboardData = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
-      setError(null);
-      
-      const res = await fetch("/api/admin/dashboard", {
-        headers: {
-          'Cache-Control': 'no-cache'
-        }
-      });
-      
-      if (!res.ok) {
-        throw new Error(`API error: ${res.status}`);
-      }
-      
+      const res = await fetch("/api/admin/dashboard", { cache: 'no-store' });
+      if (!res.ok) throw new Error();
       const data = await res.json();
-      
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      
       setStats(data);
-      setUsingMockData(false);
-      
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      setError('Failed to load live data. Showing demo data.');
-      setUsingMockData(true);
+      setError(null);
+    } catch {
+      setError('Live connection failed. Displaying cached/demo data.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const initializeDashboard = async () => {
-      const isAdmin = await checkAdminAccess();
-      if (isAdmin) {
-        await fetchDashboardData();
-      }
-    };
+    checkAdminAccess().then(admin => admin && fetchData());
+  }, []);
 
-    initializeDashboard();
-
-    // Listen for authentication state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_OUT') {
-          router.push('/auth/login');
-          return;
-        }
-        
-        if (session) {
-          const isAdmin = await checkAdminAccess();
-          if (isAdmin) {
-            await fetchDashboardData();
-          }
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, [router, supabase]);
-
-  const papersChartData = {
-    labels: stats?.papersByMonth?.map(item => item.month) || [],
+  // --- Chart Configurations ---
+  const barData = {
+    labels: stats?.papersByMonth?.map(m => m.month) || [],
     datasets: [{
-      label: 'Papers Generated',
-      data: stats?.papersByMonth?.map(item => item.count) || [],
-      backgroundColor: 'rgba(54, 162, 235, 0.5)',
-      borderColor: 'rgba(54, 162, 235, 1)',
-      borderWidth: 1
+      label: 'Papers',
+      data: stats?.papersByMonth?.map(m => m.count) || [],
+      backgroundColor: (context: ScriptableContext<'bar'>) => {
+        const ctx = context.chart.ctx;
+        const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, '#3b82f6');
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0.1)');
+        return gradient;
+      },
+      borderRadius: 6,
     }]
   };
 
-  const questionsChartData = {
-    labels: stats?.questionsBySubject?.map(item => item.subject_name) || [],
+  const doughnutData = {
+    labels: stats?.questionsBySubject?.map(s => s.subject_name) || [],
     datasets: [{
-      data: stats?.questionsBySubject?.map(item => item.count) || [],
-      backgroundColor: [
-        'rgba(255, 99, 132, 0.5)',
-        'rgba(54, 162, 235, 0.5)',
-        'rgba(255, 206, 86, 0.5)',
-        'rgba(75, 192, 192, 0.5)',
-        'rgba(153, 102, 255, 0.5)',
-        'rgba(255, 159, 64, 0.5)'
-      ],
-      borderColor: [
-        'rgba(255, 99, 132, 1)',
-        'rgba(54, 162, 235, 1)',
-        'rgba(255, 206, 86, 1)',
-        'rgba(75, 192, 192, 1)',
-        'rgba(153, 102, 255, 1)',
-        'rgba(255, 159, 64, 1)'
-      ],
-      borderWidth: 1
+      data: stats?.questionsBySubject?.map(s => s.count) || [],
+      backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b'],
+      borderWidth: 0,
+      hoverOffset: 20
     }]
   };
 
-  // Format timestamp for display
-  const formatTimeAgo = (timestamp: string) => {
-    const now = new Date();
-    const time = new Date(timestamp);
-    const diffInSeconds = Math.floor((now.getTime() - time.getTime()) / 1000);
-    
-    if (diffInSeconds < 60) return 'Just now';
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
-    if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} days ago`;
-    return `${Math.floor(diffInSeconds / 2592000)} months ago`;
-  };
-
-  // Get activity icon based on type
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'paper_generated':
-        return 'bi-file-earmark-text text-info';
-      case 'question_added':
-        return 'bi-question-circle text-primary';
-      case 'student_registered':
-        return 'bi-person-plus text-success';
-      default:
-        return 'bi-activity text-secondary';
-    }
-  };
-
-  // Get activity text based on type
-  const getActivityText = (activity: any) => {
-    switch (activity.type) {
-      case 'paper_generated':
-        return `${activity.user} generated paper "${activity.title}" for ${activity.academy}`;
-      case 'question_added':
-        return `${activity.user} added a question to ${activity.subject}`;
-      case 'student_registered':
-        return `${activity.student} registered at ${activity.academy}`;
-      default:
-        return 'Unknown activity';
-    }
-  };
-
-  // Helper function to get status badge color
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'operational':
-      case 'normal':
-      case 'good':
-        return 'bg-success';
-      case 'degraded':
-      case 'slow':
-      case 'warning':
-        return 'bg-warning';
-      case 'down':
-      case 'critical':
-        return 'bg-danger';
-      default:
-        return 'bg-secondary';
-    }
-  };
-
-  // Helper function to format status text
-  const formatStatusText = (status: string) => {
-    switch (status) {
-      case 'operational': return 'Operational';
-      case 'normal': return 'Normal';
-      case 'good': return 'Good';
-      case 'degraded': return 'Degraded';
-      case 'slow': return 'Slow';
-      case 'warning': return 'Warning';
-      case 'down': return 'Down';
-      case 'critical': return 'Critical';
-      case 'unknown': return 'Unknown';
-      default: return status;
-    }
-  };
-
-  if (loading) {
-    return (
-      <AdminLayout activeTab="overview">
-        <div className="container-fluid py-4">
-          <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
-            <div className="text-center">
-              <div className="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }} role="status">
-                <span className="visually-hidden">Loading...</span>
-              </div>
-              <p className="mt-3">Loading dashboard data...</p>
-            </div>
-          </div>
-        </div>
-      </AdminLayout>
-    );
-  }
+  if (loading) return (
+    <AdminLayout activeTab="overview">
+      <div className="d-flex flex-column justify-content-center align-items-center vh-100 bg-light">
+        <div className="custom-loader mb-3"></div>
+        <p className="text-muted fw-medium animate-pulse">Synchronizing Examly Dashboard...</p>
+      </div>
+    </AdminLayout>
+  );
 
   return (
     <AdminLayout activeTab="overview">
-      <div className="container-fluid py-4">
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <h2 className="mb-0">Dashboard Overview</h2>
-          <div>
-            {userRole && (
-              <span className="badge bg-info me-2">Role: {userRole}</span>
-            )}
-            {usingMockData && (
-              <span className="badge bg-warning me-2">Demo Data</span>
-            )}
-            <button 
-              className="btn btn-outline-primary btn-sm"
-              onClick={() => fetchDashboardData()}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                  Refreshing...
-                </>
-              ) : (
-                <>
-                  <i className="bi bi-arrow-clockwise me-2"></i>
-                  Refresh Data
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+      <div className="container-fluid px-4 py-5">
         
+        {/* Header */}
+        <div className="d-flex justify-content-between align-items-end mb-5">
+          <div>
+            <h2 className="fw-bold text-dark mb-1">Platform Insights</h2>
+            <p className="text-muted small mb-0">Overview of Examly's academic ecosystem.</p>
+          </div>
+          <button className="btn-glass d-flex align-items-center gap-2" onClick={fetchData}>
+            <RefreshCw size={16} className={loading ? 'spin' : ''} />
+            Refresh Data
+          </button>
+        </div>
+
         {error && (
-          <div className="alert alert-warning d-flex align-items-center" role="alert">
-            <i className="bi bi-exclamation-triangle-fill me-2"></i>
-            <div>
-              {error}
-            </div>
+          <div className="glass-alert mb-4">
+            <AlertCircle size={18} /> {error}
           </div>
         )}
 
-        {/* Stats Cards */}
-        <div className="row g-4 mb-4">
-          <div className="col-xl-3 col-md-6">
-            <div className="card border-primary shadow-sm h-100">
-              <div className="card-body">
-                <div className="d-flex align-items-center">
-                  <div className="flex-grow-1">
-                    <h5 className="card-title text-primary mb-1">Total Teachers</h5>
-                    <p className="card-text display-5 fw-bold mb-0">
-                      {stats?.teacherCount || 0}
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <i className="bi bi-person-badge text-primary" style={{ fontSize: '2rem' }}></i>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <span className={`badge ${stats?.growthRates?.teacherGrowth >= 0 ? 'bg-success' : 'bg-danger'}`}>
-                    {stats?.growthRates?.teacherGrowth >= 0 ? '+' : ''}{stats?.growthRates?.teacherGrowth || 0}% from last month
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="col-xl-3 col-md-6">
-            <div className="card border-success shadow-sm h-100">
-              <div className="card-body">
-                <div className="d-flex align-items-center">
-                  <div className="flex-grow-1">
-                    <h5 className="card-title text-success mb-1">Total Students</h5>
-                    <p className="card-text display-5 fw-bold mb-0">
-                      {stats?.studentCount || 0}
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <i className="bi bi-people-fill text-success" style={{ fontSize: '2rem' }}></i>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <span className={`badge ${stats?.growthRates?.studentGrowth >= 0 ? 'bg-success' : 'bg-danger'}`}>
-                    {stats?.growthRates?.studentGrowth >= 0 ? '+' : ''}{stats?.growthRates?.studentGrowth || 0}% from last month
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="col-xl-3 col-md-6">
-            <div className="card border-info shadow-sm h-100">
-              <div className="card-body">
-                <div className="d-flex align-items-center">
-                  <div className="flex-grow-1">
-                    <h5 className="card-title text-info mb-1">Academies</h5>
-                    <p className="card-text display-5 fw-bold mb-0">
-                      {stats?.academyCount || 0}
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <i className="bi bi-building text-info" style={{ fontSize: '2rem' }}></i>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <span className={`badge ${stats?.growthRates?.academyGrowth >= 0 ? 'bg-success' : 'bg-danger'}`}>
-                    {stats?.growthRates?.academyGrowth >= 0 ? '+' : ''}{stats?.growthRates?.academyGrowth || 0}% from last month
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="col-xl-3 col-md-6">
-            <div className="card border-warning shadow-sm h-100">
-              <div className="card-body">
-                <div className="d-flex align-items-center">
-                  <div className="flex-grow-1">
-                    <h5 className="card-title text-warning mb-1">Papers Generated</h5>
-                    <p className="card-text display-5 fw-bold mb-0">
-                      {stats?.paperCount || 0}
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <i className="bi bi-file-earmark-text text-warning" style={{ fontSize: '2rem' }}></i>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <span className={`badge ${stats?.growthRates?.paperGrowth >= 0 ? 'bg-success' : 'bg-danger'}`}>
-                    {stats?.growthRates?.paperGrowth >= 0 ? '+' : ''}{stats?.growthRates?.paperGrowth || 0}% from last month
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Top Metric Grid */}
+        <div className="row g-4 mb-5">
+          <MetricCard title="Teachers" value={stats?.teacherCount} growth={stats?.growthRates?.teacherGrowth} icon={<Users size={22} />} color="blue" />
+          <MetricCard title="Students" value={stats?.studentCount} growth={stats?.growthRates?.studentGrowth} icon={<BookOpen size={22} />} color="green" />
+          <MetricCard title="Academies" value={stats?.academyCount} growth={stats?.growthRates?.academyGrowth} icon={<Home size={22} />} color="purple" />
+          <MetricCard title="Papers" value={stats?.paperCount} growth={stats?.growthRates?.paperGrowth} icon={<FileText size={22} />} color="orange" />
         </div>
 
-        {/* Second Row of Stats */}
-        <div className="row g-4 mb-4">
-          <div className="col-xl-4 col-md-6">
-            <div className="card shadow-sm h-100">
-              <div className="card-body">
-                <div className="d-flex align-items-center">
-                  <div className="flex-grow-1">
-                    <h5 className="card-title mb-1">Question Bank Size</h5>
-                    <p className="card-text display-4 fw-bold mb-0">
-                      {stats?.questionCount || 0}
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <i className="bi bi-database" style={{ fontSize: '2.5rem', color: '#6f42c1' }}></i>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="col-xl-4 col-md-6">
-            <div className="card shadow-sm h-100">
-              <div className="card-body">
-                <div className="d-flex align-items-center">
-                  <div className="flex-grow-1">
-                    <h5 className="card-title mb-1">Avg Papers per User</h5>
-                    <p className="card-text display-4 fw-bold mb-0">
-                      {stats?.avgPapersPerUser || 0}
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <i className="bi bi-bar-chart" style={{ fontSize: '2.5rem', color: '#20c997' }}></i>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="col-xl-4 col-md-12">
-            <div className="card shadow-sm h-100">
-              <div className="card-body">
-                <h5 className="card-title mb-3">System Status</h5>
-                
-                {/* API Service Status */}
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <div className="d-flex align-items-center">
-                    <i className="bi bi-plugin me-2"></i>
-                    <span>API Service</span>
-                  </div>
-                  <div>
-                    <span className={`badge ${getStatusBadge(stats?.systemStatus?.apiStatus || 'unknown')} me-2`}>
-                      {formatStatusText(stats?.systemStatus?.apiStatus || 'unknown')}
-                    </span>
-                    {stats?.systemStatus?.apiResponseTime && (
-                      <small className="text-muted">{stats.systemStatus.apiResponseTime}ms</small>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Database Status */}
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <div className="d-flex align-items-center">
-                    <i className="bi bi-database me-2"></i>
-                    <span>Database</span>
-                  </div>
-                  <div>
-                    <span className={`badge ${getStatusBadge(stats?.systemStatus?.databaseStatus || 'unknown')} me-2`}>
-                      {formatStatusText(stats?.systemStatus?.databaseStatus || 'unknown')}
-                    </span>
-                    {stats?.systemStatus?.dbResponseTime && (
-                      <small className="text-muted">{stats.systemStatus.dbResponseTime}ms</small>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Storage Status */}
-                <div className="d-flex justify-content-between align-items-center">
-                  <div className="d-flex align-items-center">
-                    <i className="bi bi-hdd me-2"></i>
-                    <span>Storage</span>
-                  </div>
-                  <div className="text-end">
-                    <span className={`badge ${getStatusBadge(stats?.systemStatus?.storageStatus || 'unknown')} me-2`}>
-                      {stats?.systemStatus?.storagePercentage || 0}% Used
-                    </span>
-                    <div>
-                      <small className="text-muted">
-                        {stats?.systemStatus?.storageUsed || 0} / {stats?.systemStatus?.storageLimit || 0}
-                      </small>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Last Updated */}
-                <div className="mt-3 pt-2 border-top">
-                  <small className="text-muted">
-                    Last updated: {new Date().toLocaleTimeString()}
-                  </small>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Charts */}
         <div className="row g-4">
-          <div className="col-lg-6">
-            <div className="card shadow-sm h-100">
-              <div className="card-header bg-white">
-                <h5 className="card-title mb-0">Monthly Paper Generation</h5>
+          {/* Main Analytics */}
+          <div className="col-lg-8">
+            <div className="glass-card p-4 h-100">
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <h6 className="fw-bold m-0">Generation Trends</h6>
+                <div className="status-indicator">Monthly Data</div>
               </div>
-              <div className="card-body">
-                <div style={{ height: '300px' }}>
-                  <Bar 
-                    data={papersChartData} 
-                    options={{ 
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: {
-                          position: 'top',
-                        },
-                      },
-                      scales: {
-                        y: {
-                          beginAtZero: true,
-                          ticks: {
-                            stepSize: 10
-                          }
-                        }
-                      }
-                    }} 
-                  />
-                </div>
+              <div style={{ height: '320px' }}>
+                <Bar data={barData} options={chartOptions} />
               </div>
             </div>
           </div>
-          
-          <div className="col-lg-6">
-            <div className="card shadow-sm h-100">
-              <div className="card-header bg-white">
-                <h5 className="card-title mb-0">Subject-wise Question Distribution</h5>
-              </div>
-              <div className="card-body">
-                <div style={{ height: '300px' }}>
-                  <Pie 
-                    data={questionsChartData} 
-                    options={{ 
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: {
-                          position: 'right',
-                        },
-                      }
-                    }} 
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Recent Activity */}
-        <div className="row mt-4">
-          <div className="col-12">
-            <div className="card shadow-sm">
-              <div className="card-header bg-white">
-                <h5 className="card-title mb-0">Recent Activity</h5>
+          {/* System Health */}
+          <div className="col-lg-4">
+            <div className="glass-card p-4 h-100">
+              <h6 className="fw-bold mb-4">System Infrastructure</h6>
+              <HealthRow label="Core API" status={stats?.systemStatus?.apiStatus} ms={stats?.systemStatus?.apiResponseTime} />
+              <HealthRow label="Database" status={stats?.systemStatus?.databaseStatus} ms={stats?.systemStatus?.dbResponseTime} />
+              
+              <div className="mt-5">
+                <div className="d-flex justify-content-between mb-2">
+                  <span className="small text-muted">Cloud Storage</span>
+                  <span className="small fw-bold">{stats?.systemStatus?.storagePercentage}%</span>
+                </div>
+                <div className="progress-bar-container">
+                  <div className="progress-fill" style={{ width: `${stats?.systemStatus?.storagePercentage}%` }}></div>
+                </div>
               </div>
-              <div className="card-body p-0">
-                {stats?.recentActivities && stats.recentActivities.length > 0 ? (
-                  <div className="list-group list-group-flush">
-                    {stats.recentActivities.map((activity, index) => (
-                      <div key={index} className="list-group-item d-flex justify-content-between align-items-center px-3 py-2">
-                        <div className="d-flex align-items-center">
-                          <i className={`bi ${getActivityIcon(activity.type)} me-2`} style={{ fontSize: '1.2rem' }}></i>
-                          <span>{getActivityText(activity)}</span>
-                        </div>
-                        <small className="text-muted">{formatTimeAgo(activity.timestamp)}</small>
-                      </div>
-                    ))}
+            </div>
+          </div>
+
+          {/* Activity & Subjects */}
+          <div className="col-lg-6">
+            <div className="glass-card p-4">
+              <h6 className="fw-bold mb-4">Subject Distribution</h6>
+              <div style={{ height: '300px' }}>
+                <Doughnut data={doughnutData} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
+              </div>
+            </div>
+          </div>
+
+          <div className="col-lg-6">
+            <div className="glass-card p-4">
+              <h6 className="fw-bold mb-4">Live Activity Feed</h6>
+              <div className="activity-list">
+                {stats?.recentActivities.map((act, i) => (
+                  <div key={i} className="activity-item">
+                    <div className="activity-icon-sm"><Activity size={14} /></div>
+                    <div className="flex-grow-1 ms-3">
+                      <p className="small mb-0 text-dark fw-medium">
+                        {act.user || act.student} <span className="text-muted fw-normal">performed</span> {act.type.replace('_', ' ')}
+                      </p>
+                      <span className="tiny text-muted">{(act.timestamp)}</span>
+                    </div>
+                    <ChevronRight size={14} className="text-muted" />
                   </div>
-                ) : (
-                  <div className="text-center py-4">
-                    <i className="bi bi-inbox" style={{ fontSize: '2rem', color: '#6c757d' }}></i>
-                    <p className="mt-2 text-muted">No recent activities</p>
-                  </div>
-                )}
+                ))}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <style jsx>{`
-        .bg-purple {
-          background-color: #6f42c1;
+      <style jsx global>{`
+        .glass-card {
+          background: rgba(255, 255, 255, 0.7);
+          backdrop-filter: blur(12px);
+          border: 1px solid rgba(255, 255, 255, 0.4);
+          border-radius: 20px;
+          box-shadow: 0 10px 30px -5px rgba(0,0,0,0.04);
         }
-        .card {
-          transition: transform 0.2s;
+        .btn-glass {
+          background: #fff;
+          border: 1px solid #e2e8f0;
+          padding: 8px 18px;
+          border-radius: 12px;
+          font-weight: 600;
+          font-size: 0.85rem;
+          color: #475569;
+          transition: all 0.2s;
         }
-        .card:hover {
-          transform: translateY(-5px);
+        .btn-glass:hover {
+          background: #f8fafc;
+          border-color: #3b82f6;
+          color: #3b82f6;
         }
+        .metric-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .bg-blue-soft { background: #eff6ff; color: #3b82f6; }
+        .bg-green-soft { background: #f0fdf4; color: #10b981; }
+        .bg-purple-soft { background: #faf5ff; color: #8b5cf6; }
+        .bg-orange-soft { background: #fff7ed; color: #f59e0b; }
+
+        .progress-bar-container { height: 6px; background: #f1f5f9; border-radius: 10px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); border-radius: 10px; }
+
+        .activity-item {
+          display: flex;
+          align-items: center;
+          padding: 12px 0;
+          border-bottom: 1px solid #f1f5f9;
+        }
+        .activity-icon-sm {
+          background: #f8fafc;
+          padding: 8px;
+          border-radius: 10px;
+          color: #64748b;
+        }
+        .tiny { font-size: 0.7rem; }
+        .spin { animation: spin 2s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
       `}</style>
     </AdminLayout>
   );
 }
+
+// --- Sub Components ---
+
+function MetricCard({ title, value, growth, icon, color }: any) {
+  return (
+    <div className="col-xl-3 col-md-6">
+      <div className="glass-card p-4">
+        <div className="d-flex justify-content-between mb-3">
+          <div className={`metric-icon bg-${color}-soft`}>{icon}</div>
+          <span className={`badge rounded-pill ${growth >= 0 ? 'bg-success' : 'bg-danger'} bg-opacity-10 text-${growth >= 0 ? 'success' : 'danger'} border-0 px-3 py-2 small`}>
+            {growth >= 0 ? '+' : ''}{growth}%
+          </span>
+        </div>
+        <p className="text-muted small fw-bold text-uppercase tracking-wider mb-1">{title}</p>
+        <h2 className="fw-bold m-0">{value?.toLocaleString() || 0}</h2>
+      </div>
+    </div>
+  );
+}
+
+function HealthRow({ label, status, ms }: any) {
+  const isOk = status === 'operational' || status === 'normal';
+  return (
+    <div className="d-flex justify-content-between align-items-center mb-3 p-2 rounded-3 hover-bg">
+      <div className="d-flex align-items-center gap-3">
+        <div className={`health-dot ${isOk ? 'bg-success' : 'bg-warning'}`}></div>
+        <span className="small fw-semibold">{label}</span>
+      </div>
+      <div className="text-end">
+        <span className="small d-block fw-bold">{isOk ? 'Operational' : 'Slow'}</span>
+        <span className="tiny text-muted">{ms}ms</span>
+      </div>
+    </div>
+  );
+}
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { display: false }, border: { display: false } },
+    y: { border: { display: false }, ticks: { stepSize: 20 } }
+  }
+};

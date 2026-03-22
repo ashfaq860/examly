@@ -123,6 +123,8 @@ export const QuestionSelectorModal: React.FC<any> = ({
     setAutoSelectSeed(Date.now());
   };
 
+  // 1. Get the selected topics from the parent form
+const selectedTopics = watch('selectedTopics') || [];
   useEffect(() => {
     if (!selectedType || totalQuestions === 0 || useManualSelection || autoSelectSeed === 0) return;
 
@@ -133,7 +135,7 @@ export const QuestionSelectorModal: React.FC<any> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            subjectId, classId, chapterIds: selectedChapters,
+            subjectId, classId, chapterIds: selectedChapters,topicIds: selectedTopics,
             questionType: selectedType, language: paperData.language,
             sourceTypes: selectedSources, limit: totalQuestions, seed: autoSelectSeed
           })
@@ -362,7 +364,7 @@ export const QuestionSelectorModal: React.FC<any> = ({
             {useManualSelection ? (
               <ManualQuestionSelection
                 subjectId={subjectId} classId={classId} chapterOption={chapterOption} 
-                selectedChapters={selectedChapters} chapters={chapters} language={paperData.language}
+                selectedChapters={selectedChapters} selectedTopics={selectedTopics} chapters={chapters} language={paperData.language}
                 source_type={selectedSources} typeCounts={{ [selectedType]: totalQuestions }}
                 onQuestionsSelected={handleQuestionsSelected} shuffleTrigger={manualShuffleTrigger}
                 showSelectedOnly={showSelectedQuestions} selectedQuestions={selectedQuestions}
