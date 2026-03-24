@@ -2,43 +2,47 @@
 import { BoardPatternDetails, AdditionalQuestionType } from '@/types/paper-builder';
 
 export class BoardPatternService {
-  static getQuestionDetails(subjectName: string, className: string, currentSubject: any): BoardPatternDetails {
+static getQuestionDetails(subjectName: string, className: string, currentSubject: any): BoardPatternDetails {
+    const name = subjectName.toLowerCase();
+    
     const baseDetails: BoardPatternDetails = {
-      mcq: {
-        count: subjectName === 'english' ? 19: subjectName === 'urdu' ? 15 : subjectName === 'computer' ? 10 : 12,
-        attempt: subjectName === 'english' ? 16 : subjectName === 'urdu' ? 15 : subjectName === 'computer' ? 10 : 12,
-        marks: 1,
-        total: subjectName === 'english' ? 19: subjectName === 'urdu' ? 15 : subjectName === 'computer' ? 10 : 12
-      },
-      short: { count: 0, attempt: 0, marks: 2, total: 0 },
-      long: { 
-        count: 3, 
-        attempt: 2, 
-        marks: subjectName === 'urdu' ? 10 : 8, 
-        total: subjectName === 'urdu' ? 20 : 16 
-      },
-      totalMarks: 0,
-      timeMinutes: 145,
-      additionalTypes: []
+        mcq: {
+            count: name === 'english' ? 19 : name === 'urdu' ? 15 : name.toLowerCase().includes('computer') ? 10 : 12,
+            attempt: name === 'english' ? 19 : name === 'urdu' ? 15 : name.toLowerCase().includes('computer') ? 10 : 12,
+            marks: 1,
+            total: 0 // Calculated below
+        },
+        short: { count: 0, attempt: 0, marks: 2, total: 0 },
+        long: { 
+            count: 3, 
+            attempt: 2, 
+            marks: name === 'urdu' ? 10 : 8, 
+            total: 0 
+        },
+        totalMarks: 0,
+        timeMinutes: 145,
+        additionalTypes: []
     };
 
-    // Set short questions
-    if (subjectName === 'urdu' || subjectName === 'english') {
-      baseDetails.short = { count: 8, attempt: 5, marks: 2, total: 10 };
-    } else if (subjectName === "computer") {
-      baseDetails.short = { count: 18, attempt: 12, marks: 2, total: 24 };
+    // Correcting the Short Question totals for splitting logic
+    if (name === 'urdu' || name === 'english') {
+        baseDetails.short = { count: 8, attempt: 5, marks: 2, total: 10 };
+    } else if (name.toLowerCase().includes('computer')) {
+        // 18 total allows for 3 sections of 6
+        baseDetails.short = { count: 18, attempt: 12, marks: 2, total: 24 };
     } else {
-      baseDetails.short = { count: 24, attempt: 16, marks: 2, total: 32 };
+        // 24 total allows for 4 sections of 6 (Physics, Bio, Chem)
+        baseDetails.short = { count: 24, attempt: 16, marks: 2, total: 32 };
     }
 
-    // Calculate base total
-    baseDetails.totalMarks = baseDetails.mcq.total + baseDetails.short.total + baseDetails.long.total;
+    // Set initial totals
+    baseDetails.mcq.total = baseDetails.mcq.count * baseDetails.mcq.marks;
+    baseDetails.long.total = baseDetails.long.attempt * baseDetails.long.marks;
 
-    // Add subject-specific types
-    this.addSubjectSpecificTypes(baseDetails, subjectName, className, currentSubject);
+    this.addSubjectSpecificTypes(baseDetails, name, className, currentSubject);
 
     return baseDetails;
-  }
+}
 
   private static addSubjectSpecificTypes(
     details: BoardPatternDetails,
@@ -180,35 +184,46 @@ export class BoardPatternService {
     }
   }
 
-  private static applyBoardRules(details: BoardPatternDetails, rules: any[]) {
-    // Apply database rules to adjust counts
+private static applyBoardRules(details: BoardPatternDetails, rules: any[]) {
+    // Reset base counts to 0 before summing rules from database
+    const typeTotals: Record<string, number> = { mcq: 0, short: 0, long: 0 };
+
     rules.forEach(rule => {
-      const typeKey = rule.question_type;
-      const baseType = details[typeKey as keyof BoardPatternDetails];
-      
-      if (baseType && typeof baseType === 'object') {
-        baseType.count = Math.max(baseType.count, rule.min_questions || 0);
-        if (rule.max_questions) {
-          baseType.count = Math.min(baseType.count, rule.max_questions);
+        const typeKey = rule.question_type.toLowerCase();
+        
+        // Sum up counts for standard types
+        if (typeTotals.hasOwnProperty(typeKey)) {
+            // Use min_questions or max_questions depending on your logic preference
+            typeTotals[typeKey] += (rule.min_questions || 0);
+        } else {
+            // Handle Additional Types (Urdu/English components)
+            const additionalType = details.additionalTypes.find(t => t.name === typeKey);
+            if (additionalType) {
+                additionalType.count = (rule.min_questions || additionalType.count);
+                additionalType.total = additionalType.count * additionalType.marks;
+            }
         }
-        baseType.total = baseType.count * baseType.marks;
-      } else {
-        // Check additional types
-        const additionalType = details.additionalTypes.find(t => t.name === typeKey);
-        if (additionalType) {
-          additionalType.count = Math.max(additionalType.count, rule.min_questions || 0);
-          if (rule.max_questions) {
-            additionalType.count = Math.min(additionalType.count, rule.max_questions);
-          }
-          additionalType.total = additionalType.count * additionalType.marks;
-        }
-      }
     });
 
-    // Recalculate total marks
+    // Update the details object with summed values
+    if (typeTotals.mcq > 0) {
+        details.mcq.count = typeTotals.mcq;
+        details.mcq.total = details.mcq.count * details.mcq.marks;
+    }
+    if (typeTotals.short > 0) {
+        details.short.count = typeTotals.short;
+        // This is crucial: Short questions in Science/Computer are 2 marks each
+        details.short.total = details.short.count * 2; 
+    }
+    if (typeTotals.long > 0) {
+        details.long.count = typeTotals.long;
+        details.long.total = details.long.count * details.long.marks;
+    }
+
+    // Final global total calculation
     details.totalMarks = details.mcq.total + details.short.total + details.long.total +
-      details.additionalTypes.reduce((sum, type) => sum + type.total, 0);
-  }
+        details.additionalTypes.reduce((sum, type) => sum + type.total, 0);
+}
 
   static async fetchBoardRules(subjectId: string, classId: string) {
     try {

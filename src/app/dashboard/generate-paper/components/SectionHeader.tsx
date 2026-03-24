@@ -45,10 +45,10 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
 
   const defaultInstructions: Record<string, { en: string; ur: string }> = {
     mcq: { en: 'Choose the correct option.', ur: 'درست جواب کا انتخاب کریں۔' },
-    short: {
-      en: `Answer ${isPartial ? attemptCount : 'all'} questions.`,
-      ur: `سوالات کے مختصر جوابات تحریر کریں۔`,
-    },
+ short: {
+  en: `Write Short Answers to ${isPartial ? 'any ' + attemptCount : 'all'} questions.`,
+  ur: `${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'تمام'} سوالات کے مختصر جوابات لکھئیے`,
+},
     long: {
       en: `Answer ${isPartial ? attemptCount : 'all'} questions in detail.`,
       ur: `سوالات کے تفصیلی جوابات تحریر کریں۔`,
@@ -71,7 +71,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
 
   return (
     <div
-      className="section-header border-bottom border-1 border-dark mb-1 pb-0 d-flex align-items-center"
+      className="section-header border-bottom border-1 border-dark mb-3 pb-0 d-flex align-items-center"
       style={{ direction: 'ltr' }}
     >
       {/* 1. English Section */}

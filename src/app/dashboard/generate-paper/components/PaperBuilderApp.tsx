@@ -167,6 +167,17 @@ const handleSaveToSupabase = async () => {
   const currentLayout =  watch('mcqPlacement') || 'separate';
   const currentLanguage = currentSubject?.name === 'English' ?'english' :currentSubject?.name === 'Urdu' ? 'urdu' :watch('language')||'bilingual';
  
+ const getChapterIdsInRange = (from: number, to: number) => {
+  // We use chapterNo from your schema to match the rule's start/end
+  const filteredChapters = chapters.filter(ch => {
+    const num = Number(ch.chapterNo); 
+    return num >= from && num <= to;
+  });
+
+  if (filteredChapters.length === 0) return '';
+  return filteredChapters.map(ch => ch.id).join(',');
+};
+ 
   const languageConfigs: Record<string, LanguageConfig> = {
     english: {
       direction: 'ltr',
@@ -241,37 +252,98 @@ const handleCancelPaper = useCallback(() => {
     return () => window.removeEventListener('storage', refreshPaperData);
   }, [refreshPaperData]);
 
-  const handleBoardPattern = async () => {
-    if (!currentSubject || !currentClass) {
-      toast.error('Please select a class and subject first');
-      return;
+  
+const handleBoardPattern = async () => {
+  if (!currentSubject || !currentClass) {
+    toast.error('Please select a class and subject first');
+    return;
+  }
+
+  setIsGeneratingBoardPattern(true);
+  
+  try {
+    const subName = currentSubject.name.toLowerCase();
+    
+    // 1. Get Authoritative Pattern from Service
+    const expectedPattern = BoardPatternService.getQuestionDetails(
+      currentSubject.name, 
+      currentClass.name, 
+      currentSubject
+    );
+
+    // 2. Language Auto-Detection (Using .includes)
+    let autoLanguage: 'english' | 'urdu' | 'bilingual' = 'bilingual';
+    if (subName.includes('english')) {
+      autoLanguage = 'english';
+    } else if (['urdu', 'islamyat', 'islamiat', 'pak study', 'quran'].some(s => subName.includes(s))) {
+      autoLanguage = 'urdu';
     }
-    setIsGeneratingBoardPattern(true);
-    try {
-      const subjectName = currentSubject.name.toLowerCase();
-      const className = String(currentClass.name);
-      
-      const boardRules = await BoardPatternService.fetchBoardRules(watchedSubjectId, watchedClassId);
-      console.log(boardRules)
-      const adjustedPattern = BoardPatternService.getQuestionDetails(
-        subjectName, className, { ...currentSubject, board_rules: boardRules }
-      );
-//console.log(adjustedPattern);
-      ['mcq', 'short', 'long'].forEach(type => {
-        setValue(`${type}Count`, adjustedPattern[type].count);
-        setValue(`${type}AttemptCount`, adjustedPattern[type].attempt);
-        setValue(`${type}Marks`, adjustedPattern[type].marks);
+    
+    setPaperLanguage(autoLanguage);
+    setValue('language', autoLanguage);
+
+    // 3. Fetch Chapter Rules from DB
+    let boardRules = await BoardPatternService.fetchBoardRules(watchedSubjectId, watchedClassId);
+    
+    // Fallback if no rules exist
+    if (!boardRules || boardRules.length === 0) {
+      boardRules = [
+        { question_type: 'mcq', min_questions: expectedPattern.mcq.count, chapter_start: 1, chapter_end: 20, rule_mode: 'total' },
+        { question_type: 'short', min_questions: expectedPattern.short.count, chapter_start: 1, chapter_end: 20, rule_mode: 'total' },
+        { question_type: 'long', min_questions: expectedPattern.long.count, chapter_start: 1, chapter_end: 20, rule_mode: 'total' }
+      ];
+    }
+
+    // 4. Load questions based on Chapter Rules
+    let questionsByRule = await loadBoardPatternQuestions(boardRules);
+
+    // 5. DEFICIT FILLER: Loop through ALL types (Standard + Additional)
+    const allRequiredTypes = [
+      { name: 'mcq', count: expectedPattern.mcq.count },
+      { name: 'short', count: expectedPattern.short.count },
+      { name: 'long', count: expectedPattern.long.count },
+      ...(expectedPattern.additionalTypes || [])
+    ];
+
+    for (const typeInfo of allRequiredTypes) {
+      const typeName = typeInfo.name.toLowerCase();
+      const currentQuestions = Object.values(questionsByRule).flat().filter(q => {
+        const qType = (q.type || q.question_type || '').toLowerCase();
+        return qType === typeName;
       });
 
-      const loadedQuestions = await loadBoardPatternQuestions(adjustedPattern);
-      await generateBoardPatternSections(adjustedPattern, loadedQuestions);
-    } catch (error) {
-      console.error(error);
-      alert('Failed to generate pattern');
-    } finally {
-      setIsGeneratingBoardPattern(false);
+      if (currentQuestions.length < typeInfo.count && typeInfo.count > 0) {
+        const deficit = typeInfo.count - currentQuestions.length;
+        try {
+          const fallbackRes = await axios.get('/api/questions', {
+            params: { 
+              subjectId: watchedSubjectId, 
+              classId: watchedClassId, 
+              questionType: typeName, 
+              limit: deficit, 
+              random: true 
+            }
+          });
+          // Use a high index key to avoid clashing with chapter rules
+          const fallbackKey = 5000 + allRequiredTypes.indexOf(typeInfo);
+          questionsByRule[fallbackKey] = fallbackRes.data || [];
+        } catch (e) {
+          console.error(`Fallback failed for ${typeName}`, e);
+        }
+      }
     }
-  };
+
+    // 6. Generate UI Sections
+    await generateBoardPatternSections(boardRules, questionsByRule, autoLanguage, expectedPattern);
+    toast.success("Paper Generated Successfully!");
+
+  } catch (error: any) {
+    console.error("Generation Error:", error);
+    toast.error("Generation failed. Check console.");
+  } finally {
+    setIsGeneratingBoardPattern(false);
+  }
+};
     useEffect(() => {
       const fetchProfile = async () => {
         try {
@@ -293,65 +365,171 @@ const handleCancelPaper = useCallback(() => {
       fetchProfile();
     }, []);
 //console.log(profile?.profile)
-  const loadBoardPatternQuestions = async (pattern: any) => {
-    const chapterIds = selectedChapters.length > 0 ? selectedChapters : chapters.map(ch => ch.id);
-    const questions: Record<string, Question[]> = {};
-    const types = ['mcq', 'short', 'long', ...pattern.additionalTypes.map((t: any) => t.name)];
+const loadBoardPatternQuestions = async (rules: any[]) => {
+  const questionsByRule: Record<number, Question[]> = {};
 
-    for (const type of types) {
-      const count = pattern[type]?.count || pattern.additionalTypes.find((t: any) => t.name === type)?.count;
-      if (count > 0) {
-        const res = await axios.get('/api/questions', {
-          params: { subjectId: watchedSubjectId, classId: watchedClassId, questionType: type, chapterIds: chapterIds.join(','), limit: count, random: true }
-        });
-        questions[type] = res.data || [];
-      }
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
+    
+    // Physics rules use chapter_start and chapter_end from your schema
+    const start = rule.chapter_start;
+    const end = rule.chapter_end;
+    const numChapters = (end - start) + 1;
+
+    // Calculate limit based on rule_mode ('per_chapter' or 'total')
+    const limit = rule.rule_mode === 'per_chapter' 
+      ? rule.min_questions * numChapters 
+      : rule.min_questions;
+
+    const chapterIds = getChapterIdsInRange(start, end);
+
+    if (!chapterIds) {
+      console.warn(`No chapters found for range ${start}-${end}`);
+      questionsByRule[i] = [];
+      continue;
     }
-    return questions;
+
+    const res = await axios.get('/api/questions', {
+      params: { 
+        subjectId: watchedSubjectId, 
+        classId: watchedClassId, 
+        questionType: rule.question_type.toLowerCase(), 
+        chapterIds: chapterIds,
+        limit: limit, 
+        random: true 
+      }
+    });
+    
+    questionsByRule[i] = res.data || [];
+  }
+  return questionsByRule;
+};
+
+const generateBoardPatternSections = async (
+  rules: any[], 
+  questionsByRule: Record<number, Question[]>, 
+  selectedLanguage: 'english' | 'urdu' | 'bilingual',
+  patternDetails: any 
+) => {
+  const sections: PaperSection[] = [];
+  const subName = currentSubject?.name?.toLowerCase() || '';
+
+  // Helper to get questions of a specific type
+  const getQuestionsByType = (type: string) => {
+    return Object.values(questionsByRule)
+      .flat()
+      .filter(q => {
+        const qType = (q.type || q.question_type || '').toLowerCase();
+        return qType === type.toLowerCase();
+      });
   };
 
-  const generateBoardPatternSections = async (pattern: any, loadedQuestions: Record<string, Question[]>) => {
-  const sections: PaperSection[] = [];
-  
-  // 1. Get the standard types
-  const standardTypes = ['mcq', 'short', 'long'];
-  
-  // 2. Combine standard types with names from additionalTypes
-  const allTypes = [
-    ...standardTypes, 
-    ...(pattern.additionalTypes?.map((t: any) => t.name) || [])
-  ];
+  // --- 1. MCQs ---
+  const mcqs = getQuestionsByType('mcq').slice(0, patternDetails.mcq.count);
+  if (mcqs.length > 0) {
+    sections.push(createSectionObject('mcq', 'Q. No. 1: Choose the correct answer.', mcqs, patternDetails.mcq.marks));
+  }
 
-  allTypes.forEach((type, idx) => {
-    // Look for pattern data in either the base object or the additionalTypes array
-    const p = pattern[type] || pattern.additionalTypes.find((t: any) => t.name === type);
-    
-    if (p && p.count > 0) {
+  // --- 2. Short Questions (Logic for splitting into groups) ---
+  const shorts = getQuestionsByType('short').slice(0, patternDetails.short.count);
+  if (shorts.length > 0) {
+    // Determine chunk size: Urdu/English = 8, Computer = 6, Others = 6
+    const chunkSize = (subName.includes('urdu') || subName.includes('english')) ? 8 : 6;
+    const attemptPerSection = chunkSize === 8 ? 5 : 4;
+
+    for (let i = 0; i < shorts.length; i += chunkSize) {
+      const chunk = shorts.slice(i, i + chunkSize);
+      const qNumber = Math.floor(i / chunkSize) + 2;
+
       sections.push({
-        id: `section-${type}-${idx}`,
-        type: type as any,
-        questions: (loadedQuestions[type] || []).slice(0, p.count),
-        totalQuestions: p.count,
-        attemptCount: p.attempt,
-        marksEach: p.marks,
-        totalMarks: p.total,
+        id: `section-short-${i}-${Date.now()}`,
+        type: 'short',
+        instructions: `Q. No. ${qNumber}: Write short answers to any ${attemptPerSection} questions.`,
+        questions: chunk,
+        totalQuestions: chunk.length,
+        attemptCount: attemptPerSection,
+        marksEach: patternDetails.short.marks,
+        totalMarks: attemptPerSection * patternDetails.short.marks,
         subject: currentSubject?.name || '',
-        language: currentLanguage,
+        language: selectedLanguage,
         layout: currentLayout,
         timestamp: new Date().toISOString()
       });
     }
-  });
+  }
 
-  const paperData = {
-    layout: currentLayout,
-    language: currentLanguage,
-    sections: sections
-  };
+  // --- 3. Long Questions ---
+  const longs = getQuestionsByType('long').slice(0, patternDetails.long.count);
+  if (longs.length > 0) {
+    const qNum = sections.length + 1;
+    sections.push({
+      id: `section-long-${Date.now()}`,
+      type: 'long',
+      instructions: `Q. No. ${qNum}: Attempt any ${patternDetails.long.attempt} Long Questions.`,
+      questions: longs,
+      totalQuestions: longs.length,
+      attemptCount: patternDetails.long.attempt,
+      marksEach: patternDetails.long.marks,
+      totalMarks: patternDetails.long.attempt * patternDetails.long.marks,
+      subject: currentSubject?.name || '',
+      language: selectedLanguage,
+      layout: currentLayout,
+      timestamp: new Date().toISOString()
+    });
+  }
 
+  // --- 4. Additional Types (English/Urdu Specific) ---
+  if (patternDetails.additionalTypes && patternDetails.additionalTypes.length > 0) {
+    let nextQNum = sections.length + 1;
+
+    patternDetails.additionalTypes.forEach((extra: any) => {
+      const extraQuestions = getQuestionsByType(extra.name).slice(0, extra.count);
+
+      if (extraQuestions.length > 0) {
+        sections.push({
+          id: `section-extra-${extra.name}-${Date.now()}`,
+          type: extra.name,
+          instructions: `Q. No. ${nextQNum}: ${extra.label} (${extra.attempt}/${extra.count})`,
+          questions: extraQuestions,
+          totalQuestions: extraQuestions.length,
+          attemptCount: extra.attempt,
+          marksEach: extra.marks,
+          totalMarks: extra.total,
+          subject: currentSubject?.name || '',
+          language: selectedLanguage,
+          layout: currentLayout,
+          timestamp: new Date().toISOString()
+        });
+        nextQNum++;
+      }
+    });
+  }
+
+  // --- Final Save & Sync ---
+  if (sections.length === 0) {
+    throw new Error("No questions found even with fallback. Check DB connections.");
+  }
+
+  const paperData = { layout: currentLayout, language: selectedLanguage, sections };
   localStorage.setItem('questionPapers', JSON.stringify(paperData));
   refreshPaperData();
 };
+
+// Helper to keep the code clean
+const createSectionObject = (type: any, title: string, questions: Question[], marks: number) => ({
+  id: `section-${type}-combined-${Date.now()}`,
+  type,
+  instructions: title,
+  questions,
+  totalQuestions: questions.length,
+  attemptCount: questions.length,
+  marksEach: marks,
+  totalMarks: questions.length * marks,
+  subject: currentSubject?.name || '', 
+  language: paperLanguage, 
+  layout: currentLayout,
+  timestamp: new Date().toISOString()
+});
 
   const handlePrint = () => {
     window.print();
@@ -414,21 +592,7 @@ const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions 
       </div>
     </div>
 {/* 1. GLOBAL LOADING OVERLAY */}
-{(isGeneratingBoardPattern || isSaving) && (
-  <div 
-    className="position-fixed top-0 start-0 w-100 vh-100 d-flex flex-column align-items-center justify-content-center"
-    style={{ 
-        zIndex: 9999, 
-        backgroundColor: 'rgba(255, 255, 255, 0.7)',
-        backdropFilter: 'blur(2px)' 
-    }}
-  >
-    <div className="d-flex align-items-center justify-content-center mb-3">
-        <Loading message={isSaving ? 'Saving to Cloud...' : 'Generating Board Pattern...'} /> {/* Your existing Loading component */}
-    </div>
-    
-  </div>
-)}
+
       {/* 2. SCROLLABLE AREA: Allows both Vertical and Horizontal scrolling */}
       <main className="flex-grow-1 overflow-auto bg-secondary bg-opacity-10 custom-scrollbar d-print-block p-print-0 mt-4">
         {/* Wrapper to center paper on large screens, but allow left-align on small screens */}
@@ -504,7 +668,21 @@ const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions 
           </div>
         </div>
       </main>
+{(isGeneratingBoardPattern || isSaving) && (
+  <div 
+    className="position-fixed top-0 start-0 w-100 vh-100 d-flex flex-column align-items-center justify-content-center"
+    style={{ 
+        zIndex: 9999, 
+        backgroundColor: 'rgba(255, 255, 255, 0.7)',
+        backdropFilter: 'blur(2px)' 
+    }}
+  >
+    
+        <Loading message={isSaving ? 'Saving to Cloud...' : 'Generating Board Pattern...'} /> {/* Your existing Loading component */}
 
+    
+  </div>
+)}
       {/* 3. FLOATING ACTION BUTTON */}
       <button 
         className="btn btn-dark rounded-circle shadow-lg position-fixed bottom-0 end-0 m-4 d-print-none d-flex align-items-center justify-content-center"

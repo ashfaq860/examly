@@ -73,62 +73,86 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
 
 };
 const SectionBlock = ({ section, index }: { section: PaperSection; index: number }) => {
-    // Defensive check: If section is missing, render nothing
-    if (!section) return null;
+  if (!section) return null;
+  const questions = Array.isArray(section.questions) ? section.questions : [];
 
-    // Ensure questions is always an array to prevent .map() crashes
-    const questions = Array.isArray(section.questions) ? section.questions : [];
+  const getDynamicColClass = (q: any) => {
+    if (section.type === 'mcq' || section.type === 'long') return 'col-12';
+    const engText = q.question_text || q.question || '';
+    const urText = q.question_text_ur || '';
+    const totalVisualLength = engText.length + (urText.length * 1.5);
+    const type = section.type.toLowerCase();
+    const isUltraShort = type.includes('idiom') || type.includes('word') || type.includes('meaning');
 
-    return (
-      <div 
-        key={section.id} 
-        className="section-block" 
-        style={{ 
-          border: isEditMode ? "1px dashed #ccc" : "none", 
-          marginBottom: '5px',
-          width: '100%' 
-        }}
-      >
-        <SectionHeader
-          sectionId={section.id}
-          sectionIndex={index}
-          sectionType={section.type}
-          totalQuestions={section.totalQuestions}
-          attemptCount={section.attemptCount}
-          totalMarks={section.totalMarks}
-          headingFontSize={settings.headingFontSize}
-          headingFontFamily={settings.headingFontFamily}
-          paperLanguage={paperLanguage}
-          customEnHeader={section.customEnHeader}
-          customUrHeader={section.customUrHeader}
-          onHeaderChange={handleHeaderChange}
-          isEditMode={isEditMode}
-        />
-        <div className="questions-list">
-          {questions.map((q, qIdx) => (
-            <QuestionRenderer
-              key={q?.id || `q-${index}-${qIdx}`}
-              question={q}
-              index={qIdx}
-              sectionType={section.type}
-              sectionId={section.id}
-              paperLanguage={paperLanguage}
-              isEditMode={isEditMode}
-              config={config}
-              fontSize={settings.fontSize}
-              metaFontSize={settings.metaFontSize}
-              questionFontFamily={settings.fontFamily}
-              questionLineSpacing={settings.lineHeight}
-              mcqFontSize={settings.mcqFontSize}
-              mcqLineHeight={settings.mcqLineHeight}
-              onTextChange={onTextChange}
-              renderInlineBilingual={renderInlineBilingual}
-            />
-          ))}
-        </div>
-      </div>
-    );
+    if (totalVisualLength < 30 || (isUltraShort && totalVisualLength < 45)) return 'col-3';
+    if (totalVisualLength < 60) return 'col-4';
+    if (totalVisualLength < 110) return 'col-6';
+    return 'col-12';
   };
+
+  return (
+    <div 
+      key={`section-${section.id}-${index}`} // Section key safety
+      className="section-block" 
+      style={{ 
+        border: isEditMode ? "1px dashed #ccc" : "none", 
+        marginBottom: '8px', 
+        width: '100%' 
+      }}
+    >
+      <SectionHeader
+        sectionId={section.id}
+        sectionIndex={index}
+        sectionType={section.type}
+        totalQuestions={section.totalQuestions}
+        attemptCount={section.attemptCount}
+        totalMarks={section.totalMarks}
+        headingFontSize={settings.headingFontSize}
+        headingFontFamily={settings.headingFontFamily}
+        paperLanguage={paperLanguage}
+        customEnHeader={section.customEnHeader}
+        customUrHeader={section.customUrHeader}
+        onHeaderChange={handleHeaderChange}
+        isEditMode={isEditMode}
+      />
+
+      <div className="questions-list row g-2 mx-0">
+        {questions.map((q, qIdx) => {
+          // FIX: Create a truly unique key by combining ID and Index
+          // This prevents the duplicate key error if a question is repeated
+          const uniqueKey = q?.id ? `q-${q.id}-${qIdx}` : `q-fallback-${index}-${qIdx}`;
+          
+          return (
+            <div 
+              key={uniqueKey} 
+              className={`${getDynamicColClass(q)} px-1`}
+              style={{ minHeight: 'fit-content', marginTop: '0px' }}
+            >
+              <QuestionRenderer
+                question={q}
+                index={qIdx}
+                sectionType={section.type}
+                sectionId={section.id}
+                paperLanguage={paperLanguage}
+                isEditMode={isEditMode}
+                config={config}
+                fontSize={settings.fontSize}
+                metaFontSize={settings.metaFontSize}
+                questionFontFamily={settings.fontFamily}
+                questionLineSpacing={settings.lineHeight}
+                mcqFontSize={settings.mcqFontSize}
+                mcqLineHeight={settings.mcqLineHeight}
+                onTextChange={onTextChange}
+                renderInlineBilingual={renderInlineBilingual}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+  
  const DashedLine = () => (
   <div 
     className="w-100 my-2 border-top border-dark position-relative" 
