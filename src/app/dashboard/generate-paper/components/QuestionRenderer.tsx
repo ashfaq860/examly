@@ -1,4 +1,3 @@
-// generate-paper/components/QuestionRenderer.tsx
 'use client';
 import React from 'react';
 import { LanguageConfig } from '@/types/paperBuilderTypes';
@@ -12,20 +11,25 @@ interface QuestionRendererProps {
   paperLanguage: 'english' | 'urdu' | 'bilingual';
   isEditMode: boolean;
   config: LanguageConfig;
-  fontSize: number;           // Subjective Font Size
-  mcqFontSize: number;        // MCQ Font Size
-  lineHeight: number;         // Subjective Spacing
-  mcqLineHeight: number;      // MCQ Spacing
+  fontSize: number;
+  mcqFontSize: number;
+  lineHeight: number;
+  mcqLineHeight: number;
   metaFontSize: number;
-  questionFontFamily: string; // Global Font Family for English
+  questionFontFamily: string;
   onTextChange: (sectionId: string, questionId: string, field: string, value: string) => void;
   renderInlineBilingual?: boolean;
+  questionLineSpacing?: number;
 }
-const URDU_FONT = "'Jameel Noori Nastaleeq', serif";
+
+// MATCH THIS EXACTLY TO YOUR @font-face definition in globals.css
+const URDU_FONT = "'JameelNoori', 'Noto Nastaliq Urdu', serif";
+
 const formatQuestionText = (text: string): string => {
   if (!text) return '';
   return text.replace(/<(?:.|\n)*?>/gm, ' ').trim();
 };
+
 const BilingualTextDisplay: React.FC<any> = ({
   engValue,
   urValue,
@@ -41,12 +45,10 @@ const BilingualTextDisplay: React.FC<any> = ({
   questionFontFamily,
   urduFontSizeOffset = 2,
   isOption = false,
-  lineSpacing, 
+  lineSpacing,
 }) => {
   const effectiveLineHeight = lineSpacing || 1.4;
-  
-  // Tighten Urdu line height specifically because Nastaleeq ligatures are tall
-  const optimizedUrduLineHeight = isOption ? 1.0 : Math.max(0.9, effectiveLineHeight - 0.4);
+  const optimizedUrduLineHeight = isOption ? 1.1 : Math.max(1.0, effectiveLineHeight - 0.3);
 
   return (
     <div className={`d-flex w-100 ${isUrdu ? 'flex-row-reverse' : 'flex-row'} align-items-start`}>
@@ -54,13 +56,15 @@ const BilingualTextDisplay: React.FC<any> = ({
         <div 
           className="urdu-text flex-grow-1" 
           dir="rtl" 
+          lang="ur"
           style={{ 
             fontFamily: URDU_FONT, 
             fontSize: `${fontSize + urduFontSizeOffset}px`, 
             textAlign: 'right',
             lineHeight: optimizedUrduLineHeight,
-            marginTop: isOption ? '-4px' : '-4px', // Adjust for Nastaleeq baseline
-            marginBottom: '0px'
+            marginTop: isOption ? '-2px' : '-4px',
+            marginBottom: '0px',
+            wordSpacing: '2px'
           }}
         >
           {isEditMode ? (
@@ -102,7 +106,7 @@ const BilingualTextDisplay: React.FC<any> = ({
 };
 
 export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
-  const { paperLanguage, sectionType, index, fontSize, mcqFontSize,  mcqLineHeight, questionFontFamily, questionLineSpacing } = props;
+  const { paperLanguage, sectionType, index, fontSize, mcqFontSize, mcqLineHeight, questionFontFamily, questionLineSpacing } = props;
   const isUrdu = paperLanguage === 'urdu' || paperLanguage === 'bilingual';
   const isEnglish = paperLanguage === 'english' || paperLanguage === 'bilingual';
 
@@ -112,14 +116,19 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
   return (
     <div className={`question-wrapper mb-1 ${isUrdu ? 'rtl' : 'ltr'}`}>
       <style jsx global>{`
+        /* Force font availability on screen and mobile */
+        .urdu-text, [lang="ur"] {
+          font-family: ${URDU_FONT} !important;
+          text-rendering: optimizeLegibility;
+          -webkit-font-smoothing: antialiased;
+        }
+
         @media print {
-          /* Force tight line heights for Urdu in print */
           .urdu-text { 
+            font-family: ${URDU_FONT} !important;
             line-height: 1.1 !important; 
             display: block !important;
-            padding-bottom: 0px !important;
           }
-          /* Ensure English keeps proper spacing but matches Urdu scale */
           .english-text {
             line-height: 1.2 !important;
           }
@@ -128,6 +137,9 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
             margin-bottom: 4px !important;
           }
         }
+        .editable-content:hover { background-color: rgba(0, 0, 0, 0.02); }
+        .editable-content:focus { background-color: #fff !important; border: 1px solid #007bff !important; }
+        .urdu-text .editable-content { direction: rtl; text-align: right; }
       `}</style>
 
       <div className="d-flex align-items-start gap-1">
@@ -135,7 +147,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
             minWidth: '13px', 
             fontSize: `${numberFontSize}px`,
             lineHeight: `${currentLineHeight}`,
-            fontFamily: questionFontFamily // Applied custom font to numbers
+            fontFamily: questionFontFamily 
         }}>
           {index + 1}.
         </span>
@@ -151,9 +163,9 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
   );
 };
 
+// ... MCQQuestionRenderer and SubjectiveQuestionRenderer (Keep existing logic)
 const MCQQuestionRenderer: React.FC<any> = (props) => {
   const { question, mcqFontSize, mcqLineHeight, questionFontFamily, paperLanguage } = props;
-
   const activeFontSize = mcqFontSize || 12;
   const activeLineHeight = mcqLineHeight || 1.2;
   const options = ['a', 'b', 'c', 'd'];
@@ -185,13 +197,9 @@ const MCQQuestionRenderer: React.FC<any> = (props) => {
           questionId={question.id}
         />
       </div>
-
-      <div className={`row g-1 mt- ${props.isUrdu ? 'pe-2' : 'ps-2'}`}>
+      <div className={`row g-1 mx-0 ${props.isUrdu ? 'pe-2' : 'ps-2'}`}>
         {options.map((key) => (
-          <div 
-            key={key} 
-            className={`${getColumnClass()} d-flex gap-1 align-items-start`} 
-          >
+          <div key={key} className={`${getColumnClass()} d-flex gap-1 align-items-start`}>
             <span className="fw-bold" style={{ 
               minWidth: '12px', 
               fontSize: `${activeFontSize * 0.9}px`,
@@ -218,9 +226,7 @@ const MCQQuestionRenderer: React.FC<any> = (props) => {
 };
 
 const SubjectiveQuestionRenderer: React.FC<any> = (props) => {
-  const { question, fontSize, lineHeight, questionFontFamily,questionLineSpacing } = props;
-  //console.log('subjective console props', props);
-  
+  const { question, fontSize, questionFontFamily, questionLineSpacing } = props;
   return (
     <BilingualTextDisplay 
       {...props}
@@ -229,27 +235,9 @@ const SubjectiveQuestionRenderer: React.FC<any> = (props) => {
       engField="question_text"
       urField="question_text_ur"
       fontSize={fontSize}
-      lineSpacing={questionLineSpacing  || 1.5}
-      questionFontFamily={questionFontFamily} // Fixed prop name mismatch
+      lineSpacing={questionLineSpacing || 1.5}
+      questionFontFamily={questionFontFamily}
       questionId={question.id}
     />
   );
 };
-<style jsx global>{`
-  .editable-content:hover {
-    background-color: rgba(0, 0, 0, 0.02);
-  }
-  .editable-content:focus {
-    background-color: #fff !important;
-    border: 1px solid #007bff !important;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
-  }
-  /* Ensure Urdu text maintains direction while editing */
-  .urdu-text .editable-content {
-    direction: rtl;
-    text-align: right;
-  }
-  @media print {
-    .editable-content { border: none !important; background: none !important; }
-  }
-`}</style>

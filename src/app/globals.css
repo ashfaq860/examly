@@ -1,4 +1,11 @@
 /* src/styles/globals.css */
+@font-face {
+  font-family: 'JameelNoori';
+  src: url('/fonts/JameelNooriNastaleeqKasheeda.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block; /* 'block' is better for Nastaleeq to avoid flickering */
+}
 :root{
   --primary-600: #0b63d4;
   --primary-400: #2aa7ff;
