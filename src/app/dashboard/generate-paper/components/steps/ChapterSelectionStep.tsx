@@ -111,12 +111,18 @@ export const ChapterSelectionStep: React.FC<ChapterSelectionStepProps> = ({
   const options = [
     { value: '1st_half_book', icon: <Layers size={24} className="text-primary" />, title: '1st Half', range: getChapterRangeText('1st_half_book') },
     { value: '2nd_half_book', icon: <Layers size={24} className="text-success" />, title: '2nd Half', range: getChapterRangeText('2nd_half_book') },
-    { value: 'custom', icon: <LayoutGrid size={24} className="text-warning" />, title: 'Custom Selection', range: 'Manual' },
+    { value: 'custom', icon: <LayoutGrid size={24} className="text-warning" />, title: 'Choose Random Chapters', range: 'Manual' },
     { value: 'full_book', icon: <BookOpen size={24} className="text-info" />, title: 'Full Book', range: `${sortedChapters.length} Chapters` },
   ];
 
   return (
     <div className="container-fluid px-0">
+
+       <div className="text-center mb-5 animate-slide-down">
+        <h2 className="fw-black text-dark mb-1 tracking-tight">Select Your Chapters</h2>
+        <div className="mx-auto bg-primary rounded-pill mb-3" style={{ width: '40px', height: '4px' }}></div>
+        <p className="text-secondary opacity-75">Choose the chapters to include in your paper</p>
+      </div>
       <style jsx global>{`
         .urdu-font-style { font-family: 'JameelNoori', serif !important; font-size: 1.3rem !important; }
         

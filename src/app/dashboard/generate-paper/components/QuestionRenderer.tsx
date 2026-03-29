@@ -22,14 +22,30 @@ interface QuestionRendererProps {
   questionLineSpacing?: number;
 }
 
-// MATCH THIS EXACTLY TO YOUR @font-face definition in globals.css
 const URDU_FONT = "'JameelNoori', 'Noto Nastaliq Urdu', serif";
 
+/** Convert number to Roman numeral */
+const toRoman = (num: number): string => {
+  const lookup: { [key: string]: number } = {
+    x: 10, ix: 9, v: 5, iv: 4, i: 1
+  };
+  let roman = '';
+  for (let key in lookup) {
+    while (num >= lookup[key]) {
+      roman += key;
+      num -= lookup[key];
+    }
+  }
+  return roman;
+};
+
+/** Strip HTML tags and trim */
 const formatQuestionText = (text: string): string => {
   if (!text) return '';
   return text.replace(/<(?:.|\n)*?>/gm, ' ').trim();
 };
 
+/** Component to render bilingual text */
 const BilingualTextDisplay: React.FC<any> = ({
   engValue,
   urValue,
@@ -53,48 +69,50 @@ const BilingualTextDisplay: React.FC<any> = ({
   return (
     <div className={`d-flex w-100 ${isUrdu ? 'flex-row-reverse' : 'flex-row'} align-items-start`}>
       {isUrdu && (
-        <div 
-          className="urdu-text flex-grow-1" 
-          dir="rtl" 
+        <div
+          className="urdu-text flex-grow-1"
+          dir="rtl"
           lang="ur"
-          style={{ 
-            fontFamily: URDU_FONT, 
-            fontSize: `${fontSize + urduFontSizeOffset}px`, 
+          style={{
+            fontFamily: URDU_FONT,
+            fontSize: `${fontSize + urduFontSizeOffset}px`,
             textAlign: 'right',
             lineHeight: optimizedUrduLineHeight,
-            marginTop: isOption ? '-2px' : '-4px',
+            marginTop: isOption ? '-4px' : '-4px',
             marginBottom: '0px',
-            wordSpacing: '2px'
+            wordSpacing: '2px',
+            verticalAlign: 'baseline'
           }}
         >
           {isEditMode ? (
-            <EditableText 
-              value={urValue || ''} 
-              placeholder="Urdu text..." 
-              onChange={(v) => onTextChange(sectionId, questionId, urField, v)} 
+            <EditableText
+              value={urValue || ''}
+              placeholder="Urdu text..."
+              onChange={(v) => onTextChange(sectionId, questionId, urField, v)}
             />
           ) : (
             <span dangerouslySetInnerHTML={{ __html: formatQuestionText(urValue || (isOption ? '' : engValue)) }} />
           )}
         </div>
       )}
-      
+
       {isEnglish && (
-        <div 
-          className="english-text flex-grow-1" 
-          dir="ltr" 
-          style={{ 
-            fontFamily: questionFontFamily, 
-            fontSize: `${fontSize}px`, 
+        <div
+          className="english-text flex-grow-1"
+          dir="ltr"
+          style={{
+            fontFamily: questionFontFamily,
+            fontSize: `${fontSize}px`,
             textAlign: 'left',
             lineHeight: `${effectiveLineHeight}`,
+            
           }}
         >
           {isEditMode ? (
-            <EditableText 
-              value={engValue || ''} 
-              placeholder="English text..." 
-              onChange={(v) => onTextChange(sectionId, questionId, engField, v)} 
+            <EditableText
+              value={engValue || ''}
+              placeholder="English text..."
+              onChange={(v) => onTextChange(sectionId, questionId, engField, v)}
             />
           ) : (
             <span dangerouslySetInnerHTML={{ __html: formatQuestionText(engValue) }} />
@@ -105,18 +123,35 @@ const BilingualTextDisplay: React.FC<any> = ({
   );
 };
 
+/** Main question renderer */
 export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
-  const { paperLanguage, sectionType, index, fontSize, mcqFontSize, mcqLineHeight, questionFontFamily, questionLineSpacing } = props;
+  const {
+    paperLanguage,
+    sectionType,
+    index,
+    fontSize,
+    mcqFontSize,
+    mcqLineHeight,
+    questionFontFamily,
+    questionLineSpacing
+  } = props;
+
   const isUrdu = paperLanguage === 'urdu' || paperLanguage === 'bilingual';
   const isEnglish = paperLanguage === 'english' || paperLanguage === 'bilingual';
 
   const numberFontSize = sectionType === 'mcq' ? (mcqFontSize || 12) : fontSize;
   const currentLineHeight = sectionType === 'mcq' ? (mcqLineHeight || 1.2) : (questionLineSpacing || 1.5);
 
+  // Counting logic: standard for MCQ/Long, Roman for others
+  const typeKey = sectionType.toLowerCase();
+  const isLong = typeKey.includes('long') || typeKey.includes('essay') || typeKey.includes('subjective_long');
+  const isMCQ = typeKey === 'mcq';
+  const useStandardCounting = isMCQ || isLong;
+  const indexDisplay = useStandardCounting ? `${index + 1}.` : `(${toRoman(index + 1)})`;
+
   return (
     <div className={`question-wrapper mb-1 ${isUrdu ? 'rtl' : 'ltr'}`}>
       <style jsx global>{`
-        /* Force font availability on screen and mobile */
         .urdu-text, [lang="ur"] {
           font-family: ${URDU_FONT} !important;
           text-rendering: optimizeLegibility;
@@ -124,33 +159,80 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
         }
 
         @media print {
-          .urdu-text { 
-            font-family: ${URDU_FONT} !important;
-            line-height: 1.1 !important; 
-            display: block !important;
+       .question-wrapper, 
+          .question-wrapper *,
+          .mcq-item, 
+          .mcq-item *,
+          .row, 
+          .urdu-text, 
+          .english-text,
+          .d-flex,
+          span, div {
+            background-color: transparent !important;
+            background: transparent !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
-          .english-text {
-            line-height: 1.2 !important;
-          }
-          .question-wrapper { 
-            page-break-inside: avoid; 
-            margin-bottom: 4px !important;
-          }
+          .urdu-text { line-height: 1.1 !important; display: block !important; }
+          .english-text { line-height: 1.2 !important; }
+          .question-wrapper { page-break-inside: avoid; margin-bottom: 4px !important; }
+
+          .mcq-item .d-flex {
+    display: flex !important;
+    align-items: baseline !important;
+  }
+  
+  /* Prevent the English label from floating high */
+  .mcq-item span.fw-bold {
+    align-self: baseline !important;
+    line-height: 1 !important;
+  }
+
+  /* Adjust Urdu Nastaliq specifically for print rendering */
+  .urdu-text {
+    display: inline-block !important;
+    vertical-align: baseline !important;
+  }
         }
+
         .editable-content:hover { background-color: rgba(0, 0, 0, 0.02); }
         .editable-content:focus { background-color: #fff !important; border: 1px solid #007bff !important; }
         .urdu-text .editable-content { direction: rtl; text-align: right; }
       `}</style>
 
-      <div className="d-flex align-items-start gap-1">
-        <span className="fw-bold" style={{ 
-            minWidth: '13px', 
-            fontSize: `${numberFontSize}px`,
-            lineHeight: `${currentLineHeight}`,
-            fontFamily: questionFontFamily 
-        }}>
-          {index + 1}.
-        </span>
+      {/* Question container with numbering on both sides if bilingual */}
+      <div className="d-flex align-items-start gap-1 w-100">
+        {/* English/left number */}
+        {isEnglish && (
+          <span
+            className="fw-bold"
+            style={{
+              minWidth: '18px',
+              fontSize: `${numberFontSize}px`,
+              lineHeight: `${currentLineHeight}`,
+              fontFamily: questionFontFamily,
+              textAlign: 'left'
+            }}
+          >
+            {indexDisplay}
+          </span>
+        )}
+        {isUrdu && paperLanguage === 'urdu' &&(
+          <span
+            className="fw-bold"
+            style={{
+              minWidth: '18px',
+              fontSize: `${numberFontSize}px`,
+              lineHeight: `${currentLineHeight}`,
+              fontFamily: URDU_FONT,
+              textAlign: 'right'
+            }}
+          >
+            {indexDisplay}
+          </span>
+        )}
+
+        {/* Question text */}
         <div className="flex-grow-1">
           {sectionType === 'mcq' ? (
             <MCQQuestionRenderer {...props} isUrdu={isUrdu} isEnglish={isEnglish} />
@@ -158,22 +240,41 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
             <SubjectiveQuestionRenderer {...props} isUrdu={isUrdu} isEnglish={isEnglish} />
           )}
         </div>
+
+        {/* Urdu/right number (only for bilingual mode) */}
+        {isUrdu && paperLanguage === 'bilingual' && (
+          <span
+            className="fw-bold"
+            style={{
+              minWidth: '18px',
+              fontSize: `${numberFontSize}px`,
+              lineHeight: `${currentLineHeight}`,
+              fontFamily: URDU_FONT,
+              textAlign: 'right'
+            }}
+          >
+            {indexDisplay}
+          </span>
+        )}
       </div>
     </div>
   );
 };
 
-// ... MCQQuestionRenderer and SubjectiveQuestionRenderer (Keep existing logic)
+/** MCQ Renderer */
 const MCQQuestionRenderer: React.FC<any> = (props) => {
   const { question, mcqFontSize, mcqLineHeight, questionFontFamily, paperLanguage } = props;
   const activeFontSize = mcqFontSize || 12;
   const activeLineHeight = mcqLineHeight || 1.2;
   const options = ['a', 'b', 'c', 'd'];
-  
+
   const getColumnClass = () => {
     let maxLen = 0;
     options.forEach(key => {
-      const len = (question[`option_${key}`] || '').length + (question[`option_${key}_ur`] || '').length;
+      // Logic for column width should also account for the fallback
+      const eng = question[`option_${key}`] || '';
+      const ur = question[`option_${key}_ur`] || '';
+      const len = eng.length + ur.length;
       if (len > maxLen) maxLen = len;
     });
     const threshold = paperLanguage === 'bilingual' ? 50 : 80;
@@ -185,10 +286,11 @@ const MCQQuestionRenderer: React.FC<any> = (props) => {
   return (
     <div className="mcq-item">
       <div className="mb-1">
-        <BilingualTextDisplay 
+        <BilingualTextDisplay
           {...props}
           engValue={question.question_text || question.question}
-          urValue={question.question_text_ur}
+          // Fallback for question text if Urdu is selected but empty
+          urValue={question.question_text_ur || (paperLanguage === 'urdu' ? (question.question_text || question.question) : '')}
           engField="question_text"
           urField="question_text_ur"
           fontSize={activeFontSize}
@@ -197,38 +299,53 @@ const MCQQuestionRenderer: React.FC<any> = (props) => {
           questionId={question.id}
         />
       </div>
+
       <div className={`row g-1 mx-0 ${props.isUrdu ? 'pe-2' : 'ps-2'}`}>
-        {options.map((key) => (
-          <div key={key} className={`${getColumnClass()} d-flex gap-1 align-items-start`}>
-            <span className="fw-bold" style={{ 
-              minWidth: '12px', 
-              fontSize: `${activeFontSize * 0.9}px`,
-              fontFamily: questionFontFamily,
-              lineHeight: activeLineHeight 
-            }}>({key})</span>
-            <BilingualTextDisplay 
-              {...props}
-              isOption
-              engValue={question[`option_${key}`]}
-              urValue={question[`option_${key}_ur`]}
-              engField={`option_${key}`}
-              urField={`option_${key}_ur`}
-              fontSize={activeFontSize} 
-              lineSpacing={activeLineHeight}
-              questionFontFamily={questionFontFamily}
-              questionId={question.id}
-            />
-          </div>
-        ))}
+        {options.map((key) => {
+          const engOpt = question[`option_${key}`];
+          const urOpt = question[`option_${key}_ur`];
+          
+          // Logic: If language is Urdu and Urdu option is missing, use English option
+          const finalUrduValue = (paperLanguage === 'urdu' && !urOpt) ? engOpt : urOpt;
+
+          return (
+            <div key={key} className={`${getColumnClass()} d-flex gap-1 align-items-start`}>
+              <span
+                className="fw-bold"
+                style={{
+                  minWidth: '12px',
+                  fontSize: `${activeFontSize * 0.9}px`,
+                  fontFamily: questionFontFamily,
+                  lineHeight: activeLineHeight
+                }}
+              >
+                ({key})
+              </span>
+              <BilingualTextDisplay
+                {...props}
+                isOption
+                engValue={engOpt}
+                urValue={finalUrduValue}
+                engField={`option_${key}`}
+                urField={`option_${key}_ur`}
+                fontSize={activeFontSize}
+                lineSpacing={activeLineHeight}
+                questionFontFamily={questionFontFamily}
+                questionId={question.id}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 };
 
+/** Subjective Renderer */
 const SubjectiveQuestionRenderer: React.FC<any> = (props) => {
   const { question, fontSize, questionFontFamily, questionLineSpacing } = props;
   return (
-    <BilingualTextDisplay 
+    <BilingualTextDisplay
       {...props}
       engValue={question.question_text || question.question}
       urValue={question.question_text_ur}

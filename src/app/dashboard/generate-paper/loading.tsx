@@ -7,8 +7,8 @@ export default function Loading({ fullScreen = false, message = "Loading..." }: 
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsReady(true), 3000);
-    return () => clearTimeout(timer);
+    //const timer = setTimeout(() => setIsReady(true), 3000);
+    //return () => clearTimeout(timer);
   }, []);
 
   const wingTransition = {

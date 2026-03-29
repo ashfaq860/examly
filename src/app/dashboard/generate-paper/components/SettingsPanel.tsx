@@ -1,7 +1,7 @@
 //generate-paper/components/SettingsPanel.tsx
 'use client';
 import React from 'react';
-import { X, Settings, Type, Layout, List, FileText, Image as ImageIcon, FileQuestion } from 'lucide-react';
+import { X, Settings, Type, Layout, List, FileText, Image as ImageIcon, FileQuestion,Lock ,ShieldCheck  } from 'lucide-react';
 import { PaperSettings } from '@/types/paper-builder';
 
 interface SettingsPanelProps {
@@ -9,13 +9,15 @@ interface SettingsPanelProps {
   onClose: () => void;
   settings: PaperSettings;
   onSettingChange: (key: keyof PaperSettings, value: number | string) => void;
+  isPremium: boolean;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   isOpen,
   onClose,
   settings,
-  onSettingChange
+  onSettingChange,
+  isPremium
 }) => {
   // Professional Academic Font Pairs
 
@@ -30,7 +32,7 @@ const titleFontFamilies = [
     { name: 'University Serif (Georgia)', value: "'Georgia', serif" },
     { name: 'Clean Professional (Helvetica)', value: "'Helvetica', sans-serif" },
     { name: 'Elegant (Garamond)', value: "'Garamond', serif" },
-  { name: 'Algerian', value: "'Algerian', serif" },
+    { name: 'Algerian', value: "'Algerian', serif" },
     { name: 'Harlow Solid Italic', value: "'Harlow Solid Italic', cursive" },
     { name: 'Vladimir Script', value: "'Vladimir Script', cursive" },
     { name: 'Bodoni MT Poster', value: "'Bodoni MT Poster Compressed', serif" },
@@ -87,6 +89,86 @@ const titleFontFamilies = [
         </div>
 
         <div className="p-2">
+{/* SECTION: PREMIUM WATERMARK & DIMENSIONS */}
+          <section className="mb-3">
+            <div 
+              className={`p-2 rounded-3 border ${!isPremium ? 'bg-light opacity-75' : 'bg-white shadow-sm'}`}
+              style={{ transition: 'all 0.3s ease' }}
+            >
+              <div className="d-flex align-items-center justify-content-between mb-2">
+                <div className="d-flex align-items-center gap-2">
+                  {isPremium ? (
+                    <ShieldCheck size={18} className="text-success" />
+                  ) : (
+                    <Lock size={16} className="text-muted" />
+                  )}
+                  <div>
+                    <label className="form-label small fw-bold mb-0 d-block">
+                      Paper Watermark
+                    </label>
+                    {!isPremium && <span style={{ fontSize: '0.65rem' }} className="text-danger fw-bold">PREMIUM ONLY</span>}
+                  </div>
+                </div>
+
+                <div className="form-check form-switch mb-0">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    role="switch"
+                    checked={!!settings.showWatermark}
+                    disabled={!isPremium}
+                    onChange={(e) => onSettingChange('showWatermark', e.target.checked)}
+                    style={{ cursor: isPremium ? 'pointer' : 'not-allowed' }}
+                  />
+                </div>
+              </div>
+
+              {/* Collapsible Dimension Controls (Only for Premium + Active) */}
+              {isPremium && settings.showWatermark && (
+                <div className="pt-2 border-top mt-2 animate-fade-in">
+                  <div className="row g-2">
+                    <div className="col-6">
+                      <label className="x-small text-muted d-block mb-1">WM Width (px)</label>
+                      <input
+                        type="number"
+                        className="form-control form-control-sm border-0 bg-light"
+                        value={settings.watermarkWidth || 400}
+                        min="100"
+                        max="1000"
+                        onChange={(e) => onSettingChange('watermarkWidth', parseInt(e.target.value))}
+                      />
+                    </div>
+                    <div className="col-6">
+                      <label className="x-small text-muted d-block mb-1">WM Height (px)</label>
+                      <input
+                        type="number"
+                        className="form-control form-control-sm border-0 bg-light"
+                        value={settings.watermarkHeight || 400}
+                        min="100"
+                        max="1000"
+                        onChange={(e) => onSettingChange('watermarkHeight', parseInt(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <div className="d-flex justify-content-between x-small text-muted">
+                      <span>Opacity</span>
+                      <span>{(settings.watermarkOpacity || 0.1) * 100}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      className="form-range"
+                      min="0.05"
+                      max="0.5"
+                      step="0.01"
+                      value={settings.watermarkOpacity || 0.1}
+                      onChange={(e) => onSettingChange('watermarkOpacity', parseFloat(e.target.value))}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
           {/* SECTION: HEADER MASTER GROUP */}
           <section className="mb-0">
             <label className="text-uppercase text-primary fw-bold mb-0 d-block" style={{ fontSize: '0.75rem', letterSpacing: '1px' }}>

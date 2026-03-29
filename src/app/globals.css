@@ -1,7 +1,7 @@
 /* src/styles/globals.css */
 @font-face {
   font-family: 'JameelNoori';
-  src: url('/fonts/JameelNooriNastaleeqKasheeda.ttf') format('truetype');
+  src: url('/fonts/JameelNooriNastaleeqRegular.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: block; /* 'block' is better for Nastaleeq to avoid flickering */

@@ -1,4 +1,3 @@
-// generate_paper/components/SectionHeader.tsx
 'use client';
 
 import React from 'react';
@@ -17,8 +16,10 @@ interface SectionHeaderProps {
   customEnHeader?: string;
   customUrHeader?: string;
   onHeaderChange: (sectionId: string, field: 'en' | 'ur', value: string) => void;
-  isEditMode: boolean; // Prop added to control editability
+  isEditMode: boolean;
 }
+
+const URDU_FONT = "'JameelNoori', 'Noto Nastaliq Urdu', serif";
 
 export const SectionHeader: React.FC<SectionHeaderProps> = ({
   sectionId,
@@ -39,23 +40,87 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
   const qNo = sectionIndex + 1;
   const marksPerQuestion = totalMarks / (attemptCount || 1);
 
-  // Helper for Urdu numbers
-  const toUrduDigits = (num: number) =>
-    num.toString().replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[parseInt(d)]);
+  // Helper to convert numbers to Urdu/Arabic digits
+  const toUrduDigits = (num: number) => num
 
-  const defaultInstructions: Record<string, { en: string; ur: string }> = {
-    mcq: { en: 'Choose the correct option.', ur: 'درست جواب کا انتخاب کریں۔' },
- short: {
-  en: `Write Short Answers to ${isPartial ? 'any ' + attemptCount : 'all'} questions.`,
-  ur: `${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'تمام'} سوالات کے مختصر جوابات لکھئیے`,
-},
-    long: {
-      en: `Answer ${isPartial ? attemptCount : 'all'} questions in detail.`,
-      ur: `سوالات کے تفصیلی جوابات تحریر کریں۔`,
-    },
-    translate_urdu: { en: 'Translate into Urdu.', ur: 'اردو میں ترجمہ کریں۔' },
-    translate_english: { en: 'Translate into English.', ur: 'انگریزی میں ترجمہ کریں۔' },
-  };
+  /**
+   * Default Instructions mapped to your DB schema question_type constraints
+   */
+ const defaultInstructions: Record<string, { en: string; ur: string }> = {
+  // Objective
+  mcq: { 
+    en: `Choose the correct option for ${isPartial ? attemptCount : 'all'} questions.`, 
+    ur: `${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} درست جوابات کا انتخاب کریں۔` 
+  },
+  
+  // Subjective
+  short: {
+    en: `Write Short Answers to ${isPartial ? 'any ' + attemptCount : 'all'} questions.`,
+    ur: `${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} سوالات کے مختصر جوابات لکھئیے`,
+  },
+  long: {
+    en: `Answer ${isPartial ? 'any ' + attemptCount : 'all'} questions in detail.`,
+    ur: `${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} سوالات کے تفصیلی جوابات تحریر کریں۔`,
+  },
+
+  // English Grammar & Composition
+  directInDirect: { 
+    en: `Change the narration of ${isPartial ? 'any ' + attemptCount : 'the following'}.`, 
+    ur: `درج ذیل میں سے ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} کی ڈائریکٹ ان ڈائریکٹ میں تبدیلی کریں۔` 
+  },
+  activePassive: { 
+    en: `Change the voice of ${isPartial ? attemptCount : 'the following'} sentences.`, 
+    ur: `درج ذیل میں سے ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} جملوں کی ایکٹو اور پیسو وائس میں تبدیلی کریں۔` 
+  },
+  idiom_phrases: { 
+    en: `Use ${isPartial ? 'any ' + attemptCount : 'the following'} idioms/phrases in your own sentences.`, 
+    ur: `درج ذیل میں سے ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} محاورات یا ضرب الامثال کو اپنے جملوں میں استعمال کریں۔` 
+  },
+  translate_urdu: { 
+    en: `Translate ${isPartial ? 'any ' + attemptCount : 'the following'} passage into Urdu.`, 
+    ur: `درج ذیل میں سے ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'دیے گئے'} پیراگراف کا اردو میں ترجمہ کریں۔` 
+  },
+  translate_english: { 
+    en: `Translate ${isPartial ? attemptCount : 'the following'} sentences into English.`, 
+    ur: `درج ذیل میں سے ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} جملوں کا انگریزی میں ترجمہ کریں۔` 
+  },
+  
+  // Urdu Literature & Grammar
+  poetry_explanation: { 
+    en: `Explain ${isPartial ? attemptCount + ' verses' : 'the following verses'} with reference to context.`, 
+    ur: `درج ذیل میں سے ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} اشعار کی مختصر تشریح کریں۔` 
+  },
+  prose_explanation: { 
+    en: `Explain ${isPartial ? 'any ' + attemptCount : 'the following'} passage with reference to context.`, 
+    ur: ` ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} نثری پاروں کی تشریح کیجئے۔سبق کا عنوان،مصنف کا نام اور خط کشیدہ الفاظ کے معانی بھی لکھیئے۔` 
+  },
+  passage: { 
+    en: `Read the passage carefully and answer ${isPartial ? attemptCount + ' questions' : 'the questions'}.`, 
+    ur: `عبارت کو غور سے پڑھیں اور ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'آخر میں دیے گئے درج ذیل'} سوالات کے جوابات تحریر کریں۔` 
+  },
+  sentence_correction: { 
+    en: `Correct ${isPartial ? attemptCount : 'the following'} sentences.`, 
+    ur: ` ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} جملوں کی درستگی کریں۔` 
+  },
+  sentence_completion: { 
+    en: `Complete ${isPartial ? attemptCount : 'the following'} sentences.`, 
+    ur: ` ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} جملوں کی تکمیل کریں۔` 
+  },
+  
+  // Board Subjective Types
+  darkhwast_khat: { 
+    en: `Write ${isPartial ? 'either ' + attemptCount : 'the following'} Application or Letter.`, 
+    ur: `  ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} درخواست یا خط تحریر کریں۔` 
+  },
+  kahani_makalma: { 
+    en: `Write ${isPartial ? 'any ' + attemptCount : 'the following'} Story or Dialogue.`, 
+    ur: ` ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} کہانی یا مکالمہ تحریر کریں۔` 
+  },
+  Nasarkhulasa_markziKhyal: { 
+    en: `Write the Summary or Central Idea of ${isPartial ? attemptCount : 'the'} lesson.`, 
+    ur: ` ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} سبق کا خلاصہ یا مرکزی خیال تحریر کریں۔` 
+  },
+};
 
   const defaults = defaultInstructions[sectionType] || {
     en: sectionType.replace(/_/g, ' ').toUpperCase(),
@@ -70,101 +135,128 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
   const isBilingual = paperLanguage === 'bilingual';
 
   return (
-    <div
-      className="section-header border-bottom border-1 border-dark mb-3 pb-0 d-flex align-items-center"
-      style={{ direction: 'ltr' }}
-    >
-      {/* 1. English Section */}
-      {(isEnglishOnly || isBilingual) && (
-        <div className="flex-grow-1 text-start" style={{ flexBasis: 0 }}>
-          <div className="d-flex align-items-baseline gap-1">
-            <span
-              className="fw-bold"
-              style={{ fontSize: `${headingFontSize}px`, fontFamily: headingFontFamily }}
-            >
-              Q. No. {qNo}:
-            </span>
-            <div style={{ flex: 1 }}>
-              {isEditMode ? (
-                <EditableText
-                  value={currentEn}
-                  onChange={(val) => onHeaderChange(sectionId, 'en', val)}
-                  className="fw-bold"
-                  style={{ fontSize: `${headingFontSize}px`, fontFamily: headingFontFamily }}
-                />
-              ) : (
-                <span
-                  className="fw-bold"
-                  style={{ fontSize: `${headingFontSize}px`, fontFamily: headingFontFamily }}
-                >
-                  {currentEn}
-                </span>
-              )}
-            </div>
+  <div
+    className="section-header mb-3 pb-0 d-flex align-items-center"
+    style={{ direction: 'ltr' }}
+  >
+    <style jsx global>{`
+      .section-header-ur, .section-header-ur * {
+        font-family: ${URDU_FONT} !important;
+        text-rendering: optimizeLegibility;
+      }
+    `}</style>
+
+    {/* 1. English Section */}
+    {(isEnglishOnly || isBilingual) && (
+      <div className="flex-grow-1 text-start" style={{ flexBasis: 0 }}>
+        <div className="d-flex align-items-baseline gap-1">
+          <span
+            className="fw-bold text-nowrap"
+            style={{ fontSize: `${headingFontSize}px`, fontFamily: headingFontFamily }}
+          >
+            {qNo}.
+          </span>
+          <div className="d-flex align-items-baseline gap-2" style={{ flex: 1 }}>
+            {isEditMode ? (
+              <EditableText
+                value={currentEn}
+                onChange={(val) => onHeaderChange(sectionId, 'en', val)}
+                className="fw-bold"
+                style={{ fontSize: `${headingFontSize}px`, fontFamily: headingFontFamily }}
+              />
+            ) : (
+              <span
+                className="fw-bold"
+                style={{ fontSize: `${headingFontSize}px`, fontFamily: headingFontFamily }}
+              >
+                {currentEn}
+              </span>
+            )}
+            
+            {/* Marks immediately after English text if NOT bilingual */}
+            {isEnglishOnly && (
+              <span className="fw-bold text-nowrap ms-2" style={{ fontSize: `${Math.max(headingFontSize - 2, 10)}px` }}>
+                ({attemptCount} x {marksPerQuestion} = {totalMarks})
+              </span>
+            )}
           </div>
         </div>
-      )}
+      </div>
+    )}
 
-      {/* 2. Marks Column */}
+    {/* 2. Marks Column (ONLY shown in Bilingual mode) */}
+    {isBilingual && (
       <div
-        className={`px-2 fw-bold text-nowrap ${isUrduOnly ? 'text-start' : 'text-center'}`}
+        className="px-2 fw-bold text-nowrap text-center"
         style={{
           fontSize: `${Math.max(headingFontSize - 2, 10)}px`,
-          minWidth: isBilingual ? '120px' : '80px',
-          order: isUrduOnly ? -1 : 0,
+          minWidth: '120px',
         }}
       >
         ({attemptCount} x {marksPerQuestion} = {totalMarks})
       </div>
+    )}
 
-      {/* 3. Urdu Section */}
-      {(isUrduOnly || isBilingual) && (
-        <div
-          className="flex-grow-1"
-          style={{
-            flexBasis: 0,
-            direction: 'rtl',
-            textAlign: 'right',
-          }}
-        >
-          <div className="d-flex align-items-baseline gap-2 justify-content-start">
-            <span
-              className="fw-bold text-nowrap"
-              style={{
-                fontSize: `${headingFontSize + 2}px`,
-                fontFamily: 'Jameel Noori Nastaleeq, serif',
-              }}
-            >
-              سوال نمبر {toUrduDigits(qNo)}:
-            </span>
-            <div style={{ flex: 1 }}>
-              {isEditMode ? (
-                <EditableText
-                  value={currentUr}
-                  onChange={(val) => onHeaderChange(sectionId, 'ur', val)}
-                  className="fw-bold"
-                  style={{
-                    fontSize: `${headingFontSize + 4}px`,
-                    fontFamily: 'Jameel Noori Nastaleeq, serif',
-                    lineHeight: '1.5',
-                  }}
-                />
-              ) : (
-                <span
-                  className="fw-bold"
-                  style={{
-                    fontSize: `${headingFontSize + 4}px`,
-                    fontFamily: 'Jameel Noori Nastaleeq, serif',
-                    lineHeight: '1.5',
-                  }}
-                >
-                  {currentUr}
-                </span>
-              )}
-            </div>
+    {/* 3. Urdu Section */}
+    {(isUrduOnly || isBilingual) && (
+      <div
+        className="flex-grow-1 section-header-ur"
+        lang="ur"
+        style={{
+          flexBasis: 0,
+          direction: 'rtl',
+          textAlign: 'right',
+        }}
+      >
+        <div className="d-flex align-items-baseline gap-2 justify-content-start">
+          <span
+            className="fw-bold text-nowrap"
+            style={{ fontSize: `${headingFontSize + 2}px`, fontFamily: URDU_FONT }}
+          >
+            {qNo}.
+          </span>
+          <div className="d-flex align-items-baseline gap-2" style={{ flex: 1 }}>
+            {isEditMode ? (
+              <EditableText
+                value={currentUr}
+                onChange={(val) => onHeaderChange(sectionId, 'ur', val)}
+                className="fw-bold"
+                style={{
+                  fontSize: `${headingFontSize + 4}px`,
+                  fontFamily: URDU_FONT,
+                  lineHeight: '1.2',
+                }}
+              />
+            ) : (
+              <span
+                className="fw-bold"
+                style={{
+                  fontSize: `${headingFontSize + 4}px`,
+                  fontFamily: URDU_FONT,
+                  lineHeight: '1.2',
+                }}
+              >
+                {currentUr}
+              </span>
+            )}
+
+            {/* Marks immediately after Urdu text if NOT bilingual */}
+            {isUrduOnly && (
+              <span 
+                className="fw-bold text-nowrap me-2" 
+                style={{ 
+                  fontSize: `${Math.max(headingFontSize - 2, 10)}px`,
+                  fontFamily: 'sans-serif', // Use sans-serif for numbers for better readability
+                  direction: 'ltr' 
+                }}
+              >
+                ({attemptCount} x {marksPerQuestion} = {totalMarks})
+              </span>
+            )}
           </div>
         </div>
-      )}
-    </div>
-  );
+      </div>
+    )}
+  </div>
+);
 };

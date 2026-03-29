@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useState,useEffect } from 'react';
 import { Printer, Settings as SettingsIcon, Save, ChevronLeft } from 'lucide-react';
 import { PaperLayoutRenderer } from '@/app/dashboard/generate-paper/components/PaperLayoutRenderer';
 import { SettingsPanel } from '@/app/dashboard/generate-paper/components/SettingsPanel';
@@ -12,7 +12,7 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
   const [showSettings, setShowSettings] = useState(false);
   const [currentSettings, setCurrentSettings] = useState(paper.settings || {});
   const [isSaving, setIsSaving] = useState(false);
-
+  const [userProfile, setUserProfile] = useState<any>(null);
   const handleUpdateDatabase = async () => {
     setIsSaving(true);
     const { error } = await supabase.from('papers').update({ settings: currentSettings }).eq('id', paper.id);
@@ -24,6 +24,68 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
     }
     setIsSaving(false);
   };
+
+  const handlePrint = async () => {
+    // 1. Trigger the actual browser print
+    window.print();
+
+    try {
+      // 2. Call the API route we created that uses supabaseAdmin
+      const response = await fetch('/api/profile/increment-count', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(result.error);
+
+      // 3. Update local state so the UI reflects the new count immediately
+      setUserProfile((prev: any) => ({
+        ...prev,
+        profile: result.profile
+      }));
+
+      console.log("Paper count incremented successfully");
+    } catch (err: any) {
+      console.error("Failed to sync paper count:", err.message);
+      // We don't use toast here to avoid interrupting the print experience
+    }
+  };
+ useEffect(() => {
+      const fetchProfile = async () => {
+        try {
+          const res = await fetch('/api/profile');
+           if (!res.ok) {
+            console.error('Failed to fetch profile');
+            return;
+          }
+
+          const data = await res.json();
+
+          setUserProfile(data);
+        
+        } catch (err) {
+          console.error('Error fetching profile:', err);
+        } finally {
+          console.log('Profile fetch attempt completed');
+        }
+      };
+
+      fetchProfile();
+    }, []);
+
+    
+// 1. Extract the status safely
+const subStatus = userProfile?.profile?.subscription_status;
+
+// 2. Determine if the user is currently premium
+const isPremium = subStatus === 'active';
+
+// 3. (Optional) If you want to handle the specific "Ashfaq" case from your 
+// data object where you check the packages array as well:
+const hasActivePackage = userProfile?.userPackages?.some((pkg: any) => pkg.is_active === true);
+const isUserPremium = isPremium || hasActivePackage;
 
   return (
     <div className={`previewer-root bg-light min-vh-100 ${showSettings ? 'settings-panel-open' : ''}`}>
@@ -55,7 +117,7 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
                 <span className="d-none d-md-inline">Settings</span>
               </button>
               
-              <button className="btn-preview-dark" onClick={() => window.print()}>
+              <button className="btn-preview-dark" onClick={ handlePrint}>
                 <Printer size={18} />
                 <span className="d-none d-md-inline">Print</span>
               </button>
@@ -93,6 +155,7 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
         onClose={() => setShowSettings(false)} 
         settings={currentSettings} 
         onSettingChange={(k:any, v:any) => setCurrentSettings((p:any) => ({...p, [k]:v}))} 
+        isPremium={isUserPremium}
       />
 
       {/* FLYING DRAGGABLE SAVE BUTTON */}

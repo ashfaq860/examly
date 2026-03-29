@@ -9,6 +9,9 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { FilePlus, BookOpen, Settings, Activity } from 'lucide-react';
 import Loading from './generate-paper/loading';
 
+const CACHE_KEY = 'dashboard-analytics';
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 interface Analytics {
   recentActivity: {
     id: string;
@@ -51,6 +54,17 @@ export default function AcademyDashboard() {
 
         setIsAuthorized(true);
 
+        // Check cache for analytics
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < CACHE_DURATION) {
+            setAnalytics(data);
+            setIsLoading(false);
+            return;
+          }
+        }
+
         const { data: papers } = await supabase
           .from('papers')
           .select('id, title, class_name, subject_name, created_at')
@@ -68,6 +82,9 @@ export default function AcademyDashboard() {
           }));
 
         setAnalytics({ recentActivity });
+
+        // Cache the analytics
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ data: { recentActivity }, timestamp: Date.now() }));
       } catch (err) {
         console.error('Dashboard error:', err);
         router.push('/auth/login');

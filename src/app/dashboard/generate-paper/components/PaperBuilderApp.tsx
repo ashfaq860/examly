@@ -341,7 +341,7 @@ const handleBoardPattern = async () => {
     console.error("Generation Error:", error);
     toast.error("Generation failed. Check console.");
   } finally {
-    setIsGeneratingBoardPattern(false);
+   setTimeout(() => setIsGeneratingBoardPattern(false), 300);
   }
 };
     useEffect(() => {
@@ -354,7 +354,9 @@ const handleBoardPattern = async () => {
           }
 
           const data = await res.json();
+
           setProfile(data);
+        
         } catch (err) {
           console.error('Error fetching profile:', err);
         } finally {
@@ -364,6 +366,7 @@ const handleBoardPattern = async () => {
 
       fetchProfile();
     }, []);
+   //   console.log('Profile data fetched:', profile.profile.subscription_status);
 //console.log(profile?.profile)
 const loadBoardPatternQuestions = async (rules: any[]) => {
   const questionsByRule: Record<number, Question[]> = {};
@@ -531,9 +534,34 @@ const createSectionObject = (type: any, title: string, questions: Question[], ma
   timestamp: new Date().toISOString()
 });
 
-  const handlePrint = () => {
-    window.print();
-  };
+const handlePrint = async () => {
+  window.print();
+
+  try {
+    const response = await fetch('/api/profile/increment-count', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to update count');
+    }
+
+    // Update local state with the returned profile data
+    setProfile((prev: any) => ({
+      ...prev,
+      profile: result.profile
+    }));
+
+    toast.success("Print stats synced!");
+
+  } catch (error: any) {
+    console.error("API Update Error:", error.message);
+    // Don't toast error on print, it might annoy the user if they just want their paper
+  }
+};
 // --- NEW: Section Update Handler ---
   // This function handles the updates for custom headers (Urdu/English instructions)
 const handleSectionUpdate = useCallback((updatedSections: PaperSection[]) => {
@@ -568,6 +596,17 @@ const handleSectionUpdate = useCallback((updatedSections: PaperSection[]) => {
 const totalMarks = paperSections.reduce((acc, s) => acc + (s.totalMarks || 0), 0);
 const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions || 0), 0);
 
+
+// 1. Extract the status safely
+const subStatus = profile?.profile?.subscription_status;
+
+// 2. Determine if the user is currently premium
+const isPremium = subStatus === 'active';
+
+// 3. (Optional) If you want to handle the specific "Ashfaq" case from your 
+// data object where you check the packages array as well:
+const hasActivePackage = profile?.userPackages?.some((pkg: any) => pkg.is_active === true);
+const isUserPremium = isPremium || hasActivePackage;
  return (
     <div className="min-vh-100 d-flex flex-column bg-light">
       {/* 1. STICKY HEADER: Stays at the top while scrolling */}
@@ -602,8 +641,8 @@ const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions 
             ref={paperRef}
             className="bg-white shadow-lg paper-canvas mx-auto mx-lg-0" 
             style={{ 
-              width: '210mm', // Fixed width ensures A4 dimensions
-              minWidth: '210mm', // Prevents shrinking on small screens
+          //    width: '210mm', // Fixed width ensures A4 dimensions
+            //  minWidth: '210mm', // Prevents shrinking on small screens
               height: 'auto',
             
               fontFamily: settings.fontFamily,
@@ -636,7 +675,7 @@ const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions 
         ) : (
           <i className="bi bi-magic"></i>
         )}
-        Generate Board Pattern Paper
+        Generate Board Pattern Paper-full Book
       </button>
 
       <button 
@@ -662,13 +701,14 @@ const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions 
                 renderInlineBilingual={true}
                 currentClass={currentClass}
                 profile={profile?.profile}
+                isPremium={isUserPremium}
                 onSectionUpdate={handleSectionUpdate}
               />
             )}
           </div>
         </div>
       </main>
-{(isGeneratingBoardPattern || isSaving) && (
+{(isLoading ||isGeneratingBoardPattern || isSaving) && (
   <div 
     className="position-fixed top-0 start-0 w-100 vh-100 d-flex flex-column align-items-center justify-content-center"
     style={{ 
@@ -693,7 +733,7 @@ const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions 
       </button>
 
       {/* Settings & Modals */}
-      <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} settings={settings} onSettingChange={(key, value) => setSettings(prev => ({ ...prev, [key]: value }))} />
+      <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} settings={settings} isPremium={isUserPremium} onSettingChange={(key, value) => setSettings(prev => ({ ...prev, [key]: value }))} />
       {showQuestionSelector && (
         <QuestionSelectorModal
           isOpen={showQuestionSelector}
@@ -730,14 +770,44 @@ const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions 
       size: A4 portrait;
       margin: 0 !important; 
     }
+/* 1. Kill the 'Push' from the top */
+  html, body, #__next, .min-vh-100, main {
+    margin: 0 !important;
+    padding: 0 !important;
+    position: static !important; /* Reset from relative/absolute */
+    display: block !important;   /* Reset from flex/grid */
+    height: auto !important;
+    overflow: visible !important; /* Critical for multi-page exams */
+  }
+    .d-flex {
+    background: transparent !important; /* Prevent any background colors from printing */}
 
-    /* 2. Hide the entire UI (Sidebar, Header, Buttons) */
-    html, body, #__next, .min-vh-100, main {
-      margin: 0 !important;
-      padding: 0 !important;
-      height: auto !important;
-      background: white !important;
-    }
+  /* 2. Absolute Removal of UI */
+  .app-header, .d-print-none, .sidebar, .btn-dark {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 3. The Paper Container */
+  .paper-canvas {
+    position: absolute !important; /* Force it to the literal (0,0) coordinate */
+    top: 0 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    box-shadow: none !important;
+    transform: none !important; /* Remove any 'zoom' or 'scale' used for mobile */
+  }
+  
+  /* 4. Ensure internal sheets start correctly */
+  .paper-sheet {
+    margin: 0 auto !important;
+    page-break-before: avoid !important; 
+    page-break-after: always !important;
+  }
 
     /* Hide everything except our specific printable ID */
     body * {
@@ -758,9 +828,9 @@ const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions 
       display: block !important;
       page-break-after: always !important;
       break-after: page !important;
-      margin: 0 !important;
+    margin: 0 auto !important;
       /* We use padding for internal margins so it matches the screen */
-      padding: 3mm 4mm 3mm 3mm !important; 
+      padding: 4mm 4mm 3mm 3mm !important; 
       box-shadow: none !important;
       border: none !important;
       width: 210mm !important;
@@ -889,7 +959,35 @@ const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions 
   border-color: #cbd5e1;
   transform: translateY(-2px);
 }
+  .paper-canvas {
+    width: 210mm; /* Strict A4 Width */
+    min-height: 297mm;
+    margin: 20px auto;
+    background: white;
+    transform-origin: top center;
+    transition: transform 0.2s ease;
+  }
+@media screen and (max-width: 991px) {
+    .paper-canvas {
+      /* This allows the paper to shrink to fit the screen width 
+         while maintaining the internal A4 layout (210mm) */
+      width: 210mm !important; 
+      
+      /* Use CSS zoom for mobile browsers that support it (Chrome/Safari/Edge) */
+      /* This fits the 210mm paper into the smaller mobile viewport */
+      zoom: calc(100vw / 230mm); 
+      
+      /* For browsers that don't support zoom well, ensure it doesn't overflow hidden */
+      margin-left: auto;
+      margin-right: auto;
+    }
 
+    /* Ensure the main container allows horizontal scrolling if zoomed */
+    main {
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
 `}</style>
   </div>
   );

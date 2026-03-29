@@ -146,7 +146,7 @@ const selectedTopics = watch('selectedTopics') || [];
           return toast.error('No questions found');
         }
 
-        if (processAndSave(selectedType, data, totalQuestions, marksEach || 1)) {
+        if (processAndSave(selectedType, data, attemptCount, marksEach || 1)) {
           setSelectedQuestions({ [selectedType]: data });
           setManualSelectionComplete(true);
           setIsLoading(false);
