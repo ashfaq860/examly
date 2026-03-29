@@ -1,3 +1,4 @@
+//app/auth/callback/page.tsx
 'use client';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -28,8 +29,7 @@ export default function AuthCallback() {
           // Force a refresh to ensure cookies are sent to the server on next navigation
           router.refresh(); 
 
-          if (data.role === 'admin') router.push('/admin');
-          else router.push('/dashboard');
+         window.location.href = data.role === 'admin' ? '/admin' : '/dashboard';
         } catch (err) {
           router.push('/auth/login?error=sync_failed');
         }
