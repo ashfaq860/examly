@@ -26,10 +26,8 @@ export default function AuthCallback() {
           const data = await res.json();
           Cookies.set('role', data.role, { expires: 7, path: '/' });
           
-          // Force a refresh to ensure cookies are sent to the server on next navigation
-          router.refresh(); 
-
-         window.location.href = data.role === 'admin' ? '/admin' : '/dashboard';
+          // Redirect with full page reload to establish session properly
+          window.location.href = data.role === 'admin' ? '/admin' : '/dashboard';
         } catch (err) {
           router.push('/auth/login?error=sync_failed');
         }
