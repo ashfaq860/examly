@@ -13,6 +13,7 @@ interface Props {
   isEditMode: boolean;
   currentLayout: 'same' | 'separate' | 'two_papers' | 'three_papers';
   onTextChange: (sId: string, qId: string, f: string, v: string) => void;
+  isPremium: boolean;
   onSectionUpdate: (updatedSections: PaperSection[]) => void;
   renderInlineBilingual?: boolean;
   currentClass?: string;
@@ -34,7 +35,7 @@ const Watermark = ({ isPremium, logoUrl, settings }: { isPremium: boolean; logoU
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%) rotate(-30deg)',
-        zIndex: 0,
+        zIndex: 10,
         pointerEvents: 'none',
         opacity,
         width: `${width}px`,
@@ -60,6 +61,7 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
   isEditMode,
   currentLayout,
   onTextChange,
+  isPremium,
   onSectionUpdate,
   renderInlineBilingual = true,
   currentClass,
@@ -67,7 +69,29 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
 }) => {
   if (!settings) return <div className="p-5 text-center">Loading settings...</div>;
 
-  const isPremium = profile?.plan === 'premium';
+ // Inside PaperLayoutRenderer
+const globalNumbering = useMemo(() => {
+  const sectionStartNumbers: Record<string, number> = {};
+  let currentCount = 1;
+
+  paperSections.forEach((section) => {
+    const isLong = section.type.toLowerCase().includes('long');
+    
+    if (isLong) {
+      // Long section header has NO number, so we don't assign startNumbers[section.id]
+      // instead, the QUESTIONS inside start at currentCount
+      sectionStartNumbers[section.id] = currentCount;
+      const qCount = Array.isArray(section.questions) ? section.questions.length : 0;
+      currentCount += qCount; // Increment by number of questions
+    } else {
+      // Normal sections (MCQ/Short) take ONE number for the whole section
+      sectionStartNumbers[section.id] = currentCount;
+      currentCount += 1; // Increment by only 1 for the whole section
+    }
+  });
+
+  return sectionStartNumbers;
+}, [paperSections]);
 
   const { mcqs, subjectives } = useMemo(() => ({
     mcqs: paperSections.filter(s => s.type === 'mcq'),
@@ -75,7 +99,6 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
   }), [paperSections]);
 
   const subject = useMemo(() => paperSections[0]?.subject || '', [paperSections]);
-  const totalMarks = useMemo(() => paperSections.reduce((t, s) => t + s.totalMarks, 0), [paperSections]);
   const mcqTotalMarks = useMemo(() => mcqs.reduce((t, s) => t + s.totalMarks, 0), [mcqs]);
   const subTotalMarks = useMemo(() => subjectives.reduce((t, s) => t + s.totalMarks, 0), [subjectives]);
 
@@ -87,6 +110,8 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
     onSectionUpdate(updated);
   };
 
+
+  
   const sheetBaseStyle: React.CSSProperties = {
     width: '210mm',
     height: '296mm',
@@ -102,10 +127,35 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
     boxSizing: 'border-box'
   };
 
-  const SectionBlock = ({ section, index }: { section: PaperSection; index: number }) => {
-    if (!section) return null;
-    const questions = Array.isArray(section.questions) ? section.questions : [];
-    const getDynamicColClass = (q: any) => {
+  /**
+   * Helper to calculate global question index.
+   * If section is 'long', it starts the index from the section number (globalIndex).
+   */
+  const getQuestionStartIndex = (section: PaperSection, globalSectionIndex: number) => {
+    if (section.type === 'long') {
+      return globalSectionIndex; // This makes the first long question "Q.5" if it's the 5th section
+    }
+    // For other sections, you might want to sum previous questions or just use 0
+    // To keep numbering continuous for the whole paper, use a reducer:
+    let count = 0;
+    for (let i = 0; i < globalSectionIndex; i++) {
+        const s = paperSections[i];
+        // If previous was long, it only counts as one "block", but usually 
+        // standard question counting resets or follows specific board rules.
+        count += s.questions?.length || 0;
+    }
+    return 0; // Defaulting to local index unless 'long'
+  };
+
+ const SectionBlock = ({ section }: { section: PaperSection }) => {
+  if (!section) return null;
+  const questions = Array.isArray(section.questions) ? section.questions : [];
+  
+  const isLongType = section.type.toLowerCase().includes('long');
+  // Get the global starting number calculated in useMemo
+  const startNum = globalNumbering[section.id] || 1;
+
+   const getDynamicColClass = (q: any) => {
       if (section.type === 'mcq' || section.type === 'long' || (section.type === 'short' && subject.toLowerCase() !== 'urdu')) return 'col-12 mt-0';
       if (section.type === 'short' && subject.toLowerCase() === 'urdu') return 'col-6';
       const engText = q.question_text || q.question || '';
@@ -114,78 +164,75 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
       return totalVisualLength < 30 ? 'col-3' : totalVisualLength < 60 ? 'col-4 mt-0' : totalVisualLength < 110 ? 'col-6 mt-0' : 'col-12 mt-0';
     };
 
-    return (
-      <div className="section-block" style={{ border: isEditMode ? "1px dashed #ccc" : "none", marginBottom: '8px', width: '100%' }}>
-        <SectionHeader
-          sectionId={section.id}
-          sectionIndex={index}
-          sectionType={section.type}
-          totalQuestions={section.totalQuestions}
-          attemptCount={section.attemptCount}
-          totalMarks={section.totalMarks}
-          headingFontSize={settings.headingFontSize}
-          headingFontFamily={settings.headingFontFamily}
-          paperLanguage={paperLanguage}
-          instructions={section.instructions}
-          customEnHeader={section.customEnHeader}
-          customUrHeader={section.customUrHeader}
-          onHeaderChange={handleHeaderChange}
-          isEditMode={isEditMode}
-        />
-        <div className="questions-list row g-2 mx-0">
-          {questions.map((q, qIdx) => (
-            <div key={`${q.id}-${qIdx}`} className={`${getDynamicColClass(q)} px-1`}>
-              <QuestionRenderer
-                question={q}
-                index={qIdx}
-                sectionType={section.type}
-                sectionId={section.id}
-                paperLanguage={paperLanguage}
-                isEditMode={isEditMode}
-                config={config}
-                fontSize={settings.fontSize}
-                metaFontSize={settings.metaFontSize}
-                questionFontFamily={settings.fontFamily}
-                questionLineSpacing={settings.lineHeight}
-                mcqFontSize={settings.mcqFontSize}
-                mcqLineHeight={settings.mcqLineHeight}
-                onTextChange={onTextChange}
-                renderInlineBilingual={renderInlineBilingual}
-              />
-            </div>
-          ))}
-        </div>
+  return (
+    <div className="section-block" style={{ border: isEditMode ? "1px dashed #ccc" : "none", marginBottom: '8px', width: '100%' }}>
+      <SectionHeader
+        sectionId={section.id}
+        // If it's a Long section, the header itself doesn't carry the "Q.4" prefix, 
+        // but we pass startNum - 1 to maintain internal logic if needed.
+        sectionIndex={isLongType ? -1 : startNum - 1} 
+        sectionType={section.type}
+        totalQuestions={section.totalQuestions}
+        attemptCount={section.attemptCount}
+        totalMarks={section.totalMarks}
+        headingFontSize={settings.headingFontSize}
+        headingFontFamily={settings.headingFontFamily}
+        paperLanguage={paperLanguage}
+        customEnHeader={section.customEnHeader}
+        customUrHeader={section.customUrHeader}
+        onHeaderChange={handleHeaderChange}
+        isEditMode={isEditMode}
+      />
+      <div className="questions-list row g-2 mx-0">
+        {questions.map((q, qIdx) => (
+          <div key={`${q.id}-${qIdx}`} className={`${getDynamicColClass(q)} px-1`}>
+            <QuestionRenderer
+              question={q}
+              // If Long: starts from startNum (e.g., 4, 5, 6)
+              // If Other: starts from qIdx (0, 1, 2 for internal i, ii, iii)
+              index={isLongType ? (startNum + qIdx - 1) : qIdx}
+              sectionType={section.type}
+              sectionId={section.id}
+              paperLanguage={paperLanguage}
+              isEditMode={isEditMode}
+              config={config}
+              fontSize={settings.fontSize}
+              metaFontSize={settings.metaFontSize}
+              questionFontFamily={settings.fontFamily}
+              questionLineSpacing={settings.lineHeight}
+              mcqFontSize={settings.mcqFontSize}
+              mcqLineHeight={settings.mcqLineHeight}
+              onTextChange={onTextChange}
+              renderInlineBilingual={renderInlineBilingual}
+            />
+          </div>
+        ))}
       </div>
-    );
-  };
-
-  const PaperSlot = ({ height, children }: { height: string; children: React.ReactNode }) => (
-    <div style={{ height, overflow: 'hidden', position: 'relative' }}>
-      <Watermark isPremium={isPremium} logoUrl={profile?.logo_url} settings={settings} />
-      <div style={{ position: 'relative', zIndex: 1 }}>{children}</div>
     </div>
   );
+};
 
   const MCQAnswerKeyPage = () => {
     const allMCQs = mcqs.flatMap(s => s.questions || []);
     if (allMCQs.length === 0) return null;
     return (
       <div className="paper-sheet mcq-key-sheet" style={sheetBaseStyle}>
-        <Watermark isPremium={isPremium} logoUrl={profile?.logo_url} settings={settings} />
+        <Watermark isPremium={isPremium} logoUrl={profile?.logo} settings={settings} />
         <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
           <h2 className="text-center mb-4" style={{
             fontFamily: settings.headingFontFamily,
             fontSize: settings.headingFontSize,
             borderBottom: '2px solid #000',
-            paddingBottom: '10px'
+            paddingBottom: '10px',
+            fontWeight: 'bold'
           }}>
-            MCQ Answer Keys - {subject}
+            MCQ Answer Keys -For Class: {currentClass?.name || currentClass} ({subject})
           </h2>
           <div className="d-flex justify-content-center">
             <div style={{ width: '320px' }}>
               <table className="table table-bordered border-dark table-sm">
                 <thead>
-                  <tr className="bg-light">
+                  <tr style={{ backgroundColor: 'transparent' }}>
                     <th className="text-center" style={{ width: '40%' }}>Question #</th>
                     <th className="text-center" style={{ width: '60%' }}>Correct Key</th>
                   </tr>
@@ -208,20 +255,33 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
 
   const renderContent = () => {
     let pages: React.ReactNode[] = [];
-
-    // Render MCQs & Subjectives separately depending on layout
-    const renderPaperGroup = (group: PaperSection[], marks: number, keyPrefix: string) => {
-      if (group.length === 0) return null;
-      return (
-        <div key={keyPrefix} className="paper-sheet" style={sheetBaseStyle}>
-          <Watermark isPremium={isPremium} logoUrl={profile?.logo_url} settings={settings} />
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <PaperHeader totalMarks={marks} subject={subject} paperSections={group} isEditMode={isEditMode} settings={settings} paperLanguage={paperLanguage} config={config} currentLayout={currentLayout} currentClass={currentClass} profile={profile} />
-            {group.map((s, i) => <SectionBlock key={s.id} section={s} index={i} />)}
-          </div>
-        </div>
-      );
-    };
+console.log('profile in renderer in rendered content', profile?.logo);
+const renderPaperGroup = (group: PaperSection[], marks: number, keyPrefix: string) => {
+  if (group.length === 0) return null;
+  return (
+    <div key={keyPrefix} className="paper-sheet" style={sheetBaseStyle}>
+      <Watermark isPremium={isPremium} logoUrl={profile?.logo} settings={settings} />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <PaperHeader 
+          totalMarks={marks} 
+          subject={subject} 
+          paperSections={group} 
+          isEditMode={isEditMode} 
+          settings={settings} 
+          paperLanguage={paperLanguage} 
+          config={config} 
+          currentLayout={currentLayout} 
+          currentClass={currentClass} 
+          profile={profile} 
+        />
+        {group.map((s) => (
+          // We no longer need to find the index here; SectionBlock uses the globalNumbering map
+          <SectionBlock key={s.id} section={s} />
+        ))}
+      </div>
+    </div>
+  );
+};
 
     if (currentLayout === 'same' || currentLayout === 'two_papers' || currentLayout === 'three_papers') {
       pages.push(renderPaperGroup(mcqs, mcqTotalMarks, 'mcq-group'));
@@ -231,7 +291,6 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
       pages.push(renderPaperGroup(subjectives, subTotalMarks, 'sub-separate'));
     }
 
-    // MCQ Answer key at the end
     pages.push(<MCQAnswerKeyPage key="mcq-keys" />);
 
     return <div className="print-container">{pages}</div>;

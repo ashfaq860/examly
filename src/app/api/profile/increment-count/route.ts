@@ -4,8 +4,9 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 export async function POST() {
+  const cookieStore = await cookies();
   // 1. Identify the user using the standard client (Session check)
-  const supabase = createRouteHandlerClient({ cookies });
+const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
   const { data: { session } } = await supabase.auth.getSession();
 
   if (!session?.user?.id) {

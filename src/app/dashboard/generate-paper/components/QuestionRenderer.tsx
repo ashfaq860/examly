@@ -142,16 +142,30 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
   const numberFontSize = sectionType === 'mcq' ? (mcqFontSize || 12) : fontSize;
   const currentLineHeight = sectionType === 'mcq' ? (mcqLineHeight || 1.2) : (questionLineSpacing || 1.5);
 
-  // Counting logic: standard for MCQ/Long, Roman for others
+  // --- UPDATED COUNTING LOGIC ---
   const typeKey = sectionType.toLowerCase();
-  const isLong = typeKey.includes('long') || typeKey.includes('essay') || typeKey.includes('subjective_long');
+  
+  // Identify if it's a long question section
+  const isLong = typeKey.includes('long');
   const isMCQ = typeKey === 'mcq';
-  const useStandardCounting = isMCQ || isLong;
-  const indexDisplay = useStandardCounting ? `${index + 1}.` : `(${toRoman(index + 1)})`;
+
+  // Determine the display string
+  let indexDisplay = '';
+  if (isLong) {
+    // If it's a long question, show Q.5, Q.6 etc.
+    indexDisplay = `Q.${index + 1}`;
+  } else if (isMCQ) {
+    // Standard MCQ numbering: 1., 2.
+    indexDisplay = `${index + 1}.`;
+  } else {
+    // Short questions or others: (i), (ii)
+    indexDisplay = `(${toRoman(index + 1)})`;
+  }
+  // ------------------------------
 
   return (
     <div className={`question-wrapper mb-1 ${isUrdu ? 'rtl' : 'ltr'}`}>
-      <style jsx global>{`
+     <style jsx global>{`
         .urdu-text, [lang="ur"] {
           font-family: ${URDU_FONT} !important;
           text-rendering: optimizeLegibility;
@@ -200,32 +214,18 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
         .urdu-text .editable-content { direction: rtl; text-align: right; }
       `}</style>
 
-      {/* Question container with numbering on both sides if bilingual */}
-      <div className="d-flex align-items-start gap-1 w-100">
+      {/* Question container */}
+<div className={`d-flex align-items-start gap-1 w-100 ${paperLanguage === 'urdu' ? 'flex-row-reverse' : ''}`}>
         {/* English/left number */}
         {isEnglish && (
           <span
-            className="fw-bold"
+            className="fw-bold text-nowrap"
             style={{
-              minWidth: '18px',
-              fontSize: `${numberFontSize}px`,
+              minWidth: isLong ? '22px' : '18px', // Slightly wider for "Q.10"
+              fontSize:  isLong ?`${numberFontSize+2}px` : `${numberFontSize}px`,
               lineHeight: `${currentLineHeight}`,
               fontFamily: questionFontFamily,
               textAlign: 'left'
-            }}
-          >
-            {indexDisplay}
-          </span>
-        )}
-        {isUrdu && paperLanguage === 'urdu' &&(
-          <span
-            className="fw-bold"
-            style={{
-              minWidth: '18px',
-              fontSize: `${numberFontSize}px`,
-              lineHeight: `${currentLineHeight}`,
-              fontFamily: URDU_FONT,
-              textAlign: 'right'
             }}
           >
             {indexDisplay}
@@ -244,13 +244,31 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
         {/* Urdu/right number (only for bilingual mode) */}
         {isUrdu && paperLanguage === 'bilingual' && (
           <span
-            className="fw-bold"
+            className="fw-bold text-nowrap"
             style={{
-              minWidth: '18px',
-              fontSize: `${numberFontSize}px`,
+                 minWidth: isLong ? '20px' : '18px', // Slightly wider for "Q.10"
+              fontSize:  isLong ?`${numberFontSize+2}px` : `${numberFontSize}px`,
+              marginTop: '-5px',
               lineHeight: `${currentLineHeight}`,
               fontFamily: URDU_FONT,
               textAlign: 'right'
+            }}
+          >
+            {indexDisplay}
+          </span>
+        )}
+        
+        {/* Number for Urdu only mode */}
+        {isUrdu && paperLanguage === 'urdu' && (
+          <span
+            className="fw-bold text-nowrap"
+            style={{
+              minWidth: isLong ? '25px' : '18px',
+              fontSize: `${numberFontSize}px`,
+              lineHeight: `${currentLineHeight}`,
+              fontFamily: URDU_FONT,
+              textAlign: 'right',
+              direction: 'rtl'
             }}
           >
             {indexDisplay}
@@ -260,7 +278,6 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
     </div>
   );
 };
-
 /** MCQ Renderer */
 const MCQQuestionRenderer: React.FC<any> = (props) => {
   const { question, mcqFontSize, mcqLineHeight, questionFontFamily, paperLanguage } = props;

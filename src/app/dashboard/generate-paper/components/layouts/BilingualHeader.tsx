@@ -34,7 +34,7 @@ const BilingualHeader: React.FC<BilingualHeaderProps> = ({
 }) => {
   // Safe extraction of class name
   const classNameDisplay = typeof currentClass === 'object' ? currentClass?.name : currentClass;
-
+console.log('Profile in BilingualHeader:', profile.logo);
   return (
     <div
       className="border border-dark bg-white text-dark p-1 mb-4"
