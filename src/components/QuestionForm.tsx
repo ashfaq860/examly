@@ -32,7 +32,9 @@ type QuestionType =
   | 'activePassive'
   | 'darkhwast_khat'
   | 'kahani_makalma'
-  | 'Nasarkhulasa_markziKhyal';
+  | 'Nasarkhulasa_markziKhyal'
+  | 'gazal'
+  | 'summary';
 
 export default function QuestionForm({
   question,
@@ -75,6 +77,7 @@ export default function QuestionForm({
     darkhwast_text: '',
     kahani_text: '',
     nasar_text: '',
+    summary_text: '',
   }), []);
 
   const [formData, setFormData] = useState({
@@ -199,6 +202,7 @@ export default function QuestionForm({
       darkhwast_text: '',
       kahani_text: '',
       nasar_text: '',
+      summary_text: '',
       correct_option: (prev.question_type === 'mcq') ? '' : prev.correct_option,
       passage_questions_count: 1,
     }));
@@ -300,12 +304,16 @@ export default function QuestionForm({
     let darkhwastText = '';
     let kahaniText = '';
     let nasarText = '';
+    let summaryText = '';
     let passageQuestionText = '';
     let passageQuestionTextUr = '';
 
     // Parse specialized fields from stored text
     if (question.question_type === 'poetry_explanation' && question.question_text_ur) {
       const match = question.question_text_ur.match(/اس شعر کی تشریح کریں: (.*)/);
+      poetryText = match ? match[1] : question.question_text_ur;
+    } else if (question.question_type === 'gazal' && question.question_text_ur) {
+      const match = question.question_text_ur.match(/اس غزل کی تشریح کریں: (.*)/);
       poetryText = match ? match[1] : question.question_text_ur;
     } else if (question.question_type === 'prose_explanation' && question.question_text_ur) {
       const match = question.question_text_ur.match(/اس نثر پارے کی تشریح کریں: (.*)/);
@@ -344,6 +352,8 @@ export default function QuestionForm({
         passageTextUr = parts[0] || '';
         passageQuestionTextUr = parts[1] || '';
       }
+    } else if (question.question_type === 'summary' && question.question_text) {
+      summaryText = question.question_text;
     }
 
     // Get topic info to derive class and subject
@@ -388,6 +398,7 @@ export default function QuestionForm({
       darkhwast_text: darkhwastText,
       kahani_text: kahaniText,
       nasar_text: nasarText,
+      summary_text: summaryText,
       passage_questions_count: 1,
     });
   }, [question, classSubjects, chapters, topics, toId]); // Fixed dependencies
@@ -650,6 +661,24 @@ export default function QuestionForm({
               correct_option: null,
             };
             break;
+
+          case 'summary':
+            typeSpecificPayload = {
+              question_text: formData.summary_text,
+              question_text_ur: null,
+              answer_text: formData.answer_text,
+              answer_text_ur: null,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
         }
       }
       // Handle Urdu subject questions
@@ -674,6 +703,24 @@ export default function QuestionForm({
             break;
 
           case 'poetry_explanation':
+            typeSpecificPayload = {
+              question_text: null,
+              question_text_ur: formData.poetry_text,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null,
+              option_b: null,
+              option_c: null,
+              option_d: null,
+              option_a_ur: null,
+              option_b_ur: null,
+              option_c_ur: null,
+              option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+
+          case 'gazal':
             typeSpecificPayload = {
               question_text: null,
               question_text_ur: formData.poetry_text,
@@ -911,12 +958,14 @@ export default function QuestionForm({
         { value: 'passage', label: 'Passage and Questions' },
         { value: 'directInDirect', label: 'Direct In Direct' },
         { value: 'activePassive', label: 'Active Voice / Passive Voice' },
+        { value: 'summary', label: 'Summary' },
       ];
     } else if (isUrduSubject()) {
       return [
         { value: 'mcq', label: 'MCQ (اردو)' },
         { value: 'poetry_explanation', label: 'اشعار کی تشریح' },
         { value: 'prose_explanation', label: 'نثرپاروں کی تشریح' },
+        { value: 'gazal', label: 'غزل' },
         { value: 'short', label: 'مختصر سوالات' },
         { value: 'long', label: 'تفصیلی جوابات' },
         { value: 'sentence_correction', label: 'جملوں کی درستگی' },
@@ -938,7 +987,7 @@ export default function QuestionForm({
   // Helper function to determine which fields to show based on question type
   const shouldShowQuestionTextField = useCallback(() => {
     if (isEnglishSubject()) {
-      return !['translate_urdu', 'translate_english', 'idiom_phrases', 'directInDirect', 'activePassive', 'passage'].includes(formData.question_type);
+      return !['translate_urdu', 'translate_english', 'idiom_phrases', 'directInDirect', 'activePassive', 'passage', 'summary'].includes(formData.question_type);
     } else if (isUrduSubject()) {
       return ['mcq', 'short', 'long'].includes(formData.question_type);
     } else {
@@ -1259,6 +1308,21 @@ export default function QuestionForm({
                   </div>
                 </>
               )}
+
+              {/* Summary fields */}
+              {formData.question_type === 'summary' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label">Text to Summarize *</label>
+                    <Editor
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                      value={formData.summary_text}
+                      onEditorChange={(content) => handleEditorChange(content, 'summary_text')}
+                      init={englishEditorConfig}
+                    />
+                  </div>
+                </>
+              )}
             </>
           )}
 
@@ -1284,6 +1348,21 @@ export default function QuestionForm({
                 <>
                   <div className="col-md-12">
                     <label className="form-label urdu-label">شعر *</label>
+                    <Editor
+                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                      value={formData.poetry_text}
+                      onEditorChange={(content) => handleEditorChange(content, 'poetry_text')}
+                      init={urduEditorConfig}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Urdu Gazal */}
+              {formData.question_type === 'gazal' && (
+                <>
+                  <div className="col-md-12">
+                    <label className="form-label urdu-label">غزل *</label>
                     <Editor
                       tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.poetry_text}

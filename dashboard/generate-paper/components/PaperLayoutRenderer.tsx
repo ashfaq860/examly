@@ -295,10 +295,10 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
           {isPoetry ? 'حصہ نظم:' : isGazal ? 'حصہ غزل:' : ''}
           
           {/* Default header for non-poetry sections */}
-          {!isPoetry && !isGazal && !isFirstPartOfPair && !isSecondPartOfPair && (!isLongType || !isUrduOrEnglish) &&(
+          {!isPoetry && !isGazal && !isFirstPartOfPair && !isSecondPartOfPair && !isLongType &&(
              <SectionHeader
                 sectionId={section.id}
-                sectionIndex={isSecondPartOfPair ? -1 : startNum - 1} 
+                sectionIndex={isSecondPartOfPair || isLongType ? -1 : startNum - 1} 
                 sectionType={section.type}
                 totalQuestions={section.totalQuestions}
                 attemptCount={finalAttemptCount}
@@ -317,7 +317,7 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
 
       <div className="questions-list row g-2 mx-0" style={{ direction: sectionType === 'translate_english' ? 'rtl' : '' }}>
         {questions.map((q, qIdx) => {
-          const finalIndex = isLongType ? (paperLanguage === 'urdu' ? startNum : startNum + qIdx) : getQuestionDisplayIndex(qIdx);
+          const finalIndex = isLongType ? startNum : getQuestionDisplayIndex(qIdx);
           return (
             <div key={`${q.id}-${qIdx}`} className={`${getDynamicColClass(q)} px-1`}>
               <QuestionRenderer

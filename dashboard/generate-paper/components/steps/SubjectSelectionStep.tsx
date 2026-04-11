@@ -3,6 +3,7 @@ import React from 'react';
 import { UseFormSetValue } from 'react-hook-form';
 import Loading from '../../loading';
 
+// Updated to match the optimized 'public.subjects' table
 interface Subject {
   id: string;
   name: string;
@@ -59,6 +60,7 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
 
   return (
     <div className="container py-4">
+      {/* Font Face Declaration for Nastaleeq */}
       <style jsx global>{`
         @font-face {
           font-family: 'JameelNoori';
@@ -82,6 +84,7 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
           renderSkeletons()
         ) : subjects.length === 0 ? (
              <Loading /> 
+          
         ) : (
           subjects.map((subject, index) => {
             const isActive = watchedSubjectId === subject.id;
@@ -92,17 +95,19 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
                 key={subject.id}
                 className="col-6 col-md-4 col-lg-3 flip-container"
                 style={{ '--delay': `${index * 0.08}s` } as React.CSSProperties}
-                onClick={() => setValue('subjectId', subject.id, { shouldValidate: true })}
               >
-                <div className={`flip-card-inner ${isActive ? 'is-active' : ''}`}>
-                  {/* FRONT SIDE */}
+                <div
+                  className={`flip-card-inner ${isActive ? 'is-active' : ''}`}
+                  onClick={() => setValue('subjectId', subject.id, { shouldValidate: true })}
+                >
+                  {/* FRONT SIDE: Modern Glassmorphism Look */}
                   <div className="flip-card-front card shadow-sm border-0">
-                    {/* Added wrapper div here to handle content fading */}
-                    <div className="card-body d-flex flex-column align-items-center justify-content-center p-4 front-content-wrapper">
+                    <div className="card-body d-flex flex-column align-items-center justify-content-center p-4">
                       <div className="icon-wrapper mb-3">
                         <span className="fs-1">{subjectIcon}</span>
                       </div>
                       <h6 className="fw-bold text-dark mb-1 text-center">{subject.name}</h6>
+                      
                       {subject.name_ur && (
                         <span className="urdu-text text-primary text-center">
                           {subject.name_ur}
@@ -111,14 +116,14 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
                     </div>
                   </div>
 
-                  {/* BACK SIDE */}
+                  {/* BACK SIDE: Premium Brand Colors */}
                   <div className="flip-card-back card shadow-lg text-white border-0">
                     <div className="card-body d-flex flex-column align-items-center justify-content-center">
                       <div className="check-ring mb-2">
                         <i className="bi bi-check-lg"></i>
                       </div>
-                      <h6 className="fw-bold mb-0">Selected</h6>
-                      <small className="opacity-75">Subject Confirmed</small>
+                      <h6 className="fw-bold mb-0">Confirm Selection</h6>
+                      <small className="opacity-75">Click to proceed</small>
                     </div>
                   </div>
                 </div>
@@ -145,16 +150,15 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
           opacity: 0;
           animation: slideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
           animation-delay: var(--delay);
-          cursor: pointer;
         }
 
         .flip-card-inner {
           position: relative;
           width: 100%;
           height: 100%;
+          cursor: pointer;
           transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
           transform-style: preserve-3d;
-          pointer-events: none;
         }
 
         .flip-container:hover .flip-card-inner,
@@ -168,30 +172,12 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
           height: 100%;
           backface-visibility: hidden;
           border-radius: 28px;
-          pointer-events: auto;
         }
 
         .flip-card-front {
           background: #ffffff;
           border: 1px solid rgba(0,0,0,0.04);
-          z-index: 2;
         }
-
-        /* --- NEW STYLES FOR FADING FRONT CONTENT --- */
-        .front-content-wrapper {
-          width: 100%;
-          height: 100%;
-          /* Transition opacity slightly faster than the flip for a cleaner effect */
-          transition: opacity 0.4s ease-in-out; 
-          opacity: 1; /* Default fully visible */
-        }
-
-        /* When card flips (hover or active), fade front content to look "lighter" */
-        .flip-container:hover .front-content-wrapper,
-        .flip-card-inner.is-active .front-content-wrapper {
-          opacity: 0.1; /* Adjust this value (0.0 to 1.0) for desired lightness */
-        }
-        /* ------------------------------------------- */
 
         .icon-wrapper {
           width: 70px;
@@ -230,6 +216,7 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
           border: 1px solid rgba(255,255,255,0.3);
         }
 
+        /* Skeleton Shimmer */
         .skeleton-card {
           height: 200px;
           background: #fdfdfd;

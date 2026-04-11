@@ -47,16 +47,9 @@ const toRoman = (num: number): string => {
 };
 
 /** Strip HTML tags and trim */
-const formatQuestionText = (text: string, stripNumbering = false): string => {
+const formatQuestionText = (text: string): string => {
   if (!text) return '';
-  let cleaned = text.replace(/<(?:.|\n)*?>/gm, ' ').trim();
-  if (stripNumbering) {
-    cleaned = cleaned
-      .replace(/^(?:\(?\d+\)?[.)]?|\(?[ivxIVX]+\)?[.)]?)(\s+|\u00A0)*/, '')
-      .replace(/(\s+|\u00A0)*(?:\(?\d+\)?[.)]?|\(?[ivxIVX]+\)?[.)]?)$/, '')
-      .trim();
-  }
-  return cleaned;
+  return text.replace(/<(?:.|\n)*?>/gm, ' ').trim();
 };
 
 /** Component to render bilingual text */
@@ -76,7 +69,6 @@ const BilingualTextDisplay: React.FC<any> = ({
   urduFontSizeOffset = 2,
   isOption = false,
   lineSpacing,
-  urduNumberLabel,
   question // Ensure this is passed from the parent
 }) => {
   const effectiveLineHeight = lineSpacing || 1.4;
@@ -105,42 +97,13 @@ const BilingualTextDisplay: React.FC<any> = ({
           {isEditMode ? (
             <EditableText
               value={urValue || ''}
+              placeholder="Urdu text..."
               onChange={(v) => onTextChange(sectionId, questionId, urField, v)}
             />
-          ) : (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'flex-start',
-                gap: '0.35rem',
-                flexWrap: 'nowrap',
-                width: '100%',
-              }}
-            >
-              {urduNumberLabel && !isOption && (
-                <span
-                  className="fw-bold text-nowrap"
-                  style={{
-                    fontSize: `${fontSize}px`,
-                    lineHeight: `${optimizedUrduLineHeight}`,
-                    fontFamily: URDU_FONT,
-                    flex: '0 0 auto',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {urduNumberLabel}
-                </span>
-              )}
-              <span
-                style={{
-                  display: 'block',
-                  flex: '1 1 0',
-                  minWidth: 0,
-                  textAlign: 'right',
-                }}
-                dangerouslySetInnerHTML={{ __html: formatQuestionText(urValue || (isOption ? '' : engValue), isTranslateType) }}
-              />
-            </span>
+          ) : (<>
+            <span dangerouslySetInnerHTML={{ __html: formatQuestionText(urValue || (isOption ? '' : engValue)) }} />
+         
+            </>
           )}
         </div>
       )}
@@ -164,6 +127,7 @@ const BilingualTextDisplay: React.FC<any> = ({
           {isEditMode ? (
             <EditableText
               value={engValue || ''}
+              placeholder={isTranslateType ? "Urdu text for translation..." : "English text..."}
               onChange={(v) => onTextChange(sectionId, questionId, engField, v)}
             />
           ) : (<>
@@ -196,14 +160,9 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
   } = props;
 // Determine if we treat this as RTL (Urdu Subject or English Translation)
   const isTranslate = question?.question_type === 'translate_english';
-  // Logic: Treat as Urdu if paper is Urdu OR if it's a translation type question
-  const isUrdu = paperLanguage === 'urdu' || paperLanguage === 'bilingual' || isTranslate;
-  const isEnglish = (paperLanguage === 'english' || paperLanguage === 'bilingual') && !isTranslate;
-  const showUrduNumber = paperLanguage === 'urdu' || isTranslate;
-  const showEnglishNumber = (paperLanguage === 'english' || paperLanguage === 'bilingual') && !isTranslate;
-  const showUrduSideNumber = paperLanguage === 'bilingual' && !isTranslate;
-  const isPaperUrduOrEnglish = paperLanguage === 'urdu' || paperLanguage === 'english';
-  const numberFontSize = sectionType === 'mcq' ? (mcqFontSize || 12) : fontSize;
+ // Logic: Treat as Urdu if paper is Urdu OR if it's a translation type question
+const isUrdu = paperLanguage === 'urdu' || paperLanguage === 'bilingual' || isTranslate;
+  const isEnglish = (paperLanguage === 'english' || paperLanguage === 'bilingual') && !isTranslate;  const isPaperUrduOrEnglish = paperLanguage === 'urdu' || paperLanguage === 'english';  const numberFontSize = sectionType === 'mcq' ? (mcqFontSize || 12) : fontSize;
   const currentLineHeight = sectionType === 'mcq' ? (mcqLineHeight || 1.2) : (questionLineSpacing || 1.5);
 
   // --- UPDATED COUNTING LOGIC ---
@@ -228,8 +187,6 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
       indexDisplay = `(${toRoman(index + 1)})`;
     }
   }
-
-  const urduNumberLabel = showUrduSideNumber ? indexDisplay : undefined;
  
   // ------------------------------
 
@@ -291,7 +248,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
         {showNumber && (
           <div className="d-flex align-items-start">
             {/* Renders for English AND Bilingual modes */}
-            {showEnglishNumber && (
+            {isEnglish && (
               <span
                 className="fw-bold text-nowrap"
                 style={{
@@ -307,7 +264,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
             )}
 
             {/* Renders ONLY for pure Urdu or Translation questions */}
-            {showUrduNumber && (
+            {(paperLanguage === 'urdu' || isTranslate) && (
               <span
                 className="fw-bold text-nowrap"
                 style={{
@@ -329,9 +286,9 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
        {/* 2. QUESTION TEXT */}
         <div className={`${isUrduSubject && isLong ? 'flex-grow-0' : 'flex-grow-1'}`}>
           {sectionType === 'mcq' ? (
-            <MCQQuestionRenderer {...props} isUrdu={isUrdu} isEnglish={isEnglish} urduNumberLabel={urduNumberLabel} />
+            <MCQQuestionRenderer {...props} isUrdu={isUrdu} isEnglish={isEnglish} />
           ) : (
-            <SubjectiveQuestionRenderer {...props} isUrdu={isUrdu} isEnglish={isEnglish} isLong={isLong} urduNumberLabel={urduNumberLabel} />
+            <SubjectiveQuestionRenderer {...props} isUrdu={isUrdu} isEnglish={isEnglish} isLong={isLong} />
           )}
         </div>
 
@@ -406,7 +363,6 @@ const MCQQuestionRenderer: React.FC<any> = (props) => {
           lineSpacing={activeLineHeight}
           questionFontFamily={questionFontFamily}
           questionId={question.id}
-          urduNumberLabel={props.urduNumberLabel}
         />
       </div>
 
@@ -463,11 +419,10 @@ const SubjectiveQuestionRenderer: React.FC<any> = (props) => {
       urValue={question.question_text_ur}
       engField="question_text"
       urField="question_text_ur"
-      fontSize={fontSize + fontSizeOffset}
+      fontSize={fontSize +fontSizeOffset}
       lineSpacing={questionLineSpacing || 1.5}
       questionFontFamily={questionFontFamily}
       questionId={question.id}
-      urduNumberLabel={props.urduNumberLabel}
     />
   );
 };

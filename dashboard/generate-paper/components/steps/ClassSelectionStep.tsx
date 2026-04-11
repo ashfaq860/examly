@@ -1,8 +1,10 @@
+//generate-paper/components/steps/ClassSelectionStep.tsx
 'use client';
 import React from 'react';
 import { UseFormSetValue } from 'react-hook-form';
 import Loading from '../../loading'; 
 
+// Updated interface to match public.classes table
 interface Class {
   id: string;
   name: string;
@@ -23,12 +25,12 @@ export const ClassSelectionStep: React.FC<ClassSelectionStepProps> = ({
   errors
 }) => {
 
+  // Add this line to sort classes naturally (1, 2, 10 instead of 1, 10, 2)
   const sortedClasses = React.useMemo(() => {
     return [...classes].sort((a, b) => 
       a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
     );
   }, [classes]);
-
   return (
     <div className="container py-4">
       <div className="text-center mb-5 animate-slide-down">
@@ -53,7 +55,7 @@ export const ClassSelectionStep: React.FC<ClassSelectionStepProps> = ({
               >
                 <div
                   onClick={() => setValue("classId", cls.id, { shouldValidate: true })}
-                  className={`card h-100 selection-card border-0 ${
+                  className={`card h-100 selection-card ${
                     isActive ? "active-card shadow-lg" : "shadow-sm"
                   }`}
                 >
@@ -63,7 +65,7 @@ export const ClassSelectionStep: React.FC<ClassSelectionStepProps> = ({
                     </div>
                     
                     <h5 className="fw-bold mb-1 card-title-text">Class {cls.name}</h5>
-                    <p className="small text-muted mb-0 opacity-75">
+                    <p className="small text-muted mb-0 opacity-50">
                         {cls.description || 'Academic Level'}
                     </p>
                     
@@ -87,34 +89,23 @@ export const ClassSelectionStep: React.FC<ClassSelectionStepProps> = ({
       )}
 
       <style jsx>{`
-        .perspective-stage { 
-          perspective: 1200px; 
-        }
-
+        /* Keep your existing premium CSS here - it remains compatible */
+        .perspective-stage { perspective: 1200px; }
         .selection-card {
           cursor: pointer;
           border-radius: 24px;
+          border: 1px solid rgba(0,0,0,0.05);
           background: #ffffff;
           transform-style: preserve-3d;
-          transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
-          overflow: hidden; /* Prevents internal content or borders from triggering scrollbars */
-          position: relative;
+          transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.5s ease;
         }
-
-        /* Default subtle border using shadow to prevent layout shift */
-        .selection-card:not(.active-card) {
-          box-shadow: 0 0 0 1px rgba(0,0,0,0.05), 0 4px 6px -1px rgba(0,0,0,0.1);
-        }
-
         .selection-card:hover {
-          transform: rotateX(8deg) rotateY(-5deg) translateY(-10px);
+          transform: rotateX(12deg) rotateY(-8deg) translateY(-10px) translateZ(20px);
           box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15) !important;
         }
-
         .active-card {
-          /* Using inset shadow instead of border to prevent the "vertical bar" scroll issue */
-          box-shadow: inset 0 0 0 2px #0d6efd, 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important;
-          background: linear-gradient(145deg, #ffffff 0%, #f0f7ff 100%) !important;
+          border: 2px solid #0d6efd !important;
+          background: linear-gradient(145deg, #ffffff 0%, #f0f7ff 100%);
         }
 
         .icon-wrapper {
@@ -125,12 +116,14 @@ export const ClassSelectionStep: React.FC<ClassSelectionStepProps> = ({
           align-items: center;
           justify-content: center;
           transition: transform 0.4s ease, background 0.3s ease;
+          transform-style: preserve-3d;
         }
 
         .shadow-primary {
           box-shadow: 0 8px 15px rgba(13, 110, 253, 0.2);
         }
 
+        /* 5. Animations */
         .animate-staggered {
           opacity: 0;
           animation: fadeInUp 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
@@ -138,7 +131,7 @@ export const ClassSelectionStep: React.FC<ClassSelectionStepProps> = ({
         }
 
         @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(30px) rotateX(-10deg); }
+          from { opacity: 0; transform: translateY(40px) rotateX(-20deg); }
           to { opacity: 1; transform: translateY(0) rotateX(0); }
         }
 
@@ -149,14 +142,13 @@ export const ClassSelectionStep: React.FC<ClassSelectionStepProps> = ({
           color: #0d6efd;
           font-size: 1.3rem;
           opacity: 0;
-          transform: scale(0);
+          transform: scale(0) translateZ(50px);
           transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-          z-index: 10;
         }
 
         .selection-indicator.visible {
           opacity: 1;
-          transform: scale(1);
+          transform: scale(1) translateZ(50px);
         }
 
         .animate-slide-down {
@@ -164,19 +156,8 @@ export const ClassSelectionStep: React.FC<ClassSelectionStepProps> = ({
         }
 
         @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-20px); }
+          from { opacity: 0; transform: translateY(-30px); }
           to { opacity: 1; transform: translateY(0); }
-        }
-
-        .shake {
-          animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
-        }
-
-        @keyframes shake {
-          10%, 90% { transform: translate3d(-1px, 0, 0); }
-          20%, 80% { transform: translate3d(2px, 0, 0); }
-          30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-          40%, 60% { transform: translate3d(4px, 0, 0); }
         }
       `}</style>
     </div>

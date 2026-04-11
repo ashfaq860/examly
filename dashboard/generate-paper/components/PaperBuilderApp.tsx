@@ -200,44 +200,39 @@ const handleSaveToSupabase = async () => {
   };
 
   const config = languageConfigs[paperLanguage] || languageConfigs.english;
-  const lastSavedPaperDataRef = useRef<string>('');
 
   const refreshPaperData = useCallback(() => {
     if (typeof window === 'undefined') return;
-    const saved = localStorage.getItem('questionPapers') ?? '';
-    if (saved === lastSavedPaperDataRef.current) return;
-
-    lastSavedPaperDataRef.current = saved;
-
+    const saved = localStorage.getItem('questionPapers');
     if (!saved) {
       setPaperSections([]);
       return;
     }
 
-    try {
-      const parsed = JSON.parse(saved);
-      const sections = Array.isArray(parsed) ? parsed : (parsed.sections || []);
-      setPaperSections(sections);
-
-      // Update the form layout and language state from localStorage
-      if (!Array.isArray(parsed)) {
-        if (parsed.layout) {
-          setValue('mcqPlacement', parsed.layout); // Syncs currentLayout
-        }
-        if (parsed.language) {
-          setPaperLanguage(parsed.language);
-          setValue('language', parsed.language);
-        }
-      } else if (sections.length > 0) {
-        setPaperLanguage(sections[0].language || currentLanguage);
+  try {
+    const parsed = JSON.parse(saved);
+    const sections = Array.isArray(parsed) ? parsed : (parsed.sections || []);
+    setPaperSections(sections);
+    
+    // FIX: Update the form layout and language state from localStorage
+    if (!Array.isArray(parsed)) {
+      if (parsed.layout) {
+        setValue('mcqPlacement', parsed.layout); // Syncs currentLayout
       }
-    } catch (e) {
-      console.error('Error parsing paper data:', e);
-      setPaperSections([]);
+      if (parsed.language) {
+        setPaperLanguage(parsed.language);
+        setValue('language', parsed.language);
+      }
+    } else if (sections.length > 0) {
+      setPaperLanguage(sections[0].language || currentLanguage);
     }
-  }, [currentLanguage, setValue]);
+  } catch (e) {
+    console.error('Error parsing paper data:', e);
+    setPaperSections([]);
+  }
+}, [currentLanguage, setValue]); // Add setValue to dependencies
 
-  const handleCancelPaper = useCallback(() => {
+const handleCancelPaper = useCallback(() => {
   if (!confirm('Clear paper?')) return;
 
   // 1. Clear storage
@@ -253,15 +248,8 @@ const handleSaveToSupabase = async () => {
 
   useEffect(() => {
     refreshPaperData();
-
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === 'questionPapers') {
-        refreshPaperData();
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('storage', refreshPaperData);
+    return () => window.removeEventListener('storage', refreshPaperData);
   }, [refreshPaperData]);
 
   

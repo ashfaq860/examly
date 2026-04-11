@@ -53,7 +53,7 @@ interface Question {
   option_d_ur?: string | null;
   correct_option?: string | null;
   difficulty: 'easy' | 'medium' | 'hard';
-  question_type: 'mcq' | 'short' | 'long' | 'translate_urdu' | 'translate_english' | 'idiom_phrases' | 'passage' | 'poetry_explanation' | 'prose_explanation' | 'sentence_correction' | 'sentence_completion' | 'directInDirect' | 'activePassive' | 'darkhwast_khat' | 'kahani_makalma' | 'Nasarkhulasa_markziKhyal';
+  question_type: 'mcq' | 'short' | 'long' | 'translate_urdu' | 'translate_english' | 'idiom_phrases' | 'passage' | 'poetry_explanation' | 'prose_explanation' | 'sentence_correction' | 'sentence_completion' | 'directInDirect' | 'activePassive' | 'darkhwast_khat' | 'kahani_makalma' | 'Nasarkhulasa_markziKhyal' | 'summary';
   answer_text?: string | null;
   answer_text_ur?: string | null;
   source_type: 'book' | 'past_paper' | 'model_paper' | 'custom';
@@ -124,10 +124,12 @@ const QUESTION_TYPES = [
   { value: 'passage', label: 'Passage' },
   { value: 'poetry_explanation', label: 'Poetry Explanation' },
   { value: 'prose_explanation', label: 'Prose Explanation' },
+  { value: 'gazal', label: 'Gazal' },
   { value: 'sentence_correction', label: 'Sentence Correction' },
   { value: 'sentence_completion', label: 'Sentence Completion' },
   { value: 'directInDirect', label: 'Direct/Indirect' },
   { value: 'activePassive', label: 'Active/Passive' },
+  { value: 'summary', label: 'Summary' },
   { value: 'darkhwast_khat', label: 'Darkhwast/Khat' },
   { value: 'kahani_makalma', label: 'Kahani/Makalma' },
   { value: 'Nasarkhulasa_markziKhyal', label: 'Nasarkhulasa/Markzi Khyal' },
@@ -147,7 +149,7 @@ export default function QuestionBank() {
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'all' | 'mcq' | 'short' | 'long' | 'translate_urdu' | 'translate_english' | 'idiom_phrases' | 'passage' | 'poetry_explanation' | 'prose_explanation' | 'sentence_correction' | 'sentence_completion' | 'directInDirect' | 'activePassive' | 'darkhwast_khat' | 'kahani_makalma' | 'Nasarkhulasa_markziKhyal'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'mcq' | 'short' | 'long' | 'translate_urdu' | 'translate_english' | 'idiom_phrases' | 'passage' | 'poetry_explanation' | 'prose_explanation' | 'gazal' | 'sentence_correction' | 'sentence_completion' | 'directInDirect' | 'activePassive' | 'summary' | 'darkhwast_khat' | 'kahani_makalma' | 'Nasarkhulasa_markziKhyal'>('all');
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);

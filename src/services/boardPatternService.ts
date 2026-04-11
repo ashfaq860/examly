@@ -14,9 +14,9 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
         },
         short: { count: 0, attempt: 0, marks: 2, total: 0 },
         long: { 
-            count: 3, 
-            attempt: 2, 
-            marks: name === 'urdu' ? 10 : 8, 
+            count: name==='english'||name==='urdu' ? 2 : 3, 
+            attempt: name==='english'||name==='urdu' ? 1 : 2, 
+            marks:name==='urdu' ? 5 : 8, 
             total: 0 
         },
         totalMarks: 0,
@@ -26,7 +26,8 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
 
     // Correcting the Short Question totals for splitting logic
     if (name === 'urdu' || name === 'english') {
-        baseDetails.short = { count: 8, attempt: 5, marks: 2, total: 10 };
+        baseDetails.short = { count: 0, attempt: 0, marks: 2, total: 0 }; // Will be added as additional type
+        baseDetails.long = { count: 0, attempt: 0, marks: name === 'urdu' ? 5 : 8, total: 0 }; // Will be added as additional type
     } else if (name.toLowerCase().includes('computer')) {
         // 18 total allows for 3 sections of 6
         baseDetails.short = { count: 18, attempt: 12, marks: 2, total: 24 };
@@ -67,18 +68,65 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
       {
         name: 'poetry_explanation',
         label: 'Poetry Explanation',
+        count: 4,
+        attempt: 3,
+        marks: 2,
+        total: 6
+      },
+      {
+        name: 'gazal',
+        label: 'Gazal',
+        count: 3,
+        attempt: 2,
+        marks: 2,
+        total: 4
+      },
+      {
+        name: 'prose_explanation',
+        label: 'Prose Explanation',
+        count: 2,
+        attempt: 1,
+        marks: 10,
+        total: 10
+      },
+      {
+        name: 'short',
+        label: 'Short Questions',
         count: 8,
         attempt: 5,
         marks: 2,
         total: 10
       },
       {
-        name: 'prose_explanation',
-        label: 'Prose Explanation',
+        name: 'Nasarkhulasa_markziKhyal',
+        label: 'Nasarkhulasa/markziKhyal',
         count: 2,
-        attempt: 2,
+        attempt: 1,
+        marks: 5,
+        total:5
+      },
+      {
+        name: 'long',
+        label: 'Long Questions',
+        count: 2,
+        attempt: 1,
         marks: 5,
         total: 10
+      },
+      {
+        name: 'darkhwast_khat',
+        label: 'Darkhwast Khat',
+        count: 2,
+        attempt: 1,
+        marks:10,
+        total: 10
+      },{
+        name: 'kahani_makalma',
+        label: 'Kahani Makalma',
+        count: 2,
+        attempt: 1,
+        marks: 5,
+        total: 5
       }
     );
 
@@ -96,24 +144,35 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
         {
           name: 'sentence_correction',
           label: 'Sentence Correction',
-          count: 5,
-          attempt: 5,
+          count: 4,
+          attempt: 3,
           marks: 1,
-          total: 5
+          total: 3
         },
         {
           name: 'sentence_completion',
           label: 'Sentence Completion',
-          count: 5,
-          attempt: 5,
+          count: 3,
+          attempt: 2,
           marks: 1,
-          total: 5
+          total: 2
         }
       );
     }
   }
 
   private static addEnglishTypes(details: BoardPatternDetails, className: string) {
+    // 1. short
+    details.additionalTypes.push({
+      name: 'short',
+      label: 'Short Questions',
+      count: 8,
+      attempt: 5,
+      marks: 2,
+      total: 10
+    });
+    
+    // 2. translate_urdu
     if (className !== '10') {
       details.additionalTypes.push({
         name: 'translate_urdu',
@@ -133,45 +192,80 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
         total: 8
       });
     }
-
-    details.additionalTypes.push(
-      {
-        name: 'translate_english',
-        label: 'Translate to English',
+    
+    // 3. summary
+    details.additionalTypes.push({
+      name: 'summary',
+      label: 'Summary',
+      count: 1,
+      attempt: 1,
+      marks: 5,
+      total: 5
+    });
+    
+    // 4. idiom_phrases
+    details.additionalTypes.push({
+      name: 'idiom_phrases',
+      label: 'Idiom & Phrases',
+      count: 8,
+      attempt: 5,
+      marks: 1,
+      total: 5
+    });
+    
+    // 5. long
+    details.additionalTypes.push({
+      name: 'long',
+      label: 'Long Questions',
+      count: 2,
+      attempt: 1,
+      marks: 8,
+      total: 8
+    });
+    
+    // 6. passage (class 9 only)
+    if (className === '9') {
+      details.additionalTypes.push({
+        name: 'passage',
+        label: 'Passage',
         count: 1,
         attempt: 1,
-        marks: 5,
-        total: 5
-      },
-      {
-        name: 'idiom_phrases',
-        label: 'Idiom & Phrases',
+        marks: 10,
+        total: 10
+      });
+    }
+    
+    // 7. translate_english
+    if (className === '9') {
+      details.additionalTypes.push({
+        name: 'translate_english',
+        label: 'Translate to English',
         count: 8,
         attempt: 5,
         marks: 1,
         total: 5
-      }
-    );
-
-    if (className !== '10') {
-      details.additionalTypes.push(
-        {
-          name: 'passage',
-          label: 'Passage',
-          count: 1,
-          attempt: 1,
-          marks: 10,
-          total: 10
-        },
-        {
-          name: 'activePassive',
-          label: 'Active/Passive',
-          count: 6,
-          attempt: 5,
-          marks: 1,
-          total: 5
-        }
-      );
+      });
+    } else if (className === '10') {
+      details.additionalTypes.push({
+        name: 'translate_english',
+        label: 'Translate to English',
+        count: 6,
+        attempt: 1,
+        marks: 5,
+        total: 5
+      });
+    }
+    
+    // 8. activePassive or directInDirect
+    if (className === '9') {
+      details.additionalTypes.push({
+        name: 'activePassive',
+        label: 'Active/Passive',
+        count: 5,
+        attempt: 5,
+        marks: 1,
+        total: 5
+      });
     } else if (className === '10') {
       details.additionalTypes.push({
         name: 'directInDirect',
