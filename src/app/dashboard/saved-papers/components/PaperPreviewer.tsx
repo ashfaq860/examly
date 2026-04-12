@@ -144,6 +144,7 @@ const isUserPremium = isPremium || hasActivePackage;
               renderInlineBilingual={true}
               currentClass={{ name: paper.class_name }}
               profile={profile}
+             isPremium={isUserPremium}
               onSectionUpdate={() => {}}
             />
           </div>

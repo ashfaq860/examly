@@ -56,7 +56,7 @@ interface Question {
   question_type: 'mcq' | 'short' | 'long' | 'translate_urdu' | 'translate_english' | 'idiom_phrases' | 'passage' | 'poetry_explanation' | 'prose_explanation' | 'sentence_correction' | 'sentence_completion' | 'directInDirect' | 'activePassive' | 'darkhwast_khat' | 'kahani_makalma' | 'Nasarkhulasa_markziKhyal' | 'summary';
   answer_text?: string | null;
   answer_text_ur?: string | null;
-  source_type: 'book' | 'past_paper' | 'model_paper' | 'custom';
+  source_type: 'book' | 'past_paper' | 'model_paper' | 'custom' | 'conceptual';
   source_year?: number | null;
   created_at: string;
   topic_id?: string | null;
@@ -993,6 +993,7 @@ export default function QuestionBank() {
                   <option value="book">Book</option>
                   <option value="past_paper">Past Paper</option>
                   <option value="model_paper">Model Paper</option>
+                  <option value="conceptual">Conceptual</option>
                   <option value="custom">Custom</option>
                 </select>
               </div>

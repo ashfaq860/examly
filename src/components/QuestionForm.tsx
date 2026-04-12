@@ -89,7 +89,7 @@ export default function QuestionForm({
     topic_id: '',
     difficulty: 'medium',
     question_type: 'mcq' as QuestionType,
-    source_type: 'book' as 'book' | 'past_paper' | 'model_paper' | 'custom',
+    source_type: 'book' as 'book' | 'past_paper' | 'model_paper' | 'custom' | 'conceptual',
     passage_questions_count: 1,
   });
 
@@ -381,7 +381,7 @@ export default function QuestionForm({
       question_type: (question.question_type || 'mcq') as QuestionType,
       answer_text: question.answer_text || '',
       answer_text_ur: question.answer_text_ur || '',
-      source_type: (question.source_type || 'book') as 'book' | 'past_paper' | 'model_paper' | 'custom',
+      source_type: (question.source_type || 'book') as 'book' | 'past_paper' | 'model_paper' | 'custom' | 'conceptual',
       source_year: question.source_year ? String(question.source_year) : '',
       // Form-only fields (parsed from existing data)
       passage_text: passageText,
@@ -1162,10 +1162,10 @@ export default function QuestionForm({
               <option value="past_paper">Past Paper</option>
               <option value="model_paper">Model Paper</option>
               <option value="custom">Custom</option>
+              <option value="conceptual">Conceptual</option>
             </select>
           </div>
 
-          {/* Source Year */}
           {['past_paper', 'model_paper'].includes(formData.source_type) && (
             <div className="col-md-6">
               <label className="form-label">Year</label>
