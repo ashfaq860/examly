@@ -1,0 +1,205 @@
+/* Print-specific styles for exam paper generation */
+
+/* ===== UNIVERSAL PRINT RESET ===== */
+@media print {
+  /* 1. Page setup - critical for consistent output */
+  @page {
+    size: A4;
+    margin: 0mm;
+  }
+
+  /* 2. Remove default browser margins and padding */
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+
+  /* 3. Hide all UI elements except the paper */
+  nav,
+  header:not(.paper-header),
+  footer,
+  .sidebar,
+  .navbar,
+  .header-nav,
+  .scroll-progress-bar,
+  #nprogress,
+  .d-print-none,
+  [class*="btn"],
+  [class*="modal"],
+  [class*="dropdown"],
+  .floating-action,
+  .settings-panel,
+  .question-selector,
+  .fixed-back-btn {
+    display: none !important;
+  }
+
+  /* 4. Reset main container */
+  main,
+  [role="main"],
+  .main-content {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    background: white !important;
+    overflow: visible !important;
+  }
+
+  /* 5. Hide flex/grid layout artifacts */
+  .d-flex,
+  .flex-grow-1,
+  .min-vh-100,
+  [class*="justify-content"],
+  [class*="align-items"] {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* 6. Printable paper container - CRITICAL */
+  #printable-paper {
+    position: relative !important;
+    display: block !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    min-width: 210mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    background: white !important;
+    border: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+    page-break-after: auto !important;
+  }
+
+  #printable-paper * {
+    filter: none !important;
+    transform: none !important;
+    perspective: none !important;
+  }
+
+  /* 7. Paper sheets - page break control */
+  .paper-sheet {
+    display: block !important;
+    margin: 0 !important;
+    padding: 4mm !important;
+    width: auto !important;
+    min-width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    background: white !important;
+    border: none !important;
+    box-shadow: none !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
+  }
+
+  /* 8. Content within paper sheet */
+  .paper-sheet > * {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 9. Paper header and sections */
+  .paper-header,
+  .section-block,
+  .questions-list {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 10. Questions - keep them together when possible */
+  .question-item,
+  .question-renderer {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 11. Dashed lines for cutting */
+  .dashed-line,
+  [class*="cut-line"] {
+    display: block !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 12. Remove animations and transitions */
+  * {
+    animation: none !important;
+    transition: none !important;
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+
+  /* 13. Ensure proper text rendering */
+  body,
+  html {
+    font-family: Arial, sans-serif !important;
+    color: #000 !important;
+  }
+
+  /* 14. Fix any remaining container issues */
+  .container,
+  .container-fluid {
+    display: block !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 15. Remove background colors and gradients (unless print-color-adjust is set) */
+  [class*="bg-"] {
+    background: white !important;
+    background-image: none !important;
+  }
+
+  /* 16. Paper renderer background */
+  .paper-builder-renderer {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  /* 17. Print break helper class */
+  .print-break {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+}
+
+/* ===== NON-PRINT STYLES ===== */
+
+/* Hide print-specific elements when not printing */
+.print-only {
+  display: none !important;
+}
+
+@media print {
+  .print-only {
+    display: block !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

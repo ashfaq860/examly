@@ -49,14 +49,39 @@ export const useBoardPattern = () => {
           questionCount *= chaptersInRange.length;
         }
 
-        // Fetch questions
+        // Fetch questions using new schema with topic_id
         const { data: questions, error: questionsError } = await supabase
           .from('questions')
-          .select('*')
-          .eq('subject_id', subjectId)
-          .eq('class_id', classId)
-          .in('chapter_id', chaptersInRange)
-          .eq('type', rule.question_type)
+          .select(`
+            id,
+            question_text,
+            question_text_ur,
+            option_a,
+            option_b,
+            option_c,
+            option_d,
+            correct_option,
+            difficulty,
+            question_type,
+            topic:topics(
+              id,
+              name,
+              chapter_id,
+              chapter:chapters(
+                id,
+                class_subject_id,
+                class_subject:class_subjects(
+                  id,
+                  class_id,
+                  subject_id
+                )
+              )
+            )
+          `)
+          .eq('topic.chapter.class_subject.subject_id', subjectId)
+          .eq('topic.chapter.class_subject.class_id', classId)
+          .in('topic.chapter_id', chaptersInRange)
+          .eq('question_type', rule.question_type)
           .limit(questionCount);
 
         if (questionsError) throw questionsError;

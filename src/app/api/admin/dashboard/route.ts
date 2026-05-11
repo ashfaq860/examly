@@ -192,10 +192,10 @@ async function getRecentActivities() {
   if (!supabaseAdmin) return [];
   
   try {
-    // Get recent question additions
+    // Get recent question additions using new schema
     const { data: recentQuestions, error: questionsError } = await supabaseAdmin
       .from('questions')
-      .select('id, created_at, created_by, subject_id')
+      .select('id, created_at, created_by, topic:topics(chapter:chapters(class_subject:class_subjects(subject:subjects(id, name))))')
       .order('created_at', { ascending: false })
       .limit(5);
 
@@ -226,9 +226,9 @@ async function getRecentActivities() {
 
     if (profilesError) console.error('Error fetching profiles:', profilesError);
 
-    // Fetch subject names
+    // Fetch subject names from nested structure
     const subjectIds = [
-      ...(recentQuestions?.map(q => q.subject_id) || [])
+      ...(recentQuestions?.map(q => q.topic?.chapter?.class_subject?.subject?.id) || [])
     ].filter((id, index, arr) => id && arr.indexOf(id) === index);
 
     const { data: subjects, error: subjectsError } = subjectIds.length > 0 ?
@@ -263,7 +263,7 @@ async function getRecentActivities() {
     if (recentQuestions) {
       for (const question of recentQuestions) {
         const userName = userMap.get(question.created_by) || 'Unknown User';
-        const subjectName = subjectMap.get(question.subject_id) || 'Unknown Subject';
+        const subjectName = question.topic?.chapter?.class_subject?.subject?.name || 'Unknown Subject';
         
         activities.push({
           type: 'question_added',

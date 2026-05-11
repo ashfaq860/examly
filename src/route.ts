@@ -152,15 +152,15 @@ async function findQuestionsWithFallback(
   // Map source_type to database values
   const dbSourceType = source_type ? mapSourceType(source_type) : undefined;
   
-  // Try with all filters first
+  // Try with all filters first - use new schema with topic_id
   let query = supabaseAdmin
     .from('questions')
-    .select('id')
+    .select('id, topic_id, topic(topics_chapters(chapters(class_subjects(subject_id))))')
     .eq('question_type', type)
-    .eq('subject_id', subjectId);
+    .eq('topic.chapter.class_subject.subject_id', subjectId);
 
   if (chapterIds.length > 0) {
-    query = query.in('chapter_id', chapterIds);
+    query = query.in('topic.chapter_id', chapterIds);
   }
   
   // Filter by source type if specified and not 'all'
@@ -185,17 +185,16 @@ async function findQuestionsWithFallback(
     return questions;
   }
 
-  // Fallback 1: Remove difficulty filter
+  // Fallback 1: Remove difficulty filter - use new schema
   console.log(`🔄 Fallback 1: Removing difficulty filter for ${type}`);
   let fallbackQuery = supabaseAdmin
     .from('questions')
     .select('id')
     .eq('question_type', type)
-    .eq('subject_id', subjectId);
+    .eq('topic.chapter.class_subject.subject_id', subjectId);
 
   if (chapterIds.length > 0) {
-    fallbackQuery = fallbackQuery.in('chapter_id', chapterIds);
-  }
+      fallbackQuery = fallbackQuery.in('topic.chapter_id', chapterIds);
   
   // Keep source type filter if specified
   if (dbSourceType && dbSourceType !== 'all') {
@@ -217,10 +216,10 @@ async function findQuestionsWithFallback(
       .from('questions')
       .select('id')
       .eq('question_type', type)
-      .eq('subject_id', subjectId);
+      .eq('topic.chapter.class_subject.subject_id', subjectId);
 
     if (chapterIds.length > 0) {
-      fallbackQuery2 = fallbackQuery2.in('chapter_id', chapterIds);
+      fallbackQuery2 = fallbackQuery2.in('topic.chapter_id', chapterIds);
     }
 
     fallbackQuery2 = fallbackQuery2.order('id', { ascending: false }).limit(count);
@@ -232,13 +231,13 @@ async function findQuestionsWithFallback(
     }
   }
 
-  // Fallback 3: Only subject and type filter
+  // Fallback 3: Only subject and type filter - use new schema
   console.log(`🔄 Fallback 3: Using only subject and type filter for ${type}`);
   const { data: fallbackQuestions3 } = await supabaseAdmin
     .from('questions')
     .select('id')
     .eq('question_type', type)
-    .eq('subject_id', subjectId)
+    .eq('topic.chapter.class_subject.subject_id', subjectId)
     .order('id', { ascending: false })
     .limit(count);
 

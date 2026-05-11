@@ -26,13 +26,44 @@ export async function POST(request) {
 
     let query = supabase
       .from("questions")
-      .select("*")
-      .eq("subject_id", subjectId)
-      .eq("class_subject_id", classId)
+      .select(`
+        id,
+        question_text,
+        question_text_ur,
+        option_a,
+        option_b,
+        option_c,
+        option_d,
+        option_a_ur,
+        option_b_ur,
+        option_c_ur,
+        option_d_ur,
+        correct_option,
+        difficulty,
+        question_type,
+        topic:topics(
+          id,
+          name,
+          chapter_id,
+          chapter:chapters(
+            id,
+            name,
+            chapterNo,
+            class_subject_id,
+            class_subject:class_subjects(
+              id,
+              class_id,
+              subject_id
+            )
+          )
+        )
+      `)
+      .eq("topic.chapter.class_subject.subject_id", subjectId)
+      .eq("topic.chapter.class_subject.class_id", classId)
       .eq("question_type", "mcq");
 
     if (quizType === "chapter" && Array.isArray(chapters) && chapters.length > 0) {
-      query = query.in("chapter_id", chapters);
+      query = query.in("topic.chapter_id", chapters);
     }
 
     if (difficulty && difficulty !== "all") {

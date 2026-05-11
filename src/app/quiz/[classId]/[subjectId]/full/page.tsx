@@ -71,8 +71,39 @@ export default function FullSubjectQuizPage() {
     const fetchQuestions = async (subjectIds: string[]) => {
       const { data } = await supabase
         .from("questions")
-        .select("*")
-        .in("subject_id", subjectIds)
+        .select(`
+          id,
+          question_text,
+          question_text_ur,
+          option_a,
+          option_b,
+          option_c,
+          option_d,
+          option_a_ur,
+          option_b_ur,
+          option_c_ur,
+          option_d_ur,
+          correct_option,
+          difficulty,
+          question_type,
+          topic:topics(
+            id,
+            name,
+            chapter_id,
+            chapter:chapters(
+              id,
+              name,
+              chapterNo,
+              class_subject_id,
+              class_subject:class_subjects(
+                id,
+                class_id,
+                subject_id
+              )
+            )
+          )
+        `)
+        .in("topic.chapter.class_subject.subject_id", subjectIds)
         .eq("question_type", "mcq");
 
       if (data) {

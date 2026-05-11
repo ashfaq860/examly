@@ -57,6 +57,7 @@ const fetchData = useCallback(async () => {
   }
 }, []);
 
+
   // 2. Fetch Topics with full relational context
   const fetchTopics = async () => {
     const { data, error } = await supabase
@@ -136,8 +137,12 @@ const fetchData = useCallback(async () => {
       toast.error(error.message);
     } else {
       toast.success(`Topic ${formData.id ? 'updated' : 'added'}`);
-      setShowForm(false);
-      setFormData({ id: '', name: '', classId: '', subjectId: '', chapterId: '' });
+      if (formData.id) {
+        setShowForm(false);
+        setFormData({ id: '', name: '', classId: '', subjectId: '', chapterId: '' });
+      } else {
+        setFormData({ ...formData, name: '' });
+      }
       fetchTopics();
     }
     setSaving(false);

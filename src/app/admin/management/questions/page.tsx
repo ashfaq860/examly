@@ -67,6 +67,7 @@ interface Question {
     chapter?: {
       id: string;
       name: string;
+      chapterNo?: number;
       class_subject_id?: string;
       class_subject?: {
         id: string;
@@ -88,7 +89,12 @@ interface Question {
 }
 
 interface Subject { id: string; name: string; name_ur?: string | null; }
-interface Chapter { id: string; name: string; class_subject_id?: string; }
+interface Chapter { 
+  id: string; 
+  name: string; 
+  chapterNo?: number; 
+  class_subject_id?: string; 
+}
 interface Topic { id: string; name: string; chapter_id: string; }
 interface Class { id: string; name: string; description?: string | null; }
 interface ClassSubject { 
@@ -113,26 +119,32 @@ interface Filters {
   source_type?: string;
 }
 
-// Define all valid question types for the select dropdown
+// Define all question types for dropdown filter (from database)
 const QUESTION_TYPES = [
   { value: 'mcq', label: 'MCQ' },
-  { value: 'short', label: 'Short Question' },
-  { value: 'long', label: 'Long Question' },
-  { value: 'translate_urdu', label: 'Translate to Urdu' },
-  { value: 'translate_english', label: 'Translate to English' },
-  { value: 'idiom_phrases', label: 'Idiom & Phrases' },
-  { value: 'passage', label: 'Passage' },
+  { value: 'short', label: 'Short Answer' },
+  { value: 'long', label: 'Long Answer' },
+  { value: 'translate_urdu', label: 'Translate into Urdu' },
+  { value: 'translate_english', label: 'Translate into English' },
+  { value: 'idiom_phrases', label: 'Idiom/Phrases' },
+  { value: 'passage', label: 'Passage and Questions' },
+  { value: 'directInDirect', label: 'Direct In Direct' },
+  { value: 'activePassive', label: 'Active Voice / Passive Voice' },
   { value: 'poetry_explanation', label: 'Poetry Explanation' },
   { value: 'prose_explanation', label: 'Prose Explanation' },
-  { value: 'gazal', label: 'Gazal' },
+  { value: 'gazal', label: 'Ghazal' },
   { value: 'sentence_correction', label: 'Sentence Correction' },
   { value: 'sentence_completion', label: 'Sentence Completion' },
-  { value: 'directInDirect', label: 'Direct/Indirect' },
-  { value: 'activePassive', label: 'Active/Passive' },
-  { value: 'summary', label: 'Summary' },
-  { value: 'darkhwast_khat', label: 'Darkhwast/Khat' },
-  { value: 'kahani_makalma', label: 'Kahani/Makalma' },
-  { value: 'Nasarkhulasa_markziKhyal', label: 'Nasarkhulasa/Markzi Khyal' },
+  { value: 'fill_in_the_blanks', label: 'Fill in the Blanks' },
+  { value: 'true_false', label: 'True/False' },
+  { value: 'match_the_column', label: 'Match the Column' },
+];
+
+// Tab types - limited to main categories
+const TAB_QUESTION_TYPES = [
+  { value: 'mcq', label: 'MCQ' },
+  { value: 'short', label: 'Short' },
+  { value: 'long', label: 'Long' },
 ];
 
 export default function QuestionBank() {
@@ -149,12 +161,16 @@ export default function QuestionBank() {
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'all' | 'mcq' | 'short' | 'long' | 'translate_urdu' | 'translate_english' | 'idiom_phrases' | 'passage' | 'poetry_explanation' | 'prose_explanation' | 'gazal' | 'sentence_correction' | 'sentence_completion' | 'directInDirect' | 'activePassive' | 'summary' | 'darkhwast_khat' | 'kahani_makalma' | 'Nasarkhulasa_markziKhyal'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'mcq' | 'short' | 'long'>('all');
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalQuestions, setTotalQuestions] = useState(0);
+  
+  // Pre-computed maps for O(1) lookups
+  const [chapterMap, setChapterMap] = useState<Record<string, Chapter>>({});
+  const [topicMap, setTopicMap] = useState<Record<string, Topic>>({});
   
   const router = useRouter();
 
@@ -172,13 +188,24 @@ export default function QuestionBank() {
     init();
   }, [router]);
 
+  // Build pre-computed maps for O(1) lookups
+  useEffect(() => {
+    const chMap: Record<string, Chapter> = {};
+    chapters.forEach(c => chMap[c.id] = c);
+    setChapterMap(chMap);
+
+    const tpMap: Record<string, Topic> = {};
+    topics.forEach(t => tpMap[t.id] = t);
+    setTopicMap(tpMap);
+  }, [chapters, topics]);
+
   // Fetch Functions
   const fetchClasses = async () => {
     try {
       const { data, error } = await supabase
         .from('classes')
         .select('*')
-        .order('name', { ascending: true }); // Ensure ascending order
+        .order('name', { ascending: true });
       if (error) throw error;
       setClasses(data as Class[]);
     } catch (error) {
@@ -257,7 +284,7 @@ export default function QuestionBank() {
     }
   };
 
-  // Get filtered data based on hierarchy
+  // Filter functions for dropdowns - now using pre-computed maps for O(1) lookups
   const getFilteredSubjects = () => {
     if (!filters.class) return [];
     return classSubjects
@@ -266,25 +293,20 @@ export default function QuestionBank() {
         id: cs.subject_id,
         name: cs.subject?.name || 'Unknown Subject'
       }))
-      .sort((a, b) => a.name.localeCompare(b.name)); // Sort subjects alphabetically
+      .sort((a, b) => a.name.localeCompare(b.name));
   };
 
   const getFilteredChapters = () => {
     if (!filters.class || !filters.subject) return [];
-    
-    // Find the class_subject_id for the selected class and subject
     const classSubject = classSubjects.find(
       cs => cs.class_id === filters.class && cs.subject_id === filters.subject
     );
-    
     if (!classSubject) return [];
-    
-    // Filter chapters by class_subject_id and sort by chapterNo
     return chapters
       .filter(chapter => chapter.class_subject_id === classSubject.id)
       .sort((a, b) => {
-        const aNum = a.chapterNo ? Number(a.chapterNo) : 0;
-        const bNum = b.chapterNo ? Number(b.chapterNo) : 0;
+        const aNum = a.chapterNo || 0;
+        const bNum = b.chapterNo || 0;
         return aNum - bNum;
       });
   };
@@ -293,34 +315,80 @@ export default function QuestionBank() {
     if (!filters.chapter) return [];
     return topics
       .filter(topic => topic.chapter_id === filters.chapter)
-      .sort((a, b) => a.name.localeCompare(b.name)); // Sort topics alphabetically
+      .sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  // Sort classes function for consistent ordering
   const getSortedClasses = () => {
     return [...classes].sort((a, b) => {
-      // Try to parse as numbers for numeric sorting (e.g., 1, 2, 3, 10)
       const aNum = parseInt(a.name);
       const bNum = parseInt(b.name);
       if (!isNaN(aNum) && !isNaN(bNum)) {
         return aNum - bNum;
       }
-      // Fallback to alphabetical
       return a.name.localeCompare(b.name);
     });
   };
 
-  const fetchQuestions = async (page = 1) => {
-    setLoading(true);
+const fetchQuestions = async (page = 1, searchOverride?: string) => {
+    // Optimistic loading - only show full loader on first page load
+    setLoading(prev => (page === 1 ? true : prev));
     try {
-      console.log('Fetching questions with filters:', filters);
+      const searchToUse = searchOverride !== undefined ? searchOverride : searchTerm;
+      console.log('Fetching questions with filters:', filters, 'search:', searchToUse);
       
-      // Build the base query for counting total
-      let countQuery = supabase
-        .from('questions')
-        .select('id', { count: 'exact', head: true });
+      // 🚀 PERFORMANCE BOOST: First get matching topic IDs for relational filters
+      // Supabase doesn't support nested relational filters (topic.chapter.class_subject.class_id)
+      // so we need to fetch topic IDs first, then filter questions by those IDs
+      let matchingTopicIds: number[] | null = null;
+      
+      if (filters.class || filters.subject || filters.chapter) {
+        let topicQuery = supabase.from('topics').select('id');
+        
+        if (filters.chapter) {
+          topicQuery = topicQuery.eq('chapter_id', filters.chapter);
+        }
+        
+        if (filters.class || filters.subject) {
+          // Need to join through chapters -> class_subjects
+          let chapterQuery = supabase.from('chapters').select('id, class_subject_id');
+          
+          if (filters.chapter) {
+            chapterQuery = chapterQuery.eq('id', filters.chapter);
+          }
+          
+          if (filters.class || filters.subject) {
+            let csQuery = supabase.from('class_subjects').select('id');
+            if (filters.class) csQuery = csQuery.eq('class_id', filters.class);
+            if (filters.subject) csQuery = csQuery.eq('subject_id', filters.subject);
+            
+            const { data: csData } = await csQuery;
+            if (csData && csData.length > 0) {
+              const csIds = csData.map((cs: any) => cs.id);
+              chapterQuery = chapterQuery.in('class_subject_id', csIds);
+            } else {
+              chapterQuery = chapterQuery.in('id', [-1]); // No match
+            }
+          }
+          
+          const { data: chapterData } = await chapterQuery;
+          if (chapterData && chapterData.length > 0) {
+            const chapterIds = chapterData.map((c: any) => c.id);
+            topicQuery = topicQuery.in('chapter_id', chapterIds);
+          } else {
+            topicQuery = topicQuery.in('id', [-1]); // No match
+          }
+        }
+        
+        const { data: topicData } = await topicQuery;
+        if (topicData && topicData.length > 0) {
+          matchingTopicIds = topicData.map((t: any) => t.id);
+        } else {
+          matchingTopicIds = [-1]; // No matching topics
+        }
+      }
 
       // Build the base query for fetching data with nested relations
+      // NOTE: Using regular joins (!inner removed) to allow questions without complete relations
       let dataQuery = supabase
         .from('questions')
         .select(`
@@ -344,13 +412,14 @@ export default function QuestionBank() {
           answer_text_ur,
           created_at,
           topic_id,
-          topic:topics!questions_topic_id_fkey(
+          topic:topics(
             id,
             name,
             chapter_id,
             chapter:chapters(
               id,
               name,
+              chapterNo,
               class_subject_id,
               class_subject:class_subjects(
                 id,
@@ -364,101 +433,81 @@ export default function QuestionBank() {
         `)
         .order('created_at', { ascending: false });
 
-      // Filter by class via topic -> chapter -> class_subject
-      if (filters.class) {
-        // First, find all topics that belong to chapters linked to this class
-        const topicsInClass = topics.filter(topic => {
-          const chapter = chapters.find(c => c.id === topic.chapter_id);
-          return chapter && classSubjects.some(
-            cs => cs.id === chapter.class_subject_id && cs.class_id === filters.class
-          );
-        });
-        
-        if (topicsInClass.length > 0) {
-          const topicIds = topicsInClass.map(t => t.id);
-          countQuery = countQuery.in('topic_id', topicIds);
-          dataQuery = dataQuery.in('topic_id', topicIds);
-        } else {
-          setQuestions([]);
-          setTotalQuestions(0);
-          setLoading(false);
-          return;
-        }
+      // Apply search filter on server side with ilike
+      if (searchToUse && searchToUse.trim()) {
+        const searchTermLower = searchToUse.trim().toLowerCase();
+        dataQuery = dataQuery.or(`question_text.ilike.*${searchTermLower}*,question_text_ur.ilike.*${searchTermLower}*`);
       }
 
-      // Filter by subject via topic -> chapter -> class_subject
-      if (filters.subject) {
-        const topicsInSubject = topics.filter(topic => {
-          const chapter = chapters.find(c => c.id === topic.chapter_id);
-          return chapter && classSubjects.some(
-            cs => cs.id === chapter.class_subject_id && cs.subject_id === filters.subject
-          );
-        });
-        
-        if (topicsInSubject.length > 0) {
-          const topicIds = topicsInSubject.map(t => t.id);
-          countQuery = countQuery.in('topic_id', topicIds);
-          dataQuery = dataQuery.in('topic_id', topicIds);
-        } else {
-          setQuestions([]);
-          setTotalQuestions(0);
-          setLoading(false);
-          return;
-        }
+      // Apply topic filter from resolved topic IDs (class/subject/chapter filters)
+      if (matchingTopicIds) {
+        dataQuery = dataQuery.in('topic_id', matchingTopicIds);
       }
 
-      // Filter by chapter via topic
-      if (filters.chapter) {
-        const topicsInChapter = topics.filter(t => t.chapter_id === filters.chapter);
-        if (topicsInChapter.length > 0) {
-          const topicIds = topicsInChapter.map(t => t.id);
-          countQuery = countQuery.in('topic_id', topicIds);
-          dataQuery = dataQuery.in('topic_id', topicIds);
-        } else {
-          setQuestions([]);
-          setTotalQuestions(0);
-          setLoading(false);
-          return;
-        }
-      }
-      
-      // Filter by topic
+      // Apply direct topic filter (always, regardless of other filters)
       if (filters.topic) {
-        countQuery = countQuery.eq('topic_id', filters.topic);
         dataQuery = dataQuery.eq('topic_id', filters.topic);
       }
-      
-      // Apply other filters
+
+      // Apply other direct column filters
       if (filters.difficulty) {
-        countQuery = countQuery.eq('difficulty', filters.difficulty);
         dataQuery = dataQuery.eq('difficulty', filters.difficulty);
       }
       if (filters.question_type) {
-        countQuery = countQuery.eq('question_type', filters.question_type);
         dataQuery = dataQuery.eq('question_type', filters.question_type);
       }
       if (filters.source_type) {
-        countQuery = countQuery.eq('source_type', filters.source_type);
         dataQuery = dataQuery.eq('source_type', filters.source_type);
       }
 
-      // Get total count
-      const { count, error: countError } = await countQuery;
+      // Get accurate count with a separate query (without nested select)
+      let countQuery = supabase
+        .from('questions')
+        .select('id', { count: 'exact', head: true });
+
+      // Apply same filters to count query
+      if (searchToUse && searchToUse.trim()) {
+        const searchTermLower = searchToUse.trim().toLowerCase();
+        countQuery = countQuery.or(`question_text.ilike.*${searchTermLower}*,question_text_ur.ilike.*${searchTermLower}*`);
+      }
+      if (matchingTopicIds) {
+        countQuery = countQuery.in('topic_id', matchingTopicIds);
+      }
+
+      // Apply direct topic filter (always, regardless of other filters)
+      if (filters.topic) {
+        countQuery = countQuery.eq('topic_id', filters.topic);
+      }
+
+      if (filters.difficulty) {
+        countQuery = countQuery.eq('difficulty', filters.difficulty);
+      }
+      if (filters.question_type) {
+        countQuery = countQuery.eq('question_type', filters.question_type);
+      }
+      if (filters.source_type) {
+        countQuery = countQuery.eq('source_type', filters.source_type);
+      }
+
+      const { count: totalCount, error: countError } = await countQuery;
       if (countError) {
         console.error('Count query error:', countError);
-        throw countError;
       }
-      setTotalQuestions(count || 0);
+      setTotalQuestions(totalCount || 0);
 
       // Calculate pagination
       const from = (page - 1) * itemsPerPage;
       const to = from + itemsPerPage - 1;
       dataQuery = dataQuery.range(from, to);
 
+      // Fetch data with pagination
       const { data, error } = await dataQuery;
 
       if (error) {
         console.error('Supabase query error details:', error);
+        console.error('Supabase error code:', error.code);
+        console.error('Supabase error message:', error.message);
+        console.error('Supabase error hint:', error.hint);
         throw error;
       }
 
@@ -485,10 +534,13 @@ export default function QuestionBank() {
 
     } catch (error: any) {
       console.error('Error fetching questions:', error);
+      console.error('Error type:', typeof error);
+      console.error('Error string:', JSON.stringify(error));
       
       if (error?.message) console.error('Message:', error.message);
       if (error?.code) console.error('Code:', error.code);
       if (error?.details) console.error('Details:', error.details);
+      if (error?.hint) console.error('Hint:', error.hint);
       
       toast.error('Failed to load questions');
     } finally {
@@ -511,41 +563,31 @@ export default function QuestionBank() {
     initializeData();
   }, []);
 
-  // Reset dependent filters when parent filter changes
-  useEffect(() => {
-    setFilters(prev => ({
-      class: prev.class,
-      subject: undefined,
-      chapter: undefined,
-      topic: undefined,
-      difficulty: prev.difficulty,
-      question_type: prev.question_type,
-      source_type: prev.source_type
-    }));
-  }, [filters.class]);
-
-  useEffect(() => {
-    setFilters(prev => ({
-      ...prev,
-      chapter: undefined,
-      topic: undefined
-    }));
-  }, [filters.subject]);
-
-  useEffect(() => {
-    setFilters(prev => ({
-      ...prev,
-      topic: undefined
-    }));
-  }, [filters.chapter]);
-
-  // Refetch questions when filters change
-  useEffect(() => {
-    if (topics.length > 0 && classSubjects.length > 0) {
-      setCurrentPage(1);
-      fetchQuestions(1);
+  // Handle filter changes with proper dependency management
+  const handleFilterChange = (key: keyof Filters, value: string | undefined) => {
+    const newValue = value || undefined;
+    
+    // Reset dependent filters
+    let updatedFilters = { ...filters, [key]: newValue };
+    
+    if (key === 'class') {
+      updatedFilters = { ...updatedFilters, subject: undefined, chapter: undefined, topic: undefined };
+    } else if (key === 'subject') {
+      updatedFilters = { ...updatedFilters, chapter: undefined, topic: undefined };
+    } else if (key === 'chapter') {
+      updatedFilters = { ...updatedFilters, topic: undefined };
     }
-  }, [filters, topics, classSubjects]);
+    
+    setFilters(updatedFilters);
+  };
+
+  // Single effect to refetch when filters change
+  useEffect(() => {
+    if (topics.length > 0 && classSubjects.length > 0 && !loading) {
+      setCurrentPage(1);
+      fetchQuestions(1, searchTerm);
+    }
+  }, [filters.class, filters.subject, filters.chapter, filters.topic, filters.difficulty, filters.question_type, filters.source_type]);
 
   // Refetch questions when items per page changes
   useEffect(() => {
@@ -568,7 +610,7 @@ export default function QuestionBank() {
     }
   };
 
-  const handleExport = async () => {
+const handleExport = async () => {
     setIsExporting(true);
     try {
       // Fetch all questions without pagination for export
@@ -594,59 +636,38 @@ export default function QuestionBank() {
           answer_text,
           answer_text_ur,
           topic_id,
-          topic:topics!questions_topic_id_fkey(
+          topic:topics!inner(
             id,
             name,
             chapter_id,
-            chapter:chapters(
+            chapter:chapters!inner(
               id,
               name,
+              chapterNo,
               class_subject_id,
-              class_subject:class_subjects(
+              class_subject:class_subjects!inner(
                 id,
                 class_id,
                 subject_id,
-                class:classes(id, name, description),
-                subject:subjects(id, name, name_ur)
+                class:classes!inner(id, name, description),
+                subject:subjects!inner(id, name, name_ur)
               )
             )
           )
         `)
         .order('created_at', { ascending: false });
 
-      // Apply filters if any (same logic as fetchQuestions)
+      // 🚀 Use Supabase relational filters for export too
       if (filters.class) {
-        const topicsInClass = topics.filter(topic => {
-          const chapter = chapters.find(c => c.id === topic.chapter_id);
-          return chapter && classSubjects.some(
-            cs => cs.id === chapter.class_subject_id && cs.class_id === filters.class
-          );
-        });
-        if (topicsInClass.length > 0) {
-          const topicIds = topicsInClass.map(t => t.id);
-          query = query.in('topic_id', topicIds);
-        }
+        query = query.eq('topic.chapter.class_subject.class_id', filters.class);
       }
 
       if (filters.subject) {
-        const topicsInSubject = topics.filter(topic => {
-          const chapter = chapters.find(c => c.id === topic.chapter_id);
-          return chapter && classSubjects.some(
-            cs => cs.id === chapter.class_subject_id && cs.subject_id === filters.subject
-          );
-        });
-        if (topicsInSubject.length > 0) {
-          const topicIds = topicsInSubject.map(t => t.id);
-          query = query.in('topic_id', topicIds);
-        }
+        query = query.eq('topic.chapter.class_subject.subject_id', filters.subject);
       }
 
       if (filters.chapter) {
-        const topicsInChapter = topics.filter(t => t.chapter_id === filters.chapter);
-        if (topicsInChapter.length > 0) {
-          const topicIds = topicsInChapter.map(t => t.id);
-          query = query.in('topic_id', topicIds);
-        }
+        query = query.eq('topic.chapter_id', filters.chapter);
       }
       
       if (filters.topic) query = query.eq('topic_id', filters.topic);
@@ -750,8 +771,30 @@ export default function QuestionBank() {
       toast.success(`${(rows as any[]).length} questions imported successfully`);
       await fetchQuestions(currentPage);
     } catch (error) {
+      const getErrorMessage = (err: unknown) => {
+        if (!err) return 'Unknown error';
+        if (typeof err === 'string') return err;
+        if (err instanceof Error) return err.message;
+        if (typeof err === 'object') {
+          const anyErr = err as Record<string, unknown>;
+          const reasons: string[] = [];
+          if (typeof anyErr.message === 'string') reasons.push(anyErr.message);
+          if (typeof anyErr.details === 'string') reasons.push(anyErr.details);
+          if (typeof anyErr.hint === 'string') reasons.push(anyErr.hint);
+          if (typeof anyErr.code === 'string') reasons.push(`Code: ${anyErr.code}`);
+          if (reasons.length) return reasons.join(' | ');
+          try {
+            return JSON.stringify(anyErr);
+          } catch {
+            return String(err);
+          }
+        }
+        return String(err);
+      };
+
+      const errorMessage = getErrorMessage(error);
       console.error('Error importing questions:', error);
-      toast.error('Failed to import questions');
+      toast.error(`Failed to import questions: ${errorMessage}`);
     } finally {
       setIsImporting(false);
       e.target.value = '';
@@ -763,24 +806,16 @@ export default function QuestionBank() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = Math.min(startIndex + itemsPerPage, totalQuestions);
 
-  // Filter questions based on active tab and search term (search on stripped HTML)
-  const filteredQuestions = questions
-    .filter(q => activeTab === 'all' || q?.question_type === activeTab)
-    .filter(q => {
-      const searchLower = searchTerm.toLowerCase();
-      const plainTextQuestion = stripHtml(q?.question_text || '');
-      
-      return plainTextQuestion.toLowerCase().includes(searchLower) ||
-        (q?.question_text_ur && q?.question_text_ur.toLowerCase().includes(searchLower)) ||
-        (q?.class && q?.class?.toLowerCase().includes(searchLower)) ||
-        (q?.subject?.name && q?.subject?.name.toLowerCase().includes(searchLower)) ||
-        (q?.topic?.name && q?.topic?.name.toLowerCase().includes(searchLower));
-    });
+  // Filter questions based on active tab only (search is server-side)
+  const filteredQuestions = questions.filter(q => activeTab === 'all' || q?.question_type === activeTab);
 
   const clearAllFilters = () => {
     setFilters({});
     setSearchTerm('');
     setCurrentPage(1);
+    if (topics.length > 0 && classSubjects.length > 0) {
+      fetchQuestions(1, '');
+    }
   };
 
   // Helper function to get nav link class
@@ -839,7 +874,7 @@ export default function QuestionBank() {
           </div>
         </div>
 
-        {/* Tabs for question types */}
+        {/* Tabs - Only main categories */}
         <ul className="nav nav-tabs mb-4 flex-wrap">
           <li className="nav-item">
             <button 
@@ -849,7 +884,7 @@ export default function QuestionBank() {
               All Questions
             </button>
           </li>
-          {QUESTION_TYPES.map(type => (
+          {TAB_QUESTION_TYPES.map(type => (
             <li key={type.value} className="nav-item">
               <button 
                 className={getNavLinkClass(type.value)}
@@ -872,7 +907,17 @@ export default function QuestionBank() {
                     className="form-control"
                     placeholder="Search questions..."
                     value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
+                    onChange={e => {
+                      setSearchTerm(e.target.value);
+                      // Debounced server-side search
+                      const timer = setTimeout(() => {
+                        if (topics.length > 0 && classSubjects.length > 0) {
+                          setCurrentPage(1);
+                          fetchQuestions(1, e.target.value);
+                        }
+                      }, 400);
+                      return () => clearTimeout(timer);
+                    }}
                     style={{marginBottom: '0px'}}
                   />
                   <button className="btn btn-outline-secondary" style={{paddingBottom: '8px', borderColor: '#ccc'}} type="button">
@@ -886,7 +931,7 @@ export default function QuestionBank() {
                 <select
                   className="form-select"
                   value={filters.class || ''}
-                  onChange={e => setFilters({...filters, class: e.target.value || undefined})}
+                  onChange={e => handleFilterChange('class', e.target.value)}
                 >
                   <option value="">All Classes</option>
                   {getSortedClasses().map(c => (
@@ -902,7 +947,7 @@ export default function QuestionBank() {
                 <select
                   className="form-select"
                   value={filters.subject || ''}
-                  onChange={e => setFilters({...filters, subject: e.target.value || undefined})}
+                  onChange={e => handleFilterChange('subject', e.target.value)}
                   disabled={!filters.class}
                 >
                   <option value="">All Subjects</option>
@@ -914,17 +959,19 @@ export default function QuestionBank() {
                 </select>
               </div>
 
-              {/* Chapter Filter */}
+              {/* Chapter Filter with Chapter Numbers */}
               <div className="col-md-2">
                 <select
                   className="form-select"
                   value={filters.chapter || ''}
-                  onChange={e => setFilters({...filters, chapter: e.target.value || undefined})}
+                  onChange={e => handleFilterChange('chapter', e.target.value)}
                   disabled={!filters.class || !filters.subject}
                 >
                   <option value="">All Chapters</option>
                   {getFilteredChapters().map(chapter => (
-                    <option key={chapter?.id} value={chapter?.id}>{chapter?.name}</option>
+                    <option key={chapter?.id} value={chapter?.id}>
+                      {chapter?.chapterNo ? `Ch ${chapter.chapterNo}: ` : ''}{chapter?.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -934,7 +981,7 @@ export default function QuestionBank() {
                 <select
                   className="form-select"
                   value={filters.topic || ''}
-                  onChange={e => setFilters({...filters, topic: e.target.value || undefined})}
+                  onChange={e => handleFilterChange('topic', e.target.value)}
                   disabled={!filters.chapter}
                 >
                   <option value="">All Topics</option>
@@ -961,7 +1008,7 @@ export default function QuestionBank() {
                 <select
                   className="form-select"
                   value={filters.difficulty || ''}
-                  onChange={e => setFilters({...filters, difficulty: e.target.value || undefined})}
+                  onChange={e => handleFilterChange('difficulty', e.target.value)}
                 >
                   <option value="">All Difficulty</option>
                   <option value="easy">Easy</option>
@@ -974,7 +1021,7 @@ export default function QuestionBank() {
                 <select
                   className="form-select"
                   value={filters.question_type || ''}
-                  onChange={e => setFilters({...filters, question_type: e.target.value || undefined})}
+                  onChange={e => handleFilterChange('question_type', e.target.value)}
                 >
                   <option value="">All Types</option>
                   {QUESTION_TYPES.map(type => (
@@ -987,7 +1034,7 @@ export default function QuestionBank() {
                 <select
                   className="form-select"
                   value={filters.source_type || ''}
-                  onChange={e => setFilters({...filters, source_type: e.target.value || undefined})}
+                  onChange={e => handleFilterChange('source_type', e.target.value)}
                 >
                   <option value="">All Sources</option>
                   <option value="book">Book</option>
@@ -1091,7 +1138,14 @@ export default function QuestionBank() {
                           </td>
                           <td className="align-middle">{q?.class || '-'}{q?.class_description ? `-${q.class_description}` : ''}</td>
                           <td className="align-middle">{q?.subject?.name || '-'}</td>
-                          <td className="align-middle">{q?.topic?.chapter?.name || '-'}</td>
+                          {/* Chapter with number */}
+                          <td className="align-middle">
+                            {q?.topic?.chapter?.chapterNo 
+                              ? `Ch ${q.topic.chapter.chapterNo}: ` 
+                              : ''
+                            }
+                            {q?.topic?.chapter?.name || '-'}
+                          </td>
                           <td className="align-middle">{q?.topic?.name || '-'}</td>
                           <td className="align-middle">
                             <span className="badge bg-primary" style={{fontSize: '0.75rem'}}>
