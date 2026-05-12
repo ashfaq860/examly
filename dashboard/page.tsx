@@ -47,7 +47,10 @@ export default function AcademyDashboard() {
         }
 
         const { data: role } = await supabase.rpc('get_user_role', { user_id: user.id });
-        if (role !== 'teacher') {
+        const userRole = (role as any)?.role || role;
+        
+        // Allow both 'teacher' and 'academy' roles
+        if (userRole !== 'teacher' && userRole !== 'academy') {
           router.push('/');
           return;
         }
