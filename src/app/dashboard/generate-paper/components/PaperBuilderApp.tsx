@@ -840,9 +840,10 @@ const isUserPremium = isPremium || hasActivePackage;
       display: block !important;
       page-break-after: always !important;
       break-after: page !important;
-    margin: 0 auto !important;
+      margin: 0 auto !important;
       /* We use padding for internal margins so it matches the screen */
-      padding: 4mm 4mm 3mm 3mm !important; 
+      padding: 3mm !important;
+      box-sizing: border-box !important;
       box-shadow: none !important;
       border: none !important;
       width: 210mm !important;

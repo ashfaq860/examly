@@ -273,17 +273,7 @@ const selectedTopics = watch('selectedTopics') || [];
                   )}
                 </div>
               </div>
-
-              {/* Question Type */}
-              <div className="tool-box">
-                <label><span className="full-lbl">Question Type</span><span className="short-lbl">Qs Type</span></label>
-                <select className="mini-input" value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
-                  <option value=''>Type</option>
-                  {questionTypes.map((t: any) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-
-              {/* Source Dropdown */}
+    {/* Source Dropdown */}
               <div className="tool-box" ref={sourceDropdownRef}>
                 <label><span className="full-lbl">Source</span><span className="short-lbl">Source</span></label>
                 <div className="mini-input clickable" onClick={() => setShowSourceDropdown(!showSourceDropdown)}>
@@ -305,6 +295,16 @@ const selectedTopics = watch('selectedTopics') || [];
                   )}
                 </div>
               </div>
+              {/* Question Type */}
+              <div className="tool-box">
+                <label><span className="full-lbl">Question Type</span><span className="short-lbl">Qs Type</span></label>
+                <select className="mini-input" value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
+                  <option value=''>Type</option>
+                  {questionTypes.map((t: any) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+
+          
 
               {/* Language */}
               <div className="tool-box">
@@ -486,7 +486,8 @@ const selectedTopics = watch('selectedTopics') || [];
           .metrics-group, .action-btns { flex-shrink: 0; gap:2px; }
           .btn-action{ padding:0 12px;}
           .app-modal-footer{padding:2px 2px !important;}    
-          .no-spinner-input {width: 40px; }   
+          .no-spinner-input {width: 40px; }  
+          .floating-dropdown {width:175px;} 
         }
       `}</style>
     </>

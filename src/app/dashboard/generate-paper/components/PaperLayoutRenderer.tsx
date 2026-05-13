@@ -140,20 +140,21 @@ const globalNumbering = useMemo(() => {
 
 
   
-  const sheetBaseStyle: React.CSSProperties = {
-    width: '210mm',
-    height: '296mm',
-    padding: '4mm',
-    backgroundColor: 'white',
-    margin: '0 auto',
-    position: 'relative',
-    overflow: isOverflowLocked ? 'hidden' : 'hidden',
-    display: 'flex',
-    flexDirection: 'column',
-    color: 'black',
-    fontFamily: settings.fontFamily,
-    boxSizing: 'border-box'
-  };
+const sheetBaseStyle: React.CSSProperties = {
+  width: '210mm',
+  minHeight: '297mm',
+  height: '297mm',
+  padding: '3mm',
+  backgroundColor: 'white',
+  margin: '0 auto',
+  position: 'relative',
+  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  color: 'black',
+  fontFamily: settings.fontFamily,
+  boxSizing: 'border-box',
+};
 
   /**
    * Helper to calculate global question index.
@@ -236,12 +237,12 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
   };
 
   const getDynamicColClass = (q: any) => {
-      if (section.type === 'mcq' || section.type === 'long' ||section.type === 'summary' || (section.type === 'short' && subject.toLowerCase() !== 'urdu')|| sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma')) return 'col-12 mt-1';
-      if (section.type === 'short' && subject.toLowerCase() === 'urdu') return 'col-6 mt-1';
+      if (section.type === 'mcq' || section.type === 'long' ||section.type === 'summary' || (section.type === 'short' && subject.toLowerCase() !== 'urdu')|| sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma')) return 'col-12';
+      if (section.type === 'short' && subject.toLowerCase() === 'urdu') return 'col-6';
       const engText = q.question_text || q.question || '';
       const urText = q.question_text_ur || '';
       const totalVisualLength = engText.length + (urText.length * 1.5);
-      return totalVisualLength < 50 ? 'col-3 mt-1' : totalVisualLength < 60 ? 'col-4 mt-1' : totalVisualLength < 110 ? 'col-6 mt-1' : 'col-12 mt-1';
+      return totalVisualLength < 50 ? 'col-3' : totalVisualLength < 60 ? 'col-4' : totalVisualLength < 110 ? 'col-6 ' : 'col-12';
     };
 
   const isLongType = sectionType.includes('long') || sectionType.includes('summary')|| sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma');
@@ -253,8 +254,8 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
       className="section-block" 
       style={{ 
         border: isEditMode ? "1px dashed #ccc" : "none", 
-        marginBottom: isFirstPartOfPair ? '5px' : '15px',
-        marginTop: isSecondPartOfPair ? '5px' : '0px',
+        marginBottom: isFirstPartOfPair ? '0px' : '0px',
+        marginTop: isSecondPartOfPair ? '5px' : '5px',
         width: '100%' 
       }}
     >
@@ -281,7 +282,7 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
       {/* 3. RENDER THE SUB-HEADER (Hissa Nazam / Hissa Gazal) */}
       {!hideHeader && (
         <div 
-          className="sub-section-title px-1" 
+          className="sub-section-title px-0" 
           style={{ 
             textAlign: 'right', 
             direction: 'rtl',
@@ -319,7 +320,7 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
         {questions.map((q, qIdx) => {
           const finalIndex = isLongType ? (paperLanguage === 'urdu' ? startNum : startNum + qIdx) : getQuestionDisplayIndex(qIdx);
           return (
-            <div key={`${q.id}-${qIdx}`} className={`${getDynamicColClass(q)} px-1`}>
+            <div key={`${q.id}-${qIdx}`} className={`${getDynamicColClass(q)} px-0 mt-1`}>
               <QuestionRenderer
                 question={q}
                 index={finalIndex}
@@ -391,65 +392,353 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
     );
   };
 
-  const renderContent = () => {
-    let pages: React.ReactNode[] = [];
-//console.log('profile in renderer in rendered content', profile?.logo);
-const renderPaperGroup = (group: PaperSection[], marks: number, keyPrefix: string) => {
-  if (group.length === 0) return null;
-  return (
-    <div key={keyPrefix} className="paper-sheet" style={sheetBaseStyle}>
-      <Watermark isPremium={isPremium} logoUrl={profile?.logo} settings={settings} />
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        <PaperHeader 
-          totalMarks={marks} 
-          subject={subject} 
-          paperSections={group} 
-          isEditMode={isEditMode} 
-          settings={settings} 
-          paperLanguage={paperLanguage} 
-          config={config} 
-          currentLayout={currentLayout} 
-          currentClass={currentClass} 
-          profile={profile} 
+  const DashedLine = () => (
+  <div
+    className="w-100 my-2 border-top border-dark position-relative"
+    style={{
+      borderStyle: 'dashed',
+      borderWidth: '2px',
+      height: '1px'
+    }}
+  >
+    <span
+      className="position-absolute bg-white px-2 fw-bold"
+      style={{
+        fontSize: '12px',
+        top: '-10px',
+        left: '0mm',
+        zIndex: 1
+      }}
+    >
+      ✂
+    </span>
+  </div>
+);
+
+const PaperSlot = ({
+  height,
+  children
+}: {
+  height: string;
+  children: React.ReactNode;
+}) => (
+  <div
+    style={{
+      height,
+      overflow: 'clip',
+      position: 'relative'
+    }}
+  >
+    {children}
+  </div>
+);
+
+const renderContent = () => {
+  let pages: React.ReactNode[] = [];
+
+  const renderPaperGroup = (
+    group: PaperSection[],
+    marks: number,
+    keyPrefix: string,
+    mini = false
+  ) => {
+    if (group.length === 0) return null;
+
+    return (
+      <div
+        key={keyPrefix}
+        className="paper-sheet border shadow-sm print-break"
+        style={sheetBaseStyle}
+      >
+        <Watermark
+          isPremium={isPremium}
+          logoUrl={profile?.logo}
+          settings={settings}
         />
-        {group.map((s) => (
-          // We no longer need to find the index here; SectionBlock uses the globalNumbering map
-          <SectionBlock key={s.id} section={s} />
-        ))}
+
+        <div
+          style={{
+            position: 'relative',
+            zIndex: 1
+          }}
+        >
+          <PaperHeader
+            totalMarks={marks}
+            subject={subject}
+            paperSections={group}
+            isEditMode={isEditMode}
+            settings={settings}
+            paperLanguage={paperLanguage}
+            config={config}
+            currentLayout={currentLayout}
+            currentClass={currentClass}
+            profile={profile}
+          />
+
+          {group.map((s) => (
+            <SectionBlock
+              key={s.id}
+              section={s}
+            />
+          ))}
+        </div>
       </div>
+    );
+  };
+
+  // =========================
+  // SAME LAYOUT
+  // =========================
+  if (currentLayout === 'same') {
+    pages.push(
+      renderPaperGroup(
+        [...mcqs, ...subjectives],
+        mcqTotalMarks + subTotalMarks,
+        'same-paper'
+      )
+    );
+  }
+
+  // =========================
+  // SEPARATE LAYOUT
+  // =========================
+  else if (currentLayout === 'separate') {
+    if (mcqs.length > 0) {
+      pages.push(
+        renderPaperGroup(
+          mcqs,
+          mcqTotalMarks,
+          'mcq-separate'
+        )
+      );
+    }
+
+    if (subjectives.length > 0) {
+      pages.push(
+        renderPaperGroup(
+          subjectives,
+          subTotalMarks,
+          'sub-separate'
+        )
+      );
+    }
+  }
+
+  // =========================
+  // TWO / THREE PAPERS
+  // =========================
+  else if (
+    currentLayout === 'two_papers' ||
+    currentLayout === 'three_papers'
+  ) {
+    const count =
+      currentLayout === 'two_papers' ? 2 : 3;
+
+    const slotHeight =
+      count === 2 ? '140mm' : '93mm';
+
+    // MCQ PAGE
+    if (mcqs.length > 0) {
+      pages.push(
+        <div
+          key="mcq-mini-page"
+          className="paper-sheet border shadow-sm print-break"
+          style={sheetBaseStyle}
+        >
+          <Watermark
+            isPremium={isPremium}
+            logoUrl={profile?.logo}
+            settings={settings}
+          />
+
+          {[...Array(count)].map((_, i) => (
+            <React.Fragment key={i}>
+              <PaperSlot height={slotHeight}>
+                <div
+                  style={{
+                    position: 'relative',
+                    zIndex: 1,
+                    padding: '3mm'
+                  }}
+                >
+                  <PaperHeader
+                    totalMarks={mcqTotalMarks}
+                    subject={subject}
+                    paperSections={mcqs}
+                    isEditMode={isEditMode}
+                    settings={{
+                      ...settings,
+                      fontSize:
+                        currentLayout ===
+                        'three_papers'
+                          ? settings.fontSize - 3
+                          : settings.fontSize - 1
+                    }}
+                    paperLanguage={paperLanguage}
+                    config={config}
+                    currentLayout={currentLayout}
+                    currentClass={currentClass}
+                    profile={profile}
+                  />
+
+                  {mcqs.map((s) => (
+                    <SectionBlock
+                      key={`${i}-${s.id}`}
+                      section={s}
+                    />
+                  ))}
+                </div>
+              </PaperSlot>
+
+              {i < count - 1 && <DashedLine />}
+            </React.Fragment>
+          ))}
+        </div>
+      );
+    }
+
+    // SUBJECTIVE PAGE
+    if (subjectives.length > 0) {
+      pages.push(
+        <div
+          key="subjective-mini-page"
+          className="paper-sheet border shadow-sm print-break"
+          style={sheetBaseStyle}
+        >
+          <Watermark
+            isPremium={isPremium}
+            logoUrl={profile?.logo}
+            settings={settings}
+          />
+
+          {[...Array(count)].map((_, i) => (
+            <React.Fragment key={i}>
+              <PaperSlot height={slotHeight}>
+                <div
+                  style={{
+                    position: 'relative',
+                    zIndex: 1,
+                    padding: '3mm'
+                  }}
+                >
+                  <PaperHeader
+                    totalMarks={subTotalMarks}
+                    subject={subject}
+                    paperSections={subjectives}
+                    isEditMode={isEditMode}
+                    settings={{
+                      ...settings,
+                      fontSize:
+                        currentLayout ===
+                        'three_papers'
+                          ? settings.fontSize - 3
+                          : settings.fontSize - 1
+                    }}
+                    paperLanguage={paperLanguage}
+                    config={config}
+                    currentLayout={currentLayout}
+                    currentClass={currentClass}
+                    profile={profile}
+                  />
+
+                  {subjectives.map((s) => (
+                    <SectionBlock
+                      key={`${i}-${s.id}`}
+                      section={s}
+                    />
+                  ))}
+                </div>
+              </PaperSlot>
+
+              {i < count - 1 && <DashedLine />}
+            </React.Fragment>
+          ))}
+        </div>
+      );
+    }
+  }
+
+  // =========================
+  // MCQ ANSWER KEYS
+  // =========================
+  pages.push(
+    <MCQAnswerKeyPage key="mcq-keys" />
+  );
+
+  return (
+    <div className="print-container">
+      {pages}
     </div>
   );
 };
 
-    if (currentLayout === 'same' || currentLayout === 'two_papers' || currentLayout === 'three_papers') {
-      pages.push(renderPaperGroup(mcqs, mcqTotalMarks, 'mcq-group'));
-      pages.push(renderPaperGroup(subjectives, subTotalMarks, 'sub-group'));
-    } else if (currentLayout === 'separate') {
-      pages.push(renderPaperGroup(mcqs, mcqTotalMarks, 'mcq-separate'));
-      pages.push(renderPaperGroup(subjectives, subTotalMarks, 'sub-separate'));
-    }
-
-    pages.push(<MCQAnswerKeyPage key="mcq-keys" />);
-
-    return <div className="print-container">{pages}</div>;
-  };
-
-  return (
-    <div className="paper-builder-renderer bg-secondary-subtle">
-      <style>{`
-        @media screen {
-          .paper-sheet { box-shadow: 0 0 10px rgba(0,0,0,0.1); border: 1px solid #dee2e6; margin: 20px auto; }
+return (
+  <div className="paper-builder-renderer py-4 bg-secondary-subtle">
+    <style>{`
+    
+      @media screen {
+        .paper-sheet {
+          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+          border: 1px solid #dee2e6;
+          margin: 20px auto;
+          background: white;
         }
-        @media print {
-          @page { size: A4; margin: 0 !important; }
-          html, body { margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
-          .paper-builder-renderer { background: none !important; padding: 0 !important; }
-          .paper-sheet { display: flex !important; box-shadow: none !important; border: none !important; margin: 0 !important; page-break-after: always !important; page-break-inside: avoid !important; }
-          .print-container > .paper-sheet:last-child { page-break-after: avoid !important; }
-          .no-print, nav, .sidebar, .btn { display: none !important; }
+      }
+
+      @media print {
+
+        @page {
+          size: A4;
+          margin: 0mm !important;
         }
-      `}</style>
-      {renderContent()}
-    </div>
-  );
+
+        html,
+        body {
+          margin: 0 !important;
+          padding: 0 !important;
+          height: auto !important;
+          overflow: visible !important;
+          background: white !important;
+        }
+
+        body * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        .paper-builder-renderer {
+          padding: 0 !important;
+          background: white !important;
+        }
+
+        .paper-sheet {
+          margin: 0 !important;
+          border: none !important;
+          box-shadow: none !important;
+          page-break-after: always !important;
+          page-break-inside: avoid !important;
+          overflow: hidden !important;
+        }
+
+        .print-container > .paper-sheet:last-child {
+          page-break-after: avoid !important;
+        }
+
+        .section-block {
+          page-break-inside: avoid !important;
+        }
+
+        .no-print,
+        nav,
+        .sidebar,
+        header:not(.paper-header),
+        .btn {
+          display: none !important;
+        }
+      }
+    `}</style>
+
+    {renderContent()}
+  </div>
+);
 };

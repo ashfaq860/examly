@@ -242,13 +242,19 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
           -webkit-font-smoothing: antialiased;
         }
 
+        /* Reduce margin between questions in screen view */
+        .question-wrapper {
+          margin-bottom: 0.1rem !important;
+        }
+
         @media print {
-       .question-wrapper, 
+          /* Background and color adjustments */
+          .question-wrapper,
           .question-wrapper *,
-          .mcq-item, 
+          .mcq-item,
           .mcq-item *,
-          .row, 
-          .urdu-text, 
+          .row,
+          .urdu-text,
           .english-text,
           .d-flex,
           span, div {
@@ -257,14 +263,58 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = (props) => {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
+
+          /* Line height adjustments */
           .urdu-text { line-height: 1.1 !important; display: block !important; }
           .english-text { line-height: 1.2 !important; }
-          .question-wrapper { page-break-inside: avoid; margin-bottom: 4px !important; }
 
+          /* Question wrapper spacing - exact match to screen */
+          .question-wrapper {
+            page-break-inside: avoid !important;
+            margin: 0 0 0.1rem 0 !important;
+            padding: 0 !important;
+          }
+
+          /* Remove ALL margins from question content */
+          .question-wrapper > *,
+          .mcq-item > *,
+          .urdu-text,
+          .english-text,
+          .mcq-item .mb-1,
+          .mcq-item .row,
+          .mcq-item [class*="col-"] {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+          }
+
+          /* Reset Bootstrap grid */
+          .mcq-item .row {
+            --bs-gutter-x: 0 !important;
+            --bs-gutter-y: 0 !important;
+          }
+
+          /* MCQ item flexbox */
           .mcq-item .d-flex {
-    display: flex !important;
-    align-items: baseline !important;
-  }
+            display: flex !important;
+            align-items: baseline !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          /* Prevent floating issues */
+          .mcq-item span.fw-bold {
+            align-self: baseline !important;
+            line-height: 1 !important;
+          }
+
+          /* Urdu text positioning */
+          .urdu-text {
+            display: inline-block !important;
+            vertical-align: baseline !important;
+          }
+        }
   
   /* Prevent the English label from floating high */
   .mcq-item span.fw-bold {
