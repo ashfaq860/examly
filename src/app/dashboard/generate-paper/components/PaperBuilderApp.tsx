@@ -187,15 +187,15 @@ const handleSaveToSupabase = async () => {
     },
     urdu: {
       direction: 'rtl',
-      fontFamily: "'Jameel Noori Nastaleeq', serif",
+      fontFamily: "'JameelNoori', 'Jameel Noori Nastaleeq', serif",
       fontSize: '18px',
-      questionFontFamily: "'Jameel Noori Nastaleeq', serif"
+      questionFontFamily: "'JameelNoori', 'Jameel Noori Nastaleeq', serif"
     },
     bilingual: {
       direction: 'ltr',
-      fontFamily: "'Times New Roman', 'Jameel Noori Nastaleeq', serif",
+      fontFamily: "'Times New Roman', 'JameelNoori', 'Jameel Noori Nastaleeq', serif",
       fontSize: '14px',
-      questionFontFamily: "'Arial', 'Jameel Noori Nastaleeq', sans-serif"
+      questionFontFamily: "'Arial', 'JameelNoori', 'Jameel Noori Nastaleeq', sans-serif"
     }
   };
 
@@ -293,7 +293,7 @@ const handleBoardPattern = async () => {
     
     setPaperLanguage(autoLanguage);
     setValue('language', autoLanguage);
-
+  setValue('mcqPlacement', 'separate'); // Default to separate for board patterns
     // 3. Fetch Chapter Rules from DB
     let boardRules = await BoardPatternService.fetchBoardRules(watchedSubjectId, watchedClassId);
     
@@ -525,7 +525,7 @@ const generateBoardPatternSections = async (
     throw new Error("No questions found even with fallback. Check DB connections.");
   }
 
-  const paperData = { layout: currentLayout, language: selectedLanguage, sections };
+  const paperData = { layout: getValues('mcqPlacement') || currentLayout, language: selectedLanguage, sections };
   localStorage.setItem('questionPapers', JSON.stringify(paperData));
   refreshPaperData();
 };
@@ -645,9 +645,9 @@ const isUserPremium = isPremium || hasActivePackage;
 {/* 1. GLOBAL LOADING OVERLAY */}
 
       {/* 2. SCROLLABLE AREA: Allows both Vertical and Horizontal scrolling */}
-      <main className="flex-grow-1 overflow-auto bg-secondary bg-opacity-10 custom-scrollbar d-print-block p-print-0 mt-4">
+      <main className="flex-grow-1 overflow-auto bg-secondary bg-opacity-10 custom-scrollbar d-print-block p-print-0 mt-4 paper-preview-main">
         {/* Wrapper to center paper on large screens, but allow left-align on small screens */}
-        <div className="d-flex justify-content-start justify-content-lg-center min-w-fit">
+        <div className="d-flex justify-content-center">
           <div 
             id="printable-paper"
             ref={paperRef}
@@ -747,26 +747,34 @@ const isUserPremium = isPremium || hasActivePackage;
       {/* Settings & Modals */}
       <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} settings={settings} isPremium={isUserPremium} onSettingChange={(key, value) => setSettings(prev => ({ ...prev, [key]: value }))} />
       {showQuestionSelector && (
-        <QuestionSelectorModal
-          isOpen={showQuestionSelector}
-          onClose={() => { setShowQuestionSelector(false); refreshPaperData(); }}
-          subjectId={watchedSubjectId}
-          classId={watchedClassId}
-          chapterOption={watchedChapterOption}
-          selectedChapters={selectedChapters}
-          chapters={chapters}
-          subjects={subjects}
-          language={currentLanguage}
-          getQuestionTypes={getQuestionTypes}
-          watch={watch}
-          setValue={setValue}
-          currentSubject={currentSubject}
-        />
-      )}
+        <QuestionSelectorModal
+          isOpen={showQuestionSelector}
+          onClose={() => { setShowQuestionSelector(false); refreshPaperData(); }}
+          subjectId={watchedSubjectId}
+          classId={watchedClassId}
+          chapterOption={watchedChapterOption}
+          selectedChapters={selectedChapters}
+          chapters={chapters}
+          subjects={subjects}
+          language={currentLanguage}
+          getQuestionTypes={getQuestionTypes}
+          watch={watch}
+          setValue={setValue}
+          currentSubject={currentSubject}
+        />
+      )}
   
 
 
 <style jsx global>{`
+  /* Urdu Font Support */
+  @font-face {
+    font-family: 'JameelNoori';
+    src: local('Jameel Noori Nastaleeq'), local('Nafees'), local('Alvi Lahori Nastaleeq'), local('JameelNoori');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
   /* Screen only - makes the preview look like a floating sheet */
   @media screen {
     .paper-canvas {
@@ -980,25 +988,23 @@ const isUserPremium = isPremium || hasActivePackage;
     transform-origin: top center;
     transition: transform 0.2s ease;
   }
-@media screen and (max-width: 991px) {
+  @media screen and (max-width: 991px) {
+    .paper-preview-main {
+      overflow-x: hidden !important;
+      padding: 10px 0 !important;
+      -webkit-overflow-scrolling: touch;
+    }
     .paper-canvas {
       /* This allows the paper to shrink to fit the screen width 
          while maintaining the internal A4 layout (210mm) */
       width: 210mm !important; 
       
-      /* Use CSS zoom for mobile browsers that support it (Chrome/Safari/Edge) */
-      /* This fits the 210mm paper into the smaller mobile viewport */
-      zoom: calc(100vw / 230mm); 
+      /* Use CSS zoom to fit the 210mm paper into the smaller mobile viewport */
+      /* Dividing by 215mm provides a tiny gutter to ensure it fits perfectly */
+      zoom: calc(100vw / 215mm); 
       
-      /* For browsers that don't support zoom well, ensure it doesn't overflow hidden */
-      margin-left: auto;
-      margin-right: auto;
-    }
-
-    /* Ensure the main container allows horizontal scrolling if zoomed */
-    main {
-      overflow-x: auto !important;
-      -webkit-overflow-scrolling: touch;
+      margin: 0 auto !important;
+      box-shadow: none !important;
     }
   }
 `}</style>

@@ -42,7 +42,7 @@ export interface PaperHeaderProps {
   };
   paperLanguage: 'english' | 'urdu' | 'bilingual';
   config: any;
-  currentLayout: 'same' | 'separate' | 'two_papers' | 'three_papers';
+  currentLayout: string;
   onTextChange?: (field: string, value: string) => void;
   currentClass?: string;
     profile:any[];
@@ -52,15 +52,16 @@ export interface PaperHeaderProps {
 export const PaperHeader: React.FC<PaperHeaderProps> = (props) => {
   const { settings, paperLanguage, currentLayout,currentClass,profile } = props;
   const isRTL = paperLanguage === 'urdu';
-  const isCompact = currentLayout === 'two_papers' || currentLayout === 'three_papers';
+  const isCompact = currentLayout && (currentLayout.startsWith('two') || currentLayout.startsWith('three'));
 //console.log('Rendering PaperHeader with props:', currentClass); // Debug log to trace rendering and props
   const textAlign = isRTL ? 'text-end' : 'text-start';
 
   // Base styles to ensure print fidelity
   const printStyles = {
-    printColorAdjust: 'exact',
+  /*  printColorAdjust: 'exact',
     WebkitPrintColorAdjust: 'exact',
-  } as React.CSSProperties;
+  */
+    } as React.CSSProperties;
 
   return (
     <div style={printStyles} className="print-header-container">

@@ -11,7 +11,7 @@ interface Props {
   paperLanguage: 'english' | 'urdu' | 'bilingual';
   config: LanguageConfig;
   isEditMode: boolean;
-  currentLayout: 'same' | 'separate' | 'two_papers' | 'three_papers';
+  currentLayout: string;
   onTextChange: (sId: string, qId: string, f: string, v: string) => void;
   isPremium: boolean;
   onSectionUpdate: (updatedSections: PaperSection[]) => void;
@@ -21,18 +21,24 @@ interface Props {
   questionLineSpacing?: number;
 }
 
-const Watermark = ({ isPremium, logoUrl, settings }: { isPremium: boolean; logoUrl?: string; settings: PaperSettings }) => {
+const Watermark = ({ 
+  isPremium, 
+  logoUrl, 
+  settings, 
+  scale = 1,
+  top = '50%'
+}: { isPremium: boolean; logoUrl?: string; settings: PaperSettings; scale?: number; top?: string }) => {
   if (!settings.showWatermark) return null;
   const watermarkImg = isPremium && logoUrl ? logoUrl : '/examly.png';
-  const width = settings.watermarkWidth || 400;
-  const height = settings.watermarkHeight || 400;
+  const width = (settings.watermarkWidth || 400) * scale;
+  const height = (settings.watermarkHeight || 400) * scale;
   const opacity = settings.watermarkOpacity || 0.1;
 
   return (
     <div
       style={{
         position: 'absolute',
-        top: '50%',
+        top: top,
         left: '50%',
         transform: 'translate(-50%, -50%) rotate(-30deg)',
         zIndex: 10,
@@ -69,7 +75,7 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
 }) => {
     const subject = useMemo(() => paperSections[0]?.subject || '', [paperSections]);
   if (!settings) return <div className="p-5 text-center">Loading settings...</div>;
-const isOverflowLocked = currentLayout === 'same' || currentLayout === 'separate';
+const isOverflowLocked = ['same', 'same_page', 'combined', 'separate'].includes(currentLayout);
  // Inside PaperLayoutRenderer
 const globalNumbering = useMemo(() => {
   const sectionStartNumbers: Record<string, number> = {};
@@ -154,6 +160,9 @@ const sheetBaseStyle: React.CSSProperties = {
   color: 'black',
   fontFamily: settings.fontFamily,
   boxSizing: 'border-box',
+  border: 'none',
+  outline: 'none',
+  boxShadow: 'none'
 };
 
   /**
@@ -253,7 +262,7 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
     <div 
       className="section-block" 
       style={{ 
-        border: isEditMode ? "1px dashed #ccc" : "none", 
+        border: isEditMode ? "2px dashed #ccc" : "none", 
         marginBottom: isFirstPartOfPair ? '0px' : '0px',
         marginTop: isSecondPartOfPair ? '5px' : '5px',
         width: '100%' 
@@ -355,7 +364,7 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
     const allMCQs = mcqs.flatMap(s => s.questions || []);
     if (allMCQs.length === 0) return null;
     return (
-      <div className="paper-sheet mcq-key-sheet" style={sheetBaseStyle}>
+      <div className="paper-sheet border shadow-sm print-break mcq-key-sheet" style={sheetBaseStyle}>
         <Watermark isPremium={isPremium} logoUrl={profile?.logo} settings={settings} />
         <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
           <h2 className="text-center mb-4" style={{
@@ -489,7 +498,7 @@ const renderContent = () => {
   // =========================
   // SAME LAYOUT
   // =========================
-  if (currentLayout === 'same') {
+  if (['same', 'same_page', 'combined'].includes(currentLayout)) {
     pages.push(
       renderPaperGroup(
         [...mcqs, ...subjectives],
@@ -528,12 +537,11 @@ const renderContent = () => {
   // TWO / THREE PAPERS
   // =========================
   else if (
-    currentLayout === 'two_papers' ||
-    currentLayout === 'three_papers'
+    ['two_papers', 'two_paper', 'three_papers', 'three_paper'].includes(
+      currentLayout
+    )
   ) {
-    const count =
-      currentLayout === 'two_papers' ? 2 : 3;
-
+    const count = currentLayout.startsWith('two') ? 2 : 3;
     const slotHeight =
       count === 2 ? '140mm' : '93mm';
 
@@ -545,11 +553,6 @@ const renderContent = () => {
           className="paper-sheet border shadow-sm print-break"
           style={sheetBaseStyle}
         >
-          <Watermark
-            isPremium={isPremium}
-            logoUrl={profile?.logo}
-            settings={settings}
-          />
 
           {[...Array(count)].map((_, i) => (
             <React.Fragment key={i}>
@@ -558,9 +561,17 @@ const renderContent = () => {
                   style={{
                     position: 'relative',
                     zIndex: 1,
-                    padding: '3mm'
+                    padding: '3mm',
+                    height: '100%'
                   }}
                 >
+                  <Watermark
+                    isPremium={isPremium}
+                    logoUrl={profile?.logo}
+                    settings={settings}
+                    scale={currentLayout.startsWith('two') ? 0.7 : 0.5}
+                    top="60%"
+                  />
                   <PaperHeader
                     totalMarks={mcqTotalMarks}
                     subject={subject}
@@ -568,11 +579,7 @@ const renderContent = () => {
                     isEditMode={isEditMode}
                     settings={{
                       ...settings,
-                      fontSize:
-                        currentLayout ===
-                        'three_papers'
-                          ? settings.fontSize - 3
-                          : settings.fontSize - 1
+                      fontSize: currentLayout.startsWith('three') ? settings.fontSize - 3 : settings.fontSize - 1
                     }}
                     paperLanguage={paperLanguage}
                     config={config}
@@ -605,11 +612,6 @@ const renderContent = () => {
           className="paper-sheet border shadow-sm print-break"
           style={sheetBaseStyle}
         >
-          <Watermark
-            isPremium={isPremium}
-            logoUrl={profile?.logo}
-            settings={settings}
-          />
 
           {[...Array(count)].map((_, i) => (
             <React.Fragment key={i}>
@@ -618,9 +620,17 @@ const renderContent = () => {
                   style={{
                     position: 'relative',
                     zIndex: 1,
-                    padding: '3mm'
+                    padding: '3mm',
+                    height: '100%'
                   }}
                 >
+                  <Watermark
+                    isPremium={isPremium}
+                    logoUrl={profile?.logo}
+                    settings={settings}
+                    scale={currentLayout.startsWith('two') ? 0.7 : 0.5}
+                    top="60%"
+                  />
                   <PaperHeader
                     totalMarks={subTotalMarks}
                     subject={subject}
@@ -628,11 +638,7 @@ const renderContent = () => {
                     isEditMode={isEditMode}
                     settings={{
                       ...settings,
-                      fontSize:
-                        currentLayout ===
-                        'three_papers'
-                          ? settings.fontSize - 3
-                          : settings.fontSize - 1
+                      fontSize: currentLayout.startsWith('three') ? settings.fontSize - 3 : settings.fontSize - 1
                     }}
                     paperLanguage={paperLanguage}
                     config={config}
@@ -673,12 +679,13 @@ const renderContent = () => {
 };
 
 return (
-  <div className="paper-builder-renderer py-4 bg-secondary-subtle">
+  <div className="paper-builder-renderer bg-secondary-subtle">
     <style>{`
     
       @media screen {
         .paper-sheet {
-          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+       
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
           border: 1px solid #dee2e6;
           margin: 20px auto;
           background: white;
@@ -706,6 +713,8 @@ return (
           print-color-adjust: exact !important;
         }
 
+        main { margin: 0 !important; padding: 0 !important; }
+
         .paper-builder-renderer {
           padding: 0 !important;
           background: white !important;
@@ -713,13 +722,26 @@ return (
 
         .paper-sheet {
           margin: 0 !important;
-          border: none !important;
+          border: 0 !important;
           box-shadow: none !important;
+          outline: 0 !important;
           page-break-after: always !important;
           page-break-inside: avoid !important;
           overflow: hidden !important;
         }
 
+        /* Aggressively remove borders and shadows from common containers and utility classes 
+        .paper-sheet .page-border,
+      
+        .paper-sheet .border,
+        .paper-sheet .border-info,
+        .paper-sheet .shadow-sm,
+        .paper-sheet .shadow-lg,
+        .paper-sheet .container-fluid {
+          border: none !important;
+          box-shadow: none !important;
+        }
+*/
         .print-container > .paper-sheet:last-child {
           page-break-after: avoid !important;
         }
@@ -731,6 +753,9 @@ return (
         .no-print,
         nav,
         .sidebar,
+        .page-border,
+        .app-header,
+        .appHeaderContent,
         header:not(.paper-header),
         .btn {
           display: none !important;
@@ -742,3 +767,5 @@ return (
   </div>
 );
 };
+
+
