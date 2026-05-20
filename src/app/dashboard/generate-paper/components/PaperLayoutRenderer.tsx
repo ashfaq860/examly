@@ -403,7 +403,7 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
 
   const DashedLine = () => (
   <div
-    className="w-100 my-2 border-top border-dark position-relative"
+    className="w-100 my-1 border-top border-dark position-relative"
     style={{
       borderStyle: 'dashed',
       borderWidth: '2px',
@@ -411,7 +411,7 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
     }}
   >
     <span
-      className="position-absolute bg-white px-2 fw-bold"
+      className="position-absolute bg-white px-0 fw-bold"
       style={{
         fontSize: '12px',
         top: '-10px',
@@ -543,7 +543,7 @@ const renderContent = () => {
   ) {
     const count = currentLayout.startsWith('two') ? 2 : 3;
     const slotHeight =
-      count === 2 ? '140mm' : '93mm';
+      count === 2 ? '142mm' : '95mm';
 
     // MCQ PAGE
     if (mcqs.length > 0) {
@@ -561,7 +561,7 @@ const renderContent = () => {
                   style={{
                     position: 'relative',
                     zIndex: 1,
-                    padding: '3mm',
+                    padding: '0mm',
                     height: '100%'
                   }}
                 >
@@ -620,7 +620,7 @@ const renderContent = () => {
                   style={{
                     position: 'relative',
                     zIndex: 1,
-                    padding: '3mm',
+                    padding: '0mm',
                     height: '100%'
                   }}
                 >

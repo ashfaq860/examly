@@ -11,6 +11,7 @@ import ScorecardHeader from './layouts/ScorecardHeader';
 import BilingualHeader from './layouts/BilingualHeader';
 import UniversityHeader from './layouts/UniversityHeader';
 import DataBarHeader from './layouts/DataBarHeader';
+import { PaperSettings } from '@/types/paperBuilderTypes';
 /**
  * Note: Since EditableText might be an external dependency that's occasionally undefined 
  * in certain environments, we use a simple fallback to ensure the app doesn't crash.
@@ -33,18 +34,14 @@ export interface PaperHeaderProps {
   subject: string;
   paperSections: any[];
   isEditMode: boolean;
-  settings: {
-    titleFontSize: number;
-    headingFontFamily: string;
-    metaFontSize: number;
+  settings: PaperSettings & {
     headerLayout?: string;
-
   };
   paperLanguage: 'english' | 'urdu' | 'bilingual';
   config: any;
   currentLayout: string;
   onTextChange?: (field: string, value: string) => void;
-  currentClass?: string;
+  currentClass?: string | { id: string; name: string; [key: string]: any };
     profile:any[];
 }
 
