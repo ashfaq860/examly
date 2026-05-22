@@ -139,7 +139,30 @@ const handleSaveToSupabase = async () => {
     setIsSaving(false);
   }
 };
-  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
+
+
+useEffect(() => {
+  const syncLayout = () => {
+  if (typeof window === 'undefined') return;
+  const PAPER_PX = 793.7;
+  const PAPER_H_PX = 1122.5;
+  const vw = window.innerWidth;
+  const scale = Math.min(1, (vw - 16) / PAPER_PX);
+  const scaledW = PAPER_PX * scale;
+  const marginLeft = Math.max(0, (vw - scaledW) / 2);
+  const marginBottom = (PAPER_H_PX * scale) - PAPER_H_PX;
+  document.documentElement.style
+    .setProperty('--paper-scale', scale.toFixed(4));
+  document.documentElement.style
+    .setProperty('--paper-margin-bottom', `${marginBottom.toFixed(1)}px`);
+  document.documentElement.style
+    .setProperty('--paper-margin-left', `${marginLeft.toFixed(1)}px`);
+};
+  syncLayout();
+  window.addEventListener('resize', syncLayout);
+  return () => window.removeEventListener('resize', syncLayout);
+}, []);
+const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   // 2. Load settings from localStorage on Mount
   useEffect(() => {
     const savedSettings = localStorage.getItem(PAPER_SETTINGS_KEY);
@@ -620,7 +643,7 @@ const isPremium = subStatus === 'active';
 const hasActivePackage = profile?.userPackages?.some((pkg: any) => pkg.is_active === true);
 const isUserPremium = isPremium || hasActivePackage;
  return (
-    <div className="min-vh-100 d-flex flex-column bg-light">
+    <div className="min-vh-100 d-flex flex-column bg-light" style={{ overflowX: 'hidden' }}>
       {/* 1. STICKY HEADER: Stays at the top while scrolling */}
    <div  className="d-print-none bg-white border-bottom shadow-sm app-header " 
  
@@ -645,25 +668,20 @@ const isUserPremium = isPremium || hasActivePackage;
 {/* 1. GLOBAL LOADING OVERLAY */}
 
       {/* 2. SCROLLABLE AREA: Allows both Vertical and Horizontal scrolling */}
-      <main className="flex-grow-1 overflow-auto bg-secondary bg-opacity-10 custom-scrollbar d-print-block p-print-0 mt-4 paper-preview-main">
+     <main
+  className="flex-grow-1 overflow-auto bg-secondary bg-opacity-10 custom-scrollbar d-print-block paper-preview-main" style={{ touchAction: 'pan-y pinch-zoom' }}>
         {/* Wrapper to center paper on large screens, but allow left-align on small screens */}
-        <div className="d-flex justify-content-center">
-          <div 
-            id="printable-paper"
-            ref={paperRef}
-            className="bg-white shadow-lg paper-canvas mx-auto mx-lg-0" 
-            style={{ 
-          //    width: '210mm', // Fixed width ensures A4 dimensions
-            //  minWidth: '210mm', // Prevents shrinking on small screens
-              height: 'auto',
-            
-              fontFamily: settings.fontFamily,
-             
-              direction: config.direction as any,
-              
-            }}
-          >
-
+        <div className="paper-canvas-wrapper">
+  <div
+    id="printable-paper"
+    ref={paperRef}
+    className="bg-white shadow-lg paper-canvas"
+    style={{
+      height: 'auto',
+      fontFamily: settings.fontFamily,
+      direction: config.direction as any,
+    }}
+  >
 
             {paperSections.length === 0 ? (
   <div 
@@ -776,6 +794,9 @@ const isUserPremium = isPremium || hasActivePackage;
     font-display: swap;
   }
   /* Screen only - makes the preview look like a floating sheet */
+  .paper-preview-main {
+    padding-top: 92px !important;
+  }
   @media screen {
     .paper-canvas {
       margin-top: 20px;
@@ -857,6 +878,20 @@ const isUserPremium = isPremium || hasActivePackage;
       width: 210mm !important;
       height: 297mm !important;
     }
+
+    .paper-canvas {
+    transform: none !important;
+    transform-origin: unset !important;
+    margin: 0 !important;
+    zoom: unset !important;
+    width: 210mm !important;
+  }
+
+  .paper-canvas-wrapper {
+    display: block !important;
+    width: 210mm !important;
+    overflow: visible !important;
+  }
   }
 /* Layout & Scrollbars */
 .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -988,25 +1023,37 @@ const isUserPremium = isPremium || hasActivePackage;
     transform-origin: top center;
     transition: transform 0.2s ease;
   }
-  @media screen and (max-width: 991px) {
-    .paper-preview-main {
-      overflow-x: hidden !important;
-      padding: 10px 0 !important;
-      -webkit-overflow-scrolling: touch;
-    }
-    .paper-canvas {
-      /* This allows the paper to shrink to fit the screen width 
-         while maintaining the internal A4 layout (210mm) */
-      width: 210mm !important; 
-      
-      /* Use CSS zoom to fit the 210mm paper into the smaller mobile viewport */
-      /* Dividing by 215mm provides a tiny gutter to ensure it fits perfectly */
-      zoom: calc(100vw / 215mm); 
-      
-      margin: 0 auto !important;
-      box-shadow: none !important;
-    }
+ /* REPLACE your @media screen (max-width: 991px) block with this */
+@media screen and (max-width: 991px) {
+  .paper-preview-main {
+    padding-top: 72px !important;  /* header only */
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 80px !important;
+    overflow-x: hidden !important;
+    margin-top: 0 !important;
+    touch-action: pan-y pinch-zoom;
   }
+  .paper-canvas-wrapper {
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    position: relative !important;
+    left: 0 !important;
+  }
+  .paper-canvas {
+    width: 793.7px !important;
+    transform: scale(var(--paper-scale, 0.45)) !important;
+    transform-origin: top center !important;
+    margin: 12px 0 var(--paper-margin-bottom, -400px) 0 !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15) !important;
+    zoom: unset !important;
+  }
+}
 `}</style>
   </div>
   );
