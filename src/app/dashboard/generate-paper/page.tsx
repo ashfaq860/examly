@@ -186,6 +186,7 @@ const GeneratePaperPage = () => {
                 classes={classes}
                 setValue={setValue}
                 errors={errors}
+                isLoading={isLoading} // Pass loading state to show logo flyer if subjects are still loading
               />
             )}
 

@@ -50,8 +50,20 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
   classes,
   setValue,
   errors,
-  isLoading = true,
+  isLoading = false,
 }) => {
+   // ✅ Local "just mounted" guard — subjects haven't arrived yet
+  const [hasWaited, setHasWaited] = React.useState(false);
+
+  React.useEffect(() => {
+    // Give the fetch a moment before allowing empty state to show
+    const timer = setTimeout(() => setHasWaited(true), 800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const showEmpty = hasWaited && !isLoading && subjects.length === 0;
+  const showLoading = isLoading || !hasWaited;
+
   const selectedClassName = classes.find((c) => c.id === watchedClassId)?.name;
 
   return (
@@ -64,7 +76,7 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
           style={{ width: 40, height: 4 }}
         />
         <p className="text-secondary opacity-75">
-          {isLoading
+          {showLoading
             ? 'Fetching curriculum…'
             : `Available subjects for Class ${selectedClassName ?? 'Selected'}`}
         </p>
@@ -72,13 +84,13 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
 
       {/* ─── Card Grid ───────────────────────────────────── */}
       <div className="row g-4 justify-content-center perspective-stage">
-        {isLoading ? (
+        {showLoading ? (
           <div className="col-12 d-flex justify-content-center py-5">
             <div style={{ maxWidth: 320, width: '100%' }}>
               <Loading message="Loading subjects..." />
             </div>
           </div>
-        ) : subjects.length === 0 ? (
+        ) : showEmpty ? (
           <div className="col-12 text-center text-secondary py-5">
             <span className="fs-4">📭</span>
             <p className="mt-2">No subjects found for this class.</p>

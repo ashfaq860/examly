@@ -80,7 +80,9 @@ const BilingualTextDisplay: React.FC<any> = ({
   question // Ensure this is passed from the parent
 }) => {
   const effectiveLineHeight = lineSpacing || 1.4;
-  const optimizedUrduLineHeight = isOption ? 1.1 : Math.max(1.0, effectiveLineHeight - 0.3);
+  //const optimizedUrduLineHeight = isOption ? 1.1 : Math.max(1.0, effectiveLineHeight - 0.3);
+  const optimizedUrduLineHeight = isOption ? effectiveLineHeight : Math.max(1.0, effectiveLineHeight - 0.3);
+
 // Logic: If question type is translate_english, we treat English text as Urdu script
   const isTranslateType = question?.question_type === 'translate_english';
 //console.log('BilingualTextDisplay Props:',isTranslateType);
@@ -469,7 +471,8 @@ const MCQQuestionRenderer: React.FC<any> = (props) => {
           const finalUrduValue = (paperLanguage === 'urdu' && !urOpt) ? engOpt : urOpt;
 
           return (
-            <div key={key} className={`${getColumnClass()} d-flex gap-1 align-items-start`}>
+           <div key={key} className={`${getColumnClass()} d-flex gap-1 align-items-baseline`}>
+
               <span
                 className="fw-bold"
                 style={{
