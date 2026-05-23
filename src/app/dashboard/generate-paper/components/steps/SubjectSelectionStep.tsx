@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import { UseFormSetValue } from 'react-hook-form';
+import Loading from '@/app/dashboard/generate-paper/loading';
 
 interface Subject {
   id: string;
@@ -49,7 +50,7 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
   classes,
   setValue,
   errors,
-  isLoading = false,
+  isLoading = true,
 }) => {
   const selectedClassName = classes.find((c) => c.id === watchedClassId)?.name;
 
@@ -72,7 +73,11 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
       {/* ─── Card Grid ───────────────────────────────────── */}
       <div className="row g-4 justify-content-center perspective-stage">
         {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={`sk-${i}`} />)
+          <div className="col-12 d-flex justify-content-center py-5">
+            <div style={{ maxWidth: 320, width: '100%' }}>
+              <Loading message="Loading subjects..." />
+            </div>
+          </div>
         ) : subjects.length === 0 ? (
           <div className="col-12 text-center text-secondary py-5">
             <span className="fs-4">📭</span>

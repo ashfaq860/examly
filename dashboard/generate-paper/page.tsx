@@ -186,6 +186,7 @@ const GeneratePaperPage = () => {
                 classes={classes}
                 setValue={setValue}
                 errors={errors}
+                isLoading={isLoading}
               />
             )}
 

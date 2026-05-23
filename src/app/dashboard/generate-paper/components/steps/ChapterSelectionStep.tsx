@@ -83,7 +83,7 @@ export const ChapterSelectionStep: React.FC<ChapterSelectionStepProps> = ({
       { value: '1st_half_book', icon: <Layers size={24} className="text-primary" />, title: '1st Half', range: getRange('1st_half_book') },
       { value: '2nd_half_book', icon: <Layers size={24} className="text-success" />, title: '2nd Half', range: getRange('2nd_half_book') },
       { value: 'custom', icon: <LayoutGrid size={24} className="text-warning" />, title: 'Manual Selection', range: 'Custom' },
-      { value: 'full_book', icon: <BookOpen size={24} className="text-info" />, title: 'Full Book', range: `${sortedChapters.length} Chapters` },
+      { value: 'full_book', icon: <BookOpen size={24} className="text-info" />, title: 'Full Book', range: `${sortedChapters.length?`${sortedChapters.length} Chapters`:''}` },
     ];
   }, [sortedChapters, getHalfBookChapters]);
 
