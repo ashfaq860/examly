@@ -1,11 +1,11 @@
 "use client";
-import { useState,useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Printer, Settings as SettingsIcon, Save, ChevronLeft } from 'lucide-react';
 import { PaperLayoutRenderer } from '@/app/dashboard/generate-paper/components/PaperLayoutRenderer';
 import { SettingsPanel } from '@/app/dashboard/generate-paper/components/SettingsPanel';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { toast } from 'react-hot-toast';
-import { motion } from 'framer-motion'; // Ensure you have framer-motion installed
+import { motion } from 'framer-motion';
 
 export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
   const supabase = createClientComponentClient();
@@ -13,88 +13,90 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
   const [currentSettings, setCurrentSettings] = useState(paper.settings || {});
   const [isSaving, setIsSaving] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
+
+  // ─── Fetch profile on mount ───────────────────────────────────────────────
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch('/api/profile');
+        if (!res.ok) { console.error('Failed to fetch profile'); return; }
+        const data = await res.json();
+        setUserProfile(data);
+      } catch (err) {
+        console.error('Error fetching profile:', err);
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  // ─── Mobile paper scale ───────────────────────────────────────────────────
+  useEffect(() => {
+    const computeScale = () => {
+      const PAPER_WIDTH_PX = 794; // 210mm at 96dpi
+      if (window.innerWidth <= 991) {
+        const available = window.innerWidth - 16;
+        const scale = Math.min(available / PAPER_WIDTH_PX, 1);
+        document.documentElement.style.setProperty('--paper-scale', String(scale));
+        document.documentElement.style.setProperty(
+          '--paper-collapsed-margin',
+          `calc((${scale} - 1) * 297mm)`
+        );
+      } else {
+        document.documentElement.style.setProperty('--paper-scale', '1');
+        document.documentElement.style.setProperty('--paper-collapsed-margin', '0px');
+      }
+    };
+    computeScale();
+    window.addEventListener('resize', computeScale);
+    return () => window.removeEventListener('resize', computeScale);
+  }, []);
+
+  // ─── Premium check ────────────────────────────────────────────────────────
+  const subStatus = userProfile?.profile?.subscription_status;
+  const isPremium = subStatus === 'active';
+  const hasActivePackage = userProfile?.userPackages?.some((pkg: any) => pkg.is_active === true);
+  const isUserPremium = isPremium || hasActivePackage;
+
+  // ─── Handlers ─────────────────────────────────────────────────────────────
   const handleUpdateDatabase = async () => {
     setIsSaving(true);
-    const { error } = await supabase.from('papers').update({ settings: currentSettings }).eq('id', paper.id);
+    const { error } = await supabase
+      .from('papers')
+      .update({ settings: currentSettings })
+      .eq('id', paper.id);
     if (error) {
-      toast.error("Failed to update");
-    } else { 
-      toast.success("Settings saved successfully"); 
-      setShowSettings(false); 
+      toast.error('Failed to update');
+    } else {
+      toast.success('Settings saved successfully');
+      setShowSettings(false);
     }
     setIsSaving(false);
   };
 
   const handlePrint = async () => {
-    // 1. Trigger the actual browser print
     window.print();
-
     try {
-      // 2. Call the API route we created that uses supabaseAdmin
       const response = await fetch('/api/profile/increment-count', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-
       const result = await response.json();
-
       if (!response.ok) throw new Error(result.error);
-
-      // 3. Update local state so the UI reflects the new count immediately
-      setUserProfile((prev: any) => ({
-        ...prev,
-        profile: result.profile
-      }));
-
-      console.log("Paper count incremented successfully");
+      setUserProfile((prev: any) => ({ ...prev, profile: result.profile }));
     } catch (err: any) {
-      console.error("Failed to sync paper count:", err.message);
-      // We don't use toast here to avoid interrupting the print experience
+      console.error('Failed to sync paper count:', err.message);
     }
   };
- useEffect(() => {
-      const fetchProfile = async () => {
-        try {
-          const res = await fetch('/api/profile');
-           if (!res.ok) {
-            console.error('Failed to fetch profile');
-            return;
-          }
 
-          const data = await res.json();
-
-          setUserProfile(data);
-        
-        } catch (err) {
-          console.error('Error fetching profile:', err);
-        } finally {
-          console.log('Profile fetch attempt completed');
-        }
-      };
-
-      fetchProfile();
-    }, []);
-
-    
-// 1. Extract the status safely
-const subStatus = userProfile?.profile?.subscription_status;
-
-// 2. Determine if the user is currently premium
-const isPremium = subStatus === 'active';
-
-// 3. (Optional) If you want to handle the specific "Ashfaq" case from your 
-// data object where you check the packages array as well:
-const hasActivePackage = userProfile?.userPackages?.some((pkg: any) => pkg.is_active === true);
-const isUserPremium = isPremium || hasActivePackage;
-
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className={`previewer-root bg-light min-vh-100 ${showSettings ? 'settings-panel-open' : ''}`}>
-      
+
       {/* Action Bar */}
       <div className="action-bar-fixed d-print-none">
-        <div className="container-fluid px-2 px-md-4">
+        <div className="container-fluid p-2 px-md-4">
           <div className="d-flex justify-content-between align-items-center bar-content">
-            
+
             <div className="d-flex align-items-center flex-grow-1 overflow-hidden">
               <button className="btn-back me-2 me-md-3" onClick={onBack}>
                 <ChevronLeft size={20} />
@@ -107,28 +109,28 @@ const isUserPremium = isPremium || hasActivePackage;
               </div>
             </div>
 
-            {/* Header buttons shift left when settings are open */}
             <div className="action-buttons-group d-flex gap-1 gap-md-2">
-              <button 
-                className={`btn-preview-action ${showSettings ? 'active' : ''}`} 
+              <button
+                className={`btn-preview-action ${showSettings ? 'active' : ''}`}
                 onClick={() => setShowSettings(!showSettings)}
               >
-                <SettingsIcon size={18} className={showSettings ? 'spin-slow' : ''} /> 
+                <SettingsIcon size={18} className={showSettings ? 'spin-slow' : ''} />
                 <span className="d-none d-md-inline">Settings</span>
               </button>
-              
-              <button className="btn-preview-dark" onClick={ handlePrint}>
+
+              <button className="btn-preview-dark" onClick={handlePrint}>
                 <Printer size={18} />
                 <span className="d-none d-md-inline">Print</span>
               </button>
             </div>
+
           </div>
         </div>
       </div>
 
       {/* Main Content Area */}
       <div className="paper-viewport-container">
-        <div className="paper-canvas-wrapper">
+        <div className="paper-canvas-scaler">
           <div className="paper-canvas shadow-lg">
             <PaperLayoutRenderer
               paperSections={paper.content}
@@ -136,7 +138,10 @@ const isUserPremium = isPremium || hasActivePackage;
               paperLanguage={paper.language}
               config={{
                 direction: paper.language === 'urdu' ? 'rtl' : 'ltr',
-                fontFamily: paper.language === 'urdu' ? 'Jameel Noori Nastaleeq' : (currentSettings.questionFontFamily || 'Arial')
+                fontFamily:
+                  paper.language === 'urdu'
+                    ? 'Jameel Noori Nastaleeq'
+                    : currentSettings.questionFontFamily || 'Arial',
               }}
               isEditMode={false}
               currentLayout={paper.layout}
@@ -144,33 +149,36 @@ const isUserPremium = isPremium || hasActivePackage;
               renderInlineBilingual={true}
               currentClass={{ name: paper.class_name }}
               profile={profile}
-             isPremium={isUserPremium}
+              isPremium={isUserPremium}
               onSectionUpdate={() => {}}
             />
           </div>
         </div>
       </div>
 
-      <SettingsPanel 
-        isOpen={showSettings} 
-        onClose={() => setShowSettings(false)} 
-        settings={currentSettings} 
-        onSettingChange={(k:any, v:any) => setCurrentSettings((p:any) => ({...p, [k]:v}))} 
+      {/* Settings Panel */}
+      <SettingsPanel
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        settings={currentSettings}
+        onSettingChange={(k: any, v: any) =>
+          setCurrentSettings((p: any) => ({ ...p, [k]: v }))
+        }
         isPremium={isUserPremium}
       />
 
-      {/* FLYING DRAGGABLE SAVE BUTTON */}
+      {/* Draggable Save Button */}
       {showSettings && (
-        <motion.div 
+        <motion.div
           drag
           dragConstraints={{ left: -300, right: 20, top: -500, bottom: 20 }}
           className="flying-save-wrapper d-print-none"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
         >
-          <button 
-            className="btn-flying-save" 
-            onClick={handleUpdateDatabase} 
+          <button
+            className="btn-flying-save"
+            onClick={handleUpdateDatabase}
             disabled={isSaving}
           >
             <div className="flying-icon-box">
@@ -186,45 +194,166 @@ const isUserPremium = isPremium || hasActivePackage;
       )}
 
       <style jsx global>{`
+        /* ── Root ── */
         .previewer-root {
           background-color: #f1f5f9;
         }
 
-        /* 1. Action Buttons Shift Logic */
+        /* ── Action Bar ── */
+        .action-bar-fixed {
+          position: fixed;
+          left: 0;
+          right: 0;
+          z-index: 1040;
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(10px);
+          border-bottom: 1px solid #e2e8f0;
+        }
+
         .action-buttons-group {
           transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
+        .action-buttons-group.active {
+          transform: translateX(0);
+        }
 
+
+        /* Desktop */
         @media (min-width: 992px) {
-          .action-bar-fixed { top: 0; }
-          .paper-viewport-container { padding-top: 100px; }
+          .action-bar-fixed {
+            top: 0;
+            left: 280px !important;
+            padding: 7px;
+          }
+          .paper-viewport-container {
+            padding-top: 100px;
+          }
           .settings-panel-open .action-buttons-group {
             transform: translateX(-410px);
           }
-            .action-bar-fixed{
-            left: 280px !important;
-            padding:7px;
-            }
         }
 
+        /* Tablet / Mobile */
         @media (max-width: 991.98px) {
-          .action-bar-fixed { top: 57px; }
-          .paper-viewport-container { padding-top: 140px; }
+          .action-bar-fixed {
+            top: 57px;
+          }
+          .paper-viewport-container {
+            padding-top: 80px;
+          }
           .settings-panel-open .action-buttons-group {
             transform: translateX(-80px);
           }
         }
 
-        /* 2. Flying Save Button Styles */
+        /* ── Viewport & Paper Canvas ── */
+        .paper-viewport-container {
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
+          min-height: 100vh;
+          overflow: auto;
+          -webkit-overflow-scrolling: touch;
+          /* Allow native pinch-zoom on mobile */
+          touch-action: pan-x pan-y pinch-zoom;
+          padding-bottom: 60px;
+        }
+
+        .paper-canvas-scaler {
+          transform-origin: top center;
+        }
+
+        .paper-canvas {
+          background: white;
+          width: 210mm;
+          min-height: 297mm;
+          border-radius: 4px;
+          margin: 0 auto;
+        }
+
+        /* ── Mobile: scale paper to fit screen width ── */
+        @media (max-width: 991.98px) {
+          .paper-viewport-container {
+            overflow-x: hidden;
+          }
+
+          .paper-canvas-scaler {
+            transform: scale(var(--paper-scale, 0.42));
+            transform-origin: top center;
+            /*
+              Collapse the dead whitespace that transform:scale() creates below.
+              Since scale reduces visual height but keeps layout height,
+              we apply a negative-ish margin equal to the lost space.
+            */
+            margin-bottom: var(--paper-collapsed-margin, -460px);
+          }
+        }
+
+        /* ── Buttons ── */
+        .btn-back {
+          background: #fff;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 6px 12px;
+          display: flex;
+          align-items: center;
+          color: #64748b;
+          cursor: pointer;
+        }
+
+        .btn-preview-action {
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 8px 14px;
+          font-weight: 600;
+          color: #475569;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+        }
+
+        .btn-preview-action.active {
+          background: #0d6efd;
+          color: white;
+          border-color: #0d6efd;
+        }
+
+        .btn-preview-dark {
+          background: #1e293b;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 14px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+        }
+
+        /* ── Spin animation for settings icon ── */
+        .spin-slow {
+          animation: spin 3s linear infinite;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+
+        /* ── Flying Save Button ── */
         .flying-save-wrapper {
           position: fixed;
           bottom: 30px;
           right: 30px;
           z-index: 10000;
           cursor: grab;
-          touch-action: none; /* Required for mobile drag */
+          touch-action: none;
         }
-        .flying-save-wrapper:active { cursor: grabbing; }
+        .flying-save-wrapper:active {
+          cursor: grabbing;
+        }
 
         .btn-flying-save {
           background: transparent;
@@ -235,6 +364,7 @@ const isUserPremium = isPremium || hasActivePackage;
           gap: 6px;
           color: #10b981;
           padding: 10px;
+          cursor: pointer;
         }
 
         .flying-icon-box {
@@ -264,41 +394,25 @@ const isUserPremium = isPremium || hasActivePackage;
           opacity: 0.8;
         }
 
-        /* 3. Standard Layout Styles */
-        .paper-viewport-container {
-          display: flex; justify-content: center;
-          min-height: 100vh; overflow-x: auto;
-          -webkit-overflow-scrolling: touch; padding-bottom: 60px;
-        }
-        .paper-canvas {
-          background: white; width: 210mm; min-height: 297mm;
-          border-radius: 4px; margin: 0 auto;
-        }
-        .action-bar-fixed {
-          position: fixed; left: 0; right: 0; z-index: 1040;
-          background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
-          border-bottom: 1px solid #e2e8f0;
-        }
-        .btn-back {
-          background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 12px;
-          display: flex; align-items: center; color: #64748b;
-        }
-        .btn-preview-action {
-          background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 14px;
-          font-weight: 600; color: #475569; display: flex; align-items: center; gap: 8px;
-        }
-        .btn-preview-action.active { background: #0d6efd; color: white; border-color: #0d6efd; }
-        .btn-preview-dark {
-          background: #1e293b; color: white; border: none; border-radius: 8px; padding: 8px 14px;
-          font-weight: 600; display: flex; align-items: center; gap: 8px;
-        }
-        .spin-slow { animation: spin 3s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
+        /* ── Print overrides ── */
         @media print {
-          .action-bar-fixed, .flying-save-wrapper { display: none !important; }
-          .paper-viewport-container { padding: 0 !important; }
-          .paper-canvas { box-shadow: none !important; width: 100% !important; margin: 0 !important; }
+          .action-bar-fixed,
+          .flying-save-wrapper {
+            display: none !important;
+          }
+          .paper-viewport-container {
+            padding: 0 !important;
+            touch-action: auto;
+          }
+          .paper-canvas-scaler {
+            transform: none !important;
+            margin-bottom: 0 !important;
+          }
+          .paper-canvas {
+            box-shadow: none !important;
+            width: 100% !important;
+            margin: 0 !important;
+          }
         }
       `}</style>
     </div>

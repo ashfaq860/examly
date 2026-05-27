@@ -1,3 +1,4 @@
+//dashboard/generate-paper/components/PaperLayoutRenderer.tsx
 'use client';
 import React, { useMemo } from 'react';
 import { PaperSection, PaperSettings, LanguageConfig } from '@/types/paper-builder';
@@ -148,9 +149,10 @@ const globalNumbering = useMemo(() => {
   
 const sheetBaseStyle: React.CSSProperties = {
   width: '210mm',
-  minHeight: '297mm',
   height: '297mm',
-  padding: '3mm',
+
+ 
+  padding: '4mm',
   backgroundColor: 'white',
   margin: '0 auto',
   position: 'relative',
@@ -727,6 +729,7 @@ return (
           outline: 0 !important;
           page-break-after: always !important;
           page-break-inside: avoid !important;
+           height: 297mm !important;
           overflow: hidden !important;
         }
 

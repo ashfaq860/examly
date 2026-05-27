@@ -1,3 +1,4 @@
+//dashboard/generate-paper/loading.tsx
 "use client";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";

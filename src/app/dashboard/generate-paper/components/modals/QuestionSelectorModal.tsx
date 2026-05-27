@@ -1,3 +1,4 @@
+//dashboard/generate-paper/components/modals/QuestionSelectorModal.tsx
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
@@ -8,19 +9,19 @@ import {
 import { ManualQuestionSelection } from '../ManualQuestionSelection';
 import { toast } from 'react-hot-toast';
 import Loading from '../../loading';
-
 export const QuestionSelectorModal: React.FC<any> = ({
   isOpen, onClose, onAddQuestions, subjectId, classId, chapterOption,
   selectedChapters, chapters, subjects = [],
-  language: initialLanguage, getQuestionTypes, watch, setValue, currentSubject
+  language: initialLanguage, getQuestionTypes, watch, setValue, currentSubject, currentClass
 }) => {
   // --- States ---
   const [selectedType, setSelectedType] = useState<string>('');
   const [selectedSources, setSelectedSources] = useState<string[]>(['all']); 
   const [currentLanguage, setCurrentLanguage] = useState(initialLanguage || 'english');
-  const [totalQuestions, setTotalQuestions] = useState<number>(0);
-  const [attemptCount, setAttemptCount] = useState<number>(0);
-  const [marksEach, setMarksEach] = useState<number>(0);
+  // Change these three state initializations
+  const [totalQuestions, setTotalQuestions] = useState<number | ''>('');
+  const [attemptCount, setAttemptCount] = useState<number | ''>('');
+  const [marksEach, setMarksEach] = useState<number | ''>('');
   const [useManualSelection, setUseManualSelection] = useState<boolean>(false);
   const [manualSelectionComplete, setManualSelectionComplete] = useState<boolean>(false);
   const [selectedQuestions, setSelectedQuestions] = useState<Record<string, any[]>>({});
@@ -115,10 +116,10 @@ export const QuestionSelectorModal: React.FC<any> = ({
   };
 
   const handleAutoAdd = () => {
-    if (!selectedType || totalQuestions === 0) {
-      toast.error("Select type & total questions");
-      return;
-    }
+    if (!selectedType || !totalQuestions || totalQuestions === 0) {
+    toast.error("Select type & total questions");
+    return;
+  }
     setUseManualSelection(false);
     setAutoSelectSeed(Date.now());
   };
@@ -175,14 +176,19 @@ const selectedTopics = watch('selectedTopics') || [];
     }
   };
 
-  const handleTotalChange = (val: number) => {
-    const { maxMcq, maxSubjective } = getLimitsForLayout(paperData.layout);
-    let finalVal = val;
-    if (selectedType === 'mcq' && maxMcq > 0) finalVal = Math.min(val, maxMcq);
-    else if (selectedType !== 'mcq' && selectedType !== '' && maxSubjective > 0) finalVal = Math.min(val, maxSubjective);
-    setTotalQuestions(finalVal);
-    setAttemptCount(finalVal);
-  };
+const handleTotalChange = (val: number | '') => {
+  if (val === '') {
+    setTotalQuestions('');
+    setAttemptCount('');
+    return;
+  }
+  const { maxMcq, maxSubjective } = getLimitsForLayout(paperData.layout);
+  let finalVal = val;
+  if (selectedType === 'mcq' && maxMcq > 0) finalVal = Math.min(val, maxMcq);
+  else if (selectedType !== 'mcq' && selectedType !== '' && maxSubjective > 0) finalVal = Math.min(val, maxSubjective);
+  setTotalQuestions(finalVal);
+  setAttemptCount(finalVal);
+};
 
   const handleLayoutChange = (val: string) => {
     setPaperData(prev => ({ ...prev, layout: val }));
@@ -234,7 +240,7 @@ const selectedTopics = watch('selectedTopics') || [];
               <div className="header-text">
                 <h3>Paper Configuration</h3>
                 <p>
-                  Subject: <span className="subject-tag">{(currentSubject?.name || 'General')}</span>
+                 Class: <span className="subject-tag">{(currentClass?.name || 'General')} </span> | Subject: <span className="subject-tag">{(currentSubject?.name || 'General')}</span>
                   {paperData.sections.length > 0 && (
                     <span className="section-count">
                       ({paperData.sections.length} sections added)
@@ -277,20 +283,39 @@ const selectedTopics = watch('selectedTopics') || [];
               <div className="tool-box" ref={sourceDropdownRef}>
                 <label><span className="full-lbl">Source</span><span className="short-lbl">Source</span></label>
                 <div className="mini-input clickable" onClick={() => setShowSourceDropdown(!showSourceDropdown)}>
-                  <span className="truncate-text">{selectedSources.includes('all') ? 'All' : `${selectedSources.length} Sel`}</span>
-                  <ChevronDown size={14} />
+                  <span className="truncate-text">
+  {selectedSources.includes('all')
+    ? 'All'
+    : selectedSources.length === 1
+      ? { book: 'Book Exercise', model_paper: 'Model Paper', past_paper: 'Past Paper', custom: 'Additional Questions', conceptual: 'Conceptual' }[selectedSources[0]]
+      : `${selectedSources.length} Selected`}
+</span>      <ChevronDown size={14} />
                   {showSourceDropdown && (
                     <div className="floating-dropdown">
-                      {['all', 'book', 'model_paper', 'past_paper'].map(opt => (
-                        <div key={opt} className={`drop-item ${selectedSources.includes(opt) ? 'active' : ''}`}
-                          onClick={() => {
-                            if (opt === 'all') setSelectedSources(['all']);
-                            else setSelectedSources(prev => prev.includes(opt) ? prev.filter(s => s !== opt) : [...prev.filter(s => s !== 'all'), opt]);
-                          }}>
-                          {opt.replace('_', ' ')}
-                          {selectedSources.includes(opt) && <Check size={12} />}
-                        </div>
-                      ))}
+                 {[
+            { value: 'all',         label: 'All' },
+            { value: 'book',        label: 'Book Exercise' },
+            { value: 'custom',      label: 'Additional Questions' },
+              { value: 'conceptual',  label: 'Conceptual' },
+            { value: 'model_paper', label: 'Model Paper' },
+            { value: 'past_paper',  label: 'Past Paper' },
+        ].map(opt => (
+          <div
+            key={opt.value}
+            className={`drop-item ${selectedSources.includes(opt.value) ? 'active' : ''}`}
+            onClick={() => {
+              if (opt.value === 'all') setSelectedSources(['all']);
+              else setSelectedSources(prev =>
+                prev.includes(opt.value)
+                  ? prev.filter(s => s !== opt.value)
+                  : [...prev.filter(s => s !== 'all'), opt.value]
+              );
+            }}
+        >
+          {opt.label}
+          {selectedSources.includes(opt.value) && <Check size={12} />}
+        </div>
+      ))}
                     </div>
                   )}
                 </div>
@@ -299,7 +324,7 @@ const selectedTopics = watch('selectedTopics') || [];
               <div className="tool-box">
                 <label><span className="full-lbl">Question Type</span><span className="short-lbl">Qs Type</span></label>
                 <select className="mini-input" value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
-                  <option value=''>Type</option>
+                  <option value=''>Select Type</option>
                   {questionTypes.map((t: any) => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
@@ -327,18 +352,41 @@ const selectedTopics = watch('selectedTopics') || [];
                 <div className="metrics-group">
                   <div className={`metric-box ${isInputDisabled ? 'disabled-opacity' : ''}`}>
                     <label>Total Qs</label>
-                    <input type="number" className="no-spinner-input" value={totalQuestions} disabled={isInputDisabled}
-                      onChange={(e) => handleTotalChange(Number(e.target.value))} />
-                  </div>
+                    <input
+                          type="number"
+                          className="no-spinner-input"
+                          value={totalQuestions}
+                          disabled={isInputDisabled}
+                           placeholder="0"
+                          onChange={(e) => handleTotalChange(e.target.value === '' ? '' : Number(e.target.value))}
+                        />
+                    </div>
                   <div className={`metric-box ${isInputDisabled ? 'disabled-opacity' : ''}`}>
                     <label>Attempt</label>
-                    <input type="number" className="no-spinner-input" value={attemptCount} disabled={isInputDisabled}
-                      onChange={(e) => setAttemptCount(Math.min(Number(e.target.value), totalQuestions))} />
-                  </div>
+                   {/* Attempt */}
+                    <input
+                      type="number"
+                      className="no-spinner-input"
+                      value={attemptCount}
+                      disabled={isInputDisabled}
+                       placeholder="0"
+                      onChange={(e) => {
+                        const v = e.target.value === '' ? '' : Number(e.target.value);
+                        setAttemptCount(v === '' ? '' : Math.min(v, totalQuestions || 0));
+                      }}
+                    />
+                    </div>
                   <div className={`metric-box ${isInputDisabled ? 'disabled-opacity' : ''}`}>
                     <label>MarksEach</label>
-                    <input type="number" className="no-spinner-input" value={marksEach} disabled={isInputDisabled}
-                      onChange={(e) => setMarksEach(Number(e.target.value))} />
+                    {/* MarksEach */}
+                  <input
+                    type="number"
+                    className="no-spinner-input"
+                    value={marksEach}
+                    placeholder="0"
+                    disabled={isInputDisabled}
+                    onChange={(e) => setMarksEach(e.target.value === '' ? '' : Number(e.target.value))}
+                  />
                   </div>
                   <div className="metric-box">
                     <label>Total</label>
@@ -351,8 +399,17 @@ const selectedTopics = watch('selectedTopics') || [];
                     onClick={() => { if (!isInputDisabled) { handleAutoAdd(); } }} disabled={isInputDisabled}>
                     <Sparkles size={14} /> <span className="d-none d-sm-inline">Auto </span><span>Add</span>
                   </button>
-                  <button className={`btn-action outline ${useManualSelection ? 'active' : ''}`}
-                    onClick={() => !isInputDisabled && setUseManualSelection(!useManualSelection)} disabled={isInputDisabled}>
+                 <button className={`btn-action outline ${useManualSelection ? 'active' : ''}`}
+                    onClick={() => {
+                      if (isInputDisabled) return;
+                      if (!totalQuestions || totalQuestions === 0) {
+                        toast.error("Enter total questions first");
+                        return;
+                      }
+                      setUseManualSelection(!useManualSelection);
+                    }}
+                    disabled={isInputDisabled}
+                  >
                     <Search size={14} /> <span className="d-none d-sm-inline">Find</span>
                   </button>
                 </div>
@@ -422,7 +479,11 @@ const selectedTopics = watch('selectedTopics') || [];
       <style jsx>{`
         :global(#react-hot-toast) { z-index: 999999 !important; }
         .app-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 12px; }
-        .app-modal-container { background: #fff; width: 100%; max-width: 950px; height: 85dvh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+        .app-modal-container { background: #fff; width: 100%; max-width: 950px; height: 85dvh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); 
+        transform: translateZ(0);
+        backface-visibility: hidden;
+        will-change: transform;
+        }
         .app-modal-header { padding: 12px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #fff; }
         .header-left { display: flex; align-items: center; gap: 12px; }
         .icon-badge { padding: 8px; background: #f1f5f9; border-radius: 8px; color: #64748b; }
@@ -463,7 +524,7 @@ const selectedTopics = watch('selectedTopics') || [];
         .action-btns { display: flex; gap: 8px; }
         .btn-action { height: 34px; padding: 0 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; border: 1.5px solid #e2e8f0; background: #fff; }
         .btn-action.outline.active { background: #eff6ff; color: #2563eb; border-color: #2563eb; }
-        .app-modal-body { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; }
+        .app-modal-body { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; contain: layout style;}
         .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94a3b8; text-align: center; }
         .added-sections-list { marginTop: 20px; textAlign: left; fontSize: 12px; color: #334155; }
         .app-modal-footer { padding: 12px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }

@@ -54,6 +54,7 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
 }) => {
    // ✅ Local "just mounted" guard — subjects haven't arrived yet
   const [hasWaited, setHasWaited] = React.useState(false);
+  const [hasStartedLoading, setHasStartedLoading] = React.useState(false);
 
   React.useEffect(() => {
     // Give the fetch a moment before allowing empty state to show
@@ -61,7 +62,13 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
     return () => clearTimeout(timer);
   }, []);
 
-  const showEmpty = hasWaited && !isLoading && subjects.length === 0;
+  React.useEffect(() => {
+    if (isLoading) {
+      setHasStartedLoading(true);
+    }
+  }, [isLoading]);
+
+  const showEmpty = hasStartedLoading && !isLoading && subjects.length === 0;
   const showLoading = isLoading || !hasWaited;
 
   const selectedClassName = classes.find((c) => c.id === watchedClassId)?.name;

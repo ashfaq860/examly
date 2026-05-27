@@ -779,6 +779,7 @@ const isUserPremium = isPremium || hasActivePackage;
           watch={watch}
           setValue={setValue}
           currentSubject={currentSubject}
+          currentClass={currentClass}
         />
       )}
   
@@ -876,7 +877,8 @@ const isUserPremium = isPremium || hasActivePackage;
       box-shadow: none !important;
       border: none !important;
       width: 210mm !important;
-      height: 297mm !important;
+   height: 297mm !important;   
+      height: auto !important;
     }
 
     .paper-canvas {
@@ -1015,13 +1017,22 @@ const isUserPremium = isPremium || hasActivePackage;
   border-color: #cbd5e1;
   transform: translateY(-2px);
 }
-  .paper-canvas {
-    width: 210mm; /* Strict A4 Width */
-    min-height: 297mm;
-    margin: 20px auto;
-    background: white;
-    transform-origin: top center;
-    transition: transform 0.2s ease;
+  @media screen {
+    .paper-canvas {
+      width: 210mm; /* Strict A4 Width */
+      min-height: 297mm;
+      margin: 20px auto;
+      background: white;
+      transform-origin: top center;
+      transition: transform 0.2s ease;
+    }
+  }
+
+  @media print {
+    .paper-canvas {
+      min-height: auto !important;
+      height: auto !important;
+    }
   }
  /* REPLACE your @media screen (max-width: 991px) block with this */
 @media screen and (max-width: 991px) {

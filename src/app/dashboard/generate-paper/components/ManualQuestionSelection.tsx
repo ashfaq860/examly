@@ -1,5 +1,6 @@
+//dashboard/generate-paper/components/ManualQuestionSelection.tsx
 'use client';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { Subject, Chapter, Question } from '@/types/types';
 import Loading from '../loading';
@@ -11,7 +12,7 @@ interface ManualQuestionSelectionProps {
   chapterOption: string;
   selectedChapters: string[];
   chapters: Chapter[];
-  subjects: Subject[];
+  subjects?: Subject[];
   onQuestionsSelected: (questions: Record<string, QuestionWithOptions[]>) => void;
   language: 'english' | 'urdu' | 'bilingual';
   source_type: string | string[];
@@ -30,35 +31,23 @@ interface QuestionWithOptions extends Question {
   chapter_name?: string;
   topic_name?: string;
   source_type?: string;
-  
 }
 
 const HtmlContent: React.FC<{ content?: string; className?: string; dir?: 'rtl' | 'ltr' }> = ({ content, className, dir }) => {
   if (!content) return null;
-
   const decoded = useMemo(() => {
     if (typeof document === 'undefined') return content;
     const txt = document.createElement('textarea');
     txt.innerHTML = content.replace(/<p([^>]*)>/gi, '<p$1 style="margin:0;display:inline;">');
     return txt.value;
   }, [content]);
-
   return <div dir={dir} className={className} dangerouslySetInnerHTML={{ __html: decoded }} />;
 };
 
 export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = ({
-  subjectId,
-  classId,
-  selectedChapters,
-  selectedTopics,
-  chapters,
-  onQuestionsSelected,
-  language,
-  source_type,
-  typeCounts,
-  shuffleTrigger = false,
-  showSelectedOnly = false,
-  selectedQuestions = {}
+  subjectId, classId, selectedChapters, selectedTopics, chapters,
+  onQuestionsSelected, language, source_type, typeCounts,
+  shuffleTrigger = false, showSelectedOnly = false, selectedQuestions = {}
 }) => {
   const [questionsByType, setQuestionsByType] = useState<Record<string, QuestionWithOptions[]>>({});
   const [selectedByType, setSelectedByType] = useState<Record<string, string[]>>({});
@@ -67,6 +56,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
   const [shuffledQuestions, setShuffledQuestions] = useState<Record<string, QuestionWithOptions[]>>({});
   const [prevSelectedQuestions, setPrevSelectedQuestions] = useState<Record<string, any[]>>({});
 
+  // Keeps track of active type layout
   const activeTypes = useMemo(() => {
     if (!typeCounts) return [];
     return Object.entries(typeCounts)
@@ -79,278 +69,252 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
   }, [typeCounts]);
 
   const currentType = activeTypes[0];
+  const typeKey = currentType?.value;
 
-  // Reset states when core filters change
+  const resolvedSourceType = useMemo(() => {
+    if (Array.isArray(source_type)) {
+      return source_type.includes('all') ? 'all' : source_type.join(',');
+    }
+    return source_type || 'all';
+  }, [source_type]);
+
+  // 1. Reset everything synchronously when major parameters change
   useEffect(() => {
     setQuestionsByType({});
     setSelectedByType({});
     setShuffledQuestions({});
-    setHasAttempted(false);
     setPrevSelectedQuestions({});
-  }, [source_type, subjectId, classId, selectedChapters, language]);
+    setHasAttempted(false);
+    setIsLoading(false);
+  }, [resolvedSourceType, subjectId, classId, selectedChapters, language]);
 
-  // Sync selectedByType from parent selectedQuestions (with comparison)
+  // 2. Sync selection states securely from dashboard parent
   useEffect(() => {
-    // Convert selectedQuestions (full objects) to IDs for internal state
     const idsFromParent: Record<string, string[]> = {};
-    
     Object.keys(selectedQuestions).forEach(typeKey => {
-      const questions = selectedQuestions[typeKey] || [];
-      idsFromParent[typeKey] = questions.map((q: any) => q.id);
+      idsFromParent[typeKey] = (selectedQuestions[typeKey] || []).map((q: any) => q.id);
     });
-
-    // Only update if different to prevent loops
     if (JSON.stringify(idsFromParent) !== JSON.stringify(selectedByType)) {
       setSelectedByType(idsFromParent);
     }
   }, [selectedQuestions]);
-useEffect(() => {
-  if (!shuffleTrigger || !currentType) return;
 
-  const typeKey = currentType.value;
-  const pool = questionsByType[typeKey] || [];
-  const limit = currentType.required;
+  // 3. Shuffle logic
+  useEffect(() => {
+    if (!shuffleTrigger || !typeKey) return;
+    const pool = questionsByType[typeKey] || [];
+    if (pool.length === 0) return;
+    const pickedIds = [...pool]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, currentType.required)
+      .map(q => q.id);
+    setSelectedByType(prev => ({ ...prev, [typeKey]: pickedIds }));
+  }, [shuffleTrigger, typeKey]);
 
-  if (pool.length === 0) return;
+  useEffect(() => {
+    if (typeKey && questionsByType[typeKey]?.length > 0) {
+      const shuffled = [...questionsByType[typeKey]].sort(() => Math.random() - 0.5);
+      setShuffledQuestions(prev => ({ ...prev, [typeKey]: shuffled }));
+    }
+  }, [shuffleTrigger, typeKey, questionsByType]);
 
-  // 🔀 Randomly select NEW questions
-  const shuffledPool = [...pool].sort(() => Math.random() - 0.5);
-  const pickedIds = shuffledPool.slice(0, limit).map(q => q.id);
-
-  setSelectedByType(prev => ({
-    ...prev,
-    [typeKey]: pickedIds
-  }));
-}, [shuffleTrigger]);
-
-  // Send selection updates to parent (only when selection changes)
+  // 4. Bubbling chosen parameters up to parent component safely
   useEffect(() => {
     const fullObjectsSelection: Record<string, QuestionWithOptions[]> = {};
-    
-    Object.keys(selectedByType).forEach(typeKey => {
-      const ids = selectedByType[typeKey];
-      const sourcePool = questionsByType[typeKey] || [];
-      
-      // Filter the full objects that match the selected IDs
-      fullObjectsSelection[typeKey] = sourcePool.filter(q => ids.includes(q.id));
+    Object.keys(selectedByType).forEach(tk => {
+      const ids = selectedByType[tk];
+      const pool = questionsByType[tk] || [];
+      fullObjectsSelection[tk] = pool.filter(q => ids.includes(q.id));
     });
-
-    // Only call parent if selection actually changed
-    const prevSelectionString = JSON.stringify(prevSelectedQuestions);
-    const newSelectionString = JSON.stringify(fullObjectsSelection);
-    
-    if (newSelectionString !== prevSelectionString) {
+    const prevStr = JSON.stringify(prevSelectedQuestions);
+    const newStr = JSON.stringify(fullObjectsSelection);
+    if (newStr !== prevStr) {
       onQuestionsSelected(fullObjectsSelection);
       setPrevSelectedQuestions(fullObjectsSelection);
     }
   }, [selectedByType, questionsByType, onQuestionsSelected, prevSelectedQuestions]);
 
-  // Shuffle questions when shuffleTrigger changes
+  // 5. CRITICAL FIX: Async API fetching with explicit AbortController protection
+// AUTOMATIC RELOAD ENGINE: Listens to all inputs and fires clean API requests
   useEffect(() => {
-    if (currentType?.value && questionsByType[currentType.value]?.length > 0) {
-      const typeKey = currentType.value;
-      const questions = questionsByType[typeKey];
-      const shuffled = [...questions].sort(() => Math.random() - 0.5);
-      setShuffledQuestions(prev => ({
-        ...prev,
-        [typeKey]: shuffled
-      }));
-    }
-  }, [shuffleTrigger, currentType?.value, questionsByType]);
+    if (!subjectId || !classId || !typeKey) return;
 
-  const getChapterMeta = (id?: string) => {
-    const chap = chapters.find(c => c.id === id);
-    if (!chap) return 'Ch. N/A';
-    return `Ch.${chap.chapterNo ?? ''} ${chap.name ?? ''}`;
-  };
-
-  const fetchQuestions = useCallback(async () => {
-    const typeKey = currentType?.value;
-    if (!subjectId || !classId || !typeKey || hasAttempted || questionsByType[typeKey]) return;
-
-    setIsLoading(true);
-    try {
-      const res = await axios.get('/api/questions', {
-        params: {
-          subjectId,
-          classId,
+    const controller = new AbortController();
+    
+    const executeFetch = async () => {
+      setIsLoading(true);
+      setHasAttempted(false); // Reset feedback states before layout fetch begins
       
-          questionType: typeKey,
-          chapterIds: selectedChapters.join(','),
-          topicIds: selectedTopics.join(','),
-          language,
-          source_type: source_type !== 'all' ? (Array.isArray(source_type) ? source_type.join(',') : source_type) : undefined
+      try {
+        const res = await axios.get('/api/questions', {
+          signal: controller.signal,
+          params: {
+            subjectId, 
+            classId,
+            questionType: typeKey,
+            chapterIds: selectedChapters.join(','),
+            topicIds: selectedTopics.join(','),
+            language,
+            source_type: resolvedSourceType
+          }
+        });
+        
+        const questions = res.data || [];
+        
+        // Wipe old sequence data and apply fresh data concurrently
+        setQuestionsByType({ [typeKey]: questions });
+        setShuffledQuestions({ [typeKey]: [...questions].sort(() => Math.random() - 0.5) });
+        setHasAttempted(true);
+      } catch (e: any) {
+        if (!axios.isCancel(e)) {
+          console.error('Question fetch failed', e);
+          setHasAttempted(true);
         }
-      });
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      }
+    };
 
-      const questions = res.data || [];
-      setQuestionsByType(prev => ({
-        ...prev,
-        [typeKey]: questions
-      }));
-      
-      const shuffled = [...questions].sort(() => Math.random() - 0.5);
-      setShuffledQuestions(prev => ({
-        ...prev,
-        [typeKey]: shuffled
-      }));
-    } catch (e) {
-      console.error('Question fetch failed', e);
-    } finally {
-      setIsLoading(false);
-      setHasAttempted(true);
-    }
-  }, [subjectId, classId, currentType?.value, selectedChapters, language, source_type, hasAttempted, questionsByType]);
+    executeFetch();
 
-  useEffect(() => {
-    fetchQuestions();
-  }, [fetchQuestions]);
+    // Aborts stale ongoing requests if the user clicks inputs rapidly
+    return () => {
+      controller.abort();
+    };
+    
+    // Listens for direct modifications to core layout dependencies
+  }, [subjectId, classId, typeKey, selectedChapters, selectedTopics, language, resolvedSourceType]);
+  if (!activeTypes.length) return <div className="loading-state">No question types selected.</div>;
 
-  const toggleSelection = (id: string) => {
-    if (!currentType) return;
-    const typeKey = currentType.value;
+  // Process rows safely
+  const allQuestions = (typeKey && questionsByType[typeKey]) || [];
+  const displayedQuestions = shuffleTrigger ? ((typeKey && shuffledQuestions[typeKey]) || []) : allQuestions;
+  const selectedIds = (typeKey && selectedByType[typeKey]) || [];
+  const finalQuestions = showSelectedOnly
+    ? displayedQuestions.filter(q => selectedIds.includes(q.id))
+    : displayedQuestions;
+const toggleSelection = (id: string) => {
+    if (!currentType || !typeKey) return;
     const limit = currentType.required;
-
     setSelectedByType(prev => {
       const current = prev[typeKey] || [];
       const exists = current.includes(id);
-      
       if (!exists && current.length >= limit) return prev;
-
-      const updated = exists 
-        ? current.filter(q => q !== id) 
-        : [...current, id];
-      
-      return { ...prev, [typeKey]: updated };
+      return { ...prev, [typeKey]: exists ? current.filter(q => q !== id) : [...current, id] };
     });
   };
-
-  if (!activeTypes.length) return <div className="loading-state">No question types selected.</div>;
-
-  const typeKey = currentType?.value;
-  const allQuestions = questionsByType[typeKey] || [];
-  const displayedQuestions = shuffleTrigger ? (shuffledQuestions[typeKey] || []) : allQuestions;
-  const selectedIds = selectedByType[typeKey] || [];
-  
-  const finalQuestions = showSelectedOnly 
-    ? displayedQuestions.filter(q => selectedIds.includes(q.id))
-    : displayedQuestions;
 
   return (
     <div className="paper-container">
       {isLoading ? (
-        <div className="loading-state">
-          <div className="pulse-text"><Loading /></div>
-        </div>
+        <div className="loading-state-overlay"><Loading /></div>
       ) : (
         <div className="paper-body">
           {showSelectedOnly && selectedIds.length === 0 ? (
             <div className="empty-state-container">
-              <div className="empty-state-icon">👁️</div>
+              <div className="empty-icon">👁️</div>
               <h5>No Questions Selected</h5>
               <p>Select questions first to view them here.</p>
-              <button 
-                className="back-to-all-btn"
-                onClick={() => window.location.reload()} 
-              >
-                ← Back to All Questions
-              </button>
             </div>
           ) : hasAttempted && finalQuestions.length === 0 ? (
             <div className="empty-state-container">
-              <div className="empty-state-icon">📭</div>
+              <div className="empty-icon">📭</div>
               <h5>No Questions Found</h5>
-              <p>We couldn't find any <strong>{currentType.label}</strong> for the selected filters.</p>
-              <span className="source-pill">Source: {Array.isArray(source_type) ? source_type.join(', ') : source_type}</span>
+              <p>No <strong>{currentType.label}</strong> found for selected filters.</p>
+              <span className="source-pill">Source: {resolvedSourceType}</span>
             </div>
           ) : (
             <>
               {showSelectedOnly && (
                 <div className="selected-info">
-                  <div className="selected-badge">
-                    {selectedIds.length} / {currentType.required} selected
-                  </div>
+                  <div className="selected-badge">{selectedIds.length} / {currentType.required} selected</div>
                   <p className="selected-hint">Viewing selected questions only</p>
                 </div>
               )}
-              
+
               {finalQuestions.map((q, idx) => {
                 const isSelected = selectedIds.includes(q.id);
-                const isUrduMode = language === 'urdu';
+                const isUrdu = language === 'urdu';
                 const isBilingual = language === 'bilingual';
+                const isMcq = typeKey === 'mcq';
 
                 return (
                   <div
                     key={q.id}
-                    className={`paper-row ${isSelected ? 'selected' : ''}`}
+                    className={`paper-row ${isSelected ? 'selected' : ''} ${isUrdu ? 'urdu-mode' : ''}`}
                     onClick={() => toggleSelection(q.id)}
-                    style={{ direction: isUrduMode ? 'rtl' : 'ltr' }}
                   >
-                    <div className="q-index" style={{ paddingTop: isUrduMode ? '0px' : '' }}>{idx + 1}.</div>
+                    <div className="q-num">
+                      {isUrdu ? <span className="num-urdu">.{idx + 1}</span> : <span>{idx + 1}.</span>}
+                    </div>
 
-                    <div className="q-main-content">
-                      <div className={`question-text-container ${isBilingual ? 'bilingual-layout' : ''}`}>
-                        {(language === 'english' || isBilingual) && (
-                          <HtmlContent content={q.question_text} className="eng-text" dir="ltr" />
-                        )}
-                        
-                        {(isUrduMode || isBilingual) && (
-                          <HtmlContent 
-                            content={q.question_text_ur || q.question_text} 
-                            className="urdu-text" 
-                            dir="rtl" 
-                          />
-                        )}
-                      </div>
-
-                      {currentType.value === 'mcq' && (
-                        <div className="options-grid">
-                          {(['a', 'b', 'c', 'd'] as const).map(opt => {
-                            const optEn = (q as any)[`option_${opt}`];
-                            const optUr = (q as any)[`option_${opt}_ur`];
-
-                            return (
-                              <div key={opt} className={`opt-box ${isBilingual ? 'bilingual-opt' : ''}`}>
-                                <span className="opt-label" style={{ paddingTop: isUrduMode || isBilingual ? '3px' : '2px' }}>({opt})</span>
-                                <div className="opt-content">
-                                   {(language === 'english' || isBilingual) && (
-                                     <HtmlContent content={optEn} className="eng-opt" dir="ltr" />
-                                   )}
-                                   {(isUrduMode || isBilingual) && (
-                                     <HtmlContent content={optUr || optEn} className="urdu-opt" dir="rtl" />
-                                   )}
-                                </div>
-                              </div>
-                            );
-                          })}
+                    <div className="q-body">
+                      {isBilingual ? (
+                        <div className="q-bilingual-block">
+                          <div className="q-bilingual-en">
+                            <HtmlContent content={q.question_text} className="eng-text" dir="ltr" />
+                          </div>
+                          <div className="q-bilingual-ur">
+                            <HtmlContent content={q.question_text_ur || q.question_text} className="urdu-text bilingual-ur-text" dir="rtl" />
+                          </div>
                         </div>
+                      ) : isUrdu ? (
+                        <HtmlContent content={q.question_text_ur || q.question_text} className="urdu-text full-width" dir="rtl" />
+                      ) : (
+                        <HtmlContent content={q.question_text} className="eng-text full-width" dir="ltr" />
                       )}
 
-                   <div className={`q-meta-tiny text-capitalize small ${isUrduMode ? 'justify-start' : ''}`}>
-                        {/* Chapter No & Name */}
-                      <span className="meta-item text-capitalize">
-                        Ch:{q.chapterNo || 'N/A'} &nbsp; 
-                        
-                        <span className="d-none d-md-inline">
-                            { q.chapterName || 'General'}
-                        </span>
-                      </span>
-                        
-                        <span className="sep">•</span>
-                        
-                        {/* Topic Name */}
-                        <span className="meta-item">
-                        Topic:  {q.topicName || 'No Topic'}
-                        </span>
-                        
-                        <span className="sep">•</span>
-                        
-                        {/* Source Type with a distinct pill style */}
-                        <span className="source-tag">
-                         Source: {q.source_type || 'Standard'}
-                        </span>
+                      {isMcq && (
+                        <>
+                          {isBilingual ? (
+                            <div className="opts-bilingual-wrap">
+                              {(['a', 'b', 'c', 'd'] as const).map(opt => {
+                                const en = (q as any)[`option_${opt}`];
+                                const ur = (q as any)[`option_${opt}_ur`];
+                                return (
+                                  <div key={opt} className="opt-bilingual-row">
+                                    <span className="opt-key">({opt})</span>
+                                    <HtmlContent content={en} className="eng-opt" dir="ltr" />
+                                    <HtmlContent content={ur || en} className="urdu-opt" dir="rtl" />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className={`opts-wrap ${isUrdu ? 'opts-rtl' : ''}`}>
+                              {(['a', 'b', 'c', 'd'] as const).map(opt => {
+                                const en = (q as any)[`option_${opt}`];
+                                const ur = (q as any)[`option_${opt}_ur`];
+                                return (
+                                  <div key={opt} className={`opt-row ${isUrdu ? 'opt-row-rtl' : ''}`}>
+                                    {isUrdu ? (
+                                      <>
+                                        <HtmlContent content={ur || en} className="urdu-opt" dir="rtl" />
+                                        <span className="opt-key">({opt})</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="opt-key">({opt})</span>
+                                        <HtmlContent content={en} className="eng-opt" dir="ltr" />
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </>
+                      )}
 
-                        {isSelected && <span className="selected-indicator">✓ Selected</span>}
+                      <div className={`q-meta ${isUrdu ? 'q-meta-rtl' : ''}`}>
+                        <span>Ch:{q.chapterNo || 'N/A'} <span className="d-none d-md-inline">{q.chapterName || ''}</span></span>
+                        <span className="dot">•</span>
+                        <span>Topic: {q.topicName || 'N/A'}</span>
+                        <span className="dot">•</span>
+                        <span className="src-tag">{q.source_type || 'book'}</span>
+                        {isSelected && <span className="chk">✓</span>}
                       </div>
                     </div>
                   </div>
@@ -362,40 +326,178 @@ useEffect(() => {
       )}
 
       <style jsx global>{`
-        .paper-container { background:#fff; width:100%; }
-        .paper-row { display:flex; padding:0px 0px; border-bottom:1px solid #f4f4f5; cursor:pointer; transition:.15s; }
-        .paper-row:hover { background: #fafafa; }
-        .paper-row.selected { background:#eff6ff; position:relative; }
-        .paper-row.selected::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:#2563eb; }
-        .q-index { width:25px; font-weight:700; color:#a1a1aa; flex-shrink: 0; font-size: 13px; }
-        .q-main-content { flex:1; display: flex; flex-direction: column; gap: 4px; }
-        .question-text-container { display: flex; width: 100%; gap: 5px; }
-        .bilingual-layout { justify-content: space-between; }
-        .bilingual-layout .eng-text { flex: 1; text-align: left; }
-        .bilingual-layout .urdu-text { flex: 1; text-align: right; }
-        .eng-text, .eng-opt { font-size:15px; color:#18181b; line-height: 1.5; font-weight: 500; }
-        .urdu-text, .urdu-opt { font-family:'Jameel Noori Nastaleeq', serif; font-size:17px; line-height:1.6; text-align: right; width: 100%; }
-        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 0px; }
-        .opt-box { display: flex; gap: 8px; align-items: flex-start; }
-        .opt-label { font-weight: 700; color: #71717a; font-size: 12px; }
-        .opt-content { flex: 1; }
-        .bilingual-opt .opt-content { display: flex; gap: 10px; }
-        .bilingual-opt .opt-content > * { flex: 1; min-width: 0; }
-        .q-meta-tiny { font-size:10px; color:#a1a1aa; font-family:monospace; margin-top: 2px; display:flex; gap:4px; text-transform: uppercase; align-items: center; }
-        .selected-indicator { color: #10b981; font-weight: 700; margin-left: auto; }
-        .selected-info { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px; margin-bottom: 16px; text-align: center; }
-        .selected-badge { display: inline-block; background: #2563eb; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
-        .selected-hint { font-size: 12px; color: #64748b; margin: 0; }
-        .back-to-all-btn { background: #f1f5f9; border: 1px solid #cbd5e1; color: #64748b; padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 12px; transition: all 0.2s; }
-        .loading-state { padding:100px 0; text-align:center; }
-        .pulse-text { color:#2563eb; font-weight:600; animation:pulse 1.5s infinite; font-size: 14px; }
-        .empty-state-container { padding: 80px 20px; text-align: center; }
-        .empty-state-icon { font-size: 40px; margin-bottom: 16px; }
-        @keyframes pulse { 0%,100% { opacity:.5 } 50% { opacity:1 } }
-        @media (max-width: 768px) {
-          .options-grid { grid-template-columns: 1fr; }
-          .bilingual-layout { flex-direction: column; }
+        .paper-container { background: #fff; width: 100%; position: relative; min-height: 250px; }
+        
+        /* CHROME LAYER FIX: Forces Chrome layout engine to stay unified when elements mutate */
+        .paper-body {
+          contain: layout style;
+          width: 100%;
         }
+
+        /* ── Row ── */
+        .paper-row {
+          display: flex;
+          flex-direction: row;
+          align-items: flex-start;
+          gap: 4px;
+          padding: 12px 8px;
+          border-bottom: 1px solid #f1f5f9;
+          cursor: pointer;
+          transition: background .12s;
+          position: relative;
+        }
+        .paper-row:hover { background: #f8fafc; }
+        .paper-row.selected { background: #eff6ff !important; }
+        
+        .paper-row.selected::before {
+          content: '';
+          position: absolute;
+          left: 0; top: 0; bottom: 0;
+          width: 3px;
+          background: #2563eb;
+          border-radius: 0 2px 2px 0;
+        }
+        
+        .paper-row.urdu-mode { flex-direction: row-reverse; }
+        .paper-row.urdu-mode.selected::before {
+          left: auto; right: 0;
+          border-radius: 2px 0 0 2px;
+        }
+
+        /* ── Index ── */
+        .q-num {
+          min-width: 24px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #94a3b8;
+          flex-shrink: 0;
+          display: flex;
+          align-items: flex-start;
+        }
+        .num-urdu {
+          display: block;
+          text-align: left;
+          direction: ltr;
+          unicode-bidi: embed;
+          margin-top:10px;
+        }
+
+        /* ── Body ── */
+        .q-body {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          min-width: 0;
+        }
+
+        /* ── Text ── */
+        .eng-text { font-size: 14px; font-weight: 500; color: #1e293b; line-height: 1.5; }
+        .urdu-text {
+          font-family: 'JameelNoori', 'Norinastaliq', 'Noto Nastaliq Urdu', serif !important;
+          font-size: 17px;
+          line-height: 2;
+          color: #1e293b;
+          text-align: right;
+          direction: rtl;
+        }
+        .full-width { width: 100%; }
+
+        .q-bilingual-block {
+          display: flex;
+          flex-direction: row;
+          gap: 12px;
+          width: 100%;
+          align-items: flex-start;
+          flex-wrap: wrap;
+        }
+        .q-bilingual-en { flex: 1 1 auto; min-width: 200px; }
+        .q-bilingual-ur { flex: 1 1 auto; min-width: 150px; text-align: right; }
+        .bilingual-ur-text { margin: 0; text-align: right; direction: rtl; }
+
+        /* ── Options ── */
+        .opts-wrap {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 1px 6px;
+          margin-top: 3px;
+        }
+        @media (max-width: 1200px) { .opts-wrap { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 768px) { .opts-wrap { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 480px) { .opts-wrap { grid-template-columns: repeat(1, 1fr); } }
+        .opts-rtl { direction: rtl; }
+
+        .opt-row {
+          display: flex;
+          align-items: center;
+          gap: 3px;
+          padding: 1px 0;
+          min-width: 0;
+          overflow: hidden;
+          justify-content: flex-start;
+        }
+        .opt-row-rtl { flex-direction: row-reverse; justify-content: flex-end; }
+        .opt-key { font-size: 11px; font-weight: 800; color: #2563eb; min-width: 18px; flex-shrink: 0; line-height: 1; }
+        
+        .eng-opt {
+          font-size: 12px; color: #334155; line-height: 1.3; font-weight: 400;
+          min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .urdu-opt {
+          font-family: 'JameelNoori', 'Norinastaliq', 'Noto Nastaliq Urdu', serif !important;
+          font-size: 14px; line-height: 1.6; color: #1e293b; text-align: right;
+          direction: rtl; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
+        .opts-bilingual-wrap {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 10px;
+          margin-top: 4px;
+          width: 100%;
+        }
+        @media (max-width: 1024px) { .opts-bilingual-wrap { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 640px) { .opts-bilingual-wrap { grid-template-columns: repeat(1, 1fr); } }
+        
+        .opt-bilingual-row { display: flex; align-items: center; justify-content: space-between; min-width: 0; background: #ffffff; }
+        .opt-bilingual-row .eng-opt, .opt-bilingual-row .urdu-opt { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+        .opt-bilingual-row .urdu-opt { text-align: right; }
+
+        /* ── Meta ── */
+        .q-meta {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 4px;
+          font-size: 10px;
+          color: #94a3b8;
+          font-family: monospace;
+          text-transform: uppercase;
+          margin-top: 6px;
+        }
+        .q-meta-rtl { direction: rtl; justify-content: flex-end; }
+        .dot { color: #cbd5e1; }
+        .src-tag { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 0 5px; font-size: 9px; color: #64748b; }
+        .chk { color: #10b981; font-weight: 700; margin-left: auto; }
+
+        /* ── Loading Overlay Fix ── */
+        .loading-state-overlay {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 80px 0;
+          width: 100%;
+          /* Force Chrome hardware acceleration layer optimization */
+          transform: translateZ(0); 
+          will-change: opacity;
+        }
+        
+        .empty-state-container { padding: 80px 20px; text-align: center; color: #94a3b8; }
+        .empty-icon { font-size: 36px; margin-bottom: 12px; }
+        .source-pill { display: inline-block; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 2px 10px; border-radius: 20px; font-size: 11px; color: #64748b; margin-top: 8px; }
+        .selected-info { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 10px; margin-bottom: 12px; text-align: center; }
+        .selected-badge { display: inline-block; background: #2563eb; color: #fff; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+        .selected-hint { font-size: 12px; color: #64748b; margin: 0; }
       `}</style>
     </div>
   );

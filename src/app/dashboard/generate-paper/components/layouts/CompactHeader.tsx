@@ -142,7 +142,7 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
       <style>{`
         @media print {
           .exam-print-header-container { 
-            border-bottom: 2.5pt double #000000 !important; 
+            border-bottom: 1pt solid #000000 !important; 
             display: block !important;
             width: 100% !important;
             -webkit-print-color-adjust: exact !important;
