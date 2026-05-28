@@ -15,16 +15,15 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
 
-  // ✅ Redirect if user is already logged in
-
+  // Redirect if user is already logged in, or just completed OAuth sign-in.
+  // onAuthStateChange fires reliably after the session cookies are hydrated,
+  // which avoids the race condition where getSession() returns null on the
+  // first render right after the OAuth callback redirect.
   useEffect(() => {
-    const checkUser = async () => {
+    const redirectForRole = async (userId: string) => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) return;
-
         const { data: roleData, error: rpcError } = await supabase
-          .rpc('get_user_role', { user_id: session.user.id });
+          .rpc('get_user_role', { user_id: userId });
 
         if (rpcError) {
           console.error('Error fetching user role:', rpcError);
@@ -39,7 +38,20 @@ export default function LoginPage() {
         console.error('Error checking session:', err);
       }
     };
-    checkUser();
+
+    // Check existing session immediately (handles page refresh while logged in)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) redirectForRole(session.user.id);
+    });
+
+    // Also listen for auth state changes — this fires after the OAuth callback
+    // sets the session, catching the case where getSession() was called before
+    // the cookies were fully committed.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) redirectForRole(session.user.id);
+    });
+
+    return () => subscription.unsubscribe();
   }, [router, supabase]);
 
   const submit = async (e: React.FormEvent) => {

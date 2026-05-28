@@ -1,5 +1,5 @@
 // app/auth/callback/route.ts
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
@@ -11,10 +11,27 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=missing_code`);
   }
 
-  // ✅ FIX 1: Do NOT await cookies() — pass it as a callback reference
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+  const cookieStore = await cookies();
 
+  // Use @supabase/ssr which correctly handles cookie read/write in Next.js 15
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        },
+      },
+    }
+  );
+
+  // exchangeCodeForSession writes the session cookies via setAll above
   const { data: { session }, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
   if (exchangeError || !session) {
@@ -23,7 +40,6 @@ export async function GET(request: Request) {
   }
 
   try {
-    // ✅ FIX 2: Use maybeSingle() instead of single() to avoid throwing on missing rows
     const { data: existingProfile } = await supabase
       .from('profiles')
       .select('id, role')
@@ -49,7 +65,6 @@ export async function GET(request: Request) {
       }
     }
 
-    // ✅ FIX 3: Normalize role resolution — don't rely on ambiguous shape fallback
     const { data: roleData, error: rpcError } = await supabase
       .rpc('get_user_role', { user_id: session.user.id });
 
@@ -73,8 +88,12 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=unauthorized_role`);
     }
 
-    const redirectUrl = role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
-    const response = NextResponse.redirect(`${requestUrl.origin}${redirectUrl}`);
+    const redirectPath = role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
+
+    // Build the redirect response. The session cookies were already written to
+    // cookieStore by exchangeCodeForSession — Next.js will include them in the
+    // response automatically since we used the async cookies() store.
+    const response = NextResponse.redirect(`${requestUrl.origin}${redirectPath}`);
 
     response.cookies.set('role', role, {
       path: '/',
