@@ -9,7 +9,7 @@ export async function GET(_request: NextRequest) {
   const auth = await getSessionFromRequest();
   if (auth.error) return auth.error;
 
-  const userId = auth.session.user.id;
+  const userId = auth.user.id;
 
   try {
     const { data: profile, error: profileError } = await supabaseAdmin

@@ -6,7 +6,7 @@ export async function GET() {
   const auth = await getSessionFromRequest();
   if (auth.error) return auth.error;
 
-  const userId = auth.session.user.id;
+  const userId = auth.user.id;
 
   try {
     // Run both queries in parallel — no sequential retry loops needed;

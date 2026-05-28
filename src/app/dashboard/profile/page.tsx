@@ -65,68 +65,37 @@ export default function ProfilePage() {
   const [userPackages, setUserPackages] = useState<UserPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<any>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
 
-  // Check authentication and redirect if not logged in
+  // Single effect: check auth then fetch data in one flow.
+  // Using getUser() instead of getSession() so the client validates the token
+  // the same way the server does — avoids the race where getSession() returns
+  // a stale cookie that the server-side getUser() then rejects with 401.
   useEffect(() => {
-    const checkAuth = async () => {
+    const init = async () => {
       try {
-        const { data: { session }, error: authError } = await supabase.auth.getSession();
-        
-        if (authError || !session) {
-          console.log('No user found, redirecting to login');
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+        if (authError || !user) {
           router.push('/auth/login');
           return;
         }
 
-        // Check user role - only teachers can access
         const { data: roleData, error: roleError } = await supabase.rpc(
           'get_user_role',
-          { user_id: session.user.id }
+          { user_id: user.id }
         );
 
         if (roleError || roleData !== 'teacher') {
-          console.log('User is not a teacher, redirecting to home');
           router.push('/');
           return;
         }
 
-        // User is authorized
-        setSession(session);
         setIsAuthorized(true);
-      } catch (error) {
-        console.error('Error checking auth:', error);
-        router.push('/auth/login');
-      } finally {
-        setAuthChecked(true);
-      }
-    };
 
-    checkAuth();
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        router.push('/auth/login');
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [supabase, router]);
-
-  // Fetch profile & packages only if authorized
-  useEffect(() => {
-    const fetchProfileAndPackages = async () => {
-      if (!isAuthorized) return;
-      
-      setLoading(true);
-      setError(null);
-      try {
-        if (!session) throw new Error("Please log in to view your profile");
-
-        const response = await fetch('/api/profile');
+        // Fetch profile data — credentials: 'include' ensures cookies are sent
+        const response = await fetch('/api/profile', { credentials: 'include' });
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.error || `Failed to fetch profile: ${response.status}`);
@@ -138,15 +107,22 @@ export default function ProfilePage() {
         setProfile(data.profile);
         setUserPackages(data.userPackages || []);
       } catch (err: any) {
-        console.error('Fetch error:', err);
-        setError(err.message || "An error occurred while fetching data");
+        console.error('Profile page error:', err);
+        setError(err.message || 'An error occurred while fetching data');
       } finally {
+        setAuthChecked(true);
         setLoading(false);
       }
     };
 
-    if (isAuthorized && session) fetchProfileAndPackages();
-  }, [session, isAuthorized]);
+    init();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) router.push('/auth/login');
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase, router]);
 
   // Show loading until auth is checked
   if (!authChecked || (loading && isAuthorized)) {

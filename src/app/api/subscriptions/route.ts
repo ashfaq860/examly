@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   if (auth.error) return auth.error;
 
   // Always use the authenticated user's own ID — never trust userId from the body
-  const userId = auth.session.user.id;
+  const userId = auth.user.id;
 
   try {
     const { packageId } = await req.json();

@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   if (auth.error) return auth.error;
 
   // Use the session userId — ignore any userId in the body
-  const userId = auth.session.user.id;
+  const userId = auth.user.id;
   const { full_name, email } = await req.json();
 
   if (!email) {

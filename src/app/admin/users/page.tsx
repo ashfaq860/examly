@@ -29,7 +29,8 @@ export default function ProfilesPage() {
 
       const res = await fetch("/api/admin/profiles");
       const data = await res.json();
-      setProfiles(data);
+      // Guard: API returns a plain array; on auth error it returns { error: "..." }
+      setProfiles(Array.isArray(data) ? data : []);
       setLoading(false);
     }
     init();
