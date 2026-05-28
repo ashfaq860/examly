@@ -191,8 +191,8 @@ export async function GET(request: NextRequest) {
     //console.log('First pass counts:', Object.entries(firstPassResults).map(([s, r]) => `${s}: ${r.length}`));
 
     // 4. Redistribute quota from under-performing sources to others
-    let totalFetched = Object.values(firstPassResults).reduce((sum, r) => sum + r.length, 0);
-    let deficit = TOTAL_TARGET - totalFetched;
+    const totalFetched = Object.values(firstPassResults).reduce((sum, r) => sum + r.length, 0);
+    const deficit = TOTAL_TARGET - totalFetched;
 
     if (deficit > 0) {
       // Find sources that have room to give more

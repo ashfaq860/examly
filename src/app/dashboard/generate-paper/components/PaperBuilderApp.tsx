@@ -330,7 +330,7 @@ const handleBoardPattern = async () => {
     }
 
     // 4. Load questions based on Chapter Rules
-    let questionsByRule = await loadBoardPatternQuestions(boardRules);
+    const questionsByRule = await loadBoardPatternQuestions(boardRules);
 
     // 5. DEFICIT FILLER: Loop through ALL types (Standard + Additional)
     const allRequiredTypes = [

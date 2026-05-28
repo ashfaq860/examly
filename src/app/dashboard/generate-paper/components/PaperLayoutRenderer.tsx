@@ -441,7 +441,7 @@ const PaperSlot = ({
 );
 
 const renderContent = () => {
-  let pages: React.ReactNode[] = [];
+  const pages: React.ReactNode[] = [];
 
   const renderPaperGroup = (
     group: PaperSection[],
