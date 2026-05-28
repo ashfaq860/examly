@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getSessionFromRequest } from '@/lib/api-auth';
 
 const flattenQuestion = (q: any) => ({
   ...q,
@@ -95,6 +96,10 @@ const fetchForSource = async (
 };
 
 export async function GET(request: NextRequest) {
+  // Require authentication — questions are only for logged-in users
+  const auth = await getSessionFromRequest();
+  if (auth.error) return auth.error;
+
   const { searchParams } = new URL(request.url);
 
   try {

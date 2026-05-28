@@ -50,7 +50,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError || !session) {
-        console.log('No active session found');
         setTrialStatus({
           isTrial: false,
           trialEndsAt: null,
@@ -64,7 +63,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const response = await fetch(`/api/user/trial-status?userId=${session.user.id}`);
+      // userId is no longer passed in the query — the API reads it from the session cookie
+      const response = await fetch(`/api/user/trial-status`);
       
       if (!response.ok) {
         console.warn('Trial status unavailable:', response.status);
@@ -93,7 +93,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscriptionType: trialData.subscriptionType,
         referral_code: trialData.referral_code,
         subscriptionEndDate: trialData.subscriptionEndDate ? new Date(trialData.subscriptionEndDate) : null,
-        message: trialData.message || null   // <-- added
+        message: trialData.message || null
       });
     } catch (error) {
       console.error('Error fetching trial status:', error);
@@ -137,8 +137,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, _session) => {
-      fetchTrialStatus();
+    } = supabase.auth.onAuthStateChange((event, _session) => {
+      // Only re-fetch on meaningful auth events, not on TOKEN_REFRESHED
+      // (which fires every ~60 min and would hammer the API unnecessarily).
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+        fetchTrialStatus();
+      }
     });
 
     return () => {

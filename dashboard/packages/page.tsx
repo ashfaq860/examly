@@ -49,14 +49,12 @@ export default function SubscriptionPage() {
     }
   };
 
-  // 🔹 Fetch user subscriptions
+  // Fetch user subscriptions
   const fetchUserSubscriptions = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const res = await fetch(`/api/subscriptions/${session.user.id}`);
-      if (!res.ok) throw new Error("Failed to fetch user subscriptions");
+      // userId is no longer passed in the URL — the API reads it from the session cookie
+      const res = await fetch('/api/subscriptions/me');
+      if (!res.ok) throw new Error('Failed to fetch user subscriptions');
       const data = await res.json();
 
       const activeSubs = (data || []).filter(
@@ -77,33 +75,27 @@ export default function SubscriptionPage() {
     }
   };
 
-  // 🔹 Subscribe to a package
+  // Subscribe to a package
   const handleSubscribe = async (packageId: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setMessage({ type: "danger", text: "You must be logged in to subscribe" });
-        return;
-      }
-
-      const res = await fetch("/api/subscriptions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: session.user.id, packageId }),
+      const res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // userId is no longer sent — the API reads it from the session cookie
+        body: JSON.stringify({ packageId }),
       });
 
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed to submit subscription request");
+      if (!res.ok) throw new Error(result.error || 'Failed to submit subscription request');
 
-      // add to pending list
       setInactiveSubscriptions((prev) => [...prev, result]);
       setMessage({
-        type: "success",
-        text: "Subscription request submitted! Pending admin approval.",
+        type: 'success',
+        text: 'Subscription request submitted! Pending admin approval.',
       });
     } catch (err: any) {
       console.error(err);
-      setMessage({ type: "danger", text: err.message || "Failed to submit subscription request." });
+      setMessage({ type: 'danger', text: err.message || 'Failed to submit subscription request.' });
     }
   };
 
