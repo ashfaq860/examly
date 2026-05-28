@@ -5,171 +5,150 @@ interface StandardHeaderProps {
   settings: any;
   subject: string;
   totalMarks: number;
+  isRTL: boolean;
   currentClass: any;
-  // Accept standard BISE structural parameters or fallback gracefully
-  paperType?: string;      // e.g., "I (Essay Type)" or "Objective"
-  timeAllowed?: string;    // e.g., "1.45 hours"
-  sessionRange?: string;   // e.g., "2020-2022 to 2023-2025"
-  examType?: string;       // e.g., "First Annual - 2024"
-  groupName?: string;      // e.g., "दूसरा ग्रुप" / "Group-II"
-  partInfo?: string;       // e.g., "PART - I"
+  profile?: {
+    logoUrl?: string;
+    institution?: string;
+    address?: string;
+  };
 }
 
 const StandardHeader: React.FC<StandardHeaderProps> = ({
-  settings = {},
-  subject = "CHEMISTRY",
-  totalMarks = 48,
+  settings,
+  subject,
+  totalMarks,
+  isRTL,
   currentClass,
-  paperType = "I (Essay Type)",
-  timeAllowed = "1.45 hours",
-  sessionRange = "2020-2022 to 2023-2025",
-  examType = "First Annual - 2024",
-  groupName = "(دوسرا گروپ)",
-  partInfo = "PART - I",
+  profile,
 }) => {
-  // Extract clean class text (e.g., "9th Class" or "نہم کلاس")
-  const classLabelEn = typeof currentClass === 'object' ? currentClass.name : (currentClass || "9th");
-  const is9th = classLabelEn.toString().toLowerCase().includes('9');
-  const classLabelUrdu = is9th ? "نہم کلاس" : "دہم کلاس";
+  const headerLabel = typeof currentClass === 'object' ? currentClass.name : currentClass;
 
   const containerStyle: React.CSSProperties = {
-    fontFamily: settings.headingFontFamily || '"Times New Roman", Times, "Urdu Typesetting", "Noori Nastaliq", Arial, sans-serif',
-    width: '100%',
-    backgroundColor: '#ffffff',
-    color: '#000000',
+    fontFamily: settings.headingFontFamily || 'Arial',
+    border: '2px solid black',
+    padding: '5px',
+    marginBottom: '5px',
+    backgroundColor: 'white',
+    color: 'black',
+    direction: isRTL ? 'rtl' : 'ltr',
     boxSizing: 'border-box',
-    padding: '4px 0px 12px 0px',
-    borderBottom: '1px solid #000000', // Bottom border separating header from questions
-    lineHeight: '1.4',
+    position: 'relative', // helps Firefox render border
+  };
+
+  const logoStyle: React.CSSProperties = {
+   
+    width: `${settings.logoWidth || 140}px`,
+    height: `${settings.logoHeight || 60}px`,
+    padding:'10px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: isRTL ? 0 : '15px',
+    marginLeft: isRTL ? '15px' : 0,
+    boxSizing: 'border-box',
+  };
+
+  const tableStyle: React.CSSProperties = {
+    width: '100%',
+    borderCollapse: 'collapse',
+    tableLayout: 'fixed',
+    marginTop: '10px',
+    border: '1px solid black',
+    boxSizing: 'border-box',
+  };
+
+  const tdStyle: React.CSSProperties = {
+    border: '1px solid black',
+    padding: '4px',
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: settings.metaFontSize || 12,
+    boxSizing: 'border-box',
+  };
+
+  const leftTdStyle: React.CSSProperties = {
+    ...tdStyle,
+    textAlign: isRTL ? 'right' : 'left',
+    paddingLeft: '10px',
   };
 
   return (
-    <div style={containerStyle} className="bise-lahore-header">
-      <style>
-        {`
-          @media print {
-            * {
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-            }
-            .bise-lahore-header {
-              display: block !important;
-              border-bottom: 1px solid #000000 !important;
-              padding: 4px 0px 12px 0px !important;
-            }
-          }
-          .bise-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            width: 100%;
-          }
-          .bise-col-left {
-            width: 35%;
-            text-align: left;
-            direction: ltr;
-          }
-          .bise-col-center {
-            width: 30%;
-            text-align: center;
-            font-size: 14px;
-          }
-          .bise-col-right {
-            width: 35%;
-            text-align: right;
-            direction: rtl;
-            font-family: "Urdu Typesetting", "Noori Nastaliq", "Times New Roman", serif;
-          }
-          .bise-subject-title-en {
-            font-size: 16px;
-            font-weight: bold;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            margin-bottom: 2px;
-          }
-          .bise-subject-title-ur {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 2px;
-          }
-          .bise-meta-text {
-            font-size: 14px;
-            margin: 2px 0;
-          }
-          .bise-roll-line {
-            display: inline-block;
-            border-bottom: 1px dotted #000000;
-            min-width: 160px;
-            text-align: center;
-            font-family: "Times New Roman", sans-serif;
-            font-weight: bold;
-            letter-spacing: 1px;
-            margin: 0 4px;
-          }
-          .bise-session-text {
-            font-size: 15px;
-            font-weight: bold;
-            word-spacing: 1px;
-          }
-        `}
-      </style>
+    <div style={containerStyle} className="standard-header">
+     <style>
+  {`
+    @media print {
+      /* 1. Force Firefox to render backgrounds and borders */
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
 
-      {/* Top Section: Roll Number and Academic Sessions */}
-      <div className="bise-row" style={{ marginBottom: '6px' }}>
-        {/* Left Side is empty or structural placeholder contextually */}
-        <div className="bise-col-left"></div>
-        
-        {/* Mirroring image_67e9e1.png top right side text layout */}
-        <div className="bise-col-right" style={{ width: '100%', textDirection: 'rtl' }}>
-          <span style={{ fontSize: '15px' }}>رول نمبر۔</span>
-          <span className="bise-roll-line">&nbsp;</span>
-          <span style={{ fontSize: '13px', marginRight: '4px' }}>(امیدوار خود پُر کرے)</span>
-          <span className="bise-session-text" style={{ marginRight: '15px' }}>
-            (تعلیمی سیشن {sessionRange})
-          </span>
+      /* 2. Fix the outer container */
+      .standard-header {
+        display: block !important;
+        border: 2px solid black !important; 
+        outline: 1px solid black !important;
+        margin: 0 !important;
+        padding: 5px !important;
+      }
+
+      /* 3. Table specific fixes for Firefox */
+      table {
+        border-collapse: collapse !important;
+        width: 100% !important;
+        border: 1px solid black !important;
+      }
+
+      table td, table th {
+        border: 1px solid black !important;
+        /* Use pt for physical printing consistency */
+        border-width: 1pt !important; 
+        background-color: transparent !important;
+      }
+    }
+  `}
+</style>
+
+      {/* Branding */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: '0px' }}>
+        <div style={logoStyle}>
+          <img
+            src={profile?.logoUrl || '/examly.png'}
+            alt="Logo"
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          />
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <h1 style={{ fontSize: settings.titleFontSize || 18, fontFamily: settings.titleFontFamily || 'Arial', fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
+            {profile?.institution || 'BOARD EXAMINATION CENTER'}
+          </h1>
+          <div style={{ fontSize: '11px', marginTop: '0px' }}>
+            {profile?.address || 'Institution Address Line 1, City, Country'} • Ph: {profile?.cellno || '123-456-7890'}
+          </div>
         </div>
       </div>
 
-      {/* Main Metadata Grid (English Left | Central Sub-meta | Urdu Right) */}
-      <div className="bise-row">
-        
-        {/* Left Column: English Details */}
-        <div className="bise-col-left">
-          <div className="bise-subject-title-en">{subject}</div>
-          <div className="bise-meta-text">Paper : {paperType}</div>
-          <div className="bise-meta-text">Time Allowed : {timeAllowed}</div>
-          <div className="bise-meta-text">Maximum Marks : {totalMarks}</div>
-        </div>
-
-        {/* Center Column: Centralized Metadata Stack */}
-        <div className="bise-col-center" style={{ paddingTop: '18px' }}>
-          <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
-            {examType} - ({classLabelUrdu})
-          </div>
-          <div style={{ marginTop: '4px', fontSize: '13px' }}>
-            {groupName}
-          </div>
-          <div style={{ marginTop: '12px', fontWeight: 'bold', fontSize: '14px', letterSpacing: '0.5px' }}>
-            ( {partInfo} - حصہ اول )
-          </div>
-        </div>
-
-        {/* Right Column: Urdu Details */}
-        <div className="bise-col-right">
-          <div className="bise-subject-title-ur">کیمسٹری</div>
-          <div className="bise-meta-text">
-            پرچہ : {paperType.includes('I') ? 'I' : 'II'} (انشائیہ طرز)
-          </div>
-          <div className="bise-meta-text">
-            وقت : {timeAllowed.replace('hours', 'گھنٹے')}
-          </div>
-          <div className="bise-meta-text">
-            کل نمبر : {totalMarks}
-          </div>
-        </div>
-
-      </div>
+      {/* Meta Table */}
+      <table style={tableStyle}>
+        <tbody>
+          <tr>
+            <td style={tdStyle}>Time: 1 hr</td>
+            <td style={tdStyle}>Class: {headerLabel}th</td>
+            <td style={{ ...tdStyle, width: '35%' }}>Subject: {subject}</td>
+            <td style={tdStyle}>Marks: {totalMarks}</td>
+            <td style={tdStyle}>Date: 2025-26</td>
+          </tr>
+          <tr>
+            <td colSpan={3} style={leftTdStyle}>
+              {isRTL ? 'طالبِ علم کانام: ' : 'Student Name: '}________________________________________________
+            </td>
+            <td style={tdStyle}>{isRTL ? 'رول نمبر: ' : 'Roll #: '}_______</td>
+            <td style={tdStyle}>{isRTL ? 'سیکشن: ' : 'Section: '}______</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 };

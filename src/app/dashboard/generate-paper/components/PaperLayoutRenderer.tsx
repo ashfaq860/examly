@@ -74,64 +74,68 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
   currentClass,
   profile
 }) => {
-  // All hooks must be called unconditionally before any early return
-  const subject = useMemo(() => paperSections[0]?.subject || '', [paperSections]);
+    const subject = useMemo(() => paperSections[0]?.subject || '', [paperSections]);
+  if (!settings) return <div className="p-5 text-center">Loading settings...</div>;
+const isOverflowLocked = ['same', 'same_page', 'combined', 'separate'].includes(currentLayout);
+ // Inside PaperLayoutRenderer
+const globalNumbering = useMemo(() => {
+  const sectionStartNumbers: Record<string, number> = {};
+  let currentCount = 1;
 
-  const globalNumbering = useMemo(() => {
-    const sectionStartNumbers: Record<string, number> = {};
-    let currentCount = 1;
+  paperSections.forEach((section, index) => {
+    const sectionType = section.type.toLowerCase();
+    const isUrduOrEnglish = subject.toLowerCase() === 'urdu' || subject.toLowerCase() === 'english';
+    
+    // --- JOINING LOGIC ---
+    const prevSection = index > 0 ? paperSections[index - 1] : null;
+    const prevType = prevSection?.type.toLowerCase() || '';
 
-    paperSections.forEach((section, index) => {
-      const sectionType = section.type.toLowerCase();
-      const isUrduOrEnglish = subject.toLowerCase() === 'urdu' || subject.toLowerCase() === 'english';
+    // Detection for joined pairs
+  const isSecondPartOfPair = 
+    (sectionType.includes('gazal') && prevType.includes('poetry_explanation')) ||
+    (sectionType.includes('sentence_completion') && prevType.includes('sentence_correction'));
+
+    //const shouldShareNumber = isPoetryPair || isSentencePair;
+
+    if (isSecondPartOfPair) {
+    // Assign the same number but do NOT increment currentCount
+    sectionStartNumbers[section.id] = currentCount - 1;
+  } else {
+      // Normal logic: Assign new number
+      sectionStartNumbers[section.id] = currentCount;
+
+      // Determine if we increment for the NEXT section
+      const isLong = sectionType.includes('long') || sectionType.includes('summary') || sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma');
       
-      const prevSection = index > 0 ? paperSections[index - 1] : null;
-      const prevType = prevSection?.type.toLowerCase() || '';
-
-      const isSecondPartOfPair = 
-        (sectionType.includes('gazal') && prevType.includes('poetry_explanation')) ||
-        (sectionType.includes('sentence_completion') && prevType.includes('sentence_correction'));
-
-      if (isSecondPartOfPair) {
-        sectionStartNumbers[section.id] = currentCount - 1;
-      } else {
-        sectionStartNumbers[section.id] = currentCount;
-
-        const isLong = sectionType.includes('long') || sectionType.includes('summary') || sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma');
-        
-        if (isLong) {
-          if (isUrduOrEnglish) {
-            currentCount += 1;
-          } else {
-            const qCount = Array.isArray(section.questions) ? section.questions.length : 0;
-            currentCount += qCount;
-          }
+      if (isLong) {
+        if (isUrduOrEnglish) {
+          currentCount += 1; // One number for the whole block
         } else {
-          currentCount += 1;
+          const qCount = Array.isArray(section.questions) ? section.questions.length : 0;
+          currentCount += qCount;
         }
+      } else {
+        currentCount += 1; // Standard increment
       }
-    });
+    }
+  });
 
-    return sectionStartNumbers;
-  }, [paperSections, subject]);
+  return sectionStartNumbers;
+}, [paperSections, subject]);
 
   const { mcqs, subjectives } = useMemo(() => ({
     mcqs: paperSections.filter(s => s.type === 'mcq'),
     subjectives: paperSections.filter(s => s.type !== 'mcq')
   }), [paperSections]);
 
+
   const mcqTotalMarks = useMemo(() => mcqs.reduce((t, s) => t + s.totalMarks, 0), [mcqs]);
   const subTotalMarks = useMemo(() => subjectives.reduce((t, s) => t + s.totalMarks, 0), [subjectives]);
 
   const isSubjectUrduEnglish = useMemo(() => 
-    subject.toLowerCase() === 'urdu' || subject.toLowerCase() === 'english', 
-    [subject]
-  );
-
-  // Early return AFTER all hooks
-  if (!settings) return <div className="p-5 text-center">Loading settings...</div>;
-
-  const isOverflowLocked = ['same', 'same_page', 'combined', 'separate'].includes(currentLayout);
+  subject.toLowerCase() === 'urdu' ||subject.toLowerCase() === 'english', 
+  [subject]
+);
 
   const handleHeaderChange = (sectionId: string, field: 'en' | 'ur', value: string) => {
     const updated = paperSections.map(s => {
@@ -441,7 +445,7 @@ const PaperSlot = ({
 );
 
 const renderContent = () => {
-  const pages: React.ReactNode[] = [];
+  let pages: React.ReactNode[] = [];
 
   const renderPaperGroup = (
     group: PaperSection[],

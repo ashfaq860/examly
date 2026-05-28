@@ -1,29 +1,39 @@
 // app/api/subscriptions/[userId]/route.ts
-// The userId segment is kept for URL compatibility but is ignored —
-// we always use the authenticated session's userId instead.
-import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { getSessionFromRequest } from '@/lib/api-auth';
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET() {
-  const auth = await getSessionFromRequest();
-  if (auth.error) return auth.error;
-
-  const userId = auth.user.id;
-
+export async function GET(
+  req: NextRequest,
+  context: { params: { userId: string } }
+) {
   try {
+    const { userId } = await context.params; // 👈 MUST await
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User ID is required" },
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabaseAdmin
-      .from('user_packages')
-      .select('*, packages(*)')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .from("user_packages")
+      .select("*, packages(*)")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json(data, { status: 200 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Unexpected error' }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "Unexpected error" },
+      { status: 500 }
+    );
   }
 }

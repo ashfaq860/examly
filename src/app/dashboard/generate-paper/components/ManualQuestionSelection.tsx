@@ -34,16 +34,13 @@ interface QuestionWithOptions extends Question {
 }
 
 const HtmlContent: React.FC<{ content?: string; className?: string; dir?: 'rtl' | 'ltr' }> = ({ content, className, dir }) => {
-  // Hook must be called unconditionally — before any early return
+  if (!content) return null;
   const decoded = useMemo(() => {
-    if (!content) return '';
     if (typeof document === 'undefined') return content;
     const txt = document.createElement('textarea');
     txt.innerHTML = content.replace(/<p([^>]*)>/gi, '<p$1 style="margin:0;display:inline;">');
     return txt.value;
   }, [content]);
-
-  if (!content) return null;
   return <div dir={dir} className={className} dangerouslySetInnerHTML={{ __html: decoded }} />;
 };
 

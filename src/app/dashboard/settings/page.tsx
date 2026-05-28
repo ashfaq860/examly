@@ -50,53 +50,73 @@ export default function ProfileSettingsPage() {
     address: ''
   });
 
-  // Single effect: validate auth then fetch profile in one flow.
-  // getUser() validates the JWT server-side, matching what the API does,
-  // so we never hit the race where a stale cookie passes client-side but
-  // fails server-side with 401.
+  // Check authentication and redirect if not logged in
   useEffect(() => {
-    const init = async () => {
+    const checkAuth = async () => {
       try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-        if (authError || !user) {
+        const { data: { session }, error: authError } = await supabase.auth.getSession();
+        
+        if (authError || !session) {
+          console.log('No user found, redirecting to login');
           router.push('/auth/login');
           return;
         }
 
+        // Check user role - only teachers can access
         const { data: roleData, error: roleError } = await supabase.rpc(
           'get_user_role',
-          { user_id: user.id }
+          { user_id: session.user.id }
         );
 
         if (roleError || roleData !== 'teacher') {
+          console.log('User is not a teacher, redirecting to home');
           router.push('/');
           return;
         }
 
+        // User is authorized
         setIsAuthorized(true);
-
-        const res = await fetch('/api/profile/update', { method: 'GET', credentials: 'include' });
-        if (!res.ok) throw new Error(await res.text() || 'Failed to fetch profile');
-        const data = await res.json();
-        setProfile(data);
-      } catch (err: any) {
-        console.error('Settings page error:', err);
-        setError(err.message);
+      } catch (error) {
+        console.error('Error checking auth:', error);
+        router.push('/auth/login');
       } finally {
         setAuthChecked(true);
-        setLoading(false);
       }
     };
 
-    init();
+    checkAuth();
 
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) router.push('/auth/login');
+      if (!session) {
+        router.push('/auth/login');
+      }
     });
 
     return () => subscription.unsubscribe();
   }, [supabase, router]);
+
+  // Fetch profile only if authorized
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!isAuthorized) return;
+      
+      setLoading(true);
+      try {
+        const res = await fetch("/api/profile/update", { method: "GET", credentials: "include" });
+        if (!res.ok) throw new Error(await res.text() || "Failed to fetch profile");
+        const data = await res.json();
+        setProfile(data);
+      } catch (err: any) {
+        console.error("Error fetching profile:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (isAuthorized) fetchProfile();
+  }, [isAuthorized]);
 
   // Populate form when profile is loaded
   useEffect(() => {

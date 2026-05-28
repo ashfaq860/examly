@@ -13,44 +13,6 @@ interface PaperRendererProps {
   currentLanguage: string;
 }
 
-interface SectionRendererProps {
-  section: any;
-  sectionIndex: number;
-  settings: any;
-  isEditMode: boolean;
-  currentLanguage: string;
-  config: LanguageConfig;
-}
-
-const SectionRenderer: React.FC<SectionRendererProps> = ({
-  section, sectionIndex, settings, isEditMode, currentLanguage, config,
-}) => {
-  const questions = Array.isArray(section.questions) ? section.questions : [];
-  return (
-    <div className="section-block mb-4" style={{ border: isEditMode ? '2px dashed #ccc' : 'none' }}>
-      <h5 className="fw-bold text-uppercase mb-3" style={{ fontSize: `${settings.headingFontSize}px`, fontFamily: settings.headingFontFamily }}>
-        Section {sectionIndex + 1}: {section.type?.toUpperCase()} ({section.totalMarks} Marks)
-      </h5>
-      <div className="questions-list">
-        {questions.map((q: any, qIdx: number) => (
-          <QuestionRenderer
-            key={`${q.id}-${qIdx}`}
-            question={q} index={qIdx} qIdx={qIdx}
-            sectionType={section.type} sectionId={section.id}
-            paperLanguage={currentLanguage} isEditMode={isEditMode}
-            config={config} fontSize={settings.fontSize} metaFontSize={settings.metaFontSize}
-            questionFontFamily={settings.fontFamily} questionLineSpacing={settings.lineHeight}
-            mcqFontSize={settings.mcqFontSize} mcqLineHeight={settings.mcqLineHeight}
-            onTextChange={() => {}} marks={q.marks || section.marksEach}
-            isUrduSubject={false} isLast={qIdx === questions.length - 1}
-            shouldShowOr={false} renderInlineBilingual={true}
-          />
-        ))}
-      </div>
-    </div>
-  );
-};
-
 export const PaperRenderer: React.FC<PaperRendererProps> = ({
   paperSections,
   settings,

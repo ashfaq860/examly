@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { getSessionFromRequest } from '@/lib/api-auth';
 
 const flattenQuestion = (q: any) => ({
   ...q,
@@ -96,10 +95,6 @@ const fetchForSource = async (
 };
 
 export async function GET(request: NextRequest) {
-  // Require authentication — questions are only for logged-in users
-  const auth = await getSessionFromRequest();
-  if (auth.error) return auth.error;
-
   const { searchParams } = new URL(request.url);
 
   try {
@@ -191,8 +186,8 @@ export async function GET(request: NextRequest) {
     //console.log('First pass counts:', Object.entries(firstPassResults).map(([s, r]) => `${s}: ${r.length}`));
 
     // 4. Redistribute quota from under-performing sources to others
-    const totalFetched = Object.values(firstPassResults).reduce((sum, r) => sum + r.length, 0);
-    const deficit = TOTAL_TARGET - totalFetched;
+    let totalFetched = Object.values(firstPassResults).reduce((sum, r) => sum + r.length, 0);
+    let deficit = TOTAL_TARGET - totalFetched;
 
     if (deficit > 0) {
       // Find sources that have room to give more
