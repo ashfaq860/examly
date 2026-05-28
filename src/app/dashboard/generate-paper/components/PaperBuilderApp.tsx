@@ -672,52 +672,52 @@ const isUserPremium = isPremium || hasActivePackage;
   className="flex-grow-1 overflow-auto bg-secondary bg-opacity-10 custom-scrollbar d-print-block paper-preview-main" style={{ touchAction: 'pan-y pinch-zoom' }}>
         {/* Wrapper to center paper on large screens, but allow left-align on small screens */}
         <div className="paper-canvas-wrapper">
-  <div
-    id="printable-paper"
-    ref={paperRef}
-    className="bg-white shadow-lg paper-canvas"
-    style={{
-      height: 'auto',
-      fontFamily: settings.fontFamily,
-      direction: config.direction as any,
-    }}
-  >
+<div
+  id="printable-paper"
+  ref={paperRef}
+  className={`bg-white shadow-lg paper-canvas ${paperSections.length === 0 ? 'paper-canvas--empty' : ''}`}
+  style={{
+    height: 'auto',
+    fontFamily: settings.fontFamily,
+    direction: config.direction as any,
+  }}
+>
 
-            {paperSections.length === 0 ? (
+    {paperSections.length === 0 ? (
   <div 
-    className="empty-state d-flex flex-column align-items-center justify-content-start text-muted text-center p-4 pt-5 mt-5" 
+    className="empty-state d-flex flex-column align-items-center justify-content-start text-muted text-center p-3 pt-4 mt-3" 
     style={{ minHeight: '297mm' }}
   >
-    <BookOpen size={80} className="mb-4 opacity-20" />
-    <h3 className="fw-light">Paper Preview</h3>
-    <p className="mb-4">Select a subject and generate a pattern to begin.</p>
+    <BookOpen size={56} className="mb-3 opacity-20" />
+    <h3 className="fw-light fs-5 fs-md-3">Paper Preview</h3>
+    <p className="mb-4 px-2" style={{ fontSize: '0.9rem' }}>
+      Select a subject and generate a pattern to begin.
+    </p>
     
-    {/* --- NEW BUTTONS GROUP --- */}
-    <div className="d-flex flex-column flex-md-row gap-3">
+    <div className="d-flex flex-column gap-3 w-100 px-3" style={{ maxWidth: '360px' }}>
       <button 
-        className="btn btn-primary btn-lg px-4 shadow-sm d-flex align-items-center gap-2"
+        className="btn btn-primary btn-lg px-3 shadow-sm d-flex align-items-center justify-content-center gap-2"
         onClick={handleBoardPattern}
         disabled={isLoading || isGeneratingBoardPattern}
-        style={{ borderRadius: '12px', fontSize: '0.95rem', fontWeight: 600 }}
+        style={{ borderRadius: '12px', fontSize: '0.9rem', fontWeight: 600 }}
       >
         {isGeneratingBoardPattern ? (
           <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
         ) : (
           <i className="bi bi-magic"></i>
         )}
-        Generate Board Pattern Paper-full Book
+        Generate Board Pattern Paper
       </button>
 
       <button 
-        className="btn btn-outline-dark btn-lg px-4 d-flex align-items-center gap-2"
+        className="btn btn-outline-dark btn-lg px-3 d-flex align-items-center justify-content-center gap-2"
         onClick={() => setShowQuestionSelector(true)}
-        style={{ borderRadius: '12px', fontSize: '0.95rem', fontWeight: 600 }}
+        style={{ borderRadius: '12px', fontSize: '0.9rem', fontWeight: 600 }}
       >
         <Settings size={18} />
         Configure Paper Manually
       </button>
     </div>
-    {/* ------------------------- */}
   </div>
 ) : (
               <PaperLayoutRenderer
@@ -1063,6 +1063,39 @@ const isUserPremium = isPremium || hasActivePackage;
     margin: 12px 0 var(--paper-margin-bottom, -400px) 0 !important;
     box-shadow: 0 2px 12px rgba(0,0,0,0.15) !important;
     zoom: unset !important;
+  }
+    .empty-state {
+    padding: 1.5rem 1rem !important;
+  }
+  .empty-state h3 {
+    font-size: 1.1rem !important;
+  }
+  .empty-state .btn-lg {
+    font-size: 0.85rem !important;
+    padding: 0.5rem 1rem !important;
+    height: auto !important;
+    min-height: 48px;
+    white-space: normal !important;
+    text-align: center;
+  }
+
+  .paper-canvas--empty {
+    width: 100% !important;
+    transform: none !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    min-height: calc(100vh - 140px) !important;
+  }
+
+  .paper-canvas--empty .empty-state {
+    min-height: calc(100vh - 140px) !important;
+    width: 100% !important;
+    padding: 2rem 1.5rem !important;
+  }
+
+  .paper-canvas-wrapper:has(.paper-canvas--empty) {
+    overflow: visible !important;
+    justify-content: stretch !important;
   }
 }
 `}</style>

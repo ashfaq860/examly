@@ -11,7 +11,6 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=missing_code`);
   }
 
-  // ✅ FIX 1: Do NOT await cookies() — pass it as a callback reference
   const cookieStore = cookies();
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
 
@@ -23,14 +22,17 @@ export async function GET(request: Request) {
   }
 
   try {
-    // ✅ FIX 2: Use maybeSingle() instead of single() to avoid throwing on missing rows
     const { data: existingProfile } = await supabase
       .from('profiles')
       .select('id, role')
       .eq('id', session.user.id)
       .maybeSingle();
 
+    // ✅ FIX 1: Track whether this is a new user
+    let isNewUser = false;
+
     if (!existingProfile) {
+      isNewUser = true;
       const { error: insertError } = await supabase.from('profiles').insert({
         id: session.user.id,
         email: session.user.email,
@@ -46,24 +48,36 @@ export async function GET(request: Request) {
 
       if (insertError) {
         console.error('Profile creation error:', insertError);
+        // ✅ FIX 2: Don't continue if insert failed — redirect to login
+        return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=profile_creation_failed`);
       }
     }
 
-    // ✅ FIX 3: Normalize role resolution — don't rely on ambiguous shape fallback
-    const { data: roleData, error: rpcError } = await supabase
-      .rpc('get_user_role', { user_id: session.user.id });
-
-    if (rpcError) {
-      console.error('RPC error:', rpcError);
-      return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=role_fetch_failed`);
-    }
-
-    // Safely extract role regardless of whether RPC returns { role: "..." } or "..."
+    // ✅ FIX 3: For brand-new users, skip the RPC entirely — we JUST set role: 'teacher'
+    // For existing users, use the RPC as before
     let role: string = 'teacher';
-    if (typeof roleData === 'string') {
-      role = roleData;
-    } else if (roleData && typeof roleData === 'object' && 'role' in roleData) {
-      role = (roleData as { role: string }).role;
+
+    if (!isNewUser) {
+      // ✅ FIX 4: First try reading role directly from the profile we already fetched
+      // This avoids a redundant RPC round-trip and any propagation delay
+      if (existingProfile?.role) {
+        role = existingProfile.role;
+      } else {
+        // Fall back to RPC only if profile row had no role column
+        const { data: roleData, error: rpcError } = await supabase
+          .rpc('get_user_role', { user_id: session.user.id });
+
+        if (rpcError) {
+          console.error('RPC error:', rpcError);
+          return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=role_fetch_failed`);
+        }
+
+        if (typeof roleData === 'string') {
+          role = roleData;
+        } else if (roleData && typeof roleData === 'object' && 'role' in roleData) {
+          role = (roleData as { role: string }).role;
+        }
+      }
     }
 
     const allowedRoles = ['teacher', 'admin', 'super_admin', 'academy'];
@@ -79,7 +93,7 @@ export async function GET(request: Request) {
     response.cookies.set('role', role, {
       path: '/',
       maxAge: 60 * 60 * 24 * 7,
-      httpOnly: false, // keep false so client JS (js-cookie) can read it
+      httpOnly: false,
       sameSite: 'lax',
     });
 
