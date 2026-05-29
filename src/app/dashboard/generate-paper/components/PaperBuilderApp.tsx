@@ -1,6 +1,7 @@
 // generate-paper/components/PaperBuilderApp.tsx
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { UseFormSetValue } from 'react-hook-form';
 import { BookOpen, Settings } from 'lucide-react';
@@ -11,11 +12,10 @@ import { AppHeader } from './AppHeader';
 import { SettingsPanel } from './SettingsPanel';
 import { BoardPatternService } from '@/services/boardPatternService';
 import { PaperLayoutRenderer } from '@/app/dashboard/generate-paper/components/PaperLayoutRenderer';
-
 import Loading from '@/app/dashboard/generate-paper/loading';
-//import { supabase } from '@/lib/supabaseClient'; // Adjust this import to your supabase client path
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { toast } from 'react-hot-toast'; // Highly recommended for feedback
+import { toast } from 'react-hot-toast';
+
 interface PaperBuilderAppProps {
   watch: any;
   setValue: UseFormSetValue<any>;
@@ -44,7 +44,9 @@ interface PaperBuilderAppProps {
   validateFormAgainstRules?: any;
   getChapterIdsToUse?: any;
 }
+
 const PAPER_SETTINGS_KEY = 'paper_settings';
+
 export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
   watch,
   setValue,
@@ -57,9 +59,8 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
   watchedSubjectId,
   watchedChapterOption,
   selectedChapters,
-  onSubmit,
   isLoading,
-}) => {
+}: any) => {
   const [showQuestionSelector, setShowQuestionSelector] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [paperSections, setPaperSections] = useState<PaperSection[]>([]);
@@ -67,103 +68,91 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
   const [showSettings, setShowSettings] = useState(false);
   const [isGeneratingBoardPattern, setIsGeneratingBoardPattern] = useState(false);
   const [profile, setProfile] = useState<any>(null);
- const [settings, setSettings] = useState<PaperSettings>({
-  fontFamily: "Arial, sans-serif",      // Standard Exam (Arial)
-  fontSize: 12,
-  lineHeight: 1.5,
-  titleFontFamily: "'Times New Roman', serif", // Classic Serif
-  titleFontSize: 28,
-  headingFontFamily: "'Times New Roman', serif",
-  headingFontSize: 18,
-  metaFontSize: 12,
-  headerLayout: 'standard',
-  mcqFontSize: 12,
-  mcqLineHeight: 1.2,
-  logoWidth: 120,
-  logoHeight: 60
-});
-const supabase = createClientComponentClient();
-// start save paper logic here
-const [currentPaperId, setCurrentPaperId] = useState<string | null>(null);
-const [isSaving, setIsSaving] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
-const handleSaveToSupabase = async () => {
-  setIsSaving(true);
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return toast.error("Please login");
+  const [settings, setSettings] = useState<PaperSettings>({
+    fontFamily: "Arial, sans-serif",
+    fontSize: 12,
+    lineHeight: 1.5,
+    titleFontFamily: "'Times New Roman', serif",
+    titleFontSize: 28,
+    headingFontFamily: "'Times New Roman', serif",
+    headingFontSize: 18,
+    metaFontSize: 12,
+    headerLayout: 'standard',
+    mcqFontSize: 12,
+    mcqLineHeight: 1.2,
+    logoWidth: 120,
+    logoHeight: 60,
+  });
 
-    // Map your frontend state to your Supabase Table Columns
-    const payload = {
-      id: currentPaperId || undefined, // Send ID if updating, undefined if new
-      title: getValues('title') || "New Paper",
-      created_by: session.user.id,
-      class_name: currentClass?.name || "Unknown Class",
-      subject_name: currentSubject?.name || "Unknown Subject",
-      content: paperSections, // Matches jsonb null default '[]'
-      settings: settings,     // Matches jsonb null default '{}'
-      layout: currentLayout,  // 'separate' or 'combined'
-      language: paperLanguage // 'english', 'urdu', or 'bilingual'
-    };
+  const supabase = createClientComponentClient();
+  const [currentPaperId, setCurrentPaperId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-    console.log("Saving to Supabase with payload:", payload);
+  // Track mount for portal
+  useEffect(() => { setIsMounted(true); }, []);
 
-    const response = await fetch('/api/papers/save', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}` 
-      },
-      body: JSON.stringify(payload),
-    });
+  const handleSaveToSupabase = async () => {
+    setIsSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return toast.error("Please login");
 
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Failed to save");
+      const payload = {
+        id: currentPaperId || undefined,
+        title: getValues('title') || "New Paper",
+        created_by: session.user.id,
+        class_name: currentClass?.name || "Unknown Class",
+        subject_name: currentSubject?.name || "Unknown Subject",
+        content: paperSections,
+        settings: settings,
+        layout: currentLayout,
+        language: paperLanguage,
+      };
 
-    // --- SUCCESS ACTIONS ---
-    // If it's a new paper, the backend should return the new UUID
-    if (result.id) {
-        setCurrentPaperId(result.id);
+      const response = await fetch('/api/papers/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Failed to save");
+      if (result.id) setCurrentPaperId(result.id);
+      toast.success("Saved to Cloud successfully!");
+    } catch (error: any) {
+      console.error("Save Error:", error);
+      toast.error(error.message);
+    } finally {
+      setIsSaving(false);
     }
-    
-    // Optional: Only clear local storage if you want the user to start a fresh paper
-    // localStorage.removeItem('questionPapers');
-    // localStorage.removeItem(PAPER_SETTINGS_KEY);
-    
-    toast.success("Saved to Cloud successfully!");
+  };
 
-  } catch (error: any) {
-    console.error("Save Error:", error);
-    toast.error(error.message);
-  } finally {
-    setIsSaving(false);
-  }
-};
+  useEffect(() => {
+    const syncLayout = () => {
+      if (typeof window === 'undefined') return;
+      const PAPER_PX = 793.7;
+      const PAPER_H_PX = 1122.5;
+      const vw = window.innerWidth;
+      const scale = Math.min(1, (vw - 16) / PAPER_PX);
+      const scaledW = PAPER_PX * scale;
+      const marginLeft = Math.max(0, (vw - scaledW) / 2);
+      const marginBottom = (PAPER_H_PX * scale) - PAPER_H_PX;
+      document.documentElement.style.setProperty('--paper-scale', scale.toFixed(4));
+      document.documentElement.style.setProperty('--paper-margin-bottom', `${marginBottom.toFixed(1)}px`);
+      document.documentElement.style.setProperty('--paper-margin-left', `${marginLeft.toFixed(1)}px`);
+    };
+    syncLayout();
+    window.addEventListener('resize', syncLayout);
+    return () => window.removeEventListener('resize', syncLayout);
+  }, []);
 
+  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
 
-useEffect(() => {
-  const syncLayout = () => {
-  if (typeof window === 'undefined') return;
-  const PAPER_PX = 793.7;
-  const PAPER_H_PX = 1122.5;
-  const vw = window.innerWidth;
-  const scale = Math.min(1, (vw - 16) / PAPER_PX);
-  const scaledW = PAPER_PX * scale;
-  const marginLeft = Math.max(0, (vw - scaledW) / 2);
-  const marginBottom = (PAPER_H_PX * scale) - PAPER_H_PX;
-  document.documentElement.style
-    .setProperty('--paper-scale', scale.toFixed(4));
-  document.documentElement.style
-    .setProperty('--paper-margin-bottom', `${marginBottom.toFixed(1)}px`);
-  document.documentElement.style
-    .setProperty('--paper-margin-left', `${marginLeft.toFixed(1)}px`);
-};
-  syncLayout();
-  window.addEventListener('resize', syncLayout);
-  return () => window.removeEventListener('resize', syncLayout);
-}, []);
-const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
-  // 2. Load settings from localStorage on Mount
   useEffect(() => {
     const savedSettings = localStorage.getItem(PAPER_SETTINGS_KEY);
     if (savedSettings) {
@@ -177,7 +166,6 @@ const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
     setIsSettingsLoaded(true);
   }, []);
 
-  // 3. Save settings to localStorage whenever they change
   useEffect(() => {
     if (isSettingsLoaded) {
       localStorage.setItem(PAPER_SETTINGS_KEY, JSON.stringify(settings));
@@ -185,41 +173,42 @@ const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   }, [settings, isSettingsLoaded]);
 
   const paperRef = useRef<HTMLDivElement>(null);
-  const currentSubject = subjects.find(s => s.id === watchedSubjectId);
-  const currentClass = classes.find(c => c.id === watchedClassId);
-  const currentLayout =  watch('mcqPlacement') || 'separate';
-  const currentLanguage = currentSubject?.name === 'English' ?'english' :currentSubject?.name === 'Urdu' ? 'urdu' :watch('language')||'bilingual';
- 
- const getChapterIdsInRange = (from: number, to: number) => {
-  // We use chapterNo from your schema to match the rule's start/end
-  const filteredChapters = chapters.filter(ch => {
-    const num = Number(ch.chapterNo); 
-    return num >= from && num <= to;
-  });
+  const currentSubject = subjects.find((s: Subject) => s.id === watchedSubjectId);
+  const currentClass = classes.find((c: Class) => c.id === watchedClassId);
+  const currentLayout = watch('mcqPlacement') || 'separate';
+  const currentLanguage =
+    currentSubject?.name === 'English' ? 'english' :
+    currentSubject?.name === 'Urdu' ? 'urdu' :
+    watch('language') || 'bilingual';
 
-  if (filteredChapters.length === 0) return '';
-  return filteredChapters.map(ch => ch.id).join(',');
-};
- 
+  const getChapterIdsInRange = (from: number, to: number) => {
+    const filteredChapters = chapters.filter((ch: Chapter) => {
+      const num = Number(ch.chapterNo);
+      return num >= from && num <= to;
+    });
+    if (filteredChapters.length === 0) return '';
+    return filteredChapters.map((ch: Chapter) => ch.id).join(',');
+  };
+
   const languageConfigs: Record<string, LanguageConfig> = {
     english: {
       direction: 'ltr',
       fontFamily: "'Times New Roman', serif",
       fontSize: '14px',
-      questionFontFamily: "'Arial', sans-serif"
+      questionFontFamily: "'Arial', sans-serif",
     },
     urdu: {
       direction: 'rtl',
       fontFamily: "'JameelNoori', 'Jameel Noori Nastaleeq', serif",
       fontSize: '18px',
-      questionFontFamily: "'JameelNoori', 'Jameel Noori Nastaleeq', serif"
+      questionFontFamily: "'JameelNoori', 'Jameel Noori Nastaleeq', serif",
     },
     bilingual: {
       direction: 'ltr',
       fontFamily: "'Times New Roman', 'JameelNoori', 'Jameel Noori Nastaleeq', serif",
       fontSize: '14px',
-      questionFontFamily: "'Arial', 'JameelNoori', 'Jameel Noori Nastaleeq', sans-serif"
-    }
+      questionFontFamily: "'Arial', 'JameelNoori', 'Jameel Noori Nastaleeq', sans-serif",
+    },
   };
 
   const config = languageConfigs[paperLanguage] || languageConfigs.english;
@@ -229,28 +218,18 @@ const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
     if (typeof window === 'undefined') return;
     const saved = localStorage.getItem('questionPapers') ?? '';
     if (saved === lastSavedPaperDataRef.current) return;
-
     lastSavedPaperDataRef.current = saved;
 
-    if (!saved) {
-      setPaperSections([]);
-      return;
-    }
+    if (!saved) { setPaperSections([]); return; }
 
     try {
       const parsed = JSON.parse(saved);
       const sections = Array.isArray(parsed) ? parsed : (parsed.sections || []);
       setPaperSections(sections);
 
-      // Update the form layout and language state from localStorage
       if (!Array.isArray(parsed)) {
-        if (parsed.layout) {
-          setValue('mcqPlacement', parsed.layout); // Syncs currentLayout
-        }
-        if (parsed.language) {
-          setPaperLanguage(parsed.language);
-          setValue('language', parsed.language);
-        }
+        if (parsed.layout) setValue('mcqPlacement', parsed.layout);
+        if (parsed.language) { setPaperLanguage(parsed.language); setValue('language', parsed.language); }
       } else if (sections.length > 0) {
         setPaperLanguage(sections[0].language || currentLanguage);
       }
@@ -261,465 +240,345 @@ const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   }, [currentLanguage, setValue]);
 
   const handleCancelPaper = useCallback(() => {
-  if (!confirm('Clear paper?')) return;
-
-  // 1. Clear storage
-  localStorage.removeItem('questionPapers');
-
-  // 2. Clear React state immediately
-  setPaperSections([]);
-
-  // 3. Optional resets (recommended)
-  setPaperLanguage(currentLanguage);
-  setIsEditMode(false);
-}, [currentLanguage]);
+    if (!confirm('Clear paper?')) return;
+    localStorage.removeItem('questionPapers');
+    setPaperSections([]);
+    setPaperLanguage(currentLanguage);
+    setIsEditMode(false);
+  }, [currentLanguage]);
 
   useEffect(() => {
     refreshPaperData();
-
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === 'questionPapers') {
-        refreshPaperData();
-      }
+      if (event.key === 'questionPapers') refreshPaperData();
     };
-
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [refreshPaperData]);
 
-  
-const handleBoardPattern = async () => {
-  if (!currentSubject || !currentClass) {
-    toast.error('Please select a class and subject first');
-    return;
-  }
-
-  setIsGeneratingBoardPattern(true);
-  
-  try {
-    const subName = currentSubject.name.toLowerCase();
-    
-    // 1. Get Authoritative Pattern from Service
-    const expectedPattern = BoardPatternService.getQuestionDetails(
-      currentSubject.name, 
-      currentClass.name, 
-      currentSubject
-    );
-
-    // 2. Language Auto-Detection (Using .includes)
-    let autoLanguage: 'english' | 'urdu' | 'bilingual' = 'bilingual';
-    if (subName.includes('english')) {
-      autoLanguage = 'english';
-    } else if (['urdu', 'islamyat', 'islamiat', 'pak study', 'quran'].some(s => subName.includes(s))) {
-      autoLanguage = 'urdu';
+  const handleBoardPattern = async () => {
+    if (!currentSubject || !currentClass) {
+      toast.error('Please select a class and subject first');
+      return;
     }
-    
-    setPaperLanguage(autoLanguage);
-    setValue('language', autoLanguage);
-  setValue('mcqPlacement', 'separate'); // Default to separate for board patterns
-    // 3. Fetch Chapter Rules from DB
-    let boardRules = await BoardPatternService.fetchBoardRules(watchedSubjectId, watchedClassId);
-    
-    // Fallback if no rules exist
-    if (!boardRules || boardRules.length === 0) {
-      boardRules = [
-        { question_type: 'mcq', min_questions: expectedPattern.mcq.count, chapter_start: 1, chapter_end: 20, rule_mode: 'total' },
-        { question_type: 'short', min_questions: expectedPattern.short.count, chapter_start: 1, chapter_end: 20, rule_mode: 'total' },
-        { question_type: 'long', min_questions: expectedPattern.long.count, chapter_start: 1, chapter_end: 20, rule_mode: 'total' }
+    setIsGeneratingBoardPattern(true);
+    try {
+      const subName = currentSubject.name.toLowerCase();
+      const expectedPattern = BoardPatternService.getQuestionDetails(currentSubject.name, currentClass.name, currentSubject);
+
+      let autoLanguage: 'english' | 'urdu' | 'bilingual' = 'bilingual';
+      if (subName.includes('english')) autoLanguage = 'english';
+      else if (['urdu', 'islamyat', 'islamiat', 'pak study', 'quran'].some(s => subName.includes(s))) autoLanguage = 'urdu';
+
+      setPaperLanguage(autoLanguage);
+      setValue('language', autoLanguage);
+      setValue('mcqPlacement', 'separate');
+
+      let boardRules = await BoardPatternService.fetchBoardRules(watchedSubjectId, watchedClassId);
+      if (!boardRules || boardRules.length === 0) {
+        boardRules = [
+          { question_type: 'mcq', min_questions: expectedPattern.mcq.count, chapter_start: 1, chapter_end: 20, rule_mode: 'total' },
+          { question_type: 'short', min_questions: expectedPattern.short.count, chapter_start: 1, chapter_end: 20, rule_mode: 'total' },
+          { question_type: 'long', min_questions: expectedPattern.long.count, chapter_start: 1, chapter_end: 20, rule_mode: 'total' },
+        ];
+      }
+
+      let questionsByRule = await loadBoardPatternQuestions(boardRules);
+
+      const allRequiredTypes = [
+        { name: 'mcq', count: expectedPattern.mcq.count },
+        { name: 'short', count: expectedPattern.short.count },
+        { name: 'long', count: expectedPattern.long.count },
+        ...(expectedPattern.additionalTypes || []),
       ];
-    }
 
-    // 4. Load questions based on Chapter Rules
-    let questionsByRule = await loadBoardPatternQuestions(boardRules);
-
-    // 5. DEFICIT FILLER: Loop through ALL types (Standard + Additional)
-    const allRequiredTypes = [
-      { name: 'mcq', count: expectedPattern.mcq.count },
-      { name: 'short', count: expectedPattern.short.count },
-      { name: 'long', count: expectedPattern.long.count },
-      ...(expectedPattern.additionalTypes || [])
-    ];
-
-    for (const typeInfo of allRequiredTypes) {
-      const typeName = typeInfo.name;
-      const currentQuestions = Object.values(questionsByRule).flat().filter(q => {
-        const qType = (q.type || q.question_type || '').toLowerCase();
-        return qType === typeName;
-      });
-
-      if (currentQuestions.length < typeInfo.count && typeInfo.count > 0) {
-        const deficit = typeInfo.count - currentQuestions.length;
-        try {
-          const fallbackRes = await axios.get('/api/questions', {
-            params: { 
-              subjectId: watchedSubjectId, 
-              classId: watchedClassId, 
-              questionType: typeName, 
-              limit: deficit, 
-              random: true 
-            }
-          });
-          // Use a high index key to avoid clashing with chapter rules
-          const fallbackKey = 5000 + allRequiredTypes.indexOf(typeInfo);
-          questionsByRule[fallbackKey] = fallbackRes.data || [];
-        } catch (e) {
-          console.error(`Fallback failed for ${typeName}`, e);
-        }
-      }
-    }
-
-    // 6. Generate UI Sections
-    await generateBoardPatternSections(boardRules, questionsByRule, autoLanguage, expectedPattern);
-    toast.success("Paper Generated Successfully!");
-
-  } catch (error: any) {
-    console.error("Generation Error:", error);
-    toast.error("Generation failed. Check console.");
-  } finally {
-   setTimeout(() => setIsGeneratingBoardPattern(false), 300);
-  }
-};
-    useEffect(() => {
-      const fetchProfile = async () => {
-        try {
-          const res = await fetch('/api/profile');
-           if (!res.ok) {
-            console.error('Failed to fetch profile');
-            return;
+      for (const typeInfo of allRequiredTypes) {
+        const typeName = typeInfo.name;
+        const currentQuestions = Object.values(questionsByRule).flat().filter(q => {
+          const qType = (q.type || q.question_type || '').toLowerCase();
+          return qType === typeName;
+        });
+        if (currentQuestions.length < typeInfo.count && typeInfo.count > 0) {
+          const deficit = typeInfo.count - currentQuestions.length;
+          try {
+            const fallbackRes = await axios.get('/api/questions', {
+              params: { subjectId: watchedSubjectId, classId: watchedClassId, questionType: typeName, limit: deficit, random: true },
+            });
+            const fallbackKey = 5000 + allRequiredTypes.indexOf(typeInfo);
+            questionsByRule[fallbackKey] = fallbackRes.data || [];
+          } catch (e) {
+            console.error(`Fallback failed for ${typeName}`, e);
           }
-
-          const data = await res.json();
-
-          setProfile(data);
-        
-        } catch (err) {
-          console.error('Error fetching profile:', err);
-        } finally {
-          console.log('Profile fetch attempt completed');
         }
-      };
-
-      fetchProfile();
-    }, []);
-   //   console.log('Profile data fetched:', profile.profile.subscription_status);
-//console.log(profile?.profile)
-const loadBoardPatternQuestions = async (rules: any[]) => {
-  const questionsByRule: Record<number, Question[]> = {};
-
-  for (let i = 0; i < rules.length; i++) {
-    const rule = rules[i];
-    
-    // Physics rules use chapter_start and chapter_end from your schema
-    const start = rule.chapter_start;
-    const end = rule.chapter_end;
-    const numChapters = (end - start) + 1;
-
-    // Calculate limit based on rule_mode ('per_chapter' or 'total')
-    const limit = rule.rule_mode === 'per_chapter' 
-      ? rule.min_questions * numChapters 
-      : rule.min_questions;
-
-    const chapterIds = getChapterIdsInRange(start, end);
-
-    if (!chapterIds) {
-      console.warn(`No chapters found for range ${start}-${end}`);
-      questionsByRule[i] = [];
-      continue;
-    }
-
-    const res = await axios.get('/api/questions', {
-      params: { 
-        subjectId: watchedSubjectId, 
-        classId: watchedClassId, 
-        questionType: rule.question_type.toLowerCase(), 
-        chapterIds: chapterIds,
-        limit: limit, 
-        random: true 
       }
-    });
-    
-    questionsByRule[i] = res.data || [];
-  }
-  return questionsByRule;
-};
 
-const generateBoardPatternSections = async (
-  rules: any[], 
-  questionsByRule: Record<number, Question[]>, 
-  selectedLanguage: 'english' | 'urdu' | 'bilingual',
-  patternDetails: any 
-) => {
-  const sections: PaperSection[] = [];
-  const subName = currentSubject?.name?.toLowerCase() || '';
-
-  // Helper to get questions of a specific type
-  const getQuestionsByType = (type: string) => {
-    return Object.values(questionsByRule)
-      .flat()
-      .filter(q => {
-        const qType = (q.type || q.question_type || '').toLowerCase();
-        return qType === type.toLowerCase();
-      });
+      await generateBoardPatternSections(boardRules, questionsByRule, autoLanguage, expectedPattern);
+      toast.success("Paper Generated Successfully!");
+    } catch (error: any) {
+      console.error("Generation Error:", error);
+      toast.error("Generation failed. Check console.");
+    } finally {
+      setTimeout(() => setIsGeneratingBoardPattern(false), 300);
+    }
   };
 
-  // --- 1. MCQs ---
-  const mcqs = getQuestionsByType('mcq').slice(0, patternDetails.mcq.count);
-  if (mcqs.length > 0) {
-    sections.push(createSectionObject('mcq', 'Q. No. 1: Choose the correct answer.', mcqs, patternDetails.mcq.marks));
-  }
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch('/api/profile');
+        if (!res.ok) { console.error('Failed to fetch profile'); return; }
+        const data = await res.json();
+        setProfile(data);
+      } catch (err) {
+        console.error('Error fetching profile:', err);
+      }
+    };
+    fetchProfile();
+  }, []);
 
-  // --- 2. Short Questions (Logic for splitting into groups) ---
-  const shorts = getQuestionsByType('short').slice(0, patternDetails.short.count);
-  if (shorts.length > 0) {
-    // Determine chunk size: Urdu/English = 8, Computer = 6, Others = 6
-    const chunkSize = (subName.includes('urdu') || subName.includes('english')) ? 8 : 6;
-    const attemptPerSection = chunkSize === 8 ? 5 : 4;
-
-    for (let i = 0; i < shorts.length; i += chunkSize) {
-      const chunk = shorts.slice(i, i + chunkSize);
-      const qNumber = Math.floor(i / chunkSize) + 2;
-
-      sections.push({
-        id: `section-short-${i}-${Date.now()}`,
-        type: 'short',
-        instructions: `Q. No. ${qNumber}: Write short answers to any ${attemptPerSection} questions.`,
-        questions: chunk,
-        totalQuestions: chunk.length,
-        attemptCount: attemptPerSection,
-        marksEach: patternDetails.short.marks,
-        totalMarks: attemptPerSection * patternDetails.short.marks,
-        subject: currentSubject?.name || '',
-        language: selectedLanguage,
-        layout: currentLayout,
-        timestamp: new Date().toISOString()
+  const loadBoardPatternQuestions = async (rules: any[]) => {
+    const questionsByRule: Record<number, Question[]> = {};
+    for (let i = 0; i < rules.length; i++) {
+      const rule = rules[i];
+      const start = rule.chapter_start;
+      const end = rule.chapter_end;
+      const numChapters = (end - start) + 1;
+      const limit = rule.rule_mode === 'per_chapter' ? rule.min_questions * numChapters : rule.min_questions;
+      const chapterIds = getChapterIdsInRange(start, end);
+      if (!chapterIds) { questionsByRule[i] = []; continue; }
+      const res = await axios.get('/api/questions', {
+        params: { subjectId: watchedSubjectId, classId: watchedClassId, questionType: rule.question_type.toLowerCase(), chapterIds, limit, random: true },
       });
+      questionsByRule[i] = res.data || [];
     }
-  }
+    return questionsByRule;
+  };
 
-  // --- 3. Long Questions ---
-  const longs = getQuestionsByType('long').slice(0, patternDetails.long.count);
-  if (longs.length > 0) {
-    const qNum = sections.length + 1;
-    sections.push({
-      id: `section-long-${Date.now()}`,
-      type: 'long',
-      instructions: `Q. No. ${qNum}: Attempt any ${patternDetails.long.attempt} Long Questions.`,
-      questions: longs,
-      totalQuestions: longs.length,
-      attemptCount: patternDetails.long.attempt,
-      marksEach: patternDetails.long.marks,
-      totalMarks: patternDetails.long.attempt * patternDetails.long.marks,
-      subject: currentSubject?.name || '',
-      language: selectedLanguage,
-      layout: currentLayout,
-      timestamp: new Date().toISOString()
-    });
-  }
+  const generateBoardPatternSections = async (
+    rules: any[],
+    questionsByRule: Record<number, Question[]>,
+    selectedLanguage: 'english' | 'urdu' | 'bilingual',
+    patternDetails: any,
+  ) => {
+    const sections: PaperSection[] = [];
+    const subName = currentSubject?.name?.toLowerCase() || '';
 
-  // --- 4. Additional Types (English/Urdu Specific) ---
-  if (patternDetails.additionalTypes && patternDetails.additionalTypes.length > 0) {
-    let nextQNum = sections.length + 1;
+    const getQuestionsByType = (type: string) =>
+      Object.values(questionsByRule).flat().filter(q =>
+        (q.type || q.question_type || '').toLowerCase() === type.toLowerCase()
+      );
 
-    patternDetails.additionalTypes.forEach((extra: any) => {
-      const extraQuestions = getQuestionsByType(extra.name).slice(0, extra.count);
+    const mcqs = getQuestionsByType('mcq').slice(0, patternDetails.mcq.count);
+    if (mcqs.length > 0) sections.push(createSectionObject('mcq', 'Q. No. 1: Choose the correct answer.', mcqs, patternDetails.mcq.marks));
 
-      if (extraQuestions.length > 0) {
+    const shorts = getQuestionsByType('short').slice(0, patternDetails.short.count);
+    if (shorts.length > 0) {
+      const chunkSize = (subName.includes('urdu') || subName.includes('english')) ? 8 : 6;
+      const attemptPerSection = chunkSize === 8 ? 5 : 4;
+      for (let i = 0; i < shorts.length; i += chunkSize) {
+        const chunk = shorts.slice(i, i + chunkSize);
+        const qNumber = Math.floor(i / chunkSize) + 2;
         sections.push({
-          id: `section-extra-${extra.name}-${Date.now()}`,
-          type: extra.name,
-          instructions: `Q. No. ${nextQNum}: ${extra.label} (${extra.attempt}/${extra.count})`,
-          questions: extraQuestions,
-          totalQuestions: extraQuestions.length,
-          attemptCount: extra.attempt,
-          marksEach: extra.marks,
-          totalMarks: extra.total,
+          id: `section-short-${i}-${Date.now()}`,
+          type: 'short',
+          instructions: `Q. No. ${qNumber}: Write short answers to any ${attemptPerSection} questions.`,
+          questions: chunk,
+          totalQuestions: chunk.length,
+          attemptCount: attemptPerSection,
+          marksEach: patternDetails.short.marks,
+          totalMarks: attemptPerSection * patternDetails.short.marks,
           subject: currentSubject?.name || '',
           language: selectedLanguage,
           layout: currentLayout,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
-        nextQNum++;
       }
-    });
-  }
-
-  // --- Final Save & Sync ---
-  if (sections.length === 0) {
-    throw new Error("No questions found even with fallback. Check DB connections.");
-  }
-
-  const paperData = { layout: getValues('mcqPlacement') || currentLayout, language: selectedLanguage, sections };
-  localStorage.setItem('questionPapers', JSON.stringify(paperData));
-  refreshPaperData();
-};
-
-// Helper to keep the code clean
-const createSectionObject = (type: any, title: string, questions: Question[], marks: number) => ({
-  id: `section-${type}-combined-${Date.now()}`,
-  type,
-  instructions: title,
-  questions,
-  totalQuestions: questions.length,
-  attemptCount: questions.length,
-  marksEach: marks,
-  totalMarks: questions.length * marks,
-  subject: currentSubject?.name || '', 
-  language: paperLanguage, 
-  layout: currentLayout,
-  timestamp: new Date().toISOString()
-});
-
-const handlePrint = async () => {
-  window.print();
-
-  try {
-    const response = await fetch('/api/profile/increment-count', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to update count');
     }
 
-    // Update local state with the returned profile data
-    setProfile((prev: any) => ({
-      ...prev,
-      profile: result.profile
-    }));
+    const longs = getQuestionsByType('long').slice(0, patternDetails.long.count);
+    if (longs.length > 0) {
+      sections.push({
+        id: `section-long-${Date.now()}`,
+        type: 'long',
+        instructions: `Q. No. ${sections.length + 1}: Attempt any ${patternDetails.long.attempt} Long Questions.`,
+        questions: longs,
+        totalQuestions: longs.length,
+        attemptCount: patternDetails.long.attempt,
+        marksEach: patternDetails.long.marks,
+        totalMarks: patternDetails.long.attempt * patternDetails.long.marks,
+        subject: currentSubject?.name || '',
+        language: selectedLanguage,
+        layout: currentLayout,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
-    toast.success("Print stats synced!");
+    if (patternDetails.additionalTypes?.length > 0) {
+      let nextQNum = sections.length + 1;
+      patternDetails.additionalTypes.forEach((extra: any) => {
+        const extraQuestions = getQuestionsByType(extra.name).slice(0, extra.count);
+        if (extraQuestions.length > 0) {
+          sections.push({
+            id: `section-extra-${extra.name}-${Date.now()}`,
+            type: extra.name,
+            instructions: `Q. No. ${nextQNum}: ${extra.label} (${extra.attempt}/${extra.count})`,
+            questions: extraQuestions,
+            totalQuestions: extraQuestions.length,
+            attemptCount: extra.attempt,
+            marksEach: extra.marks,
+            totalMarks: extra.total,
+            subject: currentSubject?.name || '',
+            language: selectedLanguage,
+            layout: currentLayout,
+            timestamp: new Date().toISOString(),
+          });
+          nextQNum++;
+        }
+      });
+    }
 
-  } catch (error: any) {
-    console.error("API Update Error:", error.message);
-    // Don't toast error on print, it might annoy the user if they just want their paper
-  }
-};
-// --- NEW: Section Update Handler ---
-  // This function handles the updates for custom headers (Urdu/English instructions)
-const handleSectionUpdate = useCallback((updatedSections: PaperSection[]) => {
-  setPaperSections(updatedSections);
-  // FIX: Save as object to preserve layout
-  const paperData = {
-    layout: currentLayout,
-    language: paperLanguage,
-    sections: updatedSections
+    if (sections.length === 0) throw new Error("No questions found even with fallback. Check DB connections.");
+
+    const paperData = { layout: getValues('mcqPlacement') || currentLayout, language: selectedLanguage, sections };
+    localStorage.setItem('questionPapers', JSON.stringify(paperData));
+    refreshPaperData();
   };
-  localStorage.setItem('questionPapers', JSON.stringify(paperData));
-}, [currentLayout, paperLanguage]);
+
+  const createSectionObject = (type: any, title: string, questions: Question[], marks: number) => ({
+    id: `section-${type}-combined-${Date.now()}`,
+    type,
+    instructions: title,
+    questions,
+    totalQuestions: questions.length,
+    attemptCount: questions.length,
+    marksEach: marks,
+    totalMarks: questions.length * marks,
+    subject: currentSubject?.name || '',
+    language: paperLanguage,
+    layout: currentLayout,
+    timestamp: new Date().toISOString(),
+  });
+
+  const handlePrint = async () => {
+    window.print();
+    try {
+      const response = await fetch('/api/profile/increment-count', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to update count');
+      setProfile((prev: any) => ({ ...prev, profile: result.profile }));
+    } catch (error: any) {
+      console.error("API Update Error:", error.message);
+    }
+  };
+
+  const handleSectionUpdate = useCallback((updatedSections: PaperSection[]) => {
+    setPaperSections(updatedSections);
+    localStorage.setItem('questionPapers', JSON.stringify({ layout: currentLayout, language: paperLanguage, sections: updatedSections }));
+  }, [currentLayout, paperLanguage]);
 
   const handleTextChange = (sectionId: string, questionId: string, field: string, value: string) => {
-  const updated = paperSections.map(s => {
-    if (s.id === sectionId) {
-      return { ...s, questions: s.questions.map(q => q.id === questionId ? { ...q, [field]: value } : q) };
-    }
-    return s;
-  });
-  setPaperSections(updated);
-  
-  // FIX: Save as object to preserve layout
-  const paperData = {
-    layout: currentLayout,
-    language: paperLanguage,
-    sections: updated
+    const updated = paperSections.map(s =>
+      s.id === sectionId
+        ? { ...s, questions: s.questions.map(q => q.id === questionId ? { ...q, [field]: value } : q) }
+        : s
+    );
+    setPaperSections(updated);
+    localStorage.setItem('questionPapers', JSON.stringify({ layout: currentLayout, language: paperLanguage, sections: updated }));
   };
-  localStorage.setItem('questionPapers', JSON.stringify(paperData));
-};
- // FIX: Add a fallback of 0 for totalMarks and totalQuestions
-const totalMarks = paperSections.reduce((acc, s) => acc + (s.totalMarks || 0), 0);
-const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions || 0), 0);
 
+  const totalMarks = paperSections.reduce((acc, s) => acc + (s.totalMarks || 0), 0);
+  const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions || 0), 0);
 
-// 1. Extract the status safely
-const subStatus = profile?.profile?.subscription_status;
+  const subStatus = profile?.profile?.subscription_status;
+  const isPremium = subStatus === 'active';
+  const hasActivePackage = profile?.userPackages?.some((pkg: any) => pkg.is_active === true);
+  const isUserPremium = isPremium || hasActivePackage;
 
-// 2. Determine if the user is currently premium
-const isPremium = subStatus === 'active';
+  // ─── The settings panel rendered via portal directly into document.body ───
+  // This completely escapes ALL parent overflow/clip/stacking contexts
+  const settingsPanelPortal = isMounted
+    ? createPortal(
+        <SettingsPanel
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
+          settings={settings}
+          isPremium={isUserPremium}
+          onSettingChange={(key, value) => setSettings(prev => ({ ...prev, [key]: value }))}
+        />,
+        document.body
+      )
+    : null;
 
-// 3. (Optional) If you want to handle the specific "Ashfaq" case from your 
-// data object where you check the packages array as well:
-const hasActivePackage = profile?.userPackages?.some((pkg: any) => pkg.is_active === true);
-const isUserPremium = isPremium || hasActivePackage;
- return (
-    <div className="min-vh-100 d-flex flex-column bg-light" style={{ overflowX: 'hidden' }}>
-      {/* 1. STICKY HEADER: Stays at the top while scrolling */}
-   <div  className="d-print-none bg-white border-bottom shadow-sm app-header " 
- 
->
-      <div className="w-100 appHeaderContent">
-        <AppHeader
-          onBoardPattern={handleBoardPattern}
-          onConfigurePaper={() => setShowQuestionSelector(true)}
-          isEditMode={isEditMode}
-          onToggleEditMode={() => setIsEditMode(!isEditMode)}
-          onSavePaper={paperSections.length > 0 ? handleSaveToSupabase : undefined}
-          isSaveDisabled={paperSections.length === 0 || isSaving}
-          onPrint={handlePrint}
-          onCancelPaper={handleCancelPaper}
-          paperSections={paperSections}
-          totalQuestions={totalQuestions}
-          totalMarks={totalMarks}
-          isLoading={isLoading || isGeneratingBoardPattern}
-        />
+  return (
+    // ⚠️ CRITICAL: Remove overflowX: 'hidden' from root — it was clipping the fixed sidebar.
+    // Horizontal overflow is handled per-element below instead.
+    <div className="min-vh-100 d-flex flex-column bg-light">
+
+      {/* 1. FIXED HEADER */}
+      <div className="d-print-none bg-white border-bottom shadow-sm app-header">
+        <div className="w-100 appHeaderContent">
+          <AppHeader
+            onBoardPattern={handleBoardPattern}
+            onConfigurePaper={() => setShowQuestionSelector(true)}
+            isEditMode={isEditMode}
+            onToggleEditMode={() => setIsEditMode(!isEditMode)}
+            onSavePaper={paperSections.length > 0 ? handleSaveToSupabase : undefined}
+            isSaveDisabled={paperSections.length === 0 || isSaving}
+            onPrint={handlePrint}
+            onCancelPaper={handleCancelPaper}
+            paperSections={paperSections}
+            totalQuestions={totalQuestions}
+            totalMarks={totalMarks}
+            isLoading={isLoading || isGeneratingBoardPattern}
+          />
+        </div>
       </div>
-    </div>
-{/* 1. GLOBAL LOADING OVERLAY */}
 
-      {/* 2. SCROLLABLE AREA: Allows both Vertical and Horizontal scrolling */}
-     <main
-  className="flex-grow-1 overflow-auto bg-secondary bg-opacity-10 custom-scrollbar d-print-block paper-preview-main" style={{ touchAction: 'pan-y pinch-zoom' }}>
-        {/* Wrapper to center paper on large screens, but allow left-align on small screens */}
+      {/* 2. MAIN SCROLLABLE AREA */}
+      <main
+        className="flex-grow-1 overflow-auto bg-secondary bg-opacity-10 custom-scrollbar d-print-block paper-preview-main"
+        style={{ touchAction: 'pan-y pinch-zoom', overflowX: 'hidden' }}
+      >
         <div className="paper-canvas-wrapper">
-<div
-  id="printable-paper"
-  ref={paperRef}
-  className={`bg-white shadow-lg paper-canvas ${paperSections.length === 0 ? 'paper-canvas--empty' : ''}`}
-  style={{
-    height: 'auto',
-    fontFamily: settings.fontFamily,
-    direction: config.direction as any,
-  }}
->
-
-    {paperSections.length === 0 ? (
-  <div 
-    className="empty-state d-flex flex-column align-items-center justify-content-start text-muted text-center p-3 pt-4 mt-3" 
-    style={{ minHeight: '297mm' }}
-  >
-    <BookOpen size={56} className="mb-3 opacity-20" />
-    <h3 className="fw-light fs-5 fs-md-3">Paper Preview</h3>
-    <p className="mb-4 px-2" style={{ fontSize: '0.9rem' }}>
-      Select a subject and generate a pattern to begin.
-    </p>
-    
-    <div className="d-flex flex-column gap-3 w-100 px-3" style={{ maxWidth: '360px' }}>
-      <button 
-        className="btn btn-primary btn-lg px-3 shadow-sm d-flex align-items-center justify-content-center gap-2"
-        onClick={handleBoardPattern}
-        disabled={isLoading || isGeneratingBoardPattern}
-        style={{ borderRadius: '12px', fontSize: '0.9rem', fontWeight: 600 }}
-      >
-        {isGeneratingBoardPattern ? (
-          <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-        ) : (
-          <i className="bi bi-magic"></i>
-        )}
-        Generate Board Pattern Paper
-      </button>
-
-      <button 
-        className="btn btn-outline-dark btn-lg px-3 d-flex align-items-center justify-content-center gap-2"
-        onClick={() => setShowQuestionSelector(true)}
-        style={{ borderRadius: '12px', fontSize: '0.9rem', fontWeight: 600 }}
-      >
-        <Settings size={18} />
-        Configure Paper Manually
-      </button>
-    </div>
-  </div>
-) : (
+          <div
+            id="printable-paper"
+            ref={paperRef}
+            className={`bg-white shadow-lg paper-canvas ${paperSections.length === 0 ? 'paper-canvas--empty' : ''}`}
+            style={{ height: 'auto', fontFamily: settings.fontFamily, direction: config.direction as any }}
+          >
+            {paperSections.length === 0 ? (
+              <div
+                className="empty-state d-flex flex-column align-items-center justify-content-start text-muted text-center p-3 pt-4 mt-3"
+                style={{ minHeight: '297mm' }}
+              >
+                <BookOpen size={56} className="mb-3 opacity-20" />
+                <h3 className="fw-light fs-5 fs-md-3">Paper Preview</h3>
+                <p className="mb-4 px-2" style={{ fontSize: '0.9rem' }}>
+                  Select a subject and generate a pattern to begin.
+                </p>
+                <div className="d-flex flex-column gap-3 w-100 px-3" style={{ maxWidth: '360px' }}>
+                  <button
+                    className="btn btn-primary btn-lg px-3 shadow-sm d-flex align-items-center justify-content-center gap-2"
+                    onClick={handleBoardPattern}
+                    disabled={isLoading || isGeneratingBoardPattern}
+                    style={{ borderRadius: '12px', fontSize: '0.9rem', fontWeight: 600 }}
+                  >
+                    {isGeneratingBoardPattern
+                      ? <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                      : <i className="bi bi-magic" />}
+                    Generate Board Pattern Paper
+                  </button>
+                  <button
+                    className="btn btn-outline-dark btn-lg px-3 d-flex align-items-center justify-content-center gap-2"
+                    onClick={() => setShowQuestionSelector(true)}
+                    style={{ borderRadius: '12px', fontSize: '0.9rem', fontWeight: 600 }}
+                  >
+                    <Settings size={18} />
+                    Configure Paper Manually
+                  </button>
+                </div>
+              </div>
+            ) : (
               <PaperLayoutRenderer
                 paperSections={paperSections}
                 settings={settings}
@@ -730,6 +589,7 @@ const isUserPremium = isPremium || hasActivePackage;
                 onTextChange={handleTextChange}
                 renderInlineBilingual={true}
                 currentClass={currentClass}
+                subjectUrduName={currentSubject?.name_ur}
                 profile={profile?.profile}
                 isPremium={isUserPremium}
                 onSectionUpdate={handleSectionUpdate}
@@ -738,23 +598,19 @@ const isUserPremium = isPremium || hasActivePackage;
           </div>
         </div>
       </main>
-{(isLoading ||isGeneratingBoardPattern || isSaving) && (
-  <div 
-    className="position-fixed top-0 start-0 w-100 vh-100 d-flex flex-column align-items-center justify-content-center"
-    style={{ 
-        zIndex: 9999, 
-        backgroundColor: 'rgba(255, 255, 255, 0.7)',
-        backdropFilter: 'blur(2px)' 
-    }}
-  >
-    
-        <Loading message={isSaving ? 'Saving to Cloud...' : 'Generating Board Pattern...'} /> {/* Your existing Loading component */}
 
-    
-  </div>
-)}
-      {/* 3. FLOATING ACTION BUTTON */}
-      <button 
+      {/* 3. LOADING OVERLAY */}
+      {(isLoading || isGeneratingBoardPattern || isSaving) && (
+        <div
+          className="position-fixed top-0 start-0 w-100 vh-100 d-flex flex-column align-items-center justify-content-center"
+          style={{ zIndex: 9999, backgroundColor: 'rgba(255, 255, 255, 0.7)', backdropFilter: 'blur(2px)' }}
+        >
+          <Loading message={isSaving ? 'Saving to Cloud...' : 'Generating Board Pattern...'} />
+        </div>
+      )}
+
+      {/* 4. FLOATING SETTINGS BUTTON */}
+      <button
         className="btn btn-dark rounded-circle shadow-lg position-fixed bottom-0 end-0 m-4 d-print-none d-flex align-items-center justify-content-center"
         style={{ width: '56px', height: '56px', zIndex: 1050 }}
         onClick={() => setShowSettings(true)}
@@ -762,8 +618,7 @@ const isUserPremium = isPremium || hasActivePackage;
         <Settings size={24} />
       </button>
 
-      {/* Settings & Modals */}
-      <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} settings={settings} isPremium={isUserPremium} onSettingChange={(key, value) => setSettings(prev => ({ ...prev, [key]: value }))} />
+      {/* 5. QUESTION SELECTOR MODAL */}
       {showQuestionSelector && (
         <QuestionSelectorModal
           isOpen={showQuestionSelector}
@@ -782,323 +637,167 @@ const isUserPremium = isPremium || hasActivePackage;
           currentClass={currentClass}
         />
       )}
-  
 
+      <style jsx global>{`
+        @font-face {
+          font-family: 'JameelNoori';
+          src: local('Jameel Noori Nastaleeq'), local('Nafees'), local('Alvi Lahori Nastaleeq'), local('JameelNoori');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
 
-<style jsx global>{`
-  /* Urdu Font Support */
-  @font-face {
-    font-family: 'JameelNoori';
-    src: local('Jameel Noori Nastaleeq'), local('Nafees'), local('Alvi Lahori Nastaleeq'), local('JameelNoori');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-  }
-  /* Screen only - makes the preview look like a floating sheet */
-  .paper-preview-main {
-    padding-top: 92px !important;
-  }
-  @media screen {
-    .paper-canvas {
-      margin-top: 20px;
-      margin-bottom: 20px;
-     
-    }
-  }
+        /* ── Screen baseline ── */
+        @media screen {
+          html, body {
+            overflow-x: hidden;
+            overflow-y: auto;
+          }
+          .paper-preview-main {
+            padding-top: 92px !important;
+          }
+          .paper-canvas {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 20px auto;
+            background: white;
+            transform-origin: top center;
+            transition: transform 0.2s ease;
+          }
+        }
 
-  @media print {
-    /* 1. Force the page to be exactly A4 with NO browser margins */
-    @page {
-      size: A4 portrait;
-      margin: 0 !important; 
-    }
-/* 1. Kill the 'Push' from the top */
-  html, body, #__next, .min-vh-100, main {
-    margin: 0 !important;
-    padding: 0 !important;
-    position: static !important; /* Reset from relative/absolute */
-    display: block !important;   /* Reset from flex/grid */
-    height: auto !important;
-    overflow: visible !important; /* Critical for multi-page exams */
-  }
-    .d-flex {
-    background: transparent !important; /* Prevent any background colors from printing */}
+        /* ── Print ── */
+        @media print {
+          @page { size: A4 portrait; margin: 0 !important; }
 
-  /* 2. Absolute Removal of UI */
-  .app-header, .d-print-none, .sidebar, .btn-dark {
-    display: none !important;
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
+          html, body, #__next, .min-vh-100, main {
+            margin: 0 !important;
+            padding: 0 !important;
+            position: static !important;
+            display: block !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          .d-flex { background: transparent !important; }
+          .app-header, .d-print-none, .sidebar, .btn-dark { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }
+          /* Portal renders into body — hide settings panel on print too */
+          .settings-sidebar, .settings-sidebar + div { display: none !important; }
 
-  /* 3. The Paper Container */
-  .paper-canvas {
-    position: absolute !important; /* Force it to the literal (0,0) coordinate */
-    top: 0 !important;
-    left: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 210mm !important;
-    box-shadow: none !important;
-    transform: none !important; /* Remove any 'zoom' or 'scale' used for mobile */
-  }
-  
-  /* 4. Ensure internal sheets start correctly */
-  .paper-sheet {
-    margin: 0 auto !important;
-    page-break-before: avoid !important; 
-    page-break-after: always !important;
-  }
+          .paper-canvas {
+            position: absolute !important;
+            top: 0 !important; left: 0 !important;
+            margin: 0 !important; padding: 0 !important;
+            width: 210mm !important;
+            box-shadow: none !important;
+            transform: none !important;
+            zoom: unset !important;
+            min-height: auto !important;
+            height: auto !important;
+          }
+          .paper-canvas-wrapper { display: block !important; width: 210mm !important; overflow: visible !important; }
 
-    /* Hide everything except our specific printable ID */
-    body * {
-      visibility: hidden;
-    }
+          body * { visibility: hidden; }
+          .paper-sheet, .paper-sheet * { visibility: visible; }
+          .paper-sheet {
+            visibility: visible !important;
+            display: block !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            margin: 0 auto !important;
+            padding: 3mm !important;
+            box-sizing: border-box !important;
+            box-shadow: none !important;
+            border: none !important;
+            width: 210mm !important;
+            height: auto !important;
+          }
+        }
 
-    /* 3. The Paper Container: Reset its position to the very top-left */
-    .paper-sheet,
-    .paper-sheet * {
-      visibility: visible;
-    }
+        /* ── Sidebar scrollbar ── */
+        .settings-sidebar::-webkit-scrollbar { width: 5px; }
+        .settings-sidebar::-webkit-scrollbar-track { background: #f1f3f5; }
+        .settings-sidebar::-webkit-scrollbar-thumb { background: #ced4da; border-radius: 4px; }
+        .settings-sidebar::-webkit-scrollbar-thumb:hover { background: #adb5bd; }
+        .settings-sidebar { scrollbar-width: thin; scrollbar-color: #ced4da #f1f3f5; }
 
-   
+        /* ── Utilities ── */
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .header-wrapper { position: relative; height: 100%; }
 
-    /* 4. Ensure each sheet starts on a new physical page */
-    .paper-sheet {
-      visibility: visible !important;
-      display: block !important;
-      page-break-after: always !important;
-      break-after: page !important;
-      margin: 0 auto !important;
-      /* We use padding for internal margins so it matches the screen */
-      padding: 3mm !important;
-      box-sizing: border-box !important;
-      box-shadow: none !important;
-      border: none !important;
-      width: 210mm !important;
-   height: 297mm !important;   
-      height: auto !important;
-    }
+        .btn-premium {
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          border-radius: 10px; white-space: nowrap; font-weight: 600;
+          font-size: 0.85rem; padding: 0 16px; display: flex; align-items: center;
+          gap: 8px; height: 42px; border: 1px solid #e2e8f0;
+          background: #ffffff; color: #475569; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .btn-premium:hover:not(:disabled) { transform: translateY(-1px); background: #f8fafc; border-color: #cbd5e1; color: #1e293b; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .btn-premium:active:not(:disabled) { transform: scale(0.97); }
+        .btn-premium:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
+        .edit-mode-active { background: #fffbeb !important; border-color: #fcd34d !important; color: #92400e !important; box-shadow: inset 0 2px 4px rgba(251,191,36,0.1) !important; }
 
-    .paper-canvas {
-    transform: none !important;
-    transform-origin: unset !important;
-    margin: 0 !important;
-    zoom: unset !important;
-    width: 210mm !important;
-  }
+        .scroll-nav-btn {
+          background: white; border: 1px solid #e2e8f0; border-radius: 50%;
+          width: 32px; height: 32px; display: flex; align-items: center;
+          justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+          z-index: 20; flex-shrink: 0; position: absolute;
+        }
+        .left-fade { left: 4px; }
+        .right-fade { right: 4px; }
 
-  .paper-canvas-wrapper {
-    display: block !important;
-    width: 210mm !important;
-    overflow: visible !important;
-  }
-  }
-/* Layout & Scrollbars */
-.hide-scrollbar::-webkit-scrollbar { display: none; }
-.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .app-header {
+          position: fixed; top: 0; right: 0; left: 280px;
+          height: 72px; z-index: 1020;
+          background: rgba(255,255,255,0.9); backdrop-filter: blur(8px); transition: all 0.3s ease;
+        }
 
-.header-wrapper {
-  position: relative;
-  height: 100%;
-}
+        .empty-state .btn-primary { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border: none; transition: all 0.3s ease; }
+        .empty-state .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(37,99,235,0.3) !important; }
+        .empty-state .btn-outline-dark { border: 1px solid #e2e8f0; background: #ffffff; color: #1e293b; transition: all 0.3s ease; }
+        .empty-state .btn-outline-dark:hover { background: #f8fafc; border-color: #cbd5e1; transform: translateY(-2px); }
 
-/* Premium Button Styling */
-.btn-premium {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 10px;
-  white-space: nowrap;
-  font-weight: 600;
-  font-size: 0.85rem;
-  padding: 0 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 42px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #475569;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-}
+        @media (max-width: 990px) {
+          .app-header { left: 0; height: 64px; top: 55px; }
+          .btn-premium { height: 38px; padding: 0 12px; font-size: 0.8rem; }
+        }
 
-.btn-premium:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #1e293b;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
+        @media screen and (max-width: 991px) {
+          .paper-preview-main {
+            padding-top: 72px !important;
+            padding-left: 0 !important; padding-right: 0 !important;
+            padding-bottom: 80px !important;
+            overflow-x: hidden !important; margin-top: 0 !important;
+            touch-action: pan-y pinch-zoom;
+          }
+          .paper-canvas-wrapper {
+            display: flex !important; justify-content: center !important;
+            width: 100% !important; max-width: 100% !important;
+            overflow: hidden !important; padding: 0 !important; margin: 0 !important;
+            position: relative !important; left: 0 !important;
+          }
+          .paper-canvas {
+            width: 793.7px !important;
+            transform: scale(var(--paper-scale, 0.45)) !important;
+            transform-origin: top center !important;
+            margin: 12px 0 var(--paper-margin-bottom, -400px) 0 !important;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15) !important;
+            zoom: unset !important;
+          }
+          .empty-state { padding: 1.5rem 1rem !important; }
+          .empty-state h3 { font-size: 1.1rem !important; }
+          .empty-state .btn-lg { font-size: 0.85rem !important; padding: 0.5rem 1rem !important; height: auto !important; min-height: 48px; white-space: normal !important; text-align: center; }
+          .paper-canvas--empty { width: 100% !important; transform: none !important; margin: 0 !important; box-shadow: none !important; min-height: calc(100vh - 140px) !important; }
+          .paper-canvas--empty .empty-state { min-height: calc(100vh - 140px) !important; width: 100% !important; padding: 2rem 1.5rem !important; }
+          .paper-canvas-wrapper:has(.paper-canvas--empty) { overflow: visible !important; justify-content: stretch !important; }
+        }
+      `}</style>
 
-.btn-premium:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.btn-premium:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  filter: grayscale(1);
-}
-
-/* Active State for Edit Mode */
-.edit-mode-active {
-  background: #fffbeb !important;
-  border-color: #fcd34d !important;
-  color: #92400e !important;
-  box-shadow: inset 0 2px 4px rgba(251, 191, 36, 0.1) !important;
-}
-
-/* Modern Scroll Arrows */
-.scroll-nav-btn {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-  z-index: 20;
-  flex-shrink: 0;
-  position: absolute;
-}
-
-.left-fade { left: 4px; }
-.right-fade { right: 4px; }
-
-/* Parent Header Overrides */
-.app-header {
-  position: fixed;
-  top: 0;
-  right: 0;
-  left: 280px; /* Adjust based on your sidebar width */
-  height: 72px;
-  z-index: 1020;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
-  transition: all 0.3s ease;
-}
-
-@media (max-width: 990px) {
-  .app-header {
-    left: 0;
-    height: 64px;
-    top:55px;
-  }
-  .btn-premium {
-    height: 38px;
-    padding: 0 12px;
-    font-size: 0.8rem;
-  }
-}
-
-/* Premium Primary Button for Empty State */
-.empty-state .btn-primary {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  border: none;
-  transition: all 0.3s ease;
-}
-
-.empty-state .btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3) !important;
-}
-
-.empty-state .btn-outline-dark {
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #1e293b;
-  transition: all 0.3s ease;
-}
-
-.empty-state .btn-outline-dark:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  transform: translateY(-2px);
-}
-  @media screen {
-    .paper-canvas {
-      width: 210mm; /* Strict A4 Width */
-      min-height: 297mm;
-      margin: 20px auto;
-      background: white;
-      transform-origin: top center;
-      transition: transform 0.2s ease;
-    }
-  }
-
-  @media print {
-    .paper-canvas {
-      min-height: auto !important;
-      height: auto !important;
-    }
-  }
- /* REPLACE your @media screen (max-width: 991px) block with this */
-@media screen and (max-width: 991px) {
-  .paper-preview-main {
-    padding-top: 72px !important;  /* header only */
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    padding-bottom: 80px !important;
-    overflow-x: hidden !important;
-    margin-top: 0 !important;
-    touch-action: pan-y pinch-zoom;
-  }
-  .paper-canvas-wrapper {
-    display: flex !important;
-    justify-content: center !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow: hidden !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    position: relative !important;
-    left: 0 !important;
-  }
-  .paper-canvas {
-    width: 793.7px !important;
-    transform: scale(var(--paper-scale, 0.45)) !important;
-    transform-origin: top center !important;
-    margin: 12px 0 var(--paper-margin-bottom, -400px) 0 !important;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.15) !important;
-    zoom: unset !important;
-  }
-    .empty-state {
-    padding: 1.5rem 1rem !important;
-  }
-  .empty-state h3 {
-    font-size: 1.1rem !important;
-  }
-  .empty-state .btn-lg {
-    font-size: 0.85rem !important;
-    padding: 0.5rem 1rem !important;
-    height: auto !important;
-    min-height: 48px;
-    white-space: normal !important;
-    text-align: center;
-  }
-
-  .paper-canvas--empty {
-    width: 100% !important;
-    transform: none !important;
-    margin: 0 !important;
-    box-shadow: none !important;
-    min-height: calc(100vh - 140px) !important;
-  }
-
-  .paper-canvas--empty .empty-state {
-    min-height: calc(100vh - 140px) !important;
-    width: 100% !important;
-    padding: 2rem 1.5rem !important;
-  }
-
-  .paper-canvas-wrapper:has(.paper-canvas--empty) {
-    overflow: visible !important;
-    justify-content: stretch !important;
-  }
-}
-`}</style>
-  </div>
+      {/* 6. SETTINGS PANEL — rendered via React Portal into document.body
+           This completely escapes the component tree and ALL parent
+           overflow / clip / stacking contexts, guaranteeing the sidebar
+           is never clipped regardless of what the parent layout does.    */}
+      {settingsPanelPortal}
+    </div>
   );
 };

@@ -120,7 +120,7 @@ export const useGeneratePaper = () => {
       hardPercent: 34,
       timeMinutes: 60,
       mcqTimeMinutes: 15,
-      subjectiveTimeMinutes: 30,
+      subjectiveTimeMinutes: 45,
       language: 'english',
       mcqMarks: 1,
       shortMarks: 2,
@@ -159,8 +159,6 @@ export const useGeneratePaper = () => {
     if (isUrduSubject(subjects, watchedSubjectId)) return urduTypes;
     return defaultTypes;
   }, [watchedSubjectId, subjects]);
-
-  // Effects and other handlers moved here
 
   // --- authentication check effect -------------------------------------------------
   useEffect(() => {
@@ -264,7 +262,7 @@ export const useGeneratePaper = () => {
     
     if (trialStatus.isTrial && 
         trialStatus.trialEndsAt &&
-        trialStatus.trialEndsAt.getTime() > Date.now()) {
+        new Date(trialStatus.trialEndsAt).getTime() > Date.now()) {
       return true;
     }
     
@@ -380,7 +378,7 @@ export const useGeneratePaper = () => {
 
   const handleLanguageTranslation = (questions: Question[], language: string) => {
     return questions.map(question => {
-      const translatedQuestion = { ...question };
+      const translatedQuestion = { ...question } as any;
       
       if (language !== 'english') {
         const isBi = language === 'bilingual';
@@ -398,19 +396,19 @@ export const useGeneratePaper = () => {
           const options = ['option_a', 'option_b', 'option_c', 'option_d'];
           options.forEach(opt => {
             const urduField = `${opt}_ur`;
-            if (question[urduField]) {
+            if ((question as any)[urduField]) {
               if (isBi) {
-                translatedQuestion[`${opt}_english`] = question[opt];
-                translatedQuestion[`${opt}_urdu`] = question[urduField];
+                translatedQuestion[`${opt}_english`] = (question as any)[opt];
+                translatedQuestion[`${opt}_urdu`] = (question as any)[urduField];
               } else {
-                translatedQuestion[opt] = question[urduField];
+                translatedQuestion[opt] = (question as any)[urduField];
               }
             }
           });
         }
       }
       
-      return translatedQuestion;
+      return translatedQuestion as Question;
     });
   };
 
@@ -453,7 +451,7 @@ export const useGeneratePaper = () => {
       const warnings: string[] = [];
       
       Object.entries(requirements).forEach(([questionType, typeRequirements]) => {
-        if (!typeRequirements || typeRequirements.length === 0) return;
+        if (!typeRequirements || (typeRequirements as any).length === 0) return;
         
         const formField = questionTypes.find(t => t.value === questionType)?.fieldPrefix;
         if (!formField) return;
@@ -461,7 +459,7 @@ export const useGeneratePaper = () => {
         const formCount = formValues[`${formField}Count` as keyof PaperFormData] as number || 0;
         
         let totalMinRequired = 0;
-        typeRequirements.forEach((req: any) => {
+        (typeRequirements as any).forEach((req: any) => {
           if (req.mode === 'per_chapter') {
             totalMinRequired += (req.min || 0) * (req.chaptersInRange?.length || 0);
           } else {
@@ -566,7 +564,7 @@ export const useGeneratePaper = () => {
       
       const result: Record<string, Question[]> = {};
       Object.keys(selectedQuestions).forEach(type => {
-        const questionsForType = allQuestions.filter(q => 
+        const questionsForType = allQuestions.filter((q: any) => 
           selectedQuestions[type].includes(q.id)
         );
         result[type] = handleLanguageTranslation(questionsForType, language);
@@ -780,7 +778,7 @@ export const useGeneratePaper = () => {
         const questions = response.data || [];
         const existingIds = new Set((allQuestions[questionType] || []).map(q => q.id));
         const newQuestions = questions
-          .filter(q => !existingIds.has(q.id))
+          .filter((q: any) => !existingIds.has(q.id))
           .slice(0, missingCount);
         
         if (newQuestions.length > 0) {
@@ -789,9 +787,9 @@ export const useGeneratePaper = () => {
           }
           allQuestions[questionType].push(...handleLanguageTranslation(newQuestions, config.language));
           
-          newQuestions.forEach(q => {
-            (q as any).isFallback = true;
-            (q as any).fallbackReason = 'Could not meet distribution requirements';
+          newQuestions.forEach((q: any) => {
+            q.isFallback = true;
+            q.fallbackReason = 'Could not meet distribution requirements';
           });
         }
       } catch (error) {
@@ -905,6 +903,19 @@ export const useGeneratePaper = () => {
     }
   };
 
+  const nextStep = async () => {
+    if (step === 1) {
+      const isClassValid = await trigger('classId');
+      if (isClassValid) setStep(2);
+    } else if (step === 2) {
+      const isSubjectValid = await trigger('subjectId');
+      if (isSubjectValid) setStep(3);
+    } else if (step === 3) {
+      const isChapterValid = await trigger('chapterOption');
+      if (isChapterValid) setStep(4);
+    }
+  };
+
   const handleChapterSelection = (chapterId: string) => {
     if (watchedChapterOption === 'single_chapter') {
       setValue('selectedChapters', [chapterId]);
@@ -921,45 +932,137 @@ export const useGeneratePaper = () => {
     }
   };
 
-  // return values used by page component
+  // Simulated progress generation handler
+  const startProgressTracking = () => {
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    
+    setGenerationProgress({
+      percentage: 5,
+      message: 'Analyzing rules and distribution map...',
+      isVisible: true,
+      estimatedTimeRemaining: 8,
+      startTime: Date.now()
+    });
+
+    progressIntervalRef.current = setInterval(() => {
+      setGenerationProgress(prev => {
+        if (prev.percentage >= 95) {
+          if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+          return prev;
+        }
+        
+        let nextPercent = prev.percentage + Math.floor(Math.random() * 15) + 5;
+        if (nextPercent > 95) nextPercent = 95;
+
+        let msg = 'Assembling questionnaire matrix...';
+        if (nextPercent > 40) msg = 'Applying localization & translations...';
+        if (nextPercent > 75) msg = 'Finalizing structural validation layout...';
+
+        const elapsed = (Date.now() - prev.startTime) / 1000;
+        const totalEstimatedTime = (elapsed / nextPercent) * 100;
+        const remaining = Math.max(1, Math.round(totalEstimatedTime - elapsed));
+
+        return {
+          ...prev,
+          percentage: nextPercent,
+          message: msg,
+          estimatedTimeRemaining: remaining
+        };
+      });
+    }, 600);
+  };
+
+  const completeProgressTracking = (msg = 'Paper generated successfully!') => {
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    setGenerationProgress(prev => ({
+      ...prev,
+      percentage: 100,
+      message: msg,
+      estimatedTimeRemaining: 0
+    }));
+    setTimeout(() => {
+      setGenerationProgress(prev => ({ ...prev, isVisible: false }));
+    }, 1500);
+  };
+
+  // Submit and structural compilation mechanism
+  const generatePaper = async (formValues: PaperFormData) => {
+    if (!canGeneratePaper()) {
+      setShowSubscriptionModal(true);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      startProgressTracking();
+
+      const chapterIds = getChapterIdsToUse();
+      const payload = {
+        ...formValues,
+        chapterIds,
+        questions: previewQuestions,
+      };
+
+      const response = await axios.post('/api/papers/generate', payload);
+      completeProgressTracking('Compilation and packaging finished!');
+      return response.data;
+    } catch (error) {
+      console.error('Error compiling paper assembly generation:', error);
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+      setGenerationProgress(prev => ({
+        ...prev,
+        message: 'Compilation failed. Please verify question pools.',
+        percentage: 0
+      }));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    };
+  }, []);
+
   return {
     step,
+    setStep,
     classes,
     subjects,
     chapters,
-    watchedClassId,
-    watchedSubjectId,
-    watchedChapterOption,
     selectedQuestions,
     setSelectedQuestions,
-    setPreviewQuestions,
     isLoading,
-    isLoadingPreview,
     isDownloadingKey,
+    setIsDownloadingKey,
+    showSubscriptionModal,
+    setShowSubscriptionModal,
+    isEditMode,
+    setIsEditMode,
     previewQuestions,
-    loadPreviewQuestions,
-    trialStatus,
-    subjectRules,
+    setPreviewQuestions,
+    isLoadingPreview,
     ruleValidation,
-    setRuleValidation,
-    validateFormAgainstRules,
-    getChapterIdsToUse,
-    canGeneratePaper,
-    prevStep,
-    handleChapterSelection,
-    watch,
-    setValue,
-    register,
-    errors,
-    getValues,
-    trigger,
-    getQuestionTypes,
+    generationProgress,
     isAuthenticated,
     authChecked,
     authError,
-    trialLoading,
-    setStep,
-    setSubjects,
-    setChapters,
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    errors,
+    getValues,
+    reset,
+    trigger,
+    getQuestionTypes,
+    canGeneratePaper,
+    loadPreviewQuestions,
+    prevStep,
+    nextStep,
+    handleChapterSelection,
+    generatePaper
   };
 };

@@ -1,14 +1,14 @@
 //generate-paper/components/SettingsPanel.tsx
 'use client';
 import React from 'react';
-import { X, Settings, Type, Layout, List, FileText, Image as ImageIcon, FileQuestion,Lock ,ShieldCheck  } from 'lucide-react';
+import { X, Settings, Layout, List, FileText, Image as ImageIcon, FileQuestion, Lock, ShieldCheck } from 'lucide-react';
 import { PaperSettings } from '@/types/paper-builder';
 
 interface SettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
   settings: PaperSettings;
-  onSettingChange: (key: keyof PaperSettings, value: number | string) => void;
+  onSettingChange: (key: keyof PaperSettings, value: number | string | boolean) => void;
   isPremium: boolean;
 }
 
@@ -17,99 +17,101 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClose,
   settings,
   onSettingChange,
-  isPremium
+  isPremium,
 }) => {
-  // Professional Academic Font Pairs
-
-   
-const titleFontFamilies = [
-    // --- Professional & Academic ---
-       // --- Decorative & Stylized ---
-   
-   
-    { name: 'Classic Serif (Times)', value: "'Times New Roman', serif" },
-    { name: 'Modern Sans (Arial)', value: "Arial, sans-serif" },
-    { name: 'University Serif (Georgia)', value: "'Georgia', serif" },
-    { name: 'Clean Professional (Helvetica)', value: "'Helvetica', sans-serif" },
-    { name: 'Elegant (Garamond)', value: "'Garamond', serif" },
-    { name: 'Algerian', value: "'Algerian', serif" },
-    { name: 'Harlow Solid Italic', value: "'Harlow Solid Italic', cursive" },
-    { name: 'Vladimir Script', value: "'Vladimir Script', cursive" },
-    { name: 'Bodoni MT Poster', value: "'Bodoni MT Poster Compressed', serif" },
-    { name: 'Chiller', value: "'Chiller', cursive" },
+  const titleFontFamilies = [
+    { name: 'Classic Serif (Times)',        value: "'Times New Roman', serif" },
+    { name: 'Modern Sans (Arial)',           value: "Arial, sans-serif" },
+    { name: 'University Serif (Georgia)',    value: "'Georgia', serif" },
+    { name: 'Clean Professional (Helvetica)',value: "'Helvetica', sans-serif" },
+    { name: 'Elegant (Garamond)',            value: "'Garamond', serif" },
+    { name: 'Algerian',                      value: "'Algerian', serif" },
+    { name: 'Harlow Solid Italic',           value: "'Harlow Solid Italic', cursive" },
+    { name: 'Vladimir Script',               value: "'Vladimir Script', cursive" },
+    { name: 'Bodoni MT Poster',              value: "'Bodoni MT Poster Compressed', serif" },
+    { name: 'Chiller',                       value: "'Chiller', cursive" },
   ];
 
   const questionFontFamilies = [
-    { name: 'Standard Exam (Arial)', value: "Arial, sans-serif" },
-    { name: 'Cambridge Style (Calibri)', value: "'Calibri', sans-serif" },
-    { name: 'Formal Reading (Times)', value: "'Times New Roman', serif" },
-    { name: 'Modern (Inter/Roboto)', value: "'Inter', sans-serif" },
-    { name: 'High Legibility (Verdana)', value: "Verdana, sans-serif" },
+    { name: 'Standard Exam (Arial)',    value: "Arial, sans-serif" },
+    { name: 'Cambridge Style (Calibri)',value: "'Calibri', sans-serif" },
+    { name: 'Formal Reading (Times)',   value: "'Times New Roman', serif" },
+    { name: 'Modern (Inter/Roboto)',    value: "'Inter', sans-serif" },
+    { name: 'High Legibility (Verdana)',value: "Verdana, sans-serif" },
   ];
 
   const headerLayouts = [
-    { id: 'standard', name: 'Standard (Board Style)' },
-    { id: 'classic', name: 'Classic (Split Grid)' },
-    { id: 'modern', name: 'Modern (Minimalist)' },
-    { id: 'sidebar', name: 'Academy (Sidebar Logo)' },
-    { id: 'instructional', name: 'Technical (instructional)' },
-    { id: 'scorecard', name: 'Grading Focused (ScorCard)' },
-    
-    { id: 'databar', name: 'Ultra Compact Bar' },
+    { id: 'standard',     name: 'Standard (Board Style)' },
+    { id: 'classic',      name: 'Classic (Split Grid)' },
+    { id: 'modern',       name: 'Modern (Minimalist)' },
+    { id: 'instructional',name: 'Technical (Instructional)' },
+    { id: 'scorecard',    name: 'Grading Focused (ScoreCard)' },
+    { id: 'databar',      name: 'Ultra Compact Bar' },
   ];
 
   return (
     <>
-      <div 
-        className={`settings-sidebar ${isOpen ? 'open' : ''}`}
+      {/* ─── Sidebar ─── */}
+      <div
+        className="settings-sidebar"
         style={{
           position: 'fixed',
           top: 0,
           right: isOpen ? 0 : '-350px',
           width: '320px',
-          height: '100vh',
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          /* KEY FIX: use 100dvh so mobile browser chrome is excluded,
+             fall back to 100vh. overflow-y:scroll reserves the scrollbar
+             track so it never gets clipped by parent overflow rules.     */
+          height: '100dvh',
+          maxHeight: '100vh',
+          backgroundColor: 'rgba(255, 255, 255, 0.97)',
           backdropFilter: 'blur(10px)',
-          boxShadow: '-5px 0 25px rgba(0,0,0,0.1)',
+          boxShadow: '-5px 0 25px rgba(0,0,0,0.12)',
           zIndex: 9999,
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          overflowY: 'auto',
-          borderLeft: '1px solid #e0e0e0'
+          transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          /* scroll lives here, NOT on a child */
+          overflowY: 'scroll',
+          overscrollBehavior: 'contain',
+          borderLeft: '1px solid #e0e0e0',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        {/* Header */}
-        <div className="p-1 border-bottom d-flex justify-content-between align-items-center bg-light">
+        {/* ── Sticky Header ── */}
+        <div
+          style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(248,249,250,0.97)' }}
+          className="px-3 py-2 border-bottom d-flex justify-content-between align-items-center"
+        >
           <div className="d-flex align-items-center gap-2">
-            <Settings size={20} className="text-primary" />
-            <h5 className="mb-0 fw-bold" style={{ fontSize: '1.1rem' }}>Change Paper Style</h5>
+            <Settings size={18} className="text-primary" />
+            <h6 className="mb-0 fw-bold" style={{ fontSize: '1rem' }}>Paper Style</h6>
           </div>
-          <button className="btn btn-link text-muted p-0" onClick={onClose}>
-            <X size={20} />
+          <button className="btn btn-sm btn-light border-0 rounded-circle p-1" onClick={onClose} aria-label="Close">
+            <X size={18} />
           </button>
         </div>
 
-        <div className="p-2">
-{/* SECTION: PREMIUM WATERMARK & DIMENSIONS */}
+        {/* ── Scrollable Body ── */}
+        <div className="px-2 py-2" style={{ paddingBottom: '60px' }}>
+
+          {/* ══ SECTION: WATERMARK (Premium) ══ */}
           <section className="mb-3">
-            <div 
+            <div
               className={`p-2 rounded-3 border ${!isPremium ? 'bg-light opacity-75' : 'bg-white shadow-sm'}`}
               style={{ transition: 'all 0.3s ease' }}
             >
-              <div className="d-flex align-items-center justify-content-between mb-2">
+              <div className="d-flex align-items-center justify-content-between">
                 <div className="d-flex align-items-center gap-2">
-                  {isPremium ? (
-                    <ShieldCheck size={18} className="text-success" />
-                  ) : (
-                    <Lock size={16} className="text-muted" />
-                  )}
+                  {isPremium
+                    ? <ShieldCheck size={16} className="text-success" />
+                    : <Lock size={15} className="text-muted" />}
                   <div>
-                    <label className="form-label small fw-bold mb-0 d-block">
-                      Paper Watermark
-                    </label>
-                    {!isPremium && <span style={{ fontSize: '0.65rem' }} className="text-danger fw-bold">PREMIUM ONLY</span>}
+                    <span className="small fw-bold d-block">Paper Watermark</span>
+                    {!isPremium && (
+                      <span style={{ fontSize: '0.62rem' }} className="text-danger fw-bold">PREMIUM ONLY</span>
+                    )}
                   </div>
                 </div>
-
                 <div className="form-check form-switch mb-0">
                   <input
                     className="form-check-input"
@@ -123,135 +125,105 @@ const titleFontFamilies = [
                 </div>
               </div>
 
-              {/* Collapsible Dimension Controls (Only for Premium + Active) */}
+              {/* Collapsible watermark controls */}
               {isPremium && settings.showWatermark && (
-                <div className="pt-2 border-top mt-2 animate-fade-in">
-                  <div className="row g-2">
+                <div className="pt-2 border-top mt-2">
+                  <div className="row g-2 mb-2">
                     <div className="col-6">
-                      <label className="x-small text-muted d-block mb-1">WM Width (px)</label>
+                      <label className="form-label x-small text-muted mb-1">WM Width (px)</label>
                       <input
                         type="number"
                         className="form-control form-control-sm border-0 bg-light"
                         value={settings.watermarkWidth || 400}
-                        min="100"
-                        max="1000"
+                        min="100" max="1000"
                         onChange={(e) => onSettingChange('watermarkWidth', parseInt(e.target.value))}
                       />
                     </div>
                     <div className="col-6">
-                      <label className="x-small text-muted d-block mb-1">WM Height (px)</label>
+                      <label className="form-label x-small text-muted mb-1">WM Height (px)</label>
                       <input
                         type="number"
                         className="form-control form-control-sm border-0 bg-light"
                         value={settings.watermarkHeight || 400}
-                        min="100"
-                        max="1000"
+                        min="100" max="1000"
                         onChange={(e) => onSettingChange('watermarkHeight', parseInt(e.target.value))}
                       />
                     </div>
                   </div>
-                  <div className="mt-2">
-                    <div className="d-flex justify-content-between x-small text-muted">
-                      <span>Opacity</span>
-                      <span>{(settings.watermarkOpacity || 0.1) * 100}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      className="form-range"
-                      min="0.05"
-                      max="0.5"
-                      step="0.01"
-                      value={settings.watermarkOpacity || 0.1}
-                      onChange={(e) => onSettingChange('watermarkOpacity', parseFloat(e.target.value))}
-                    />
+                  <div className="d-flex justify-content-between x-small text-muted mb-1">
+                    <span>Opacity</span>
+                    <span>{Math.round((settings.watermarkOpacity || 0.1) * 100)}%</span>
                   </div>
+                  <input
+                    type="range"
+                    className="form-range"
+                    min="0.05" max="0.5" step="0.01"
+                    value={settings.watermarkOpacity || 0.1}
+                    onChange={(e) => onSettingChange('watermarkOpacity', parseFloat(e.target.value))}
+                  />
                 </div>
               )}
             </div>
           </section>
-          {/* SECTION: HEADER MASTER GROUP */}
-          <section className="mb-0">
-            <label className="text-uppercase text-primary fw-bold mb-0 d-block" style={{ fontSize: '0.75rem', letterSpacing: '1px' }}>
-              <Layout size={14} className="me-1" /> Header Configuration
-            </label>
-            
-            <div className="p-0 rounded-3 bg-light shadow-sm mb-0">
-              {/* Header Style */}
-              <div className="mb-0">
-                <label className="form-label small fw-bold">Header Layouts</label>
+
+          {/* ══ SECTION: HEADER CONFIGURATION ══ */}
+          <section className="mb-3">
+            <p className="text-uppercase text-primary fw-bold mb-2 d-flex align-items-center gap-1"
+              style={{ fontSize: '0.7rem', letterSpacing: '1px' }}>
+              <Layout size={13} /> Header Configuration
+            </p>
+
+            <div className="rounded-3 bg-light shadow-sm overflow-hidden">
+
+              {/* Header Layout Select */}
+              <div className="p-2 border-bottom">
+                <label className="form-label x-small fw-bold text-muted mb-1">Header Layout</label>
                 <select
                   className="form-select form-select-sm border-0 shadow-sm"
                   value={settings.headerLayout || 'standard'}
                   onChange={(e) => onSettingChange('headerLayout', e.target.value)}
                 >
-                  {headerLayouts.map(layout => (
-                    <option key={layout.id} value={layout.id}>{layout.name}</option>
+                  {headerLayouts.map(l => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
                   ))}
                 </select>
               </div>
 
-             {/* NEW: Academy Title Font Family */}
-            <div className="mb-0 pt-0 border-top">
-              <label className="form-label small fw-bold text-muted">Academy Title Font</label>
-              <select
-                className="form-select form-select-sm mb-0 border-0 shadow-sm"
-                /* This styles the selected value shown in the collapsed box */
-                style={{ 
-                  fontFamily: settings.titleFontFamily,
-                  fontSize: '14px' // Keep select box text legible
-                }}
-                value={settings.titleFontFamily}
-                onChange={(e) => onSettingChange('titleFontFamily', e.target.value)}
-              >
-                {titleFontFamilies.map((f) => (
-                  <option 
-                    key={f.value} 
-                    value={f.value}
-                    /* This styles the items inside the dropdown list */
-                    style={{ fontFamily: f.value, fontSize: '16px' }}
-                  >
-                    {f.name}
-                  </option>
-                ))}
-              </select>
-              
-              <div className="d-flex justify-content-between x-small text-muted mb-1 mt-2">
-                <span>Font Size</span>
-                <span>{settings.titleFontSize}px</span>
-              </div>
-              <input
-                type="range"
-                className="form-range"
-                min="18" max="48"
-                value={settings.titleFontSize}
-                onChange={(e) => onSettingChange('titleFontSize', parseInt(e.target.value))}
-              />
-            </div>
-
-              {/* Header Line Height 
-              <div className="mb-0">
-                <div className="d-flex justify-content-between x-small text-muted mb-0">
-                  <span>Header Line Spacing</span>
-                  <span>{settings.headerLineHeight || 1.2}</span>
+              {/* Academy Title Font */}
+              <div className="p-2 border-bottom">
+                <label className="form-label x-small fw-bold text-muted mb-1">Academy Title Font</label>
+                <select
+                  className="form-select form-select-sm border-0 shadow-sm mb-2"
+                  style={{ fontFamily: settings.titleFontFamily, fontSize: '14px' }}
+                  value={settings.titleFontFamily}
+                  onChange={(e) => onSettingChange('titleFontFamily', e.target.value)}
+                >
+                  {titleFontFamilies.map(f => (
+                    <option key={f.value} value={f.value} style={{ fontFamily: f.value, fontSize: '15px' }}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="d-flex justify-content-between x-small text-muted mb-1">
+                  <span>Font Size</span>
+                  <span>{settings.titleFontSize}px</span>
                 </div>
                 <input
-                  type="range"
-                  className="form-range"
-                  min="0.8" max="2.5" step="0.1"
-                  value={settings.headerLineHeight || 1.2}
-                  onChange={(e) => onSettingChange('headerLineHeight', parseFloat(e.target.value))}
+                  type="range" className="form-range"
+                  min="18" max="48"
+                  value={settings.titleFontSize}
+                  onChange={(e) => onSettingChange('titleFontSize', parseInt(e.target.value))}
                 />
               </div>
-*/}
-              {/* Meta Font (Date/Marks) */}
-              <div className="mb-0 pt-0 border-top">
-                <div className="d-flex justify-content-between x-small text-muted mb-0">
+
+              {/* Meta Font Size */}
+              <div className="p-2 border-bottom">
+                <div className="d-flex justify-content-between x-small text-muted mb-1">
                   <span>Meta Font (Date, Marks)</span>
                   <span>{settings.metaFontSize}px</span>
                 </div>
                 <input
-                  type="range"
-                  className="form-range"
+                  type="range" className="form-range"
                   min="10" max="16"
                   value={settings.metaFontSize}
                   onChange={(e) => onSettingChange('metaFontSize', parseInt(e.target.value))}
@@ -259,13 +231,13 @@ const titleFontFamilies = [
               </div>
 
               {/* Logo Dimensions */}
-              <div className="pt-1">
-                <label className="form-label small fw-bold text-muted mb-0">
-                  <ImageIcon size={12} className="me-1" /> Logo Dimensions
+              <div className="p-2">
+                <label className="form-label x-small fw-bold text-muted mb-1 d-flex align-items-center gap-1">
+                  <ImageIcon size={12} /> Logo Dimensions
                 </label>
                 <div className="row g-2">
                   <div className="col-6">
-                    <label className="x-small text-muted d-block">Width</label>
+                    <label className="x-small text-muted d-block mb-1">Width (px)</label>
                     <input
                       type="number"
                       className="form-control form-control-sm border-0 shadow-sm"
@@ -274,7 +246,7 @@ const titleFontFamilies = [
                     />
                   </div>
                   <div className="col-6">
-                    <label className="x-small text-muted d-block">Height</label>
+                    <label className="x-small text-muted d-block mb-1">Height (px)</label>
                     <input
                       type="number"
                       className="form-control form-control-sm border-0 shadow-sm"
@@ -287,136 +259,140 @@ const titleFontFamilies = [
             </div>
           </section>
 
-          <hr />
+          <hr className="my-2" />
 
-          {/* Section: Questions & Content */}
-          <section className="mb-0">
-            <label className="text-uppercase text-primary fw-bold mb-0 d-block" style={{ fontSize: '0.7rem', letterSpacing: '1px' }}>
-            <FileQuestion size={12} className="me-1" /> Question Paper Style
-            </label>
+          {/* ══ SECTION: QUESTION PAPER STYLE ══ */}
+          <section className="mb-3">
+            <p className="text-uppercase text-primary fw-bold mb-2 d-flex align-items-center gap-1"
+              style={{ fontSize: '0.7rem', letterSpacing: '1px' }}>
+              <FileQuestion size={13} /> Question Paper Style
+            </p>
 
-            <div className="mb-0 p-2 rounded-3 shadow-sm bg-white border">
-              <div className="mb-2">
-            <label className="form-label x-small text-muted mb-0 fw-bold">Question Body Font</label>
-            <select
-              className="form-select form-select-sm border-0 bg-light shadow-sm"
-              /* This styles the selected value shown in the collapsed box */
-              style={{ 
-                fontFamily: settings.fontFamily,
-                fontSize: '14px' 
-              }}
-              value={settings.fontFamily}
-              onChange={(e) => onSettingChange('fontFamily', e.target.value)}
-            >
-              {questionFontFamilies.map((f) => (
-                <option 
-                  key={f.value} 
-                  value={f.value}
-                  /* This styles each font option in the dropdown list */
-                  style={{ 
-                    fontFamily: f.value, 
-                    fontSize: '15px',
-                    padding: '8px' 
-                  }}
+            <div className="rounded-3 bg-white border shadow-sm overflow-hidden">
+
+              {/* Question Body Font */}
+              <div className="p-2 border-bottom">
+                <label className="form-label x-small fw-bold text-muted mb-1">Question Body Font</label>
+                <select
+                  className="form-select form-select-sm border-0 bg-light shadow-sm"
+                  style={{ fontFamily: settings.fontFamily, fontSize: '14px' }}
+                  value={settings.fontFamily}
+                  onChange={(e) => onSettingChange('fontFamily', e.target.value)}
                 >
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          </div>
+                  {questionFontFamilies.map(f => (
+                    <option key={f.value} value={f.value}
+                      style={{ fontFamily: f.value, fontSize: '15px', padding: '8px' }}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="mb-0 px-2">
-              <label className="form-label small text-muted"> Section Headings Size</label>
-              <div className="d-flex align-items-center gap-3">
+              {/* Section Heading Size */}
+              <div className="p-2 border-bottom">
+                <div className="d-flex justify-content-between x-small text-muted mb-1">
+                  <span>Section Heading Size</span>
+                  <span className="badge bg-secondary">{settings.headingFontSize}px</span>
+                </div>
                 <input
-                  type="range"
-                  className="form-range"
+                  type="range" className="form-range"
                   min="10" max="24"
                   value={settings.headingFontSize}
                   onChange={(e) => onSettingChange('headingFontSize', parseInt(e.target.value))}
                 />
-                <span className="badge bg-secondary">{settings.headingFontSize}px</span>
               </div>
-            </div>
+
               {/* MCQ Settings */}
-              <div className="pt-2 border-top mb-0">
-                <label className="form-label small fw-bold text-dark d-flex align-items-center gap-2 mb-0">
-                  <List size={14} className="text-muted" /> MCQ Part style
+              <div className="p-2 border-bottom">
+                <label className="form-label x-small fw-bold text-dark d-flex align-items-center gap-1 mb-2">
+                  <List size={13} className="text-muted" /> MCQ Part Style
                 </label>
-                <div className="mb-2">
-                  <div className="d-flex justify-content-between x-small mb-0 text-muted">
-                    <span>Font Size</span>
-                    <span>{settings.mcqFontSize || 12}px</span>
-                  </div>
-                  <input
-                    type="range"
-                    className="form-range"
-                    min="6" max="24"
-                    value={settings.mcqFontSize || 12}
-                    onChange={(e) => onSettingChange('mcqFontSize', parseInt(e.target.value))}
-                  />
+                <div className="d-flex justify-content-between x-small text-muted mb-1">
+                  <span>Font Size</span>
+                  <span>{settings.mcqFontSize || 12}px</span>
                 </div>
-                <div>
-                  <div className="d-flex justify-content-between x-small mb-0 text-muted">
-                    <span>Line Spacing</span>
-                    <span>{settings.mcqLineHeight || 1.2}x</span>
-                  </div>
-                  <input
-                    type="range"
-                    className="form-range"
-                    min="0.8" max="3.5" step="0.1"
-                    value={settings.mcqLineHeight || 1.2}
-                    onChange={(e) => onSettingChange('mcqLineHeight', parseFloat(e.target.value))}
-                  />
+                <input
+                  type="range" className="form-range mb-2"
+                  min="6" max="24"
+                  value={settings.mcqFontSize || 12}
+                  onChange={(e) => onSettingChange('mcqFontSize', parseInt(e.target.value))}
+                />
+                <div className="d-flex justify-content-between x-small text-muted mb-1">
+                  <span>Line Spacing</span>
+                  <span>{settings.mcqLineHeight || 1.2}x</span>
                 </div>
+                <input
+                  type="range" className="form-range"
+                  min="0.8" max="3.5" step="0.1"
+                  value={settings.mcqLineHeight || 1.2}
+                  onChange={(e) => onSettingChange('mcqLineHeight', parseFloat(e.target.value))}
+                />
               </div>
 
               {/* Subjective Settings */}
-              <div className="pt-2 border-top">
-                <label className="form-label small fw-bold text-dark d-flex align-items-center gap-2 mb-0">
-                  <FileText size={14} className="text-muted" /> Subjective Part Style
+              <div className="p-2">
+                <label className="form-label x-small fw-bold text-dark d-flex align-items-center gap-1 mb-2">
+                  <FileText size={13} className="text-muted" /> Subjective Part Style
                 </label>
-                <div className="mb-0">
-                  <div className="d-flex justify-content-between x-small mb-0 text-muted">
-                    <span>Font Size</span>
-                    <span>{settings.fontSize}px</span>
-                  </div>
-                  <input
-                    type="range"
-                    className="form-range"
-                    min="8" max="20"
-                    value={settings.fontSize}
-                    onChange={(e) => onSettingChange('fontSize', parseInt(e.target.value))}
-                  />
+                <div className="d-flex justify-content-between x-small text-muted mb-1">
+                  <span>Font Size</span>
+                  <span>{settings.fontSize}px</span>
                 </div>
-                <div>
-                  <div className="d-flex justify-content-between x-small mb-0 text-muted">
-                    <span>Line Spacing</span>
-                    <span>{settings.lineHeight || 1.5}x</span>
-                  </div>
-                  <input
-                    type="range"
-                    className="form-range"
-                    min="0.8" max="2.5" step="0.1"
-                    value={settings.lineHeight || 1.5}
-                    onChange={(e) => onSettingChange('lineHeight', parseFloat(e.target.value))}
-                  />
+                <input
+                  type="range" className="form-range mb-2"
+                  min="8" max="20"
+                  value={settings.fontSize}
+                  onChange={(e) => onSettingChange('fontSize', parseInt(e.target.value))}
+                />
+                <div className="d-flex justify-content-between x-small text-muted mb-1">
+                  <span>Line Spacing</span>
+                  <span>{settings.lineHeight || 1.5}x</span>
                 </div>
+                <input
+                  type="range" className="form-range"
+                  min="0.8" max="2.5" step="0.1"
+                  value={settings.lineHeight || 1.5}
+                  onChange={(e) => onSettingChange('lineHeight', parseFloat(e.target.value))}
+                />
               </div>
+
             </div>
           </section>
-        </div>
+
+        </div>{/* end scrollable body */}
       </div>
 
-      {/* Overlay */}
+      {/* ─── Scrollbar Styles ─── */}
+      <style>{`
+        .settings-sidebar::-webkit-scrollbar {
+          width: 5px;
+        }
+        .settings-sidebar::-webkit-scrollbar-track {
+          background: #f1f3f5;
+        }
+        .settings-sidebar::-webkit-scrollbar-thumb {
+          background: #ced4da;
+          border-radius: 4px;
+        }
+        .settings-sidebar::-webkit-scrollbar-thumb:hover {
+          background: #adb5bd;
+        }
+        /* Firefox */
+        .settings-sidebar {
+          scrollbar-width: thin;
+          scrollbar-color: #ced4da #f1f3f5;
+        }
+      `}</style>
+
+      {/* ─── Overlay ─── */}
       {isOpen && (
-        <div 
+        <div
           onClick={onClose}
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.1)',
-            zIndex: 9998
+            backgroundColor: 'rgba(0,0,0,0.15)',
+            zIndex: 9998,
           }}
         />
       )}

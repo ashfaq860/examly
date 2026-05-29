@@ -3,7 +3,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import AcademyLayout from '@/components/AcademyLayout';
 import { Search } from 'lucide-react';
 import { ArchiveGrid } from './components/ArchiveGrid';
 import { PaperPreviewer } from './components/PaperPreviewer';
@@ -38,10 +37,10 @@ export default function SavedPapersPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  if (loading) return <AcademyLayout><div className="text-center py-5">{<Loading />}</div></AcademyLayout>;
+  if (loading) return <><div className="text-center py-5">{<Loading />}</div></>;
 
   return (
-    <AcademyLayout>
+    <>
       {viewMode === 'grid' ? (
         <div className="container-fluid">
           <div className="row align-items-center mb-2 g-3">
@@ -92,6 +91,6 @@ export default function SavedPapersPage() {
           .paper-canvas { position: absolute !important; left: 0; top: 0; width: 210mm !important; box-shadow: none !important; }
         }
       `}</style>
-    </AcademyLayout>
+    </>
   );
 }

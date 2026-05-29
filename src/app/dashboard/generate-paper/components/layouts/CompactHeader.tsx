@@ -11,6 +11,8 @@ interface CompactHeaderProps {
     titleFontFamily?: string;
     metaFontSize: number;
     titleFontSize: number;
+    logoWidth?: number;  // Added logoWidth
+    logoHeight?: number; // Added logoHeight
   };
   totalMarks: string | number;
   subject: string;
@@ -20,7 +22,7 @@ interface CompactHeaderProps {
     name?: string;
   };
   profile?: {
-    logoUrl?: string;
+    logo?: string;
     institution?: string;
   };
 }
@@ -34,6 +36,7 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
   currentClass,
   profile,
 }) => {
+  console.log(profile?.logo, 'Profile Logo URL'); // Debug log to verify logo URL is being passed correctly
   // Safe directional spacing based on layout direction
   const marginSpacingClass = isRTL ? 'me-1' : 'ms-1';
 
@@ -50,7 +53,7 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
   const containerStyle: React.CSSProperties = {
     fontFamily: settings.headingFontFamily || 'serif',
     fontSize: `${settings.metaFontSize}px`,
-    borderBottom: "2.5pt double #000000",
+   
     position: "relative",
     WebkitPrintColorAdjust: "exact",
     printColorAdjust: "exact",
@@ -65,38 +68,35 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
       style={containerStyle}
     >
       {/* Header Row: Title, Logo and Marks */}
-      <div 
-        className="d-flex justify-content-between align-items-center mb-0"
-        style={{ width: '100%' }}
-      >
-        {/* Placeholder for School Logo */}
-        <div style={{ width: "120px", padding: "5px", height: "35px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <img
-            src={profile?.logoUrl || '/examly.png'}
-            alt="Logo"
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          />
-        </div>
+<div className="d-flex justify-content-center align-items-center mb-0" style={{ width: '100%', gap: '15px' }}>
+  {/* Placeholder for School Logo */}
+  <div style={{ width: `${settings.logoWidth || 120}px`, height: `${settings.logoHeight || 35}px`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <img src={profile?.logo || '/examly.png'}
+      alt="Logo"
+      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+    />
+  </div>
 
-        <div className="text-center flex-grow-1 px-2">
-          <h2 style={{ 
-            margin: 0, 
-            fontSize: `${settings.titleFontSize - 8}px`, 
-            fontFamily: settings.titleFontFamily,
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-            fontWeight: "800",
-            lineHeight: "1.1",
-            color: '#000000'
-          }}>
-            {profile?.institution || 'BOARD EXAMINATION CENTER'}
-          </h2>
-        </div>
+  {/* Removed flex-grow-1 so it doesn't push items away, added max-width if needed */}
+  <div className="text-center px-2" style={{ maxWidth: '60%' }}>
+    <h2 style={{ 
+      margin: 0, 
+      fontSize: `${settings.titleFontSize - 8}px`, 
+      fontFamily: settings.titleFontFamily,
+      textTransform: "uppercase",
+      letterSpacing: "0.5px",
+      fontWeight: "800",
+      lineHeight: "1.1",
+      color: '#000000'
+    }}>
+      {profile?.institution || 'BOARD EXAMINATION CENTER'}
+    </h2>
+  </div>
 
-        <div className="fw-bold text-nowrap" style={{ fontSize: "11px", minWidth: "85px", textAlign: isRTL ? "left" : "right" }}>
-          MARKS: {totalMarks}
-        </div>
-      </div>
+  <div className="fw-bold text-nowrap" style={{ fontSize: "11px", minWidth: "85px", textAlign: isRTL ? "left" : "right" }}>
+    MARKS: {totalMarks}
+  </div>
+</div>
 
       {/* Student Info Row - Powered by Grid for pixel-perfect identical screen/print sizing */}
       <div 

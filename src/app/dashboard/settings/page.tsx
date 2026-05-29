@@ -2,7 +2,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import AcademyLayout from "@/components/AcademyLayout";
 import { 
 MapPin,  User, Phone, University, Mail, Save, Upload, X, Calendar, CheckCircle, AlertCircle, Package, FileText, Clock, Crown 
 } from "lucide-react";
@@ -317,11 +316,11 @@ export default function ProfileSettingsPage() {
   // Show loading until auth is checked
   if (!authChecked || (loading && isAuthorized)) {
     return (
-      <AcademyLayout>
+      
         <div className="container-fluid text-center py-5">
           <div className="spinner-border text-primary" />
         </div>
-      </AcademyLayout>
+      
     );
   }
 
@@ -332,7 +331,7 @@ export default function ProfileSettingsPage() {
 
   // Error state for profile fetch (after authentication)
   if (error && !profile) return (
-    <AcademyLayout>
+  
       <div className="container px-1 px-md-3 py-3">
         <div className="alert alert-danger d-flex align-items-center" role="alert">
           <div><strong>Error: </strong>{error}</div>
@@ -342,11 +341,11 @@ export default function ProfileSettingsPage() {
           <button className="btn btn-primary" onClick={() => window.location.reload()}>Try Again</button>
         </div>
       </div>
-    </AcademyLayout>
+  
   );
 
   return (
-    <AcademyLayout>
+    <>
       <div className="container px-2 px-md-3 py-0 py-md-3">
         <motion.h1 
           initial={{ opacity: 0, y: -20 }} 
@@ -648,6 +647,6 @@ export default function ProfileSettingsPage() {
           </motion.div>
         )}
       </div>
-    </AcademyLayout>
+    </>
   );
 }

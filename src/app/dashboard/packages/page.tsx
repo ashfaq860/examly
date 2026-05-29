@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import AcademyLayout from '@/components/AcademyLayout';
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import Loading from '@/app/dashboard/generate-paper/loading'; 
 const supabase = createClientComponentClient();
@@ -110,16 +109,14 @@ export default function SubscriptionPage() {
   // 🔹 Loading spinner
   if (loading) {
     return (
-      <AcademyLayout>
         <div className="container text-center py-5">
          {<Loading />}
         </div>
-      </AcademyLayout>
     );
   }
 
   return (
-    <AcademyLayout>
+    <>
       {/* Hero Section */}
       <section className="bg-primary text-white text-center py-5 mb-5 rounded-3 shadow">
         <div className="container">
@@ -249,6 +246,6 @@ export default function SubscriptionPage() {
 
         </div>
       </div>
-    </AcademyLayout>
+    </>
   );
 }

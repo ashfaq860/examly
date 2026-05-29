@@ -1,8 +1,6 @@
-//dashboard/generate-paper/page.tsx
 'use client';
 import React from 'react';
-import AcademyLayout from '@/components/AcademyLayout';
-import { ArrowLeft, Rocket, ShieldAlert, Loader2 } from 'lucide-react';
+import { ArrowLeft, Rocket, ShieldAlert } from 'lucide-react';
 
 // step components
 import { ClassSelectionStep } from './components/steps/ClassSelectionStep';
@@ -29,7 +27,7 @@ const GeneratePaperPage = () => {
     isDownloadingKey,
     previewQuestions,
     loadPreviewQuestions,
-    trialStatus,
+    trialStatus,         // Used below to guard the loader
     subjectRules,
     ruleValidation,
     setRuleValidation,
@@ -52,65 +50,61 @@ const GeneratePaperPage = () => {
     setStep,
   } = useGeneratePaper();
 
-  // 1. Loading State
-  if (!authChecked || trialLoading) {
+  // 1. DEFENSIVE LOADING STATE 
+  // Only intercept with a full loader if we don't have auth data yet, 
+  // OR if trial data is loading and we don't already have an existing trialStatus cache.
+  const isInitialLoading = !authChecked || (trialLoading && !trialStatus);
+
+  if (isInitialLoading) {
     return (
-      <AcademyLayout>
-        <div className="container-fluid">
-       {<Loading />}
-        </div>
-      </AcademyLayout>
+      <div className="container-fluid">
+        <Loading />
+      </div>
     );
   }
 
   // 2. Auth Error State
   if (!isAuthenticated && authError) {
     return (
-      <AcademyLayout>
-        <div className="container py-5">
-          <div className="card border-0 shadow-sm mx-auto" style={{ maxWidth: '500px' }}>
-            <div className="card-body text-center p-5">
-              <ShieldAlert className="text-danger mb-3" size={64} />
-              <h4 className="fw-bold">Access Denied</h4>
-              <p className="text-muted mb-4">{authError}</p>
-              <button
-                className="btn btn-primary w-100 py-2 fw-bold"
-                onClick={() => (window.location.href = '/auth/login')}
-              >
-                Go to Login
-              </button>
-            </div>
+      <div className="container py-5">
+        <div className="card border-0 shadow-sm mx-auto" style={{ maxWidth: '500px' }}>
+          <div className="card-body text-center p-5">
+            <ShieldAlert className="text-danger mb-3" size={64} />
+            <h4 className="fw-bold">Access Denied</h4>
+            <p className="text-muted mb-4">{authError}</p>
+            <button
+              className="btn btn-primary w-100 py-2 fw-bold"
+              onClick={() => (window.location.href = '/auth/login')}
+            >
+              Go to Login
+            </button>
           </div>
         </div>
-      </AcademyLayout>
+      </div>
     );
   }
 
   return (
-    <AcademyLayout>
-      {/* PREMIUM RESPONSIVE BACK BUTTON 
-        We use CSS variables and media queries to adjust 'left' position 
-        based on the presence of a sidebar on desktop vs mobile.
-      */}
+    <>
+      {/* PREMIUM RESPONSIVE BACK BUTTON */}
       {step > 1 && (
         <>
-         <style jsx>{`
-              .fixed-back-btn {
-                position: fixed;
-                top: 8rem; /* ~85px but scalable with font size */
-                left: 5%;   /* small offset from left on mobile */
-                z-index: 1200;
-                transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-              }
+          <style jsx>{`
+            .fixed-back-btn {
+              position: fixed;
+              top: 8rem;
+              left: 5%;
+              z-index: 1200;
+              transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            }
 
-              @media (min-width: 992px) {
-                .fixed-back-btn {
-                  left: calc(280px + 2%); /* sidebar width + small margin */
-                  top: 5rem; /* same as mobile */
-                }
+            @media (min-width: 992px) {
+              .fixed-back-btn {
+                left: calc(280px + 2%);
+                top: 5rem;
               }
-            `}
-          </style>
+            }
+          `}</style>
           
           <div className="fixed-back-btn">
             <button
@@ -141,7 +135,6 @@ const GeneratePaperPage = () => {
           style={{
             opacity: canGeneratePaper() && isAuthenticated ? 1 : 0.6,
             pointerEvents: canGeneratePaper() && isAuthenticated ? 'auto' : 'none',
-            // Provide padding so content doesn't collide with the fixed button on mobile
             paddingTop: step > 1 ? '0px' : '0' 
           }}
         >
@@ -186,7 +179,7 @@ const GeneratePaperPage = () => {
                 classes={classes}
                 setValue={setValue}
                 errors={errors}
-                isLoading={isLoading} // Pass loading state to show logo flyer if subjects are still loading
+                isLoading={isLoading}
               />
             )}
 
@@ -258,7 +251,7 @@ const GeneratePaperPage = () => {
           </div>
         )}
       </div>
-    </AcademyLayout>
+    </>
   );
 };
 

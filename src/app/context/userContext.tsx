@@ -11,18 +11,18 @@ interface TrialStatus {
   daysRemaining: number;
   hasActiveSubscription: boolean;
   papersGenerated: number;
-  papersRemaining: number | 'unlimited'; // Changed to support unlimited
+  papersRemaining: number | 'unlimited';
   subscriptionName?: string | null;
   subscriptionType?: 'paper_pack' | 'subscription' | null;
   subscriptionEndDate?: Date | null;
-   message?: string | null;   // <-- added
+  message?: string | null;
   referral_code?: string | null;
 }
 
 interface UserContextType {
   trialStatus: TrialStatus | null;
   isLoading: boolean;
-  refreshTrialStatus: () => Promise<void>;
+  refreshTrialStatus: (silent?: boolean) => Promise<void>;
   incrementPapersGenerated: () => void;
   error: string | null;
 }
@@ -42,8 +42,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTrialStatus = async () => {
-    setIsLoading(true);
+  // ✅ Added a silent parameter to prevent layout unmounting on re-fetch
+  const fetchTrialStatus = async (silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+    }
     setError(null);
 
     try {
@@ -93,7 +96,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscriptionType: trialData.subscriptionType,
         referral_code: trialData.referral_code,
         subscriptionEndDate: trialData.subscriptionEndDate ? new Date(trialData.subscriptionEndDate) : null,
-        message: trialData.message || null   // <-- added
+        message: trialData.message || null
       });
     } catch (error) {
       console.error('Error fetching trial status:', error);
@@ -118,7 +121,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const newPapersGenerated = prev.papersGenerated + 1;
       
-      // For trial users, papers remain unlimited
       const newPapersRemaining = prev.isTrial ? 'unlimited' : 
         (prev.papersRemaining !== 'unlimited' && prev.papersRemaining !== Infinity)
           ? Math.max(0, prev.papersRemaining - 1)
@@ -133,12 +135,19 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    fetchTrialStatus();
+    // First load requires a true loading state
+    fetchTrialStatus(false);
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, _session) => {
-      fetchTrialStatus();
+    } = supabase.auth.onAuthStateChange((event, _session) => {
+      // ✅ Optimization: Silently update the session in the background on route changes 
+      // without setting isLoading = true if we already have active state.
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        fetchTrialStatus(true);
+      } else {
+        fetchTrialStatus(false);
+      }
     });
 
     return () => {
@@ -149,7 +158,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const value = {
     trialStatus,
     isLoading,
-    refreshTrialStatus: fetchTrialStatus,
+    refreshTrialStatus: () => fetchTrialStatus(true), // defaults manual refreshes to silent background updates
     incrementPapersGenerated,
     error
   };

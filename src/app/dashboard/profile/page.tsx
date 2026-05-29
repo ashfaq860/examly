@@ -3,7 +3,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import AcademyLayout from "@/components/AcademyLayout";
 import {
   User,
   Phone,
@@ -151,11 +150,11 @@ export default function ProfilePage() {
   // Show loading until auth is checked
   if (!authChecked || (loading && isAuthorized)) {
     return (
-      <AcademyLayout>
+      
         <div className="container-fluid text-center py-5">
           <div className="spinner-border text-primary" />
         </div>
-      </AcademyLayout>
+    
     );
   }
 
@@ -203,18 +202,18 @@ export default function ProfilePage() {
   // Error handling for profile fetch (after authentication)
   if (error) {
     return (
-      <AcademyLayout>
+  
         <div className="container px-0 px-md-3 py-2">
           <div className="alert alert-danger" role="alert">
             <strong>Error: </strong>{error}
           </div>
         </div>
-      </AcademyLayout>
+  
     );
   }
 
   return (
-    <AcademyLayout>
+    <>
       <Toaster position="top-right" />
       <div className="container px-0 px-md-3 py-2">
         <motion.h1
@@ -422,6 +421,6 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
-    </AcademyLayout>
+    </>
   );
 }

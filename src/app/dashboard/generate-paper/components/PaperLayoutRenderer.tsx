@@ -20,6 +20,8 @@ interface Props {
   currentClass?: string;
   profile: any;
   questionLineSpacing?: number;
+  subjectUrduName?: string;
+  paperPart:any;
 }
 
 const Watermark = ({ 
@@ -72,7 +74,8 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
   onSectionUpdate,
   renderInlineBilingual = true,
   currentClass,
-  profile
+  profile,
+  subjectUrduName
 }) => {
     const subject = useMemo(() => paperSections[0]?.subject || '', [paperSections]);
   if (!settings) return <div className="p-5 text-center">Loading settings...</div>;
@@ -451,7 +454,8 @@ const renderContent = () => {
     group: PaperSection[],
     marks: number,
     keyPrefix: string,
-    mini = false
+    mini = false,
+     part: 'mcq' | 'subjective' | 'combined' = 'combined'  // ← add this
   ) => {
     if (group.length === 0) return null;
 
@@ -484,6 +488,8 @@ const renderContent = () => {
             currentLayout={currentLayout}
             currentClass={currentClass}
             profile={profile}
+            paperPart={part}
+            subjectUrduName={subjectUrduName}
           />
 
           {group.map((s) => (
@@ -519,7 +525,9 @@ const renderContent = () => {
         renderPaperGroup(
           mcqs,
           mcqTotalMarks,
-          'mcq-separate'
+          'mcq-separate',
+          false,
+          'mcq' 
         )
       );
     }
@@ -529,7 +537,9 @@ const renderContent = () => {
         renderPaperGroup(
           subjectives,
           subTotalMarks,
-          'sub-separate'
+          'sub-separate',
+          false,
+          'subjective'
         )
       );
     }
@@ -588,6 +598,7 @@ const renderContent = () => {
                     currentLayout={currentLayout}
                     currentClass={currentClass}
                     profile={profile}
+                    paperPart="mcq"
                   />
 
                   {mcqs.map((s) => (
@@ -647,6 +658,7 @@ const renderContent = () => {
                     currentLayout={currentLayout}
                     currentClass={currentClass}
                     profile={profile}
+                    paperPart="subjective"
                   />
 
                   {subjectives.map((s) => (

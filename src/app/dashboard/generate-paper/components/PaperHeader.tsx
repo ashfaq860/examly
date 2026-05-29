@@ -5,7 +5,6 @@ import CompactHeader from './layouts/CompactHeader';
 import ClassicHeader from './layouts/ClassicHeader';
 import ModernHeader from './layouts/ModernHeader';
 
-import SidebarHeader from './layouts/SidebarHeader';
 import InstructionalHeader from './layouts/InstructionalHeader';
 import ScorecardHeader from './layouts/ScorecardHeader';
 import BilingualHeader from './layouts/BilingualHeader';
@@ -64,13 +63,12 @@ export const PaperHeader: React.FC<PaperHeaderProps> = (props) => {
     <div style={printStyles} className="print-header-container">
       {(() => {
         // 1. Force Compact Mode if layout is multi-paper
-        if (isCompact) return <CompactHeader {...props} isRTL={isRTL} directionClass={textAlign} />;
+        if (isCompact) return <CompactHeader {...props} isRTL={isRTL} directionClass={textAlign} profile={profile} />;
 
         // 2. Live Switch based on SettingsPanel
         switch (settings.headerLayout) {
           case 'classic': return <ClassicHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
           case 'modern': return <ModernHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
-          case 'sidebar': return <SidebarHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
           case 'instructional': return <InstructionalHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
           case 'scorecard': return <ScorecardHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
           case 'bilingual': return <BilingualHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
