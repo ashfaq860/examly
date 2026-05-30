@@ -14,6 +14,7 @@ export async function GET(request: Request) {
   const cookieStore = cookies();
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
 
+  // ✅ Exchange the code — this sets the session cookie on the response
   const {
     data: { session },
     error: exchangeError,
@@ -32,10 +33,9 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     let role: string = 'teacher';
-    let isNewUser = false;
 
     if (!existingProfile) {
-      isNewUser = true;
+      // New user — insert profile
       const { error: insertError } = await supabase.from('profiles').insert({
         id: session.user.id,
         email: session.user.email,
@@ -56,6 +56,7 @@ export async function GET(request: Request) {
           `${requestUrl.origin}/auth/login?error=profile_creation_failed`
         );
       }
+      // role stays 'teacher' for new users
     } else {
       role = existingProfile.role ?? 'teacher';
     }
@@ -67,9 +68,11 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=unauthorized_role`);
     }
 
-    const redirectPath = role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
+    const redirectPath =
+      role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
 
-    // ✅ KEY FIX: Use 302 redirect with role cookie baked in
+    // ✅ Redirect directly — session cookie is already set by exchangeCodeForSession
+    // The client will pick it up automatically on the next page load
     const response = NextResponse.redirect(`${requestUrl.origin}${redirectPath}`, {
       status: 302,
     });

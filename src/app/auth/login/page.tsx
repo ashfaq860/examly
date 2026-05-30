@@ -1,6 +1,6 @@
 // app/auth/login/page.tsx
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AuthLayout from '@/components/AuthLayout';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
@@ -12,50 +12,53 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  // ✅ FIX: Gate the page render until we know session state
-  const [sessionChecked, setSessionChecked] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const router = useRouter();
   const supabase = createClientComponentClient();
+  // ✅ Prevent redirect from firing more than once
+  const redirecting = useRef(false);
 
   useEffect(() => {
-    // ✅ FIX: Use onAuthStateChange so we catch the session the instant
-    // Supabase sets the cookie — including right after an OAuth callback.
-    // getSession() can return null momentarily during the redirect chain.
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // SIGNED_IN fires when the session is fully ready (including after OAuth)
-      if (event === 'SIGNED_IN' && session?.user) {
-        try {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .maybeSingle();
+    // ✅ Only check once on mount — if there's already a session
+    // (e.g. user manually navigated back to /login while logged in),
+    // redirect them away. Do NOT use onAuthStateChange here —
+    // it fires during the OAuth redirect chain and causes loops.
+    const checkExistingSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
 
-          const role = profileData?.role ?? 'teacher';
-
-          Cookies.set('role', role, { expires: 7, path: '/' });
-
-          if (role === 'admin' || role === 'super_admin') {
-            router.replace('/admin');
-          } else {
-            router.replace('/dashboard');
-          }
-        } catch (e) {
-          console.error('Role check error:', e);
+        if (!session?.user) {
+          // No session — show the login form
+          setCheckingSession(false);
+          return;
         }
-      } else if (event === 'INITIAL_SESSION' && !session) {
-        // No session at all — show the login form
-        setSessionChecked(true);
-      } else if (event === 'INITIAL_SESSION' && session) {
-        // Already logged in — will be handled by SIGNED_IN branch above
-        // but set checked so the form doesn't flash
-      }
-    });
 
-    return () => subscription.unsubscribe();
-  }, [router, supabase]);
+        // Already logged in — redirect away
+        if (redirecting.current) return;
+        redirecting.current = true;
+
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        const role = profileData?.role ?? 'teacher';
+        Cookies.set('role', role, { expires: 7, path: '/' });
+
+        if (role === 'admin' || role === 'super_admin') {
+          router.replace('/admin');
+        } else {
+          router.replace('/dashboard');
+        }
+      } catch (e) {
+        console.error('Session check error:', e);
+        setCheckingSession(false);
+      }
+    };
+
+    checkExistingSession();
+  }, []); // ✅ Empty deps — run once only, no reactive loop
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,7 +121,6 @@ export default function LoginPage() {
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          // ✅ FIX: Skip browser cache — forces fresh OAuth flow
           queryParams: { prompt: 'select_account' },
         },
       });
@@ -127,7 +129,7 @@ export default function LoginPage() {
         setErr(error.message);
         setLoading(false);
       }
-      // Don't setLoading(false) on success — page is navigating away
+      // ✅ Don't setLoading(false) on success — browser is navigating away to Google
     } catch (e) {
       console.error('Google login failed:', e);
       setErr('Google login failed. Try again.');
@@ -135,9 +137,7 @@ export default function LoginPage() {
     }
   };
 
-  // ✅ FIX: Show a spinner until we know there's no active session.
-  // This prevents the login form from flashing during an OAuth redirect.
-  if (!sessionChecked) {
+  if (checkingSession) {
     return (
       <AuthLayout title="Welcome back" subtitle="">
         <div className="d-flex justify-content-center align-items-center py-5">
