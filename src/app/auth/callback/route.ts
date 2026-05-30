@@ -3,6 +3,15 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
+type AllowedRole = 'teacher' | 'admin' | 'super_admin' | 'academy';
+
+const ALLOWED_ROLES: AllowedRole[] = ['teacher', 'admin', 'super_admin', 'academy'];
+
+function getRoleRedirectPath(role: string): string {
+  if (role === 'admin' || role === 'super_admin') return '/admin';
+  return '/dashboard';
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
@@ -14,11 +23,8 @@ export async function GET(request: Request) {
   const cookieStore = cookies();
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
 
-  // ✅ Exchange the code — this sets the session cookie on the response
-  const {
-    data: { session },
-    error: exchangeError,
-  } = await supabase.auth.exchangeCodeForSession(code);
+  const { data: { session }, error: exchangeError } =
+    await supabase.auth.exchangeCodeForSession(code);
 
   if (exchangeError || !session) {
     console.error('Session exchange error:', exchangeError);
@@ -26,16 +32,20 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { data: existingProfile } = await supabase
+    const { data: existingProfile, error: profileError } = await supabase
       .from('profiles')
       .select('id, role')
       .eq('id', session.user.id)
       .maybeSingle();
 
+    if (profileError) {
+      console.error('Profile fetch error:', profileError);
+      return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=profile_fetch_failed`);
+    }
+
     let role: string = 'teacher';
 
     if (!existingProfile) {
-      // New user — insert profile
       const { error: insertError } = await supabase.from('profiles').insert({
         id: session.user.id,
         email: session.user.email,
@@ -56,23 +66,22 @@ export async function GET(request: Request) {
           `${requestUrl.origin}/auth/login?error=profile_creation_failed`
         );
       }
-      // role stays 'teacher' for new users
+      // New users are always teachers
+      role = 'teacher';
     } else {
-      role = existingProfile.role ?? 'teacher';
+      // ✅ Use the role exactly as stored in DB — no fallback that could mask bugs
+      role = existingProfile.role;
     }
 
-    const allowedRoles = ['teacher', 'admin', 'super_admin', 'academy'];
-    if (!allowedRoles.includes(role)) {
+    if (!ALLOWED_ROLES.includes(role as AllowedRole)) {
       console.error('Unauthorized role via OAuth:', role);
       await supabase.auth.signOut();
       return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=unauthorized_role`);
     }
 
-    const redirectPath =
-      role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
+    // ✅ Single source of truth for role → path mapping
+    const redirectPath = getRoleRedirectPath(role);
 
-    // ✅ Redirect directly — session cookie is already set by exchangeCodeForSession
-    // The client will pick it up automatically on the next page load
     const response = NextResponse.redirect(`${requestUrl.origin}${redirectPath}`, {
       status: 302,
     });
@@ -86,6 +95,7 @@ export async function GET(request: Request) {
     });
 
     return response;
+
   } catch (error) {
     console.error('Callback error:', error);
     return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=auth_failed`);

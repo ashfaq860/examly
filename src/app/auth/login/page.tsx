@@ -7,6 +7,16 @@ import Cookies from 'js-cookie';
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
+type AllowedRole = 'teacher' | 'admin' | 'super_admin' | 'academy';
+
+const ALLOWED_ROLES: AllowedRole[] = ['teacher', 'admin', 'super_admin', 'academy'];
+
+// ✅ Single source of truth — same logic as callback/route.ts
+function getRoleRedirectPath(role: string): string {
+  if (role === 'admin' || role === 'super_admin') return '/admin';
+  return '/dashboard';
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,42 +25,48 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   const router = useRouter();
   const supabase = createClientComponentClient();
-  // ✅ Prevent redirect from firing more than once
   const redirecting = useRef(false);
 
   useEffect(() => {
-    // ✅ Only check once on mount — if there's already a session
-    // (e.g. user manually navigated back to /login while logged in),
-    // redirect them away. Do NOT use onAuthStateChange here —
-    // it fires during the OAuth redirect chain and causes loops.
     const checkExistingSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
 
         if (!session?.user) {
-          // No session — show the login form
           setCheckingSession(false);
           return;
         }
 
-        // Already logged in — redirect away
         if (redirecting.current) return;
         redirecting.current = true;
 
-        const { data: profileData } = await supabase
+        const { data: profileData, error } = await supabase
           .from('profiles')
           .select('role')
           .eq('id', session.user.id)
           .maybeSingle();
 
-        const role = profileData?.role ?? 'teacher';
-        Cookies.set('role', role, { expires: 7, path: '/' });
-
-        if (role === 'admin' || role === 'super_admin') {
-          router.replace('/admin');
-        } else {
-          router.replace('/dashboard');
+        if (error || !profileData) {
+          // Can't verify role — sign out and show login
+          await supabase.auth.signOut();
+          redirecting.current = false;
+          setCheckingSession(false);
+          return;
         }
+
+        const role = profileData.role as string;
+
+        if (!ALLOWED_ROLES.includes(role as AllowedRole)) {
+          await supabase.auth.signOut();
+          redirecting.current = false;
+          setCheckingSession(false);
+          return;
+        }
+
+        Cookies.set('role', role, { expires: 7, path: '/' });
+        // ✅ Uses shared helper — admin/super_admin → /admin, everyone else → /dashboard
+        router.replace(getRoleRedirectPath(role));
+
       } catch (e) {
         console.error('Session check error:', e);
         setCheckingSession(false);
@@ -58,7 +74,7 @@ export default function LoginPage() {
     };
 
     checkExistingSession();
-  }, []); // ✅ Empty deps — run once only, no reactive loop
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,25 +107,24 @@ export default function LoginPage() {
         return;
       }
 
-      handleRoleRedirect(profileData.role ?? 'teacher');
+      const role = profileData.role as string;
+
+      if (!ALLOWED_ROLES.includes(role as AllowedRole)) {
+        setErr('Access denied: Your role cannot access this portal.');
+        await supabase.auth.signOut();
+        return;
+      }
+
+      Cookies.set('role', role, { expires: 7, path: '/' });
+      // ✅ Same helper — no divergence between email and Google login paths
+      router.push(getRoleRedirectPath(role));
+
     } catch (e) {
       console.error('Unexpected error:', e);
       setErr('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleRoleRedirect = (role: string) => {
-    const allowedRoles = ['teacher', 'admin', 'academy'];
-    if (!allowedRoles.includes(role)) {
-      setErr('Access denied: Your role cannot access this portal.');
-      supabase.auth.signOut();
-      return;
-    }
-    Cookies.set('role', role, { expires: 7, path: '/' });
-    if (role === 'teacher' || role === 'academy') router.push('/dashboard');
-    else if (role === 'admin') router.push('/admin');
   };
 
   const handleGoogleLogin = async () => {
@@ -129,7 +144,6 @@ export default function LoginPage() {
         setErr(error.message);
         setLoading(false);
       }
-      // ✅ Don't setLoading(false) on success — browser is navigating away to Google
     } catch (e) {
       console.error('Google login failed:', e);
       setErr('Google login failed. Try again.');
