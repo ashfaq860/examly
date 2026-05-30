@@ -12,34 +12,49 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // ✅ FIX: Gate the page render until we know session state
+  const [sessionChecked, setSessionChecked] = useState(false);
   const router = useRouter();
   const supabase = createClientComponentClient();
 
-  // ✅ Redirect if user is already logged in
-
   useEffect(() => {
-    const checkUser = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) return;
+    // ✅ FIX: Use onAuthStateChange so we catch the session the instant
+    // Supabase sets the cookie — including right after an OAuth callback.
+    // getSession() can return null momentarily during the redirect chain.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // SIGNED_IN fires when the session is fully ready (including after OAuth)
+      if (event === 'SIGNED_IN' && session?.user) {
+        try {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .maybeSingle();
 
-        const { data: roleData, error: rpcError } = await supabase
-          .rpc('get_user_role', { user_id: session.user.id });
+          const role = profileData?.role ?? 'teacher';
 
-        if (rpcError) {
-          console.error('Error fetching user role:', rpcError);
-          return;
+          Cookies.set('role', role, { expires: 7, path: '/' });
+
+          if (role === 'admin' || role === 'super_admin') {
+            router.replace('/admin');
+          } else {
+            router.replace('/dashboard');
+          }
+        } catch (e) {
+          console.error('Role check error:', e);
         }
-
-        const role = (roleData as any)?.role || roleData;
-
-        if (role === 'admin' || role === 'super_admin') router.replace('/admin');
-        else if (role === 'teacher' || role === 'academy') router.replace('/dashboard');
-      } catch (err) {
-        console.error('Error checking session:', err);
+      } else if (event === 'INITIAL_SESSION' && !session) {
+        // No session at all — show the login form
+        setSessionChecked(true);
+      } else if (event === 'INITIAL_SESSION' && session) {
+        // Already logged in — will be handled by SIGNED_IN branch above
+        // but set checked so the form doesn't flash
       }
-    };
-    checkUser();
+    });
+
+    return () => subscription.unsubscribe();
   }, [router, supabase]);
 
   const submit = async (e: React.FormEvent) => {
@@ -61,19 +76,21 @@ export default function LoginPage() {
         return;
       }
 
-      // Get user role
-      const { data: roleData, error: rpcError } = await supabase.rpc('get_user_role', { user_id: userId });
-      if (rpcError || !roleData) {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profileError || !profileData) {
         setErr('Unable to verify user role. Please contact support.');
         await supabase.auth.signOut();
         return;
       }
 
-      const role = (roleData as any)?.role || roleData;
-      handleRoleRedirect(role);
-
-    } catch (err) {
-      console.error('💥 Unexpected error:', err);
+      handleRoleRedirect(profileData.role ?? 'teacher');
+    } catch (e) {
+      console.error('Unexpected error:', e);
       setErr('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -87,32 +104,50 @@ export default function LoginPage() {
       supabase.auth.signOut();
       return;
     }
-
     Cookies.set('role', role, { expires: 7, path: '/' });
     if (role === 'teacher' || role === 'academy') router.push('/dashboard');
     else if (role === 'admin') router.push('/admin');
   };
 
-  // 🌟 Google OAuth login
   const handleGoogleLogin = async () => {
     try {
       setErr(null);
       setLoading(true);
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          // ✅ FIX: Skip browser cache — forces fresh OAuth flow
+          queryParams: { prompt: 'select_account' },
+        },
       });
 
-      if (error) setErr(error.message);
-      else console.log('Redirecting to Google...');
-    } catch (err) {
-      console.error('Google login failed:', err);
+      if (error) {
+        setErr(error.message);
+        setLoading(false);
+      }
+      // Don't setLoading(false) on success — page is navigating away
+    } catch (e) {
+      console.error('Google login failed:', e);
       setErr('Google login failed. Try again.');
-    } finally {
       setLoading(false);
     }
   };
+
+  // ✅ FIX: Show a spinner until we know there's no active session.
+  // This prevents the login form from flashing during an OAuth redirect.
+  if (!sessionChecked) {
+    return (
+      <AuthLayout title="Welcome back" subtitle="">
+        <div className="d-flex justify-content-center align-items-center py-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading…</span>
+          </div>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout title="Welcome back" subtitle="">
