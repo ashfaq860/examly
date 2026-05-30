@@ -1,80 +1,46 @@
 // app/auth/login/page.tsx
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import AuthLayout from '@/components/AuthLayout';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
-type AllowedRole = 'teacher' | 'admin' | 'super_admin' | 'academy';
-
-const ALLOWED_ROLES: AllowedRole[] = ['teacher', 'admin', 'super_admin', 'academy'];
-
-// ✅ Single source of truth — same logic as callback/route.ts
-function getRoleRedirectPath(role: string): string {
-  if (role === 'admin' || role === 'super_admin') return '/admin';
-  return '/dashboard';
-}
-
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
   const router = useRouter();
   const supabase = createClientComponentClient();
-  const redirecting = useRef(false);
+
+  // ✅ Redirect if user is already logged in
 
   useEffect(() => {
-    const checkExistingSession = async () => {
+    const checkUser = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
 
-        if (!session?.user) {
-          setCheckingSession(false);
+        const { data: roleData, error: rpcError } = await supabase
+          .rpc('get_user_role', { user_id: session.user.id });
+
+        if (rpcError) {
+          console.error('Error fetching user role:', rpcError);
           return;
         }
 
-        if (redirecting.current) return;
-        redirecting.current = true;
+        const role = (roleData as any)?.role || roleData;
 
-        const { data: profileData, error } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .maybeSingle();
-
-        if (error || !profileData) {
-          // Can't verify role — sign out and show login
-          await supabase.auth.signOut();
-          redirecting.current = false;
-          setCheckingSession(false);
-          return;
-        }
-
-        const role = profileData.role as string;
-
-        if (!ALLOWED_ROLES.includes(role as AllowedRole)) {
-          await supabase.auth.signOut();
-          redirecting.current = false;
-          setCheckingSession(false);
-          return;
-        }
-
-        Cookies.set('role', role, { expires: 7, path: '/' });
-        // ✅ Uses shared helper — admin/super_admin → /admin, everyone else → /dashboard
-        router.replace(getRoleRedirectPath(role));
-
-      } catch (e) {
-        console.error('Session check error:', e);
-        setCheckingSession(false);
+        if (role === 'admin' || role === 'super_admin') router.replace('/admin');
+        else if (role === 'teacher' || role === 'academy') router.replace('/dashboard');
+      } catch (err) {
+        console.error('Error checking session:', err);
       }
     };
-
-    checkExistingSession();
-  }, []);
+    checkUser();
+  }, [router, supabase]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,73 +61,58 @@ export default function LoginPage() {
         return;
       }
 
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (profileError || !profileData) {
+      // Get user role
+      const { data: roleData, error: rpcError } = await supabase.rpc('get_user_role', { user_id: userId });
+      if (rpcError || !roleData) {
         setErr('Unable to verify user role. Please contact support.');
         await supabase.auth.signOut();
         return;
       }
 
-      const role = profileData.role as string;
+      const role = (roleData as any)?.role || roleData;
+      handleRoleRedirect(role);
 
-      if (!ALLOWED_ROLES.includes(role as AllowedRole)) {
-        setErr('Access denied: Your role cannot access this portal.');
-        await supabase.auth.signOut();
-        return;
-      }
-
-      Cookies.set('role', role, { expires: 7, path: '/' });
-      // ✅ Same helper — no divergence between email and Google login paths
-      router.push(getRoleRedirectPath(role));
-
-    } catch (e) {
-      console.error('Unexpected error:', e);
+    } catch (err) {
+      console.error('💥 Unexpected error:', err);
       setErr('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleRoleRedirect = (role: string) => {
+    const allowedRoles = ['teacher', 'admin', 'academy'];
+    if (!allowedRoles.includes(role)) {
+      setErr('Access denied: Your role cannot access this portal.');
+      supabase.auth.signOut();
+      return;
+    }
+
+    Cookies.set('role', role, { expires: 7, path: '/' });
+    if (role === 'teacher' || role === 'academy') router.push('/dashboard');
+    else if (role === 'admin') router.push('/admin');
+  };
+
+  // 🌟 Google OAuth login
   const handleGoogleLogin = async () => {
     try {
       setErr(null);
       setLoading(true);
 
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: { prompt: 'select_account' },
-        },
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
       });
 
-      if (error) {
-        setErr(error.message);
-        setLoading(false);
-      }
-    } catch (e) {
-      console.error('Google login failed:', e);
+      if (error) setErr(error.message);
+      else console.log('Redirecting to Google...');
+    } catch (err) {
+      console.error('Google login failed:', err);
       setErr('Google login failed. Try again.');
+    } finally {
       setLoading(false);
     }
   };
-
-  if (checkingSession) {
-    return (
-      <AuthLayout title="Welcome back" subtitle="">
-        <div className="d-flex justify-content-center align-items-center py-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading…</span>
-          </div>
-        </div>
-      </AuthLayout>
-    );
-  }
 
   return (
     <AuthLayout title="Welcome back" subtitle="">
