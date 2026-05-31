@@ -1,6 +1,6 @@
 // app/auth/login/page.tsx
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AuthLayout from '@/components/AuthLayout';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
@@ -12,28 +12,46 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
   const router = useRouter();
   const supabase = createClientComponentClient();
 
-  // ✅ FIX: useEffect removed entirely.
-  //
-  // The callback route (/auth/callback) already handles the redirect after
-  // Google OAuth and sets the role cookie before redirecting to /dashboard
-  // or /admin. Having a useEffect here that also checks the session and
-  // calls get_user_role creates a race condition for new users:
-  //
-  //   1. Callback inserts the new profile row (async DB write).
-  //   2. Callback redirects → Next.js briefly renders this login page.
-  //   3. useEffect fires and calls get_user_role RPC immediately.
-  //   4. The DB write from step 1 may not be visible yet → RPC returns null.
-  //   5. The null-role branch calls signOut() → user is kicked back to login.
-  //
-  // On the second attempt the profile row already exists, so the RPC
-  // succeeds and the user gets in. That's the "needs two attempts" symptom.
-  //
-  // If you need to protect /dashboard and /admin from unauthenticated access,
-  // use Next.js middleware (middleware.ts) to check the session server-side
-  // before every request — that's the correct place for it.
+  useEffect(() => {
+    const redirectIfLoggedIn = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session?.user) {
+          setChecking(false);
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        const role = profile?.role;
+
+        if (role === 'admin' || role === 'super_admin') {
+          router.replace('/admin');
+        } else if (role === 'teacher' || role === 'academy') {
+          router.replace('/dashboard');
+        } else {
+          await supabase.auth.signOut();
+          setChecking(false);
+        }
+      } catch (e) {
+        console.error('Session check error:', e);
+        setChecking(false);
+      }
+    };
+
+    redirectIfLoggedIn();
+  }, [router, supabase]);
+
+  if (checking) return null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,18 +72,22 @@ export default function LoginPage() {
         return;
       }
 
-      const { data: roleData, error: rpcError } = await supabase.rpc('get_user_role', { user_id: userId });
-      if (rpcError || !roleData) {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profileError || !profile?.role) {
         setErr('Unable to verify user role. Please contact support.');
         await supabase.auth.signOut();
         return;
       }
 
-      const role = (roleData as any)?.role || roleData;
-      handleRoleRedirect(role);
+      handleRoleRedirect(profile.role);
 
-    } catch (err) {
-      console.error('Unexpected error:', err);
+    } catch (e) {
+      console.error('Unexpected error:', e);
       setErr('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -73,7 +95,7 @@ export default function LoginPage() {
   };
 
   const handleRoleRedirect = (role: string) => {
-    const allowedRoles = ['teacher', 'admin', 'academy'];
+    const allowedRoles = ['teacher', 'admin', 'super_admin', 'academy'];
     if (!allowedRoles.includes(role)) {
       setErr('Access denied: Your role cannot access this portal.');
       supabase.auth.signOut();
@@ -81,8 +103,9 @@ export default function LoginPage() {
     }
 
     Cookies.set('role', role, { expires: 7, path: '/' });
-    if (role === 'teacher' || role === 'academy') router.push('/dashboard');
-    else if (role === 'admin') router.push('/admin');
+
+    if (role === 'admin' || role === 'super_admin') router.push('/admin');
+    else router.push('/dashboard');
   };
 
   const handleGoogleLogin = async () => {
@@ -96,8 +119,8 @@ export default function LoginPage() {
       });
 
       if (error) setErr(error.message);
-    } catch (err) {
-      console.error('Google login failed:', err);
+    } catch (e) {
+      console.error('Google login failed:', e);
       setErr('Google login failed. Try again.');
     } finally {
       setLoading(false);
@@ -141,6 +164,7 @@ export default function LoginPage() {
         </div>
 
         <div className="text-center my-3 text-muted">OR</div>
+
         <button
           type="button"
           className="btn btn-outline-danger w-100"
