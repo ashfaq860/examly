@@ -1,4 +1,3 @@
-// app/auth/login/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
 import AuthLayout from '@/components/AuthLayout';
@@ -26,20 +25,20 @@ export default function LoginPage() {
           return;
         }
 
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .maybeSingle();
+        // Use RPC — now fixed to use the user_id param correctly
+        const { data: role, error } = await supabase
+          .rpc('get_user_role', { user_id: session.user.id });
 
-        const role = profile?.role;
+        if (error || !role) {
+          setChecking(false);
+          return;
+        }
 
         if (role === 'admin' || role === 'super_admin') {
           router.replace('/admin');
         } else if (role === 'teacher' || role === 'academy') {
           router.replace('/dashboard');
         } else {
-          await supabase.auth.signOut();
           setChecking(false);
         }
       } catch (e) {
@@ -72,19 +71,19 @@ export default function LoginPage() {
         return;
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .maybeSingle();
+      // ✅ Use RPC with SECURITY DEFINER — bypasses RLS, always works
+      // even immediately after signInWithPassword
+      const { data: role, error: rpcError } = await supabase
+        .rpc('get_user_role', { user_id: userId });
 
-      if (profileError || !profile?.role) {
+      if (rpcError || !role) {
+        console.error('Role fetch error:', rpcError);
         setErr('Unable to verify user role. Please contact support.');
         await supabase.auth.signOut();
         return;
       }
 
-      handleRoleRedirect(profile.role);
+      handleRoleRedirect(role as string);
 
     } catch (e) {
       console.error('Unexpected error:', e);
