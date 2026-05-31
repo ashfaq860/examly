@@ -1,7 +1,9 @@
 'use client';
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { LanguageConfig } from '@/types/paperBuilderTypes';
 import { EditableText } from './EditableText';
+import 'katex/dist/katex.min.css';
+import { InlineMath, BlockMath } from 'react-katex';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,50 +33,80 @@ interface QuestionRendererProps {
 }
 
 interface BilingualProps {
-  // Text content
   engValue: string;
   urValue?: string;
   engField: string;
   urField: string;
-  // Identity
   sectionId: string;
   questionId: string;
-  // Render flags
   isEnglish: boolean;
   isUrdu: boolean;
   isEditMode: boolean;
   isOption?: boolean;
-  // Styling — all fully resolved by the caller, no fallback logic here
   fontSize: number;
   urduFontSizeOffset?: number;
-  lineSpacing: number;          // REQUIRED, already-resolved value
+  lineSpacing: number;
   questionFontFamily: string;
-  // Optional extras
   urduNumberLabel?: string;
   question?: any;
-  // Callback
   onTextChange: (sid: string, qid: string, field: string, val: string) => void;
 }
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const URDU_FONT       = "'JameelNoori', 'Noto Nastaliq Urdu', serif";
-const PRINT_STYLE_ID  = 'qr-print-styles';
+const URDU_FONT      = "'JameelNoori', 'Noto Nastaliq Urdu', serif";
+const PRINT_STYLE_ID = 'qr-print-styles';
 
 // ---------------------------------------------------------------------------
-// ONE-TIME global print style injection
+// Pure React Safe LaTeX Tokenizer / Parser
 // ---------------------------------------------------------------------------
-// Defined as a plain string constant — not inside any component — so it is
-// never duplicated. Injected at module-load time AND re-checked in useEffect
-// to cover SSR hydration timing.
-//
-// LINE-HEIGHT STRATEGY
-// Each .question-lh-scope element sets --q-lh as an inline CSS variable with
-// the exact resolved value for that block (MCQ gets mcqLineHeight, subjective
-// gets questionLineSpacing). The print rule reads var(--q-lh) from the element
-// itself; children use `inherit` so they always get the value from their
-// nearest scoped ancestor — no cross-contamination, no injection-order races.
+interface MathRendererProps {
+  text: string;
+}
+
+const MathRenderer: React.FC<MathRendererProps> = ({ text }) => {
+  if (!text) return null;
+
+  // Split content by matching LaTeX blocks: $...$, $...$, \(...\), or \[...\]
+  const tokens = useMemo(() => {
+    const regex = /(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$|\\\(.*?\\\)|\\\[.*?\\\])/g;
+    return text.split(regex);
+  }, [text]);
+
+  return (
+    <>
+      {tokens.map((token, index) => {
+        // 1. Double Dollar Display Math Block
+        if (token.startsWith('$$') && token.endsWith('$$')) {
+          const formula = token.slice(2, -2).trim();
+          return <BlockMath key={index} math={formula} />;
+        }
+        // 2. Bracket Display Math Block
+        if (token.startsWith('\\[') && token.endsWith('\\]')) {
+          const formula = token.slice(2, -2).trim();
+          return <BlockMath key={index} math={formula} />;
+        }
+        // 3. Single Dollar Inline Math Block
+        if (token.startsWith('$') && token.endsWith('$')) {
+          const formula = token.slice(1, -1).trim();
+          return <InlineMath key={index} math={formula} />;
+        }
+        // 4. Parentheses Inline Math Block
+        if (token.startsWith('\\(') && token.endsWith('\\)')) {
+          const formula = token.slice(2, -2).trim();
+          return <InlineMath key={index} math={formula} />;
+        }
+        
+        // 5. Plain Normal Text String Segment
+        return <span key={index}>{token}</span>;
+      })}
+    </>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Print styles
 // ---------------------------------------------------------------------------
 const PRINT_CSS = `
   .urdu-text, [lang="ur"] {
@@ -90,7 +122,6 @@ const PRINT_CSS = `
   .urdu-text .editable-content { direction: rtl; text-align: right; }
 
   @media print {
-
     .question-wrapper, .question-wrapper *,
     .mcq-item, .mcq-item *,
     .urdu-text, .english-text,
@@ -101,7 +132,6 @@ const PRINT_CSS = `
       print-color-adjust: exact !important;
     }
 
-    /* Each scoped wrapper carries --q-lh inline; children inherit it cleanly */
     .question-lh-scope {
       line-height: var(--q-lh, 1.4) !important;
     }
@@ -129,6 +159,9 @@ const PRINT_CSS = `
     .mcq-item .row   { --bs-gutter-x: 0 !important; --bs-gutter-y: 0 !important; }
     .mcq-item .d-flex { display: flex !important; align-items: baseline !important; margin: 0 !important; padding: 0 !important; }
     .mcq-item span.fw-bold { align-self: baseline !important; }
+
+    .katex-display { margin: 0.2em 0 !important; display: inline-block !important; width: auto !important; }
+    .katex { font-size: 1.05em !important; text-rendering: auto !important; }
   }
 `;
 
@@ -141,7 +174,6 @@ function injectPrintStyles() {
   document.head.appendChild(el);
 }
 
-// Synchronous injection at module load (before any render or print dialog)
 if (typeof window !== 'undefined') injectPrintStyles();
 
 // ---------------------------------------------------------------------------
@@ -154,9 +186,20 @@ const toRoman = (n: number): string => {
   return r;
 };
 
+/** ADVANCED HTML STRIPPER THAT PROTECTS LATEX MACROS AND DELIMITERS */
 const stripHtml = (text: string, stripNum = false): string => {
   if (!text) return '';
-  let s = text.replace(/<(?:.|\n)*?>/gm, ' ').trim();
+
+  // 1. Remove database markup tags (e.g., <p>, <span class="math-tex">, </p>) safely
+  let s = text.replace(/<\/?[^>]+(>|$)/g, ' ').trim();
+
+  // 2. Normalize common layout spacing codes down to standardized spacing strings
+  s = s.replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
+
+  // 3. Fix double-escaped math block markers introduced by content sanitization string pipes
+  s = s.replace(/\\\\\(/g, '\\(').replace(/\\\\\)/g, '\\)');
+  s = s.replace(/\\\\\s*\(/g, '\\(').replace(/\\\\\s*\)/g, '\\)');
+
   if (stripNum) {
     s = s
       .replace(/^(?:\(?\d+\)?[.)]?|\(?[ivxIVX]+\)?[.)]?)(\s+|\u00A0)*/, '')
@@ -166,24 +209,14 @@ const stripHtml = (text: string, stripNum = false): string => {
   return s;
 };
 
-/** Resolve a line-height value safely — never swallows 0.9, 1.0, etc. */
 const resolveLH = (val: number | undefined, fallback: number): number =>
   typeof val === 'number' && val > 0 ? val : fallback;
 
-/**
- * Returns inline styles that set BOTH the screen lineHeight and the CSS
- * variable --q-lh that the single shared @media print rule reads.
- * Called on every .question-lh-scope element so each carries its own value.
- */
 const lhScope = (lh: number): React.CSSProperties =>
   ({ lineHeight: lh, '--q-lh': lh } as React.CSSProperties);
 
 // ---------------------------------------------------------------------------
 // BilingualTextDisplay
-// ---------------------------------------------------------------------------
-// Props are ALWAYS passed explicitly by the caller — never via {...spread}.
-// This is the core guarantee that MCQ line-height never gets replaced by a
-// subjective value or any other prop leaking in from the parent chain.
 // ---------------------------------------------------------------------------
 const BilingualTextDisplay: React.FC<BilingualProps> = ({
   engValue,
@@ -198,14 +231,13 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
   isOption = false,
   fontSize,
   urduFontSizeOffset = 2,
-  lineSpacing,          // already resolved — used as-is
+  lineSpacing,
   questionFontFamily,
   urduNumberLabel,
   question,
   onTextChange,
 }) => {
   const isTranslate = question?.question_type === 'translate_english';
-  // For Urdu body text a slightly tighter setting reads better, but cap at 1.0
   const urduLH = isOption ? lineSpacing : Math.max(1.0, lineSpacing - 0.3);
 
   return (
@@ -218,7 +250,7 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
           dir="rtl"
           lang="ur"
           style={{
-            ...lhScope(urduLH),          // --q-lh + lineHeight set here
+            ...lhScope(urduLH),
             fontFamily: URDU_FONT,
             fontSize: `${fontSize + urduFontSizeOffset}px`,
             textAlign: 'right',
@@ -235,14 +267,16 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
           ) : (
             <span style={{ display: 'inline-flex', alignItems: 'flex-start', gap: '0.35rem', flexWrap: 'nowrap', width: '100%' }}>
               {urduNumberLabel && !isOption && (
-                <span className="fw-bold text-nowrap" style={{ fontSize: `${fontSize}px`, fontFamily: URDU_FONT, flex: '0 0 auto', whiteSpace: 'nowrap' }}>
+                <span
+                  className="fw-bold text-nowrap"
+                  style={{ fontSize: `${fontSize}px`, fontFamily: URDU_FONT, flex: '0 0 auto', whiteSpace: 'nowrap' }}
+                >
                   {urduNumberLabel}
                 </span>
               )}
-              <span
-                style={{ display: 'block', flex: '1 1 0', minWidth: 0, textAlign: 'right' }}
-                dangerouslySetInnerHTML={{ __html: stripHtml(urValue || (isOption ? '' : engValue), isTranslate) }}
-              />
+              <span style={{ display: 'block', flex: '1 1 0', minWidth: 0, textAlign: 'right' }}>
+                <MathRenderer text={stripHtml(urValue || (isOption ? '' : engValue), isTranslate)} />
+              </span>
             </span>
           )}
         </div>
@@ -255,7 +289,7 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
           dir={isTranslate ? 'rtl' : 'ltr'}
           lang={isTranslate ? 'ur' : 'en'}
           style={{
-            ...lhScope(isTranslate ? urduLH : lineSpacing),  // --q-lh + lineHeight
+            ...lhScope(isTranslate ? urduLH : lineSpacing),
             marginTop: '-1px',
             fontFamily: isTranslate ? URDU_FONT : questionFontFamily,
             fontSize: isTranslate ? `${fontSize + urduFontSizeOffset}px` : `${fontSize}px`,
@@ -268,7 +302,7 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
               onChange={(v: string) => onTextChange(sectionId, questionId, engField, v)}
             />
           ) : (
-            <span dangerouslySetInnerHTML={{ __html: stripHtml(engValue) }} />
+            <MathRenderer text={stripHtml(engValue)} />
           )}
         </div>
       )}
@@ -277,7 +311,7 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
 };
 
 // ---------------------------------------------------------------------------
-// QuestionRenderer  (main export)
+// QuestionRenderer
 // ---------------------------------------------------------------------------
 export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   question,
@@ -298,24 +332,20 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   shouldShowOr,
   onTextChange,
 }) => {
-  // Ensure style tag exists after SSR hydration
   useEffect(() => { injectPrintStyles(); }, []);
 
-  const isTranslate        = question?.question_type === 'translate_english';
-  const isUrdu             = paperLanguage === 'urdu' || paperLanguage === 'bilingual' || isTranslate;
-  const isEnglish          = (paperLanguage === 'english' || paperLanguage === 'bilingual') && !isTranslate;
-  const showUrduNumber     = paperLanguage === 'urdu' || isTranslate;
-  const showEnglishNumber  = (paperLanguage === 'english' || paperLanguage === 'bilingual') && !isTranslate;
+  const isTranslate       = question?.question_type === 'translate_english';
+  const isUrdu            = paperLanguage === 'urdu' || paperLanguage === 'bilingual' || isTranslate;
+  const isEnglish         = (paperLanguage === 'english' || paperLanguage === 'bilingual') && !isTranslate;
+  const showUrduNumber    = paperLanguage === 'urdu' || isTranslate;
+  const showEnglishNumber = (paperLanguage === 'english' || paperLanguage === 'bilingual') && !isTranslate;
   const showUrduSideNumber = paperLanguage === 'bilingual' && !isTranslate;
   const isPaperUrduOrEng   = paperLanguage === 'urdu' || paperLanguage === 'english';
 
   const isMCQ = sectionType === 'mcq';
 
-  // Resolve once here — these values flow explicitly to every child.
-  // resolveLH guards against undefined / 0 / NaN without using `||`
-  // which would incorrectly swallow valid values like 1.0.
-  const resolvedMcqLH  = resolveLH(mcqLineHeight,       1.2);
-  const resolvedSubjLH = resolveLH(questionLineSpacing,  1.5);
+  const resolvedMcqLH  = resolveLH(mcqLineHeight,      1.2);
+  const resolvedSubjLH = resolveLH(questionLineSpacing, 1.5);
   const currentLH      = isMCQ ? resolvedMcqLH : resolvedSubjLH;
 
   const numberFontSize = isMCQ ? resolveLH(mcqFontSize, 12) : fontSize;
@@ -334,23 +364,10 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   if (showNumber) {
     if (isLong)     indexDisplay = paperLanguage === 'urdu' ? `${index}.Q` : `Q.${index}`;
     else if (isMCQ) indexDisplay = `${index + 1}.`;
-    else            indexDisplay = `(${toRoman(index + 1)})`;
+    else             indexDisplay = `(${toRoman(index + 1)})`;
   }
 
   const urduNumberLabel = showUrduSideNumber ? indexDisplay : undefined;
-
-  // Shared props for BilingualTextDisplay — built once, used in both sub-renderers.
-  // Critically: lineSpacing is set to the correct resolved value for THIS section type.
-  const bilingualBase = {
-    sectionId,
-    isEnglish,
-    isUrdu,
-    isEditMode,
-    questionFontFamily,
-    onTextChange,
-    question,
-    urduNumberLabel,
-  };
 
   return (
     <div className={`question-wrapper mb-1 ${isUrdu || isTranslate ? 'rtl' : 'ltr'}`}>
@@ -389,7 +406,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
               isEnglish={isEnglish}
               isEditMode={isEditMode}
               fontSize={resolveLH(mcqFontSize, 12)}
-              lineHeight={resolvedMcqLH}         // ← MCQ-specific, fully resolved
+              lineHeight={resolvedMcqLH}
               questionFontFamily={questionFontFamily}
               urduNumberLabel={urduNumberLabel}
               onTextChange={onTextChange}
@@ -403,7 +420,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
               isEditMode={isEditMode}
               isLong={isLong}
               fontSize={fontSize}
-              lineHeight={resolvedSubjLH}        // ← subjective-specific, fully resolved
+              lineHeight={resolvedSubjLH}
               questionFontFamily={questionFontFamily}
               urduNumberLabel={urduNumberLabel}
               onTextChange={onTextChange}
@@ -411,7 +428,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
           )}
         </div>
 
-        {/* ── 3. Marks (long questions only) ── */}
+        {/* ── 3. Marks ── */}
         {isLong && isUrduSubject && marks !== undefined && (
           <div
             className="fw-bold text-nowrap"
@@ -436,9 +453,6 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
 // ---------------------------------------------------------------------------
 // MCQRenderer
 // ---------------------------------------------------------------------------
-// Receives lineHeight as an explicit prop — the resolved mcqLineHeight value.
-// Never uses {...spread} into BilingualTextDisplay.
-// ---------------------------------------------------------------------------
 interface MCQRendererProps {
   question: any;
   sectionId: string;
@@ -447,7 +461,7 @@ interface MCQRendererProps {
   isEnglish: boolean;
   isEditMode: boolean;
   fontSize: number;
-  lineHeight: number;    // resolved mcqLineHeight — the authoritative value
+  lineHeight: number;
   questionFontFamily: string;
   urduNumberLabel?: string;
   onTextChange: (sid: string, qid: string, field: string, val: string) => void;
@@ -480,14 +494,13 @@ const MCQRenderer: React.FC<MCQRendererProps> = ({
     return 'col-3';
   };
 
-  // Explicit props object — zero spreading into BilingualTextDisplay
   const commonBilingual = {
     sectionId,
     isEnglish,
     isUrdu,
     isEditMode,
     fontSize,
-    lineSpacing: lineHeight,   // ← MCQ line-height, always correct
+    lineSpacing: lineHeight,
     questionFontFamily,
     onTextChange,
     question,
@@ -546,7 +559,7 @@ interface SubjectiveRendererProps {
   isEditMode: boolean;
   isLong: boolean;
   fontSize: number;
-  lineHeight: number;    // resolved questionLineSpacing
+  lineHeight: number;
   questionFontFamily: string;
   urduNumberLabel?: string;
   onTextChange: (sid: string, qid: string, field: string, val: string) => void;
@@ -576,7 +589,7 @@ const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
     engField="question_text"
     urField="question_text_ur"
     fontSize={fontSize + (isLong ? 4 : 0)}
-    lineSpacing={lineHeight}               // ← subjective line-height, always correct
+    lineSpacing={lineHeight}
     questionFontFamily={questionFontFamily}
     urduNumberLabel={urduNumberLabel}
     question={question}

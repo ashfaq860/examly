@@ -107,15 +107,21 @@ export default function QuestionForm({
   const englishEditorConfig = useMemo(() => ({
     height: 300,
     menubar: true,
+    external_plugins: {
+      'mathjax': 'https://cdn.jsdelivr.net/npm/@dimakorotkov/tinymce-mathjax@1.0.9/plugin.min.js',
+    },
     plugins: [
       'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
       'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
       'insertdatetime', 'media', 'table', 'help', 'wordcount'
     ],
-    toolbar: 
+    toolbar:
       'undo redo | blocks | bold italic underline strikethrough | ' +
       'forecolor backcolor | alignleft aligncenter alignright alignjustify | ' +
-      'bullist numlist outdent indent | removeformat help',
+      'bullist numlist outdent indent | mathjax | removeformat help',
+    mathjax: {
+      lib: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
+    },
     content_style: 'body { font-family: Helvetica, Arial, sans-serif; font-size: 16px; }',
     directionality: 'ltr',
     license_key: 'gpl',
@@ -139,15 +145,38 @@ export default function QuestionForm({
     }
   }), []);
 
-  // TinyMCE configuration for Urdu (RTL)
+  // TinyMCE configuration for Urdu (RTL) — includes mathjax for LaTeX support
   const urduEditorConfig = useMemo(() => ({
     ...englishEditorConfig,
-    content_style: 'body { font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif; font-size: 16pt; direction: rtl; }',
+    content_style: `
+      body {
+        font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif;
+        font-size: 16pt;
+        direction: rtl;
+      }
+    `,
     directionality: 'rtl',
-    toolbar: 
+    // mathjax added here so LaTeX works in Urdu fields too
+    toolbar:
       'undo redo | blocks | bold italic underline strikethrough | ' +
       'forecolor backcolor | alignright aligncenter alignleft alignjustify | ' +
-      'bullist numlist outdent indent | removeformat help',
+      'bullist numlist outdent indent | mathjax | removeformat help',
+  }), [englishEditorConfig]);
+
+  // Compact Urdu editor config for MCQ options (shorter height, minimal toolbar, RTL + LaTeX)
+  const urduOptionEditorConfig = useMemo(() => ({
+    ...urduEditorConfig,
+    height: 150,
+    menubar: false,
+    toolbar: 'bold italic | mathjax | removeformat help',
+  }), [urduEditorConfig]);
+
+  // Compact English editor config for MCQ options
+  const englishOptionEditorConfig = useMemo(() => ({
+    ...englishEditorConfig,
+    height: 150,
+    menubar: false,
+    toolbar: 'bold italic | mathjax | removeformat help',
   }), [englishEditorConfig]);
 
   // Check if selected subject is English
@@ -285,11 +314,10 @@ export default function QuestionForm({
     }
   }, [isEnglishSubject, isUrduSubject, formData, translateToUrdu]);
 
-  // Initialize form (Edit mode) - Fixed dependency array
+  // Initialize form (Edit mode)
   useEffect(() => {
     if (!question) return;
 
-    // Extract data from existing question
     let poetryText = '';
     let proseText = '';
     let sentenceText = '';
@@ -308,7 +336,6 @@ export default function QuestionForm({
     let passageQuestionText = '';
     let passageQuestionTextUr = '';
 
-    // Parse specialized fields from stored text
     if (question.question_type === 'poetry_explanation' && question.question_text_ur) {
       const match = question.question_text_ur.match(/اس شعر کی تشریح کریں: (.*)/);
       poetryText = match ? match[1] : question.question_text_ur;
@@ -340,14 +367,11 @@ export default function QuestionForm({
     } else if (question.question_type === 'Nasarkhulasa_markziKhyal' && question.question_text_ur) {
       nasarText = question.question_text_ur;
     } else if (question.question_type === 'passage') {
-      // Parse passage and question from stored text
       if (question.question_text) {
-        // English passage
         const parts = question.question_text.split('\n\nQUESTION: ');
         passageText = parts[0] || '';
         passageQuestionText = parts[1] || '';
       } else if (question.question_text_ur) {
-        // Urdu passage
         const parts = question.question_text_ur.split('\n\nQUESTION: ');
         passageTextUr = parts[0] || '';
         passageQuestionTextUr = parts[1] || '';
@@ -356,7 +380,6 @@ export default function QuestionForm({
       summaryText = question.question_text;
     }
 
-    // Get topic info to derive class and subject
     const currentTopic = topics.find(t => toId(t.id) === toId(question.topic_id));
     const currentChapter = currentTopic ? chapters.find(c => toId(c.id) === toId(currentTopic.chapter_id)) : null;
     const classSubject = currentChapter ? classSubjects.find(cs => toId(cs.id) === toId(currentChapter.class_subject_id)) : null;
@@ -383,7 +406,6 @@ export default function QuestionForm({
       answer_text_ur: question.answer_text_ur || '',
       source_type: (question.source_type || 'book') as 'book' | 'past_paper' | 'model_paper' | 'custom' | 'conceptual',
       source_year: question.source_year ? String(question.source_year) : '',
-      // Form-only fields (parsed from existing data)
       passage_text: passageText,
       passage_text_ur: passageTextUr,
       idiom_phrase: idiomPhrase,
@@ -401,7 +423,7 @@ export default function QuestionForm({
       summary_text: summaryText,
       passage_questions_count: 1,
     });
-  }, [question, classSubjects, chapters, topics, toId]); // Fixed dependencies
+  }, [question, classSubjects, chapters, topics, toId]);
 
   // Filter subjects when class changes
   useEffect(() => {
@@ -502,7 +524,6 @@ export default function QuestionForm({
         .eq('id', user?.id)
         .single();
 
-      // Build payload based on question type and subject
       const basePayload = {
         topic_id: formData.topic_id || null,
         difficulty: formData.difficulty,
@@ -514,7 +535,6 @@ export default function QuestionForm({
 
       let typeSpecificPayload = {};
 
-      // Handle English subject questions
       if (isEnglishSubject()) {
         switch (formData.question_type) {
           case 'mcq':
@@ -680,9 +700,7 @@ export default function QuestionForm({
             };
             break;
         }
-      }
-      // Handle Urdu subject questions
-      else if (isUrduSubject()) {
+      } else if (isUrduSubject()) {
         switch (formData.question_type) {
           case 'mcq':
             typeSpecificPayload = {
@@ -866,9 +884,7 @@ export default function QuestionForm({
             };
             break;
         }
-      }
-      // Handle other subjects (bilingual)
-      else {
+      } else {
         switch (formData.question_type) {
           case 'mcq':
             typeSpecificPayload = {
@@ -940,12 +956,10 @@ export default function QuestionForm({
     setFormData(prev => ({ ...prev, [name]: value }));
   }, []);
 
-  // Special handler for TinyMCE editor changes
   const handleEditorChange = useCallback((content: string, fieldName: string) => {
     setFormData(prev => ({ ...prev, [fieldName]: content }));
   }, []);
 
-  // Get available question types based on subject
   const getAvailableQuestionTypes = useCallback(() => {
     if (isEnglishSubject()) {
       return [
@@ -984,7 +998,6 @@ export default function QuestionForm({
     }
   }, [isEnglishSubject, isUrduSubject]);
 
-  // Helper function to determine which fields to show based on question type
   const shouldShowQuestionTextField = useCallback(() => {
     if (isEnglishSubject()) {
       return !['translate_urdu', 'translate_english', 'idiom_phrases', 'directInDirect', 'activePassive', 'passage', 'summary'].includes(formData.question_type);
@@ -995,7 +1008,6 @@ export default function QuestionForm({
     }
   }, [isEnglishSubject, isUrduSubject, formData.question_type]);
 
-  // Sort classes function for consistent ordering
   const sortedClasses = useMemo(() => {
     return [...classes].sort((a, b) => {
       const aNum = parseInt(a.name);
@@ -1010,7 +1022,7 @@ export default function QuestionForm({
   return (
     <form onSubmit={handleSubmit}>
       <div className="modal-body">
-        {/* Selection Fields Section - Moved to Top */}
+        {/* Selection Fields Section */}
         <div className="row g-3 mb-4">
           <div className="col-12">
             <h5 className="mb-3">Question Configuration</h5>
@@ -1068,10 +1080,10 @@ export default function QuestionForm({
               onChange={handleChange}
               disabled={!formData.class_id || !formData.subject_id}
             >
-              <option value="">{isUrduSubject()?'چیپٹر کا انتخاب کریں':'Select Chapter'}</option>
-              {filteredChapters.map((chapter,index) => (
+              <option value="">{isUrduSubject() ? 'چیپٹر کا انتخاب کریں' : 'Select Chapter'}</option>
+              {filteredChapters.map((chapter, index) => (
                 <option key={toId(chapter.id)} value={toId(chapter.id)}>
-                 {index+1}-{chapter.name}
+                  {index + 1}-{chapter.name}
                   {chapter.description ? ` — ${chapter.description}` : ''}
                 </option>
               ))}
@@ -1088,7 +1100,7 @@ export default function QuestionForm({
               onChange={handleChange}
               disabled={!formData.chapter_id}
             >
-              <option value="">{isUrduSubject()?'موضوع کا انتخاب کریں':'Select Topic'}</option>
+              <option value="">{isUrduSubject() ? 'موضوع کا انتخاب کریں' : 'Select Topic'}</option>
               {filteredTopics.map((topic) => (
                 <option key={toId(topic.id)} value={toId(topic.id)}>
                   {topic.name}
@@ -1188,16 +1200,13 @@ export default function QuestionForm({
             <h5 className="mb-3">Question Content</h5>
             <hr />
           </div>
-          
-          {/* Question fields based on subject */}
+
+          {/* ── ENGLISH SUBJECT ── */}
           {isEnglishSubject() && (
             <>
-              {/* English Question text - all types except specific ones */}
               {shouldShowQuestionTextField() && (
                 <div className="col-md-12">
-                  <label className="form-label">
-                    Question Text (English) *
-                  </label>
+                  <label className="form-label">Question Text (English) *</label>
                   <Editor
                     tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                     value={formData.question_text}
@@ -1207,55 +1216,45 @@ export default function QuestionForm({
                 </div>
               )}
 
-              {/* Text to translate for translate_urdu */}
               {formData.question_type === 'translate_urdu' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label">English Text to Translate *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.question_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'question_text')}
-                      init={englishEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label">English Text to Translate *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.question_text}
+                    onEditorChange={(content) => handleEditorChange(content, 'question_text')}
+                    init={englishEditorConfig}
+                  />
+                </div>
               )}
 
-              {/* Text to translate for translate_english */}
               {formData.question_type === 'translate_english' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label">Urdu Text to Translate *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.question_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'question_text')}
-                      init={englishEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label">Urdu Text to Translate *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.question_text}
+                    onEditorChange={(content) => handleEditorChange(content, 'question_text')}
+                    init={englishEditorConfig}
+                  />
+                </div>
               )}
 
-              {/* Idiom/Phrase fields */}
               {formData.question_type === 'idiom_phrases' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label">Idiom/Phrase (English) *</label>
-                    <textarea
-                      className="form-control"
-                      name="idiom_phrase"
-                      value={formData.idiom_phrase}
-                      onChange={handleChange}
-                      required
-                      placeholder="e.g., 'Break a leg'"
-                      rows={3}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label">Idiom/Phrase (English) *</label>
+                  <textarea
+                    className="form-control"
+                    name="idiom_phrase"
+                    value={formData.idiom_phrase}
+                    onChange={handleChange}
+                    required
+                    placeholder="e.g., 'Break a leg'"
+                    rows={3}
+                  />
+                </div>
               )}
 
-              {/* Passage fields */}
               {formData.question_type === 'passage' && (
                 <>
                   <div className="col-md-12">
@@ -1279,148 +1278,122 @@ export default function QuestionForm({
                 </>
               )}
 
-              {/* Direct/Indirect Speech fields */}
               {formData.question_type === 'directInDirect' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label">Direct Speech Sentence *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.direct_sentence}
-                      onEditorChange={(content) => handleEditorChange(content, 'direct_sentence')}
-                      init={englishEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label">Direct Speech Sentence *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.direct_sentence}
+                    onEditorChange={(content) => handleEditorChange(content, 'direct_sentence')}
+                    init={englishEditorConfig}
+                  />
+                </div>
               )}
 
-              {/* Active/Passive Voice fields */}
               {formData.question_type === 'activePassive' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label">Active Voice Sentence *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.active_sentence}
-                      onEditorChange={(content) => handleEditorChange(content, 'active_sentence')}
-                      init={englishEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label">Active Voice Sentence *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.active_sentence}
+                    onEditorChange={(content) => handleEditorChange(content, 'active_sentence')}
+                    init={englishEditorConfig}
+                  />
+                </div>
               )}
 
-              {/* Summary fields */}
               {formData.question_type === 'summary' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label">Text to Summarize *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.summary_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'summary_text')}
-                      init={englishEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label">Text to Summarize *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.summary_text}
+                    onEditorChange={(content) => handleEditorChange(content, 'summary_text')}
+                    init={englishEditorConfig}
+                  />
+                </div>
               )}
             </>
           )}
 
+          {/* ── URDU SUBJECT ── */}
           {isUrduSubject() && (
             <>
-              {/* Urdu MCQ */}
+              {/* Urdu MCQ question */}
               {formData.question_type === 'mcq' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">سوال (اردو) *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.question_text_ur}
-                      onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label urdu-label">سوال (اردو) *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.question_text_ur}
+                    onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
+                    init={urduEditorConfig}
+                  />
+                </div>
               )}
 
-              {/* Urdu Poetry Explanation */}
               {formData.question_type === 'poetry_explanation' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">شعر *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.poetry_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'poetry_text')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label urdu-label">شعر *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.poetry_text}
+                    onEditorChange={(content) => handleEditorChange(content, 'poetry_text')}
+                    init={urduEditorConfig}
+                  />
+                </div>
               )}
 
-              {/* Urdu Gazal */}
               {formData.question_type === 'gazal' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">غزل *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.poetry_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'poetry_text')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label urdu-label">غزل *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.poetry_text}
+                    onEditorChange={(content) => handleEditorChange(content, 'poetry_text')}
+                    init={urduEditorConfig}
+                  />
+                </div>
               )}
 
-              {/* Urdu Prose Explanation */}
               {formData.question_type === 'prose_explanation' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">نثر پارہ *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.prose_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'prose_text')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label urdu-label">نثر پارہ *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.prose_text}
+                    onEditorChange={(content) => handleEditorChange(content, 'prose_text')}
+                    init={urduEditorConfig}
+                  />
+                </div>
               )}
 
-              {/* Short and Long Questions */}
               {(formData.question_type === 'short' || formData.question_type === 'long') && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">سوال *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.question_text_ur}
-                      onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label urdu-label">سوال *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.question_text_ur}
+                    onEditorChange={(content) => handleEditorChange(content, 'question_text_ur')}
+                    init={urduEditorConfig}
+                  />
+                </div>
               )}
 
-              {/* Sentence Correction/Completion */}
               {(formData.question_type === 'sentence_correction' || formData.question_type === 'sentence_completion') && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">
-                      {formData.question_type === 'sentence_correction' ? 'جملہ (درستگی کے لیے) *' : 'جملہ (تکمیل کے لیے) *'}
-                    </label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.sentence_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'sentence_text')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label urdu-label">
+                    {formData.question_type === 'sentence_correction' ? 'جملہ (درستگی کے لیے) *' : 'جملہ (تکمیل کے لیے) *'}
+                  </label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.sentence_text}
+                    onEditorChange={(content) => handleEditorChange(content, 'sentence_text')}
+                    init={urduEditorConfig}
+                  />
+                </div>
               )}
 
-              {/* Urdu Passage fields */}
               {formData.question_type === 'passage' && (
                 <>
                   <div className="col-md-12">
@@ -1444,57 +1417,47 @@ export default function QuestionForm({
                 </>
               )}
 
-              {/* Darkhwast/Khat */}
               {formData.question_type === 'darkhwast_khat' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">درخواست/خط کا متن *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.darkhwast_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'darkhwast_text')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label urdu-label">درخواست/خط کا متن *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.darkhwast_text}
+                    onEditorChange={(content) => handleEditorChange(content, 'darkhwast_text')}
+                    init={urduEditorConfig}
+                  />
+                </div>
               )}
 
-              {/* Kahani/Makalma */}
               {formData.question_type === 'kahani_makalma' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">کہانی/مکالمہ کا متن *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.kahani_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'kahani_text')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label urdu-label">کہانی/مکالمہ کا متن *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.kahani_text}
+                    onEditorChange={(content) => handleEditorChange(content, 'kahani_text')}
+                    init={urduEditorConfig}
+                  />
+                </div>
               )}
 
-              {/* Nasarkhulasa/Markzi Khyal */}
               {formData.question_type === 'Nasarkhulasa_markziKhyal' && (
-                <>
-                  <div className="col-md-12">
-                    <label className="form-label urdu-label">نثر/خلاصہ/مرکزی خیال *</label>
-                    <Editor
-                      tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
-                      value={formData.nasar_text}
-                      onEditorChange={(content) => handleEditorChange(content, 'nasar_text')}
-                      init={urduEditorConfig}
-                    />
-                  </div>
-                </>
+                <div className="col-md-12">
+                  <label className="form-label urdu-label">نثر/خلاصہ/مرکزی خیال *</label>
+                  <Editor
+                    tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
+                    value={formData.nasar_text}
+                    onEditorChange={(content) => handleEditorChange(content, 'nasar_text')}
+                    init={urduEditorConfig}
+                  />
+                </div>
               )}
             </>
           )}
 
-          {/* For other subjects (bilingual) */}
+          {/* ── OTHER SUBJECTS (bilingual) ── */}
           {!isEnglishSubject() && !isUrduSubject() && (
             <>
-              {/* English Question text */}
               <div className="col-md-12">
                 <label className="form-label">Question Text (English) *</label>
                 <Editor
@@ -1505,7 +1468,6 @@ export default function QuestionForm({
                 />
               </div>
 
-              {/* Urdu Question text */}
               <div className="col-md-12">
                 <label className="form-label">Question Text (Urdu)</label>
                 <Editor
@@ -1519,8 +1481,9 @@ export default function QuestionForm({
           )}
         </div>
 
-        {/* Options Section for MCQ */}
+        {/* ── MCQ OPTIONS ── */}
         <div className="row g-3 mt-2">
+
           {/* English and Other Subjects MCQ Options */}
           {(formData.question_type === 'mcq' && (isEnglishSubject() || (!isEnglishSubject() && !isUrduSubject()))) && (
             <>
@@ -1530,12 +1493,7 @@ export default function QuestionForm({
                   tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_a}
                   onEditorChange={(content) => handleEditorChange(content, 'option_a')}
-                  init={{
-                    ...englishEditorConfig,
-                    height: 150,
-                    menubar: false,
-                    toolbar: 'bold italic | removeformat help'
-                  }}
+                  init={englishOptionEditorConfig}
                 />
               </div>
 
@@ -1545,12 +1503,7 @@ export default function QuestionForm({
                   tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_b}
                   onEditorChange={(content) => handleEditorChange(content, 'option_b')}
-                  init={{
-                    ...englishEditorConfig,
-                    height: 150,
-                    menubar: false,
-                    toolbar: 'bold italic | removeformat help'
-                  }}
+                  init={englishOptionEditorConfig}
                 />
               </div>
 
@@ -1560,12 +1513,7 @@ export default function QuestionForm({
                   tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_c}
                   onEditorChange={(content) => handleEditorChange(content, 'option_c')}
-                  init={{
-                    ...englishEditorConfig,
-                    height: 150,
-                    menubar: false,
-                    toolbar: 'bold italic | removeformat help'
-                  }}
+                  init={englishOptionEditorConfig}
                 />
               </div>
 
@@ -1575,16 +1523,11 @@ export default function QuestionForm({
                   tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_d}
                   onEditorChange={(content) => handleEditorChange(content, 'option_d')}
-                  init={{
-                    ...englishEditorConfig,
-                    height: 150,
-                    menubar: false,
-                    toolbar: 'bold italic | removeformat help'
-                  }}
+                  init={englishOptionEditorConfig}
                 />
               </div>
 
-              {/* Urdu options for other subjects only */}
+              {/* Urdu options for other (bilingual) subjects */}
               {!isEnglishSubject() && !isUrduSubject() && (
                 <>
                   <div className="col-md-6">
@@ -1593,12 +1536,7 @@ export default function QuestionForm({
                       tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.option_a_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'option_a_ur')}
-                      init={{
-                        ...urduEditorConfig,
-                        height: 150,
-                        menubar: false,
-                        toolbar: 'bold italic | removeformat help'
-                      }}
+                      init={urduOptionEditorConfig}
                     />
                   </div>
 
@@ -1608,12 +1546,7 @@ export default function QuestionForm({
                       tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.option_b_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'option_b_ur')}
-                      init={{
-                        ...urduEditorConfig,
-                        height: 150,
-                        menubar: false,
-                        toolbar: 'bold italic | removeformat help'
-                      }}
+                      init={urduOptionEditorConfig}
                     />
                   </div>
 
@@ -1623,12 +1556,7 @@ export default function QuestionForm({
                       tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.option_c_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'option_c_ur')}
-                      init={{
-                        ...urduEditorConfig,
-                        height: 150,
-                        menubar: false,
-                        toolbar: 'bold italic | removeformat help'
-                      }}
+                      init={urduOptionEditorConfig}
                     />
                   </div>
 
@@ -1638,12 +1566,7 @@ export default function QuestionForm({
                       tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                       value={formData.option_d_ur}
                       onEditorChange={(content) => handleEditorChange(content, 'option_d_ur')}
-                      init={{
-                        ...urduEditorConfig,
-                        height: 150,
-                        menubar: false,
-                        toolbar: 'bold italic | removeformat help'
-                      }}
+                      init={urduOptionEditorConfig}
                     />
                   </div>
                 </>
@@ -1668,7 +1591,7 @@ export default function QuestionForm({
             </>
           )}
 
-          {/* Urdu Subject MCQ Options */}
+          {/* Urdu Subject MCQ Options — with LaTeX support via urduOptionEditorConfig */}
           {formData.question_type === 'mcq' && isUrduSubject() && (
             <>
               <div className="col-md-6">
@@ -1677,12 +1600,7 @@ export default function QuestionForm({
                   tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_a_ur}
                   onEditorChange={(content) => handleEditorChange(content, 'option_a_ur')}
-                  init={{
-                    ...urduEditorConfig,
-                    height: 150,
-                    menubar: false,
-                    toolbar: 'bold italic | removeformat help'
-                  }}
+                  init={urduOptionEditorConfig}
                 />
               </div>
 
@@ -1692,12 +1610,7 @@ export default function QuestionForm({
                   tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_b_ur}
                   onEditorChange={(content) => handleEditorChange(content, 'option_b_ur')}
-                  init={{
-                    ...urduEditorConfig,
-                    height: 150,
-                    menubar: false,
-                    toolbar: 'bold italic | removeformat help'
-                  }}
+                  init={urduOptionEditorConfig}
                 />
               </div>
 
@@ -1707,12 +1620,7 @@ export default function QuestionForm({
                   tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_c_ur}
                   onEditorChange={(content) => handleEditorChange(content, 'option_c_ur')}
-                  init={{
-                    ...urduEditorConfig,
-                    height: 150,
-                    menubar: false,
-                    toolbar: 'bold italic | removeformat help'
-                  }}
+                  init={urduOptionEditorConfig}
                 />
               </div>
 
@@ -1722,17 +1630,12 @@ export default function QuestionForm({
                   tinymceScriptSrc={TINYMCE_SCRIPT_SRC}
                   value={formData.option_d_ur}
                   onEditorChange={(content) => handleEditorChange(content, 'option_d_ur')}
-                  init={{
-                    ...urduEditorConfig,
-                    height: 150,
-                    menubar: false,
-                    toolbar: 'bold italic | removeformat help'
-                  }}
+                  init={urduOptionEditorConfig}
                 />
               </div>
 
               <div className="col-md-12">
-                <label className="form-label urdu-text" style={{float:'right'}}>صحیح آپشن منتخب کریں *</label>
+                <label className="form-label urdu-text" style={{ float: 'right' }}>صحیح آپشن منتخب کریں *</label>
                 <select
                   className="form-select urdu-text"
                   name="correct_option"
@@ -1816,8 +1719,8 @@ export default function QuestionForm({
         
         {/* Show translation button only for non-English/Urdu subjects */}
         {!isEnglishSubject() && !isUrduSubject() && (
-          <button 
-            type="button" 
+          <button
+            type="button"
             className="btn btn-outline-primary"
             onClick={handleTranslateAll}
             disabled={isTranslating || loading}

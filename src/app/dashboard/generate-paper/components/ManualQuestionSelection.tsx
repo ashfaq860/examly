@@ -1,4 +1,4 @@
-//dashboard/generate-paper/components/ManualQuestionSelection.tsx
+// dashboard/generate-paper/components/ManualQuestionSelection.tsx
 'use client';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
@@ -33,17 +33,115 @@ interface QuestionWithOptions extends Question {
   source_type?: string;
 }
 
-const HtmlContent: React.FC<{ content?: string; className?: string; dir?: 'rtl' | 'ltr' }> = ({ content, className, dir }) => {
-  if (!content) return null;
-  const decoded = useMemo(() => {
-    if (typeof document === 'undefined') return content;
-    const txt = document.createElement('textarea');
-    txt.innerHTML = content.replace(/<p([^>]*)>/gi, '<p$1 style="margin:0;display:inline;">');
-    return txt.value;
-  }, [content]);
-  return <div dir={dir} className={className} dangerouslySetInnerHTML={{ __html: decoded }} />;
+// ─── MathJax loader (loads once globally) ────────────────────────────────────
+let mathJaxLoaded = false;
+let mathJaxLoading = false;
+const mathJaxCallbacks: Array<() => void> = [];
+
+const loadMathJax = (): Promise<void> => {
+  return new Promise((resolve) => {
+    if (mathJaxLoaded) { resolve(); return; }
+    mathJaxCallbacks.push(resolve);
+    if (mathJaxLoading) return;
+    mathJaxLoading = true;
+
+    // Configure MathJax before loading
+    (window as any).MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true,
+      },
+      svg: { fontCache: 'global' },
+      options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'] },
+      startup: {
+        ready() {
+          (window as any).MathJax.startup.defaultReady();
+          mathJaxLoaded = true;
+          mathJaxLoading = false;
+          mathJaxCallbacks.forEach(cb => cb());
+          mathJaxCallbacks.length = 0;
+        }
+      }
+    };
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js';
+    script.async = true;
+    document.head.appendChild(script);
+  });
 };
 
+// ─── LaTeX helpers ────────────────────────────────────────────────────────────
+const hasLatex = (content: string): boolean => {
+  if (!content) return false;
+  return /\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$|\\[\(\[]|\\frac|\\sqrt|\\sum|\\int|\\alpha|\\beta|\\gamma|\\delta|\\epsilon|\\theta|\\lambda|\\mu|\\pi|\\sigma|\\phi|\\omega/.test(content);
+};
+
+// Strip outer <p> tags so inline content doesn't add margins
+const normalizeHtml = (html: string): string => {
+  if (!html) return '';
+  return html.replace(/<p([^>]*)>/gi, '<span$1 style="display:inline;">').replace(/<\/p>/gi, '</span>');
+};
+
+// ─── HtmlContent: renders HTML + LaTeX without iframes ───────────────────────
+const HtmlContent: React.FC<{
+  content?: string;
+  className?: string;
+  dir?: 'rtl' | 'ltr';
+}> = ({ content, className, dir = 'ltr' }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [rendered, setRendered] = useState(false);
+
+  const normalizedHtml = useMemo(() => normalizeHtml(content || ''), [content]);
+  const needsMath = useMemo(() => hasLatex(content || ''), [content]);
+
+  // Set innerHTML then typeset with MathJax if needed
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    el.innerHTML = normalizedHtml;
+    setRendered(false);
+
+    if (!needsMath) {
+      setRendered(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    loadMathJax().then(() => {
+      if (cancelled || !containerRef.current) return;
+      const mj = (window as any).MathJax;
+      if (mj?.typesetPromise) {
+        mj.typesetPromise([containerRef.current])
+          .then(() => { if (!cancelled) setRendered(true); })
+          .catch(() => { if (!cancelled) setRendered(true); });
+      } else {
+        setRendered(true);
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [normalizedHtml, needsMath]);
+
+  if (!content) return null;
+
+  return (
+    <div
+      ref={containerRef}
+      className={className}
+      dir={dir}
+      style={{
+        opacity: needsMath && !rendered ? 0 : 1,
+        transition: 'opacity 0.15s ease',
+      }}
+    />
+  );
+};
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = ({
   subjectId, classId, selectedChapters, selectedTopics, chapters,
   onQuestionsSelected, language, source_type, typeCounts,
@@ -56,7 +154,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
   const [shuffledQuestions, setShuffledQuestions] = useState<Record<string, QuestionWithOptions[]>>({});
   const [prevSelectedQuestions, setPrevSelectedQuestions] = useState<Record<string, any[]>>({});
 
-  // Keeps track of active type layout
   const activeTypes = useMemo(() => {
     if (!typeCounts) return [];
     return Object.entries(typeCounts)
@@ -78,7 +175,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     return source_type || 'all';
   }, [source_type]);
 
-  // 1. Reset everything synchronously when major parameters change
   useEffect(() => {
     setQuestionsByType({});
     setSelectedByType({});
@@ -88,7 +184,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     setIsLoading(false);
   }, [resolvedSourceType, subjectId, classId, selectedChapters, language]);
 
-  // 2. Sync selection states securely from dashboard parent
   useEffect(() => {
     const idsFromParent: Record<string, string[]> = {};
     Object.keys(selectedQuestions).forEach(typeKey => {
@@ -99,7 +194,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     }
   }, [selectedQuestions]);
 
-  // 3. Shuffle logic
   useEffect(() => {
     if (!shuffleTrigger || !typeKey) return;
     const pool = questionsByType[typeKey] || [];
@@ -118,7 +212,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     }
   }, [shuffleTrigger, typeKey, questionsByType]);
 
-  // 4. Bubbling chosen parameters up to parent component safely
   useEffect(() => {
     const fullObjectsSelection: Record<string, QuestionWithOptions[]> = {};
     Object.keys(selectedByType).forEach(tk => {
@@ -134,8 +227,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     }
   }, [selectedByType, questionsByType, onQuestionsSelected, prevSelectedQuestions]);
 
-  // 5. CRITICAL FIX: Async API fetching with explicit AbortController protection
-// AUTOMATIC RELOAD ENGINE: Listens to all inputs and fires clean API requests
   useEffect(() => {
     if (!subjectId || !classId || !typeKey) return;
 
@@ -143,7 +234,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     
     const executeFetch = async () => {
       setIsLoading(true);
-      setHasAttempted(false); // Reset feedback states before layout fetch begins
+      setHasAttempted(false);
       
       try {
         const res = await axios.get('/api/questions', {
@@ -160,8 +251,6 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         });
         
         const questions = res.data || [];
-        
-        // Wipe old sequence data and apply fresh data concurrently
         setQuestionsByType({ [typeKey]: questions });
         setShuffledQuestions({ [typeKey]: [...questions].sort(() => Math.random() - 0.5) });
         setHasAttempted(true);
@@ -178,24 +267,19 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     };
 
     executeFetch();
-
-    // Aborts stale ongoing requests if the user clicks inputs rapidly
-    return () => {
-      controller.abort();
-    };
-    
-    // Listens for direct modifications to core layout dependencies
+    return () => { controller.abort(); };
   }, [subjectId, classId, typeKey, selectedChapters, selectedTopics, language, resolvedSourceType]);
+
   if (!activeTypes.length) return <div className="loading-state">No question types selected.</div>;
 
-  // Process rows safely
   const allQuestions = (typeKey && questionsByType[typeKey]) || [];
   const displayedQuestions = shuffleTrigger ? ((typeKey && shuffledQuestions[typeKey]) || []) : allQuestions;
   const selectedIds = (typeKey && selectedByType[typeKey]) || [];
   const finalQuestions = showSelectedOnly
     ? displayedQuestions.filter(q => selectedIds.includes(q.id))
     : displayedQuestions;
-const toggleSelection = (id: string) => {
+
+  const toggleSelection = (id: string) => {
     if (!currentType || !typeKey) return;
     const limit = currentType.required;
     setSelectedByType(prev => {
@@ -247,7 +331,10 @@ const toggleSelection = (id: string) => {
                     onClick={() => toggleSelection(q.id)}
                   >
                     <div className="q-num">
-                      {isUrdu ? <span className="num-urdu">.{idx + 1}</span> : <span>{idx + 1}.</span>}
+                      {isUrdu
+                        ? <span className="num-urdu">.{idx + 1}</span>
+                        : <span>{idx + 1}.</span>
+                      }
                     </div>
 
                     <div className="q-body">
@@ -273,6 +360,7 @@ const toggleSelection = (id: string) => {
                               {(['a', 'b', 'c', 'd'] as const).map(opt => {
                                 const en = (q as any)[`option_${opt}`];
                                 const ur = (q as any)[`option_${opt}_ur`];
+                                if (!en && !ur) return null;
                                 return (
                                   <div key={opt} className="opt-bilingual-row">
                                     <span className="opt-key">({opt})</span>
@@ -287,6 +375,7 @@ const toggleSelection = (id: string) => {
                               {(['a', 'b', 'c', 'd'] as const).map(opt => {
                                 const en = (q as any)[`option_${opt}`];
                                 const ur = (q as any)[`option_${opt}_ur`];
+                                if (!en && !ur) return null;
                                 return (
                                   <div key={opt} className={`opt-row ${isUrdu ? 'opt-row-rtl' : ''}`}>
                                     {isUrdu ? (
@@ -327,12 +416,7 @@ const toggleSelection = (id: string) => {
 
       <style jsx global>{`
         .paper-container { background: #fff; width: 100%; position: relative; min-height: 250px; }
-        
-        /* CHROME LAYER FIX: Forces Chrome layout engine to stay unified when elements mutate */
-        .paper-body {
-          contain: layout style;
-          width: 100%;
-        }
+        .paper-body { contain: layout style; width: 100%; }
 
         /* ── Row ── */
         .paper-row {
@@ -348,7 +432,6 @@ const toggleSelection = (id: string) => {
         }
         .paper-row:hover { background: #f8fafc; }
         .paper-row.selected { background: #eff6ff !important; }
-        
         .paper-row.selected::before {
           content: '';
           position: absolute;
@@ -357,7 +440,6 @@ const toggleSelection = (id: string) => {
           background: #2563eb;
           border-radius: 0 2px 2px 0;
         }
-        
         .paper-row.urdu-mode { flex-direction: row-reverse; }
         .paper-row.urdu-mode.selected::before {
           left: auto; right: 0;
@@ -379,17 +461,11 @@ const toggleSelection = (id: string) => {
           text-align: left;
           direction: ltr;
           unicode-bidi: embed;
-          margin-top:10px;
+          margin-top: 10px;
         }
 
         /* ── Body ── */
-        .q-body {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-          min-width: 0;
-        }
+        .q-body { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 
         /* ── Text ── */
         .eng-text { font-size: 14px; font-weight: 500; color: #1e293b; line-height: 1.5; }
@@ -423,30 +499,25 @@ const toggleSelection = (id: string) => {
           margin-top: 3px;
         }
         @media (max-width: 1200px) { .opts-wrap { grid-template-columns: repeat(3, 1fr); } }
-        @media (max-width: 768px) { .opts-wrap { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 480px) { .opts-wrap { grid-template-columns: repeat(1, 1fr); } }
+        @media (max-width: 768px)  { .opts-wrap { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 480px)  { .opts-wrap { grid-template-columns: repeat(1, 1fr); } }
         .opts-rtl { direction: rtl; }
 
         .opt-row {
           display: flex;
-          align-items: center;
+          align-items: baseline;
           gap: 3px;
           padding: 1px 0;
           min-width: 0;
-          overflow: hidden;
-          justify-content: flex-start;
         }
         .opt-row-rtl { flex-direction: row-reverse; justify-content: flex-end; }
         .opt-key { font-size: 11px; font-weight: 800; color: #2563eb; min-width: 18px; flex-shrink: 0; line-height: 1; }
-        
-        .eng-opt {
-          font-size: 12px; color: #334155; line-height: 1.3; font-weight: 400;
-          min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        }
+
+        .eng-opt { font-size: 12px; color: #334155; line-height: 1.4; font-weight: 400; min-width: 0; word-break: break-word; }
         .urdu-opt {
           font-family: 'JameelNoori', 'Norinastaliq', 'Noto Nastaliq Urdu', serif !important;
-          font-size: 14px; line-height: 1.6; color: #1e293b; text-align: right;
-          direction: rtl; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          font-size: 14px; line-height: 1.6; color: #1e293b;
+          text-align: right; direction: rtl; min-width: 0; word-break: break-word;
         }
 
         .opts-bilingual-wrap {
@@ -457,10 +528,10 @@ const toggleSelection = (id: string) => {
           width: 100%;
         }
         @media (max-width: 1024px) { .opts-bilingual-wrap { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 640px) { .opts-bilingual-wrap { grid-template-columns: repeat(1, 1fr); } }
-        
-        .opt-bilingual-row { display: flex; align-items: center; justify-content: space-between; min-width: 0; background: #ffffff; }
-        .opt-bilingual-row .eng-opt, .opt-bilingual-row .urdu-opt { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+        @media (max-width: 640px)  { .opts-bilingual-wrap { grid-template-columns: repeat(1, 1fr); } }
+        .opt-bilingual-row { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+        .opt-bilingual-row .eng-opt,
+        .opt-bilingual-row .urdu-opt { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
         .opt-bilingual-row .urdu-opt { text-align: right; }
 
         /* ── Meta ── */
@@ -480,24 +551,26 @@ const toggleSelection = (id: string) => {
         .src-tag { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 0 5px; font-size: 9px; color: #64748b; }
         .chk { color: #10b981; font-weight: 700; margin-left: auto; }
 
-        /* ── Loading Overlay Fix ── */
-        .loading-state-overlay {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 80px 0;
-          width: 100%;
-          /* Force Chrome hardware acceleration layer optimization */
-          transform: translateZ(0); 
-          will-change: opacity;
-        }
-        
+        /* ── Loading / Empty ── */
+        .loading-state-overlay { display: flex; align-items: center; justify-content: center; padding: 80px 0; width: 100%; }
         .empty-state-container { padding: 80px 20px; text-align: center; color: #94a3b8; }
         .empty-icon { font-size: 36px; margin-bottom: 12px; }
         .source-pill { display: inline-block; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 2px 10px; border-radius: 20px; font-size: 11px; color: #64748b; margin-top: 8px; }
         .selected-info { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 10px; margin-bottom: 12px; text-align: center; }
         .selected-badge { display: inline-block; background: #2563eb; color: #fff; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
         .selected-hint { font-size: 12px; color: #64748b; margin: 0; }
+
+        /* ── MathJax ── */
+        mjx-container {
+          direction: ltr !important;
+          display: inline-block !important;
+          margin: 0 2px;
+          vertical-align: middle;
+        }
+        .MathJax {
+          direction: ltr !important;
+          display: inline-block !important;
+        }
       `}</style>
     </div>
   );

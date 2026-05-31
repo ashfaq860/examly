@@ -7,6 +7,10 @@ import type { ReactNode } from 'react';
 import { UserProvider } from './context/userContext';
 import ClientLayoutWrapper from "./ClientLayoutWrapper";
 
+import 'katex/dist/katex.min.css';
+// @ts-ignore
+import { InlineMath, BlockMath } from 'react-katex';
+
 
 export const metadata = {
   title: 'Examly — Online Test Maker, Question Paper Generator & Quiz Platform',
@@ -30,6 +34,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap"
           rel="stylesheet"
         />
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       </head>
 
       <body>
