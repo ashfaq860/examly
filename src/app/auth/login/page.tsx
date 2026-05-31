@@ -1,6 +1,6 @@
 // app/auth/login/page.tsx
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import AuthLayout from '@/components/AuthLayout';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
@@ -15,32 +15,25 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
 
-  // ✅ Redirect if user is already logged in
-
-  useEffect(() => {
-    const checkUser = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) return;
-
-        const { data: roleData, error: rpcError } = await supabase
-          .rpc('get_user_role', { user_id: session.user.id });
-
-        if (rpcError) {
-          console.error('Error fetching user role:', rpcError);
-          return;
-        }
-
-        const role = (roleData as any)?.role || roleData;
-
-        if (role === 'admin' || role === 'super_admin') router.replace('/admin');
-        else if (role === 'teacher' || role === 'academy') router.replace('/dashboard');
-      } catch (err) {
-        console.error('Error checking session:', err);
-      }
-    };
-    checkUser();
-  }, [router, supabase]);
+  // ✅ FIX: useEffect removed entirely.
+  //
+  // The callback route (/auth/callback) already handles the redirect after
+  // Google OAuth and sets the role cookie before redirecting to /dashboard
+  // or /admin. Having a useEffect here that also checks the session and
+  // calls get_user_role creates a race condition for new users:
+  //
+  //   1. Callback inserts the new profile row (async DB write).
+  //   2. Callback redirects → Next.js briefly renders this login page.
+  //   3. useEffect fires and calls get_user_role RPC immediately.
+  //   4. The DB write from step 1 may not be visible yet → RPC returns null.
+  //   5. The null-role branch calls signOut() → user is kicked back to login.
+  //
+  // On the second attempt the profile row already exists, so the RPC
+  // succeeds and the user gets in. That's the "needs two attempts" symptom.
+  //
+  // If you need to protect /dashboard and /admin from unauthenticated access,
+  // use Next.js middleware (middleware.ts) to check the session server-side
+  // before every request — that's the correct place for it.
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +54,6 @@ export default function LoginPage() {
         return;
       }
 
-      // Get user role
       const { data: roleData, error: rpcError } = await supabase.rpc('get_user_role', { user_id: userId });
       if (rpcError || !roleData) {
         setErr('Unable to verify user role. Please contact support.');
@@ -73,7 +65,7 @@ export default function LoginPage() {
       handleRoleRedirect(role);
 
     } catch (err) {
-      console.error('💥 Unexpected error:', err);
+      console.error('Unexpected error:', err);
       setErr('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -93,19 +85,17 @@ export default function LoginPage() {
     else if (role === 'admin') router.push('/admin');
   };
 
-  // 🌟 Google OAuth login
   const handleGoogleLogin = async () => {
     try {
       setErr(null);
       setLoading(true);
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: `${window.location.origin}/auth/callback` },
       });
 
       if (error) setErr(error.message);
-      else console.log('Redirecting to Google...');
     } catch (err) {
       console.error('Google login failed:', err);
       setErr('Google login failed. Try again.');

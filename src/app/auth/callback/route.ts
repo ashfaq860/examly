@@ -11,7 +11,8 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=missing_code`);
   }
 
-  const cookieStore = cookies();
+  // ✅ FIX: await cookies() — required in Next.js 15 / newer auth-helpers
+  const cookieStore = await cookies();
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
 
   const { data: { session }, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
@@ -28,7 +29,6 @@ export async function GET(request: Request) {
       .eq('id', session.user.id)
       .maybeSingle();
 
-    // ✅ FIX 1: Track whether this is a new user
     let isNewUser = false;
 
     if (!existingProfile) {
@@ -42,43 +42,22 @@ export async function GET(request: Request) {
           session.user.email?.split('@')[0] ||
           'User',
         role: 'teacher',
+        login_method: 'google',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
 
       if (insertError) {
         console.error('Profile creation error:', insertError);
-        // ✅ FIX 2: Don't continue if insert failed — redirect to login
         return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=profile_creation_failed`);
       }
     }
 
-    // ✅ FIX 3: For brand-new users, skip the RPC entirely — we JUST set role: 'teacher'
-    // For existing users, use the RPC as before
-    let role: string = 'teacher';
-
-    if (!isNewUser) {
-      // ✅ FIX 4: First try reading role directly from the profile we already fetched
-      // This avoids a redundant RPC round-trip and any propagation delay
-      if (existingProfile?.role) {
-        role = existingProfile.role;
-      } else {
-        // Fall back to RPC only if profile row had no role column
-        const { data: roleData, error: rpcError } = await supabase
-          .rpc('get_user_role', { user_id: session.user.id });
-
-        if (rpcError) {
-          console.error('RPC error:', rpcError);
-          return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=role_fetch_failed`);
-        }
-
-        if (typeof roleData === 'string') {
-          role = roleData;
-        } else if (roleData && typeof roleData === 'object' && 'role' in roleData) {
-          role = (roleData as { role: string }).role;
-        }
-      }
-    }
+    // For new users we just inserted role='teacher', no RPC needed.
+    // For existing users, read role directly from the fetched profile row.
+    const role: string = isNewUser
+      ? 'teacher'
+      : (existingProfile?.role ?? 'teacher');
 
     const allowedRoles = ['teacher', 'admin', 'super_admin', 'academy'];
     if (!allowedRoles.includes(role)) {
