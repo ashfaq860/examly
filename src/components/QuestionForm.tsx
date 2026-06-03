@@ -103,82 +103,84 @@ export default function QuestionForm({
   // Use GPL version via CDN (no API key required)
   const TINYMCE_SCRIPT_SRC = 'https://cdn.jsdelivr.net/npm/tinymce@6.8.3/tinymce.min.js';
   
-  // TinyMCE configuration for English/Math/Science (GPL version)
-  const englishEditorConfig = useMemo(() => ({
-    height: 300,
-    menubar: true,
-    external_plugins: {
-      'mathjax': 'https://cdn.jsdelivr.net/npm/@dimakorotkov/tinymce-mathjax@1.0.9/plugin.min.js',
-    },
-    plugins: [
-      'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
-      'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-      'insertdatetime', 'media', 'table', 'help', 'wordcount'
-    ],
-    toolbar:
-      'undo redo | blocks | bold italic underline strikethrough | ' +
-      'forecolor backcolor | alignleft aligncenter alignright alignjustify | ' +
-      'bullist numlist outdent indent | mathjax | removeformat help',
-    mathjax: {
-      lib: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
-    },
-    content_style: 'body { font-family: Helvetica, Arial, sans-serif; font-size: 16px; }',
-    directionality: 'ltr',
-    license_key: 'gpl',
-    images_upload_url: '/api/upload',
-    images_upload_handler: async (blobInfo: any) => {
-      try {
-        const formData = new FormData();
-        formData.append('file', blobInfo.blob(), blobInfo.filename());
-        
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
-        
-        const data = await response.json();
-        return data.location;
-      } catch (error) {
-        console.error('Image upload error:', error);
-        return '';
+  // components/QuestionForm.tsx
+
+// Update the englishEditorConfig - remove the incompatible MathJax plugin
+const englishEditorConfig = useMemo(() => ({
+  height: 300,
+  menubar: true,
+  plugins: [
+    'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+    'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+    'insertdatetime', 'media', 'table', 'help', 'wordcount'
+  ],
+  toolbar:
+    'undo redo | blocks | bold italic underline strikethrough | ' +
+    'forecolor backcolor | alignleft aligncenter alignright alignjustify | ' +
+    'bullist numlist outdent indent | removeformat help',
+  content_style: 'body { font-family: Helvetica, Arial, sans-serif; font-size: 16px; }',
+  directionality: 'ltr',
+  license_key: 'gpl',
+  // Add setup to properly configure MathJax if needed
+  setup: (editor) => {
+    editor.on('init', () => {
+      // Remove any MathJax event listeners that might cause recursion
+      if (window.MathJax) {
+        delete window.MathJax.typesetPromise;
       }
+    });
+  },
+  images_upload_url: '/api/upload',
+  images_upload_handler: async (blobInfo: any) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', blobInfo.blob(), blobInfo.filename());
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const data = await response.json();
+      return data.location;
+    } catch (error) {
+      console.error('Image upload error:', error);
+      return '';
     }
-  }), []);
+  }
+}), []);
 
-  // TinyMCE configuration for Urdu (RTL) — includes mathjax for LaTeX support
-  const urduEditorConfig = useMemo(() => ({
-    ...englishEditorConfig,
-    content_style: `
-      body {
-        font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif;
-        font-size: 16pt;
-        direction: rtl;
-      }
-    `,
-    directionality: 'rtl',
-    // mathjax added here so LaTeX works in Urdu fields too
-    toolbar:
-      'undo redo | blocks | bold italic underline strikethrough | ' +
-      'forecolor backcolor | alignright aligncenter alignleft alignjustify | ' +
-      'bullist numlist outdent indent | mathjax | removeformat help',
-  }), [englishEditorConfig]);
+// Update the Urdu editor config similarly
+const urduEditorConfig = useMemo(() => ({
+  ...englishEditorConfig,
+  content_style: `
+    body {
+      font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", serif;
+      font-size: 16pt;
+      direction: rtl;
+    }
+  `,
+  directionality: 'rtl',
+  toolbar:
+    'undo redo | blocks | bold italic underline strikethrough | ' +
+    'forecolor backcolor | alignright aligncenter alignleft alignjustify | ' +
+    'bullist numlist outdent indent | removeformat help',
+}), [englishEditorConfig]);
 
-  // Compact Urdu editor config for MCQ options (shorter height, minimal toolbar, RTL + LaTeX)
-  const urduOptionEditorConfig = useMemo(() => ({
-    ...urduEditorConfig,
-    height: 150,
-    menubar: false,
-    toolbar: 'bold italic | mathjax | removeformat help',
-  }), [urduEditorConfig]);
+// Update option editor configs
+const urduOptionEditorConfig = useMemo(() => ({
+  ...urduEditorConfig,
+  height: 150,
+  menubar: false,
+  toolbar: 'bold italic | removeformat help',
+}), [urduEditorConfig]);
 
-  // Compact English editor config for MCQ options
-  const englishOptionEditorConfig = useMemo(() => ({
-    ...englishEditorConfig,
-    height: 150,
-    menubar: false,
-    toolbar: 'bold italic | mathjax | removeformat help',
-  }), [englishEditorConfig]);
-
+const englishOptionEditorConfig = useMemo(() => ({
+  ...englishEditorConfig,
+  height: 150,
+  menubar: false,
+  toolbar: 'bold italic | removeformat help',
+}), [englishEditorConfig]);
   // Check if selected subject is English
   const isEnglishSubject = useCallback(() => {
     const selectedSubject = subjects.find(s => toId(s.id) === formData.subject_id);
