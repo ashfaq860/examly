@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef, useCallback, ChangeEvent } from 'react';
+import React, { useState, useEffect, useRef, useCallback, ChangeEvent } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { supabase } from '@/lib/supabaseClient';
 import {
@@ -15,7 +15,13 @@ import { useRouter } from 'next/navigation';
 import { isUserAdmin } from '@/lib/auth-utils';
 
 /* ═══════════════════════════ helpers ═══════════════════════════════════════*/
-declare global { interface Window { MathJax: any; } }
+declare global {
+  interface Window {
+    katex: {
+      renderToString: (tex: string, opts?: any) => string;
+    };
+  }
+}
 
 const stripHtml = (html: string): string => {
   if (!html) return '';
@@ -25,25 +31,219 @@ const stripHtml = (html: string): string => {
   return d.textContent || d.innerText || '';
 };
 
-/** Trigger MathJax typeset on a DOM node - enhanced for Urdu/LaTeX support */
-const renderMath = (node: HTMLElement | null) => {
-  if (!node || typeof window === 'undefined') return;
-  const mj = window.MathJax;
-  if (!mj) {
-    // Retry if MathJax hasn't loaded yet
-    setTimeout(() => renderMath(node), 500);
-    return;
-  }
-  if (mj.typesetPromise) {
-    mj.typesetPromise([node]).catch((err: any) => {
-      console.error('MathJax typeset error:', err);
-    });
-  } else if (mj.Hub) {
-    mj.Hub.Queue(['Typeset', mj.Hub, node]);
-  }
-};
 
-/* ═══════════════════════════ types ═════════════════════════════════════════*/
+
+/* ─── KaTeX + Urdu pre-processor ────────────────────────────────────────────
+ * Two problems solved here:
+ *
+ * PROBLEM 1 — Urdu inside delimited math
+ *   \[ \overline{حاکمیت} \]  →  KaTeX crash (no glyphs for Arabic in math mode)
+ *   Fix: wrap bare Urdu runs inside delimiters with \text{}
+ *   Result: \[ \overline{\text{حاکمیت}} \]
+ *
+ * PROBLEM 2 — LaTeX commands with NO delimiters at all
+ *   Stored in DB as: \overline{\text{حاکمیت}}
+ *   renderMathInElement never even scans it — no delimiters = invisible to KaTeX
+ *   Fix: detect undelimited LaTeX command sequences and wrap them in \(...\)
+ *   Result: \(\overline{\text{حاکمیت}}\)
+ *
+ * Already-wrapped \text{} and already-delimited expressions are left untouched.
+ */
+const URDU_CHAR = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\u200C\u200D\u200F]/;
+const URDU_RUN  = /([\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\u200C\u200D\u200F ]+)/g;
+
+/** Wrap bare Urdu runs inside a LaTeX snippet with \text{}, skip existing \text{} */
+function wrapUrduInMath(content: string): string {
+  const parts: string[] = [];
+  let cursor = 0;
+  const textCmd = /\\text\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = textCmd.exec(content)) !== null) {
+    if (m.index > cursor) {
+      parts.push(content.slice(cursor, m.index).replace(URDU_RUN, r => /^\s+$/.test(r) ? r : `\\text{${r.trim()}}`));
+    }
+    parts.push(m[0]);
+    cursor = m.index + m[0].length;
+  }
+  if (cursor < content.length) {
+    parts.push(content.slice(cursor).replace(URDU_RUN, r => /^\s+$/.test(r) ? r : `\\text{${r.trim()}}`));
+  }
+  return parts.join('');
+}
+
+/** Rewrite one delimiter pair in src, applying wrapUrduInMath to each math region */
+function rewriteDelims(src: string, open: string, close: string): string {
+  const out: string[] = [];
+  let pos = 0;
+  while (pos < src.length) {
+    const oi = src.indexOf(open, pos);
+    if (oi === -1) { out.push(src.slice(pos)); break; }
+    out.push(src.slice(pos, oi));
+    const ci = src.indexOf(close, oi + open.length);
+    if (ci === -1) { out.push(src.slice(oi)); pos = src.length; break; }
+    out.push(open + wrapUrduInMath(src.slice(oi + open.length, ci)) + close);
+    pos = ci + close.length;
+  }
+  return out.join('');
+}
+
+/** Detect undelimited LaTeX sequences and wrap them in \(...\) so
+ *  renderMathInElement can find and render them.
+ *  e.g.  \overline{\text{حاکمیت}}  →  \(\overline{\text{حاکمیت}}\)
+ */
+function wrapUndelimitedLatex(src: string): string {
+  // Match a LaTeX command (\name) followed by any {brace} or [opt] args,
+  // optionally chained with + - = operators into compound expressions.
+  const CMD  = '\\\\[a-zA-Z]+';
+  const BARG = '\\{[^{}]*(?:\\{[^{}]*\\}[^{}]*)*\\}';
+  const OARG = '\\[[^\\]]*\\]';
+  const UNIT = `(?:${CMD}(?:\\s*(?:${BARG}|${OARG}))*)`;
+  const OP   = '(?:\\s*[+\\-=]\\s*)';
+  const SEQ  = new RegExp(`(${UNIT}(?:${OP}${UNIT})*)`, 'g');
+
+  return src.replace(SEQ, (match, _p1, offset) => {
+    // Skip if already inside a delimiter pair
+    const before = src.slice(0, offset);
+    const inDisplay = (before.match(/\\\[/g)||[]).length > (before.match(/\\\]/g)||[]).length;
+    const inInline  = (before.match(/\\\(/g)||[]).length > (before.match(/\\\)/g)||[]).length;
+    const inDollar  = ((before.match(/\$\$/g)||[]).length) % 2 !== 0;
+    if (inDisplay || inInline || inDollar) return match;
+    // Skip escape sequences like \n \t \r
+    if (/^\\[ntr ]$/.test(match.trim())) return match;
+    return `\\(${match}\\)`;
+  });
+}
+
+function preprocessMathHtml(html: string | null | undefined): string {
+  if (!html) return html ?? '';
+
+  let r = html;
+
+  // Step 1 — fix Urdu inside existing delimiters
+  r = rewriteDelims(r, '\\[', '\\]');
+  r = rewriteDelims(r, '\\(', '\\)');
+  r = rewriteDelims(r, '$$', '$$');
+
+  // Step 2 — wrap undelimited LaTeX commands so renderMathInElement sees them
+  r = wrapUndelimitedLatex(r);
+
+  return r;
+}
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * renderMathInString — the RIGHT approach for React components.
+ *
+ * Instead of calling renderMathInElement() (which scans text nodes and can
+ * miss content or double-process nodes), we call katex.renderToString()
+ * directly on each delimiter-wrapped math segment in the HTML string.
+ *
+ * This runs SYNCHRONOUSLY at render time — no useEffect timing issues,
+ * no "KaTeX not loaded yet" race conditions, no stale node refs.
+ *
+ * KaTeX is loaded via the useEffect in QuestionBank (imperative script tag).
+ * We wait for window.katex to be available before calling this.
+ */
+function renderMathInString(html: string, isRtl = false): string {
+  if (typeof window === 'undefined' || !window.katex) return html;
+
+  const katex = window.katex;
+
+  // Process display math first (\[...\] and $$...$$), then inline \(...\)
+  const delimiters: Array<{ open: string; close: string; display: boolean }> = [
+    { open: '\\[',  close: '\\]',  display: true  },
+    { open: '$$',   close: '$$',   display: true  },
+    { open: '\\(',  close: '\\)',  display: false },
+  ];
+
+  let result = html;
+
+  for (const { open, close, display } of delimiters) {
+    const parts: string[] = [];
+    let pos = 0;
+    while (pos < result.length) {
+      const oi = result.indexOf(open, pos);
+      if (oi === -1) { parts.push(result.slice(pos)); break; }
+      parts.push(result.slice(pos, oi));
+      const ci = result.indexOf(close, oi + open.length);
+      if (ci === -1) { parts.push(result.slice(oi)); pos = result.length; break; }
+      const mathStr = result.slice(oi + open.length, ci);
+      try {
+        const rendered = katex.renderToString(mathStr, {
+          displayMode: display,
+          throwOnError: false,
+          strict: false,
+          trust: true,
+          // Output HTML so we can inject Urdu font styles
+          output: 'html',
+          // macros: common shortcuts
+          macros: { '\\R': '\\mathbb{R}' },
+        });
+        parts.push(rendered);
+      } catch {
+        // Fallback: show original with delimiters
+        parts.push(open + mathStr + close);
+      }
+      pos = ci + close.length;
+    }
+    result = parts.join('');
+  }
+
+  return result;
+}
+
+/** Context so QuestionCell knows when KaTeX JS is ready to call renderToString */
+const KatexReadyContext = React.createContext(false);
+
+/* ═══════════════════════════ QuestionCell ═══════════════════════════════════
+   Renders WYSIWYG HTML + Urdu text + KaTeX math.
+   
+   HOW IT WORKS:
+   1. preprocessMathHtml() transforms the raw DB string:
+      - Wraps bare Urdu inside math delimiters with \text{}
+      - Wraps undelimited LaTeX commands with \(...\)
+   2. renderMathInString() calls katex.renderToString() on each math segment,
+      replacing the raw \(...\) / \[...\] text with actual KaTeX HTML.
+   3. The resulting HTML (mix of plain text + KaTeX HTML) is set as innerHTML.
+   
+   This is fully synchronous at render time — no useEffect race conditions.
+═════════════════════════════════════════════════════════════════════════════*/
+function QuestionCell({ en, ur }: { en?: string | null; ur?: string | null }) {
+  const katexReady = React.useContext(KatexReadyContext);
+
+  // Step 1: pre-process (wrap Urdu in \text{}, wrap undelimited LaTeX in \(...\))
+  const processedEn = preprocessMathHtml(en);
+  const processedUr = preprocessMathHtml(ur);
+
+  // Step 2: render math to HTML string synchronously (only when KaTeX is loaded)
+  // When katexReady is false, we show the preprocessed text (which may have
+  // raw \(...\) visible for a moment) — acceptable since KaTeX loads fast.
+  const safeEn = katexReady ? renderMathInString(processedEn ?? '') : (processedEn ?? '');
+  const safeUr = katexReady ? renderMathInString(processedUr ?? '', true) : (processedUr ?? '');
+
+  if (!safeEn && !safeUr) return <span style={{ color: 'var(--qb-muted)' }}>—</span>;
+
+  return (
+    <div className="qb-q-cell">
+      {safeEn && (
+        <div
+          className="qb-q-en"
+          dangerouslySetInnerHTML={{ __html: safeEn }}
+        />
+      )}
+      {safeUr && (
+        <>
+          {safeEn && <div className="qb-q-divider" />}
+          <div
+            className="qb-q-ur"
+            dir="rtl"
+            dangerouslySetInnerHTML={{ __html: safeUr }}
+          />
+        </>
+      )}
+    </div>
+  );
+}
 interface Question {
   id: string;
   question_text:    string;
@@ -72,7 +272,6 @@ interface Question {
       };
     };
   };
-  // computed
   _class?: string; _class_desc?: string;
   _subject?: string;
 }
@@ -131,62 +330,6 @@ const DIFF: Record<string, { cls: string; label: string }> = {
 
 const getTypeLabel = (v: string) => QUESTION_TYPES.find(t => t.value === v)?.label || v;
 
-/* ═══════════════════════════ QuestionCell ═══════════════════════════════════
-   Renders HTML + Urdu with LaTeX via MathJax, isolated per row.
-   Enhanced to properly handle Urdu + LaTeX combinations.
-═════════════════════════════════════════════════════════════════════════════*/
-function QuestionCell({ en, ur }: { en?: string | null; ur?: string | null }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [mjReady, setMjReady] = useState(false);
-
-  useEffect(() => {
-    // Check if MathJax is loaded
-    if (typeof window !== 'undefined' && window.MathJax) {
-      setMjReady(true);
-    } else {
-      const checkMj = setInterval(() => {
-        if (window.MathJax) {
-          setMjReady(true);
-          clearInterval(checkMj);
-        }
-      }, 200);
-      return () => clearInterval(checkMj);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (mjReady && ref.current) {
-      // Small delay to ensure DOM is fully rendered
-      const timer = setTimeout(() => {
-        renderMath(ref.current);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [en, ur, mjReady]);
-
-  if (!en && !ur) return <span style={{ color: 'var(--qb-muted)' }}>—</span>;
-
-  return (
-    <div ref={ref} className="qb-q-cell">
-      {en && (
-        <div
-          className="qb-q-en"
-          dangerouslySetInnerHTML={{ __html: en }}
-        />
-      )}
-      {ur && (
-        <>
-          {en && <div className="qb-q-divider" />}
-          <div
-            className="qb-q-ur mathjax-urdu"
-            dir="rtl"
-            dangerouslySetInnerHTML={{ __html: ur }}
-          />
-        </>
-      )}
-    </div>
-  );
-}
 
 /* ═══════════════════════════ main page ══════════════════════════════════════*/
 export default function QuestionBank() {
@@ -207,13 +350,48 @@ export default function QuestionBank() {
   const [currentPage,    setCurrentPage]    = useState(1);
   const [itemsPerPage,   setItemsPerPage]   = useState(20);
   const [totalQ,         setTotalQ]         = useState(0);
-
-  // Bulk selection state
   const [selectedIds,    setSelectedIds]    = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [katexLoaded,    setKatexLoaded]    = useState(false);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
   const router = useRouter();
+
+  /* ── Load KaTeX core JS + CSS dynamically ──────────────────────────────────
+     We use katex.renderToString() directly in QuestionCell (synchronous, no
+     DOM scanning), so we only need katex.min.js — not auto-render.min.js.
+     React requires onLoad to be a function so we load imperatively here.
+  ────────────────────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.katex) { setKatexLoaded(true); return; }
+
+    const addLink = (href: string) => {
+      if (document.querySelector(`link[href="${href}"]`)) return;
+      const l = document.createElement('link');
+      l.rel = 'stylesheet'; l.href = href;
+      document.head.appendChild(l);
+    };
+
+    const addScript = (src: string): Promise<void> => new Promise((res, rej) => {
+      if (document.querySelector(`script[src="${src}"]`)) { res(); return; }
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload  = () => res();
+      s.onerror = () => rej(new Error(`KaTeX script failed: ${src}`));
+      document.head.appendChild(s);
+    });
+
+    (async () => {
+      try {
+        addLink('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css');
+        await addScript('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js');
+        setKatexLoaded(true);
+      } catch (err) {
+        console.error('KaTeX load error:', err);
+      }
+    })();
+  }, []);
 
   /* ── admin guard ── */
   useEffect(() => {
@@ -265,7 +443,6 @@ export default function QuestionBank() {
     try {
       const q = search !== undefined ? search : searchTerm;
 
-      // Resolve topic IDs for relational filters
       let topicIds: number[] | null = null;
       if (filters.class || filters.subject || filters.chapter) {
         let tq = supabase.from('topics').select('id');
@@ -297,13 +474,11 @@ export default function QuestionBank() {
         return b;
       };
 
-      // Count
       const { count } = await applyFilters(
         supabase.from('questions').select('id', { count: 'exact', head: true })
       );
       setTotalQ(count || 0);
 
-      // Data
       const from = (page - 1) * itemsPerPage;
       const { data, error } = await applyFilters(
         supabase.from('questions').select(`
@@ -335,7 +510,6 @@ export default function QuestionBank() {
         _subject:    q.topic?.chapter?.class_subject?.subject?.name || '—',
       })));
       setCurrentPage(page);
-      // Clear selections when page changes
       setSelectedIds(new Set());
     } catch (err) {
       console.error(err);
@@ -371,7 +545,6 @@ export default function QuestionBank() {
 
   const clearFilters = () => { setFilters({}); setSearchTerm(''); setCurrentPage(1); fetchQuestions(1, ''); };
 
-  /* ── page change handler ── */
   const handlePageChange = (page: number) => {
     if (page < 1 || page > totalPages) return;
     fetchQuestions(page);
@@ -383,12 +556,7 @@ export default function QuestionBank() {
     const { error } = await supabase.from('questions').delete().eq('id', id);
     if (error) { toast.error('Delete failed'); return; }
     toast.success('Question deleted');
-    // Remove from selected set if present
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+    setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
     fetchQuestions(currentPage);
   };
 
@@ -396,40 +564,25 @@ export default function QuestionBank() {
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
 
   const toggleSelectAll = () => {
     const allIds = new Set(displayedQs.map(q => q.id));
-    if (selectedIds.size === allIds.size) {
-      // Deselect all
-      setSelectedIds(new Set());
-    } else {
-      // Select all on current page
-      setSelectedIds(allIds);
-    }
+    setSelectedIds(selectedIds.size === allIds.size ? new Set() : allIds);
   };
 
   /* ── bulk delete ── */
   const handleBulkDelete = async () => {
-    if (selectedIds.size === 0) {
-      toast.error('No questions selected');
-      return;
-    }
+    if (selectedIds.size === 0) { toast.error('No questions selected'); return; }
     if (!confirm(`Delete ${selectedIds.size} selected question(s) permanently? This cannot be undone.`)) return;
-    
     setIsBulkDeleting(true);
     try {
       const idsArray = Array.from(selectedIds);
       const { error } = await supabase.from('questions').delete().in('id', idsArray);
       if (error) throw error;
-      
       toast.success(`${idsArray.length} question(s) deleted`);
       setSelectedIds(new Set());
       fetchQuestions(currentPage);
@@ -472,8 +625,8 @@ export default function QuestionBank() {
           'Question (HTML)': q.question_text,
           'Question (Plain)': stripHtml(q.question_text || ''),
           'Question (Urdu)': q.question_text_ur,
-          'Option A': q.option_a,  'Option B': q.option_b,
-          'Option C': q.option_c,  'Option D': q.option_d,
+          'Option A': q.option_a, 'Option B': q.option_b,
+          'Option C': q.option_c, 'Option D': q.option_d,
           'Option A (Urdu)': q.option_a_ur, 'Option B (Urdu)': q.option_b_ur,
           'Option C (Urdu)': q.option_c_ur, 'Option D (Urdu)': q.option_d_ur,
           'Correct Option': q.correct_option,
@@ -532,11 +685,11 @@ export default function QuestionBank() {
   };
 
   /* ── derived ── */
-  const totalPages   = Math.ceil(totalQ / itemsPerPage);
-  const startIdx     = (currentPage - 1) * itemsPerPage;
-  const endIdx       = Math.min(startIdx + itemsPerPage, totalQ);
-  const displayedQs  = questions.filter(q => activeTab === 'all' || q?.question_type === activeTab);
-  const activeCount  = Object.values(filters).filter(Boolean).length + (searchTerm ? 1 : 0);
+  const totalPages  = Math.ceil(totalQ / itemsPerPage);
+  const startIdx    = (currentPage - 1) * itemsPerPage;
+  const endIdx      = Math.min(startIdx + itemsPerPage, totalQ);
+  const displayedQs = questions.filter(q => activeTab === 'all' || q?.question_type === activeTab);
+  const activeCount = Object.values(filters).filter(Boolean).length + (searchTerm ? 1 : 0);
 
   const pageNums = (() => {
     const total = totalPages, cur = currentPage;
@@ -548,53 +701,46 @@ export default function QuestionBank() {
 
   /* ═════════════════════════════════════════════════════════════════════════*/
   return (
+    <KatexReadyContext.Provider value={katexLoaded}>
     <AdminLayout activeTab="questions">
 
-      {/* ── MathJax CDN ── load once, renders \(...\) and $$...$$ 
-           Enhanced configuration for Urdu + LaTeX support */}
-      <script
-        dangerouslySetInnerHTML={{__html:`
-          window.MathJax = {
-            tex: {
-              inlineMath: [['\\\\(','\\\\)'],['$','$']],
-              displayMath: [['\\\\[','\\\\]'],['$$','$$']],
-              processEscapes: true,
-              processEnvironments: true,
-              packages: {'[+]': ['noerrors','noundefined']}
-            },
-            svg: { fontCache:'global', scale: 0.97 },
-            options: {
-              skipHtmlTags: ['script','noscript','style','textarea','pre','code'],
-              ignoreHtmlClass: 'no-mathjax',
-              processHtmlClass: 'mathjax-urdu'
-            },
-            startup: {
-              typeset: true,
-              ready: function() {
-                MathJax.startup.defaultReady();
-                // Re-typeset when DOM changes
-                if (typeof MutationObserver !== 'undefined') {
-                  const observer = new MutationObserver(function(mutations) {
-                    for (const mutation of mutations) {
-                      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                        for (const node of mutation.addedNodes) {
-                          if (node.nodeType === 1) {
-                            MathJax.typesetPromise([node]).catch(console.error);
-                          }
-                        }
-                      }
-                    }
-                  });
-                  observer.observe(document.body, { childList: true, subtree: true });
-                }
-              }
-            }
-          };
-        `}}
-      />
-      <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async />
-
       <style>{`
+        /* ── KaTeX + Urdu ────────────────────────────────────────────────── */
+
+        /* 1. Don't overflow narrow table cells */
+        .qb-q-cell .katex-display { margin:.25em 0; overflow-x:auto; overflow-y:hidden; }
+
+        /* 2. Scale to match surrounding question text */
+        .qb-q-cell .katex { font-size:1.05em; vertical-align:middle; }
+
+        /* 3. Inside RTL Urdu containers, KaTeX output must render LTR.
+              KaTeX generates its own BFC so we just flip direction on the
+              katex root span and its display wrapper. */
+        .qb-q-ur .katex,
+        .qb-q-ur .katex-html { direction:ltr !important; unicode-bidi:embed; }
+        .qb-q-ur .katex-display { display:block; text-align:center; }
+        .qb-q-ur .katex-display > .katex { display:inline-block; }
+
+        /* 4. Urdu font for \text{} content inside KaTeX.
+              KaTeX renders \text{} as:  <span class="mord text"><span class="mord">…</span></span>
+              We must target BOTH the wrapper AND the inner span, and use
+              !important because KaTeX inlines font-family on the inner span. */
+        .qb-q-cell .katex .mord.text > .mord,
+        .qb-q-cell .katex .mord.text > .mord * {
+          font-family: 'JameelNoori','Jameel Noori Nastaleeq','Noto Nastaliq Urdu','Urdu Typesetting',serif !important;
+          font-size: 1.1em !important;
+          line-height: 1.5;
+        }
+
+        /* 5. Urdu plain text (outside math) — use the same JameelNoori font
+              that global.css defines so it's consistent */
+        .qb-q-ur {
+          font-family: 'JameelNoori','Jameel Noori Nastaleeq','Noto Nastaliq Urdu','Urdu Typesetting',serif !important;
+        }
+
+        /* 6. KaTeX error spans — show gracefully, don't break row layout */
+        .qb-q-cell .katex-error { color:#c92a2a; font-size:.78em; font-family:var(--qb-mono); }
+
         /* ── tokens ── */
         :root {
           --qb-bg       : #f2f4f8;
@@ -630,29 +776,27 @@ export default function QuestionBank() {
         .qb-btn-primary:hover:not(:disabled) { background:#2345c8; box-shadow:0 4px 14px rgba(47,84,235,.35); }
         .qb-btn-ghost   { background:var(--qb-surface); color:var(--qb-text); border:1.5px solid var(--qb-border); }
         .qb-btn-ghost:hover:not(:disabled)   { border-color:var(--qb-accent); color:var(--qb-accent); background:var(--qb-accent-lt); }
-        .qb-btn-success { background:#099268; color:#fff; }
-        .qb-btn-success:hover:not(:disabled) { background:#087858; }
         .qb-btn-danger  { background:var(--qb-red); color:#fff; }
-        .qb-btn-danger:hover:not(:disabled) { background:#e03131; box-shadow:0 4px 14px rgba(250,82,82,.35); }
+        .qb-btn-danger:hover:not(:disabled) { background:#e03131; }
         .qb-btn-icon    { padding:7px 9px; position:relative; }
 
         /* ── tabs ── */
         .qb-tabs { display:flex; gap:3px; background:var(--qb-surface); border:1.5px solid var(--qb-border); border-radius:var(--qb-rsm); padding:4px; width:fit-content; margin-bottom:18px; }
         .qb-tab  { display:inline-flex; align-items:center; gap:5px; font-size:.79rem; font-weight:650; padding:6px 13px; border-radius:5px; border:none; background:transparent; color:var(--qb-muted); cursor:pointer; transition:all .14s; font-family:var(--qb-font); }
-        .qb-tab:hover   { color:var(--qb-text); }
-        .qb-tab.on      { background:var(--qb-accent); color:#fff; box-shadow:0 2px 8px rgba(47,84,235,.3); }
+        .qb-tab:hover { color:var(--qb-text); }
+        .qb-tab.on    { background:var(--qb-accent); color:#fff; box-shadow:0 2px 8px rgba(47,84,235,.3); }
 
         /* ── filter card ── */
-        .qb-fc  { background:var(--qb-surface); border:1.5px solid var(--qb-border); border-radius:var(--qb-radius); padding:16px 18px; margin-bottom:18px; box-shadow:var(--qb-shadow); }
-        .qb-fr  { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+        .qb-fc { background:var(--qb-surface); border:1.5px solid var(--qb-border); border-radius:var(--qb-radius); padding:16px 18px; margin-bottom:18px; box-shadow:var(--qb-shadow); }
+        .qb-fr { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
         .qb-fr+.qb-fr { margin-top:10px; padding-top:10px; border-top:1px solid var(--qb-border); }
-        .qb-si  { position:relative; flex:1 1 210px; min-width:190px; }
+        .qb-si { position:relative; flex:1 1 210px; min-width:190px; }
         .qb-si svg { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--qb-muted); pointer-events:none; }
         .qb-si input { width:100%; padding:8px 10px 8px 32px; font-size:.82rem; border:1.5px solid var(--qb-border); border-radius:var(--qb-rsm); background:var(--qb-bg); color:var(--qb-text); outline:none; transition:border .13s; font-family:var(--qb-font); box-sizing:border-box; }
         .qb-si input:focus { border-color:var(--qb-accent); background:#fff; }
         .qb-sel { flex:1 1 130px; min-width:120px; padding:8px 10px; font-size:.81rem; border:1.5px solid var(--qb-border); border-radius:var(--qb-rsm); background:var(--qb-bg); color:var(--qb-text); outline:none; cursor:pointer; font-family:var(--qb-font); transition:border .13s; }
-        .qb-sel:focus   { border-color:var(--qb-accent); background:#fff; }
-        .qb-sel:disabled{ opacity:.4; cursor:not-allowed; }
+        .qb-sel:focus    { border-color:var(--qb-accent); background:#fff; }
+        .qb-sel:disabled { opacity:.4; cursor:not-allowed; }
         .qb-fbadge { position:absolute; top:-6px; right:-6px; background:var(--qb-accent); color:#fff; font-size:.66rem; font-weight:700; border-radius:99px; width:16px; height:16px; display:flex; align-items:center; justify-content:center; }
 
         /* ── bulk action bar ── */
@@ -662,9 +806,9 @@ export default function QuestionBank() {
 
         /* ── stats bar ── */
         .qb-sb  { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-        .qb-sb-l{ font-size:.8rem; color:var(--qb-muted); }
+        .qb-sb-l { font-size:.8rem; color:var(--qb-muted); }
         .qb-sb-l strong { color:var(--qb-text); }
-        .qb-sb-r{ display:flex; align-items:center; gap:7px; font-size:.8rem; color:var(--qb-muted); }
+        .qb-sb-r { display:flex; align-items:center; gap:7px; font-size:.8rem; color:var(--qb-muted); }
         .qb-pps { padding:5px 8px; font-size:.78rem; border:1.5px solid var(--qb-border); border-radius:6px; background:var(--qb-surface); color:var(--qb-text); cursor:pointer; font-family:var(--qb-font); }
 
         /* ── table card ── */
@@ -677,10 +821,7 @@ export default function QuestionBank() {
         .qb-table tbody tr:hover { background:#f9fafd; }
         .qb-table tbody tr.selected { background:#eef2ff; }
         .qb-table tbody tr:last-child td { border-bottom:none; }
-
-        /* ── checkbox styling ── */
         .qb-cb { width:16px; height:16px; cursor:pointer; accent-color:var(--qb-accent); margin:0; }
-        .qb-cb:indeterminate { opacity:.7; }
 
         /* ── question cell ── */
         .qb-q-cell { max-width:400px; min-width:220px; }
@@ -694,7 +835,6 @@ export default function QuestionBank() {
         .qb-q-en table td,
         .qb-q-en table th { border:1px solid #cdd0db; padding:3px 7px; }
         .qb-q-en img      { max-width:100%; height:auto; border-radius:4px; }
-        .qb-q-en .math-tex { white-space:nowrap; }
         .qb-q-divider { height:1px; background:var(--qb-border); margin:7px 0; }
         .qb-q-ur {
           direction:rtl; text-align:right;
@@ -703,17 +843,14 @@ export default function QuestionBank() {
           word-break:break-word;
         }
         .qb-q-ur p { margin:.1em 0; }
-        /* Urdu LaTeX math */
-        .qb-q-ur .math-tex,
-        .qb-q-ur mjx-container { direction:ltr; display:inline-block; }
         .qb-serial { font-size:.73rem; color:var(--qb-muted); font-family:var(--qb-mono); white-space:nowrap; }
 
         /* ── badges ── */
-        .qb-badge { display:inline-flex; align-items:center; font-size:.69rem; font-weight:750; letter-spacing:.04em; padding:3px 9px; border-radius:99px; white-space:nowrap; }
-        .qb-b-type   { background:var(--qb-accent-lt); color:var(--qb-accent); }
-        .qb-easy     { background:#ebfbee; color:#2b8a3e; }
-        .qb-medium   { background:#fff3bf; color:#d97706; }
-        .qb-hard     { background:#ffe3e3; color:#c92a2a; }
+        .qb-badge  { display:inline-flex; align-items:center; font-size:.69rem; font-weight:750; letter-spacing:.04em; padding:3px 9px; border-radius:99px; white-space:nowrap; }
+        .qb-b-type { background:var(--qb-accent-lt); color:var(--qb-accent); }
+        .qb-easy   { background:#ebfbee; color:#2b8a3e; }
+        .qb-medium { background:#fff3bf; color:#d97706; }
+        .qb-hard   { background:#ffe3e3; color:#c92a2a; }
         .qb-b-source { background:#f1f3f9; color:var(--qb-muted); }
 
         /* ── action btns ── */
@@ -724,8 +861,8 @@ export default function QuestionBank() {
         /* ── empty ── */
         .qb-empty { text-align:center; padding:60px 24px; color:var(--qb-muted); }
         .qb-empty-ico { font-size:2.8rem; margin-bottom:10px; opacity:.25; }
-        .qb-empty h3  { font-size:.95rem; font-weight:700; color:var(--qb-text); margin:0 0 5px; }
-        .qb-empty p   { font-size:.8rem; margin:0; }
+        .qb-empty h3 { font-size:.95rem; font-weight:700; color:var(--qb-text); margin:0 0 5px; }
+        .qb-empty p  { font-size:.8rem; margin:0; }
 
         /* ── loader ── */
         .qb-loader { text-align:center; padding:80px; }
@@ -736,23 +873,21 @@ export default function QuestionBank() {
         .qb-pg  { display:flex; justify-content:center; align-items:center; gap:4px; flex-wrap:wrap; padding-top:4px; }
         .qb-pgb { display:inline-flex; align-items:center; justify-content:center; min-width:34px; height:34px; padding:0 6px; border-radius:7px; border:1.5px solid var(--qb-border); background:var(--qb-surface); color:var(--qb-text); font-size:.81rem; font-weight:650; cursor:pointer; transition:all .13s; font-family:var(--qb-font); }
         .qb-pgb:hover:not(:disabled):not(.on) { border-color:var(--qb-accent); color:var(--qb-accent); }
-        .qb-pgb.on   { background:var(--qb-accent); border-color:var(--qb-accent); color:#fff; }
+        .qb-pgb.on       { background:var(--qb-accent); border-color:var(--qb-accent); color:#fff; }
         .qb-pgb:disabled { opacity:.3; cursor:not-allowed; }
-        .qb-pgb.dots { border:none; background:transparent; cursor:default; color:var(--qb-muted); letter-spacing:.1em; }
+        .qb-pgb.dots     { border:none; background:transparent; cursor:default; color:var(--qb-muted); letter-spacing:.1em; }
 
         /* ── modal ── */
-        .qb-mo  { position:fixed; inset:0; background:rgba(18,30,64,.6); z-index:1050; display:flex; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(3px); }
-        .qb-md  { background:var(--qb-surface); border-radius:var(--qb-radius); box-shadow:0 12px 48px rgba(18,30,64,.22); width:100%; max-width:900px; max-height:94vh; display:flex; flex-direction:column; overflow:hidden; }
+        .qb-mo { position:fixed; inset:0; background:rgba(18,30,64,.6); z-index:1050; display:flex; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(3px); }
+        .qb-md { background:var(--qb-surface); border-radius:var(--qb-radius); box-shadow:0 12px 48px rgba(18,30,64,.22); width:100%; max-width:900px; max-height:94vh; display:flex; flex-direction:column; overflow:hidden; }
         .qb-mhd { display:flex; justify-content:space-between; align-items:center; padding:16px 22px; border-bottom:1.5px solid var(--qb-border); background:#f7f8fc; }
-        .qb-mhd h5  { font-size:.95rem; font-weight:750; color:var(--qb-navy); margin:0; }
+        .qb-mhd h5 { font-size:.95rem; font-weight:750; color:var(--qb-navy); margin:0; }
         .qb-mbd { overflow-y:auto; flex:1; padding:22px; }
         .qb-xcl { display:inline-flex; align-items:center; justify-content:center; width:29px; height:29px; border-radius:6px; border:1.5px solid var(--qb-border); background:transparent; color:var(--qb-muted); cursor:pointer; transition:all .13s; }
         .qb-xcl:hover { border-color:var(--qb-red); color:var(--qb-red); background:var(--qb-red-bg); }
-
-        /* ── cell meta ── */
         .qb-meta { display:flex; flex-direction:column; gap:2px; }
-        .qb-meta-main  { font-size:.82rem; color:var(--qb-text); white-space:nowrap; }
-        .qb-meta-sub   { font-size:.73rem; color:var(--qb-muted); white-space:nowrap; }
+        .qb-meta-main { font-size:.82rem; color:var(--qb-text); white-space:nowrap; }
+        .qb-meta-sub  { font-size:.73rem; color:var(--qb-muted); white-space:nowrap; }
 
         @media (max-width:768px) {
           .qb { padding:14px 10px 40px; }
@@ -799,7 +934,6 @@ export default function QuestionBank() {
         {/* ── Filters ── */}
         <div className="qb-fc">
           <div className="qb-fr">
-            {/* Search */}
             <div className="qb-si">
               <FiSearch size={13} />
               <input
@@ -813,34 +947,27 @@ export default function QuestionBank() {
                 }}
               />
             </div>
-            {/* Class */}
             <select className="qb-sel" value={filters.class || ''} onChange={e => handleFilterChange('class', e.target.value)}>
               <option value="">All Classes</option>
               {sortedClasses().map(c => <option key={c.id} value={c.id}>{c.name}{c.description ? ` – ${c.description}` : ''}</option>)}
             </select>
-            {/* Subject */}
             <select className="qb-sel" value={filters.subject || ''} onChange={e => handleFilterChange('subject', e.target.value)} disabled={!filters.class}>
               <option value="">All Subjects</option>
               {filteredSubjects().map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            {/* Chapter */}
             <select className="qb-sel" value={filters.chapter || ''} onChange={e => handleFilterChange('chapter', e.target.value)} disabled={!filters.class || !filters.subject}>
               <option value="">All Chapters</option>
               {filteredChapters().map(c => <option key={c.id} value={c.id}>{c.chapterNo ? `Ch ${c.chapterNo}: ` : ''}{c.name}</option>)}
             </select>
-            {/* Topic */}
             <select className="qb-sel" value={filters.topic || ''} onChange={e => handleFilterChange('topic', e.target.value)} disabled={!filters.chapter}>
               <option value="">All Topics</option>
               {filteredTopics().map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
-            {/* Clear */}
             <button className="qb-btn qb-btn-ghost qb-btn-icon" onClick={clearFilters} title="Clear all filters">
               <FiX size={13} />
               {activeCount > 0 && <span className="qb-fbadge">{activeCount}</span>}
             </button>
           </div>
-
-          {/* Row 2 */}
           <div className="qb-fr">
             <select className="qb-sel" style={{ flex: '0 1 140px' }} value={filters.difficulty || ''} onChange={e => handleFilterChange('difficulty', e.target.value)}>
               <option value="">All Difficulty</option>
@@ -908,11 +1035,7 @@ export default function QuestionBank() {
                           type="checkbox"
                           className="qb-cb"
                           checked={displayedQs.length > 0 && selectedIds.size === displayedQs.length}
-                          ref={el => {
-                            if (el) {
-                              el.indeterminate = selectedIds.size > 0 && selectedIds.size < displayedQs.length;
-                            }
-                          }}
+                          ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < displayedQs.length; }}
                           onChange={toggleSelectAll}
                           title="Select / Deselect all on this page"
                         />
@@ -936,29 +1059,19 @@ export default function QuestionBank() {
                       return (
                         <tr key={q?.id} className={isSelected ? 'selected' : ''}>
                           <td>
-                            <input
-                              type="checkbox"
-                              className="qb-cb"
-                              checked={isSelected}
-                              onChange={() => toggleSelect(q.id)}
-                            />
+                            <input type="checkbox" className="qb-cb" checked={isSelected} onChange={() => toggleSelect(q.id)} />
                           </td>
                           <td><span className="qb-serial">{startIdx + i + 1}</span></td>
-
-                          {/* ── Full bilingual question with LaTeX + WYSIWYG ── */}
                           <td>
                             <QuestionCell en={q?.question_text} ur={q?.question_text_ur} />
                           </td>
-
                           <td>
                             <div className="qb-meta">
                               <span className="qb-meta-main">{(q as any)?._class || '—'}</span>
                               {(q as any)?._class_desc && <span className="qb-meta-sub">{(q as any)._class_desc}</span>}
                             </div>
                           </td>
-
                           <td><span className="qb-meta-main">{(q as any)?._subject || '—'}</span></td>
-
                           <td>
                             <div className="qb-meta">
                               {q?.topic?.chapter?.chapterNo && <span className="qb-meta-sub">Ch {q.topic.chapter.chapterNo}</span>}
@@ -967,13 +1080,11 @@ export default function QuestionBank() {
                               </span>
                             </div>
                           </td>
-
                           <td>
                             <span className="qb-meta-main" style={{ maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
                               {q?.topic?.name || '—'}
                             </span>
                           </td>
-
                           <td><span className="qb-badge qb-b-type">{getTypeLabel(q?.question_type)}</span></td>
                           <td><span className={`qb-badge ${diff.cls}`}>{diff.label}</span></td>
                           <td>
@@ -982,15 +1093,12 @@ export default function QuestionBank() {
                               {q?.source_year && <span className="qb-meta-sub">{q.source_year}</span>}
                             </div>
                           </td>
-
                           <td>
                             <div style={{ display: 'flex', gap: 5 }}>
-                              <button className="qb-ab edit" title="Edit"
-                                onClick={() => { setSelQ(q); setShowModal(true); }}>
+                              <button className="qb-ab edit" title="Edit" onClick={() => { setSelQ(q); setShowModal(true); }}>
                                 <FiEdit size={12} />
                               </button>
-                              <button className="qb-ab delete" title="Delete"
-                                onClick={() => handleDelete(q?.id)}>
+                              <button className="qb-ab delete" title="Delete" onClick={() => handleDelete(q?.id)}>
                                 <FiTrash2 size={12} />
                               </button>
                             </div>
@@ -1018,7 +1126,6 @@ export default function QuestionBank() {
               <div className="qb-pg">
                 <button className="qb-pgb" onClick={() => handlePageChange(1)} disabled={currentPage === 1}><FiChevronsLeft size={12} /></button>
                 <button className="qb-pgb" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}><FiChevronLeft size={12} /></button>
-
                 {pageNums.map((p, idx) =>
                   p === '…' ? (
                     <button key={`dots-${idx}`} className="qb-pgb dots" disabled>…</button>
@@ -1027,7 +1134,6 @@ export default function QuestionBank() {
                       onClick={() => handlePageChange(p as number)}>{p}</button>
                   )
                 )}
-
                 <button className="qb-pgb" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages}><FiChevronRight size={12} /></button>
                 <button className="qb-pgb" onClick={() => handlePageChange(totalPages)} disabled={currentPage === totalPages}><FiChevronsRight size={12} /></button>
               </div>
@@ -1059,5 +1165,6 @@ export default function QuestionBank() {
         </div>
       )}
     </AdminLayout>
+    </KatexReadyContext.Provider>
   );
 }

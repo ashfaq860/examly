@@ -443,3 +443,33 @@ svg.lucide-circle-alert { display: none; }  /* profile: remove duplicate validat
   user-select: none;
   -webkit-user-select: none;
 }
+.katex .mord.text > .mord,
+.katex .mord.text > .mord * {
+  font-family: 'JameelNoori', 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu',
+               'Urdu Typesetting', serif !important;
+}
+ 
+/* ── KaTeX inside RTL containers — keep math rendering LTR ─────── */
+/*
+   Arabic/Urdu text is RTL but mathematical notation must always render
+   left-to-right. When KaTeX output appears inside a dir="rtl" element
+   (like .qb-q-ur or .urdu-text) we force it back to LTR.
+*/
+[dir="rtl"] .katex,
+[dir="rtl"] .katex-html { direction: ltr !important; unicode-bidi: embed; }
+[dir="rtl"] .katex-display { display: block; text-align: center; }
+[dir="rtl"] .katex-display > .katex { display: inline-block; }
+ 
+/* ── KaTeX display math spacing ─────────────────────────────────── */
+.katex-display { margin: 0.4em 0; overflow-x: auto; overflow-y: hidden; }
+ 
+/* ── KaTeX inline size ───────────────────────────────────────────── */
+/* Match surrounding text size — KaTeX defaults to 1.21em which is too big */
+.katex { font-size: 1.05em; vertical-align: middle; }
+ 
+/* ── KaTeX error display ─────────────────────────────────────────── */
+.katex-error {
+  color: #c92a2a;
+  font-size: 0.8em;
+  font-family: ui-monospace, 'JetBrains Mono', monospace;
+}
