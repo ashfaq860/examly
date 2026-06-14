@@ -11,6 +11,7 @@ const Footer = dynamic(() => import('@/components/Footer'), {
 export default function Home() {
   return (
     <>
+  
       <Header />
 
       {/* Client-only wrapper for CubeSlider + scroll effects */}
