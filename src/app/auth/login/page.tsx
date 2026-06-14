@@ -1,3 +1,4 @@
+//app/auth/login/page.tsx
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import AuthLayout from '@/components/AuthLayout';
