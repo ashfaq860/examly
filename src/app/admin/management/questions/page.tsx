@@ -426,51 +426,57 @@ export default function QuestionBank() {
   };
 
   /* ── import ── */
-  const handleImport = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    setIsImporting(true);
-    try {
-      const buf  = await file.arrayBuffer();
-      const wb   = XLSX.read(buf);
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+const handleImport = async (e: ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0]; if (!file) return;
+  setIsImporting(true);
+  try {
+    // 1. Get fresh lookups to ensure we have the latest topics & chapters
+    const freshLookups = await fetchLookups();
+    const freshTopics = freshLookups.topics;
+    const freshChapters = freshLookups.chapters;
 
-      const payload = (rows as any[]).map(row => {
-        let topicId = null;
-        if (row.Topic && row.Chapter) {
-          const t = allTopics.find(
-            t => t.name === row.Topic &&
-              chapters.find(c => c.id === t.chapter_id && c.name === row.Chapter)
-          );
-          topicId = t?.id || null;
-        }
-        return {
-          question_text:    row['Question (HTML)'] || row.Question,
-          question_text_ur: row['Question (Urdu)'],
-          option_a: row['Option A'], option_b: row['Option B'],
-          option_c: row['Option C'], option_d: row['Option D'],
-          option_a_ur: row['Option A (Urdu)'], option_b_ur: row['Option B (Urdu)'],
-          option_c_ur: row['Option C (Urdu)'], option_d_ur: row['Option D (Urdu)'],
-          correct_option: row['Correct Option'],
-          topic_id:     topicId,
-          difficulty:   row.Difficulty,
-          question_type: row['Question Type'],
-          source_type:  row['Source Type'],
-          source_year:  row['Source Year'],
-          answer_text:    row['Answer'],
-          answer_text_ur: row['Answer (Urdu)'],
-        };
-      });
+    const buf  = await file.arrayBuffer();
+    const wb   = XLSX.read(buf);
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
 
-      const { inserted } = await importQuestions(payload);
-      toast.success(`${inserted} questions imported`);
-      loadQuestions(currentPage);
-    } catch (err: any) {
-      toast.error(`Import failed: ${err?.message || 'Error'}`);
-    } finally {
-      setIsImporting(false);
-      e.target.value = '';
-    }
-  };
+    const payload = (rows as any[]).map(row => {
+      let topicId = null;
+      if (row.Topic && row.Chapter) {
+        const t = freshTopics.find(
+          t => t.name === row.Topic &&
+            freshChapters.find(c => c.id === t.chapter_id && c.name === row.Chapter)
+        );
+        topicId = t?.id || null;
+      }
+      // KEEP ALL ORIGINAL FIELDS – do NOT replace with { ... }
+      return {
+        question_text:    row['Question (HTML)'] || row.Question,
+        question_text_ur: row['Question (Urdu)'],
+        option_a: row['Option A'], option_b: row['Option B'],
+        option_c: row['Option C'], option_d: row['Option D'],
+        option_a_ur: row['Option A (Urdu)'], option_b_ur: row['Option B (Urdu)'],
+        option_c_ur: row['Option C (Urdu)'], option_d_ur: row['Option D (Urdu)'],
+        correct_option: row['Correct Option'],
+        topic_id:     topicId,   // ← uses the fresh match
+        difficulty:   row.Difficulty,
+        question_type: row['Question Type'],
+        source_type:  row['Source Type'],
+        source_year:  row['Source Year'],
+        answer_text:    row['Answer'],
+        answer_text_ur: row['Answer (Urdu)'],
+      };
+    });
+
+    const { inserted } = await importQuestions(payload);
+    toast.success(`${inserted} questions imported`);
+    loadQuestions(currentPage);
+  } catch (err: any) {
+    toast.error(`Import failed: ${err?.message || 'Error'}`);
+  } finally {
+    setIsImporting(false);
+    e.target.value = '';
+  }
+};
 
   /* ── derived ── */
   const totalPages  = Math.ceil(totalQ / itemsPerPage);

@@ -95,10 +95,10 @@ export async function bulkDeleteQuestions(ids: string[]) {
 
 /* ── Import (bulk insert) ───────────────────────────────────────────────── */
 export async function importQuestions(rows: any[]) {
-  return apiFetch<{ inserted: number }>('/api/questions', {
+  return apiFetch<{ inserted: number }>('/api/admin/questions/import', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ rows }),
+    body:    JSON.stringify({ questions: rows }),
   });
 }
 
