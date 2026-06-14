@@ -1,12 +1,9 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
 export async function POST() {
-  const cookieStore = await cookies();
-  // 1. Identify the user using the standard client (Session check)
-const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+  const supabase = await createSupabaseRouteHandlerClient();
   const { data: { session } } = await supabase.auth.getSession();
 
   if (!session?.user?.id) {

@@ -1,12 +1,12 @@
 // src/app/dashboard/generate-paper/hooks/useAuthGuard.ts
 import { useState, useEffect } from 'react';
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export const useAuthGuard = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const supabase = createClientComponentClient();
+  const supabase = createSupabaseBrowserClient();
 
   useEffect(() => {
     const checkAuth = async () => {

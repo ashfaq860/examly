@@ -2,13 +2,13 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Search } from 'lucide-react';
 import { ArchiveGrid } from './components/ArchiveGrid';
 import { PaperPreviewer } from './components/PaperPreviewer';
 import Loading from '@/app/dashboard/generate-paper/loading';
 export default function SavedPapersPage() {
-  const supabase = createClientComponentClient();
+  const supabase = createSupabaseBrowserClient();
   const [loading, setLoading] = useState(true);
   const [papers, setPapers] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);

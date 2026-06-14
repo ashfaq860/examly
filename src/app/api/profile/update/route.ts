@@ -1,13 +1,11 @@
 // api/profile/update/route.ts
 import { NextResponse } from "next/server";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
+import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = await createSupabaseRouteHandlerClient();
 
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
@@ -57,8 +55,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = await createSupabaseRouteHandlerClient();
 
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     

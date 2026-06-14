@@ -7,13 +7,13 @@ import AuthLayout from '@/components/AuthLayout';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff } from 'lucide-react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import Cookies from 'js-cookie';
 
 export default function SignupForm() {
   const search = useSearchParams();
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = createSupabaseBrowserClient();
 
   const referralCodeFromUrl = search.get('ref') || '';
 

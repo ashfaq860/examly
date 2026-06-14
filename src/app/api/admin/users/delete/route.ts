@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { checkAdminAccessServer } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(req: Request) {
-  const isAdmin = await checkAdminAccessServer(cookies());
+  const isAdmin = await checkAdminAccessServer();
   if (!isAdmin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }

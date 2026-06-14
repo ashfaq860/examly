@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import Loading from '@/app/dashboard/generate-paper/loading'; 
-const supabase = createClientComponentClient();
+const supabase = createSupabaseBrowserClient();
 interface Package {
   id: string;
   name: string;

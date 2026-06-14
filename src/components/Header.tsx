@@ -2,7 +2,7 @@
 'use client';
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter, usePathname } from 'next/navigation';
 
 export default function Header() {
@@ -12,7 +12,7 @@ export default function Header() {
   const [role, setRole] = useState(null);
   const [activeLink, setActiveLink] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
-  const supabase = createClientComponentClient();
+  const supabase = createSupabaseBrowserClient();
   const router = useRouter();
   const pathname = usePathname();
   const menuRef = useRef(null);

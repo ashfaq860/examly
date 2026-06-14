@@ -1,13 +1,10 @@
 // src/lib/session.ts
 'use server'
 
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-// ✅ Always async now
 export async function getCurrentSession() {
-  const cookieStore = await cookies()  // <- await is required in Next.js 15
-  const supabase = createServerComponentClient({ cookies: () => cookieStore })
+  const supabase = await createSupabaseServerClient()
 
   // Instead of getSession (insecure), use getUser (verified by Supabase)
   const { data: { user }, error } = await supabase.auth.getUser()

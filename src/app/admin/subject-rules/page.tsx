@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '@/components/AdminLayout';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Class, Subject, Chapter, ChapterRangeRule } from '@/types/types';
 import toast from 'react-hot-toast';
 import {
@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import './subject-rules.css';
 
-const supabase = createClientComponentClient();
+const supabase = createSupabaseBrowserClient();
 
 interface QuestionTypeConfig {
   id: string;

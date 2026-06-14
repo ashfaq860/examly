@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { 
   LayoutDashboard, Users, ShoppingBag, Settings, 
   Layers, Grid, BookOpen, FilePlus, Book, 
@@ -10,7 +10,7 @@ import {
   ShieldCheck, Zap 
 } from 'lucide-react';
 
-const supabase = createClientComponentClient();
+const supabase = createSupabaseBrowserClient();
 
 export default function AdminLayout({ children, activeTab }: { children: React.ReactNode; activeTab?: string }) {
   const router = useRouter();

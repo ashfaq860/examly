@@ -1,6 +1,5 @@
 // lib/admin-auth.ts
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { redirect } from 'next/navigation'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 /**
  * Checks if the current user has admin access
@@ -9,7 +8,7 @@ import { redirect } from 'next/navigation'
  */
 export const checkAdminAccess = async (router?: any): Promise<boolean> => {
   try {
-    const supabase = createClientComponentClient()
+    const supabase = createSupabaseBrowserClient()
     
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -47,7 +46,7 @@ export const checkAdminAccess = async (router?: any): Promise<boolean> => {
  */
 export const getUserRole = async (): Promise<string | null> => {
   try {
-    const supabase = createClientComponentClient()
+    const supabase = createSupabaseBrowserClient()
     
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -72,10 +71,10 @@ export const getUserRole = async (): Promise<string | null> => {
 /**
  * Server-side admin check for API routes or server components
  */
-export const checkAdminAccessServer = async (cookies: any): Promise<boolean> => {
+export const checkAdminAccessServer = async (): Promise<boolean> => {
   try {
-    const { createServerComponentClient } = await import('@supabase/auth-helpers-nextjs')
-    const supabase = createServerComponentClient({ cookies })
+    const { createSupabaseServerClient } = await import('@/lib/supabase/server');
+    const supabase = await createSupabaseServerClient()
     
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {

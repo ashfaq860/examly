@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import AdminLayout from '@/components/AdminLayout';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { Chart, registerables, ScriptableContext } from 'chart.js';
@@ -54,7 +54,7 @@ export default function Overview() {
   const [error, setError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = createSupabaseBrowserClient();
 
   const checkAdminAccess = async () => {
     try {

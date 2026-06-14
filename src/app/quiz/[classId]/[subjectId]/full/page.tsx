@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import BreadcrumbAuto from "@/components/BreadcrumbAuto";
 
 export default function FullSubjectQuizPage() {
-  const supabase = createClientComponentClient();
+  const supabase = createSupabaseBrowserClient();
   const { subjectId } = useParams();
 
   const [questions, setQuestions] = useState<any[]>([]);

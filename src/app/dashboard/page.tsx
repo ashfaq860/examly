@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import AcademyLayout from '@/components/AcademyLayout';
 import { useUser } from '../context/userContext';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { FilePlus, BookOpen, Settings, Activity } from 'lucide-react';
 import Loading from './generate-paper/loading';
 
@@ -24,7 +24,7 @@ interface Analytics {
 
 export default function AcademyDashboard() {
   // ✅ FIX 1: Stable supabase instance — never recreated on re-render
-  const supabase = useMemo(() => createClientComponentClient(), []);
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const router = useRouter();
   const { trialStatus, isLoading: trialLoading } = useUser();
 

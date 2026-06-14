@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   try {
     // Await the cookies function
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = await createSupabaseRouteHandlerClient();
     
     const { searchParams } = new URL(request.url);
     const subjectId = searchParams.get('subjectId');
@@ -57,8 +55,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Await the cookies function
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = await createSupabaseRouteHandlerClient();
     
     const body = await request.json();
 
@@ -150,8 +147,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     // Await the cookies function
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = await createSupabaseRouteHandlerClient();
     
     const { searchParams } = new URL(request.url);
     const ruleId = searchParams.get('id');
@@ -246,8 +242,7 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     // Await the cookies function
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = await createSupabaseRouteHandlerClient();
     
     const { searchParams } = new URL(request.url);
     const ruleId = searchParams.get('id');

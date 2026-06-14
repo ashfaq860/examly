@@ -1,7 +1,7 @@
 // src/app/dashboard/generate-paper/components/sections/SavePaperSection.tsx
 'use client';
 import React, { useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 interface SavePaperSectionProps {
   paperTitle: string;
@@ -34,7 +34,7 @@ export const SavePaperSection: React.FC<SavePaperSectionProps> = ({
   watch,
   setPaperSaved
 }) => {
-  const supabase = createClientComponentClient();
+  const supabase = createSupabaseBrowserClient();
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string>('');
   const [saveError, setSaveError] = useState<string>('');

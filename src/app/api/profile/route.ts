@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   console.log("✅ API /api/profile was accessed");
 
   try {
-       // Get the user from the session using auth helpers - AWAIT cookies()
-    const cookieStore = await cookies(); // Await the cookies function
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const supabase = await createSupabaseRouteHandlerClient()
     
     const { data: { session } } = await supabase.auth.getSession()
     

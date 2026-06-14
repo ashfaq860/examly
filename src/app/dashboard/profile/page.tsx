@@ -15,7 +15,7 @@ import {
   Link as LinkIcon,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import toast, { Toaster } from "react-hot-toast";
 import ReferralSection from "@/components/ReferralSection";
 
@@ -58,7 +58,7 @@ type UserPackage = {
 };
 
 export default function ProfilePage() {
-  const supabase = createClientComponentClient();
+  const supabase = createSupabaseBrowserClient();
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [userPackages, setUserPackages] = useState<UserPackage[]>([]);

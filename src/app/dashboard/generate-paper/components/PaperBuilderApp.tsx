@@ -13,7 +13,7 @@ import { SettingsPanel } from './SettingsPanel';
 import { BoardPatternService } from '@/services/boardPatternService';
 import { PaperLayoutRenderer } from '@/app/dashboard/generate-paper/components/PaperLayoutRenderer';
 import Loading from '@/app/dashboard/generate-paper/loading';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
 
 interface PaperBuilderAppProps {
@@ -86,7 +86,7 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
     logoHeight: 60,
   });
 
-  const supabase = createClientComponentClient();
+  const supabase = createSupabaseBrowserClient();
   const [currentPaperId, setCurrentPaperId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 

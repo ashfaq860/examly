@@ -7,9 +7,9 @@ import { Class, Subject, Chapter, Question } from '@/types/types';
 import { useUser } from '@/app/context/userContext';
 import { fetchSubjectRules, QuestionRuleEngine} from '@/lib/questionRules';
 import { cachedGet, isEnglishSubject, isUrduSubject, defaultTypes, englishTypes, urduTypes, useDebounce } from '../utils';
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
-const supabase = createClientComponentClient();
+const supabase = createSupabaseBrowserClient();
 
 // Form validation schema
 const paperSchema = z.object({

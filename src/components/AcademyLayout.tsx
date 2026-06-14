@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   LayoutDashboard,
   FilePlus,
@@ -25,7 +25,7 @@ import Footer from "@/components/Footer";
 import ReferralSection from "@/components/ReferralSection";
 
 // ✅ Supabase client created ONCE at module level — never recreated
-const supabase = createClientComponentClient();
+const supabase = createSupabaseBrowserClient();
 
 // ✅ User session cached at module level — persists across remounts
 let cachedUser: any = null;

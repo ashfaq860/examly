@@ -3,12 +3,12 @@ import { useState, useEffect } from 'react';
 import { Printer, Settings as SettingsIcon, Save, ChevronLeft } from 'lucide-react';
 import { PaperLayoutRenderer } from '@/app/dashboard/generate-paper/components/PaperLayoutRenderer';
 import { SettingsPanel } from '@/app/dashboard/generate-paper/components/SettingsPanel';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
 import { motion } from 'framer-motion';
 
 export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
-  const supabase = createClientComponentClient();
+  const supabase = createSupabaseBrowserClient();
   const [showSettings, setShowSettings] = useState(false);
   const [currentSettings, setCurrentSettings] = useState(paper.settings || {});
   const [isSaving, setIsSaving] = useState(false);

@@ -7,7 +7,7 @@ MapPin,  User, Phone, University, Mail, Save, Upload, X, Calendar, CheckCircle, 
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useUser } from "@/app/context/userContext";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type Profile = {
   id: string;
@@ -27,7 +27,7 @@ type Profile = {
 };
 
 export default function ProfileSettingsPage() {
-  const supabase = createClientComponentClient();
+  const supabase = createSupabaseBrowserClient();
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);

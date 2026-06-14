@@ -1,7 +1,6 @@
 // app/api/auth/get-role/route.ts
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
 // Required in Next.js 15 for route handlers that read cookies
@@ -9,8 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = await createSupabaseRouteHandlerClient();
 
     const {
       data: { session },

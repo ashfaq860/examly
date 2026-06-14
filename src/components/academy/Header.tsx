@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Menu } from "lucide-react";
 import { useUser } from '@/app/context/userContext';
 import ReferralSection from '@/components/ReferralSection'; 
@@ -10,7 +10,7 @@ const Header = ({ sidebarOpen, setSidebarOpen }: any) => {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [role, setRole] = useState<string>("user");
-  const supabase = createClientComponentClient();
+  const supabase = createSupabaseBrowserClient();
  const { trialStatus, isLoading: trialLoading } = useUser();
  const subscriptionInfo = trialStatus
     ? {
