@@ -2,6 +2,7 @@
 'use client';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { createQuestion, updateQuestion, fetchLookups, fetchTopicsByChapter } from '@/lib/questionsApi';
 import toast from 'react-hot-toast';
 import { Editor } from '@tinymce/tinymce-react';
 
@@ -288,6 +289,18 @@ export default function QuestionForm({
     passage_questions_count: 1,
   });
 
+  const compareLabels = useCallback((a: any, b: any) => {
+    return String(a?.name ?? '').localeCompare(String(b?.name ?? ''), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  }, []);
+
+  const [lookupClasses, setLookupClasses] = useState<any[]>(classes);
+  const [lookupSubjects, setLookupSubjects] = useState<any[]>(subjects);
+  const [lookupChapters, setLookupChapters] = useState<any[]>(chapters);
+  const [lookupTopics, setLookupTopics] = useState<any[]>(topics);
+  const [lookupClassSubjects, setLookupClassSubjects] = useState<any[]>(classSubjects);
   const [filteredSubjects, setFilteredSubjects] = useState<any[]>([]);
   const [filteredChapters, setFilteredChapters] = useState<any[]>([]);
   const [filteredTopics,   setFilteredTopics]   = useState<any[]>([]);
@@ -295,21 +308,39 @@ export default function QuestionForm({
   const [isTranslating,    setIsTranslating]    = useState(false);
 
   /* ── subject type helpers ── */
+  const activeClasses = useMemo(
+    () => [...(lookupClasses.length ? lookupClasses : classes)].sort(compareLabels),
+    [classes, compareLabels, lookupClasses]
+  );
+  const activeSubjects = useMemo(
+    () => [...(lookupSubjects.length ? lookupSubjects : subjects)].sort(compareLabels),
+    [compareLabels, lookupSubjects, subjects]
+  );
+  const activeChapters = useMemo(
+    () => [...(lookupChapters.length ? lookupChapters : chapters)].sort(compareLabels),
+    [chapters, compareLabels, lookupChapters]
+  );
+  const activeTopics = useMemo(
+    () => [...(lookupTopics.length ? lookupTopics : topics)].sort(compareLabels),
+    [compareLabels, lookupTopics, topics]
+  );
+  const activeClassSubjects = lookupClassSubjects.length ? lookupClassSubjects : classSubjects;
+
   const isEnglishSubject = useCallback(() => {
-    const s = subjects.find(s => toId(s.id) === formData.subject_id);
+    const s = activeSubjects.find(s => toId(s.id) === formData.subject_id);
     return s?.name?.toLowerCase().includes('english') || false;
-  }, [formData.subject_id, subjects, toId]);
+  }, [activeSubjects, formData.subject_id, toId]);
 
   const isUrduSubject = useCallback(() => {
-    const s = subjects.find(s => toId(s.id) === formData.subject_id);
+    const s = activeSubjects.find(s => toId(s.id) === formData.subject_id);
     return s?.name?.toLowerCase().includes('urdu') || false;
-  }, [formData.subject_id, subjects, toId]);
+  }, [activeSubjects, formData.subject_id, toId]);
 
   const isMathScienceSubject = useCallback(() => {
-    const s = subjects.find(s => toId(s.id) === formData.subject_id);
+    const s = activeSubjects.find(s => toId(s.id) === formData.subject_id);
     const n = s?.name?.toLowerCase() || '';
     return n.includes('math') || n.includes('physics') || n.includes('chemistry') || n.includes('science');
-  }, [formData.subject_id, subjects, toId]);
+  }, [activeSubjects, formData.subject_id, toId]);
 
   /* ══════════════════════════════════════════════════════════════════════════
      TinyMCE configs
@@ -322,7 +353,7 @@ export default function QuestionForm({
     buildMathButton(editor);
   }, []);
 
-  const englishEditorConfig = useMemo(() => ({
+  const englishEditorConfig = useMemo<any>(() => ({
     height: 300,
     menubar: true,
     plugins: [
@@ -355,7 +386,7 @@ export default function QuestionForm({
     },
   }), [sharedSetup]);
 
-  const urduEditorConfig = useMemo(() => ({
+  const urduEditorConfig = useMemo<any>(() => ({
     ...englishEditorConfig,
     content_style: `
       body {
@@ -370,19 +401,37 @@ export default function QuestionForm({
       'bullist numlist outdent indent | mathformula | removeformat help',
   }), [englishEditorConfig]);
 
-  const englishOptionEditorConfig = useMemo(() => ({
+  const englishOptionEditorConfig = useMemo<any>(() => ({
     ...englishEditorConfig,
     height: 150,
     menubar: false,
     toolbar: 'bold italic | mathformula | removeformat',
   }), [englishEditorConfig]);
 
-  const urduOptionEditorConfig = useMemo(() => ({
+  const urduOptionEditorConfig = useMemo<any>(() => ({
     ...urduEditorConfig,
     height: 150,
     menubar: false,
     toolbar: 'bold italic | mathformula | removeformat',
   }), [urduEditorConfig]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const data = await fetchLookups();
+        if (!mounted) return;
+        setLookupClasses(data.classes || []);
+        setLookupSubjects(data.subjects || []);
+        setLookupChapters(data.chapters || []);
+        setLookupTopics(data.topics || []);
+        setLookupClassSubjects(data.classSubjects || []);
+      } catch (err) {
+        console.error('Failed to load lookup data:', err);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   /* ── reset text fields ── */
   const resetTextFields = useCallback(() => {
@@ -476,9 +525,9 @@ export default function QuestionForm({
       }
     } else if (question.question_type === 'summary' && question.question_text) summaryText = question.question_text;
 
-    const currentTopic   = topics.find(t => toId(t.id) === toId(question.topic_id));
-    const currentChapter = currentTopic ? chapters.find(c => toId(c.id) === toId(currentTopic.chapter_id)) : null;
-    const classSubject   = currentChapter ? classSubjects.find(cs => toId(cs.id) === toId(currentChapter.class_subject_id)) : null;
+    const currentTopic   = activeTopics.find(t => toId(t.id) === toId(question.topic_id));
+    const currentChapter = currentTopic ? activeChapters.find(c => toId(c.id) === toId(currentTopic.chapter_id)) : null;
+    const classSubject   = currentChapter ? activeClassSubjects.find(cs => toId(cs.id) === toId(currentChapter.class_subject_id)) : null;
 
     setFormData({
       question_text:    passageQuestionText  || question.question_text    || '',
@@ -507,13 +556,13 @@ export default function QuestionForm({
       nasar_text: nasarText, summary_text: summaryText,
       passage_questions_count: 1,
     });
-  }, [question, classSubjects, chapters, topics, toId]);
+  }, [activeChapters, activeClassSubjects, activeTopics, question, toId]);
 
   /* ── cascading dropdowns ── */
   useEffect(() => {
     const classId = formData.class_id;
     if (classId) {
-      const subs = subjects.filter(s => classSubjects.some(cs => toId(cs.class_id) === classId && toId(cs.subject_id) === toId(s.id)));
+      const subs = activeSubjects.filter(s => activeClassSubjects.some(cs => toId(cs.class_id) === classId && toId(cs.subject_id) === toId(s.id)));
       setFilteredSubjects(subs);
       if (formData.subject_id && !subs.some(s => toId(s.id) === formData.subject_id))
         setFormData(p => ({ ...p, subject_id: '', chapter_id: '', topic_id: '' }));
@@ -521,15 +570,15 @@ export default function QuestionForm({
       setFilteredSubjects([]);
       if (formData.subject_id) setFormData(p => ({ ...p, subject_id: '', chapter_id: '', topic_id: '' }));
     }
-  }, [formData.class_id, subjects, classSubjects, toId]);
+  }, [activeClassSubjects, activeSubjects, formData.class_id, toId]);
 
   useEffect(() => {
     const { class_id, subject_id } = formData;
     if (class_id && subject_id) {
-      const cs = classSubjects.find(c => toId(c.class_id) === class_id && toId(c.subject_id) === subject_id);
+      const cs = activeClassSubjects.find(c => toId(c.class_id) === class_id && toId(c.subject_id) === subject_id);
       if (cs) {
-        const chs = chapters.filter(c => toId(c.class_subject_id) === toId(cs.id));
-        setFilteredChapters(chs);
+      const chs = activeChapters.filter(c => toId(c.class_subject_id) === toId(cs.id)).sort((a, b) => (a.chapterNo ?? 0) - (b.chapterNo ?? 0));
+       setFilteredChapters(chs);
         if (formData.chapter_id && !chs.some(c => toId(c.id) === formData.chapter_id))
           setFormData(p => ({ ...p, chapter_id: '', topic_id: '' }));
       } else {
@@ -540,19 +589,37 @@ export default function QuestionForm({
       setFilteredChapters([]);
       if (formData.chapter_id) setFormData(p => ({ ...p, chapter_id: '', topic_id: '' }));
     }
-  }, [formData.class_id, formData.subject_id, chapters, classSubjects, toId]);
+  }, [activeChapters, activeClassSubjects, formData.class_id, formData.subject_id, toId]);
 
   useEffect(() => {
-    if (formData.chapter_id) {
-      const ts = topics.filter(t => toId(t.chapter_id) === formData.chapter_id);
-      setFilteredTopics(ts);
-      if (formData.topic_id && !ts.some(t => toId(t.id) === formData.topic_id))
-        setFormData(p => ({ ...p, topic_id: '' }));
-    } else {
+    let mounted = true;
+    if (!formData.chapter_id) {
       setFilteredTopics([]);
       if (formData.topic_id) setFormData(p => ({ ...p, topic_id: '' }));
+      return () => { mounted = false; };
     }
-  }, [formData.chapter_id, topics, toId]);
+
+    const syncTopics = async () => {
+      try {
+        const data = await fetchTopicsByChapter(formData.chapter_id);
+        if (!mounted) return;
+        setFilteredTopics((data || []).slice().sort(compareLabels));
+        if (formData.topic_id && !(data || []).some(t => toId(t.id) === formData.topic_id)) {
+          setFormData(p => ({ ...p, topic_id: '' }));
+        }
+      } catch (err) {
+        console.error('Failed to load topics for chapter:', err);
+        const ts = activeTopics.filter(t => toId(t.chapter_id) === formData.chapter_id).sort(compareLabels);
+        setFilteredTopics(ts);
+        if (formData.topic_id && !ts.some(t => toId(t.id) === formData.topic_id)) {
+          setFormData(p => ({ ...p, topic_id: '' }));
+        }
+      }
+    };
+
+    syncTopics();
+    return () => { mounted = false; };
+  }, [activeTopics, compareLabels, formData.chapter_id, formData.topic_id, setFormData, toId]);
 
   /* ── submit ── */
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -560,7 +627,6 @@ export default function QuestionForm({
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile }  = await supabase.from('profiles').select('id').eq('id', user?.id).single();
 
       const base = {
         topic_id:    formData.topic_id || null,
@@ -568,7 +634,7 @@ export default function QuestionForm({
         question_type: formData.question_type,
         source_type: formData.source_type,
         source_year: formData.source_year ? parseInt(formData.source_year) : null,
-        created_by:  profile?.id,
+        created_by:  user?.id ?? null,
       };
 
       let specific: any = {};
@@ -634,12 +700,10 @@ export default function QuestionForm({
       console.log('Saving payload:', payload);
 
       if (question) {
-        const { error } = await supabase.from('questions').update(payload).eq('id', question.id);
-        if (error) throw error;
+        await updateQuestion(String(question.id), payload);
         toast.success('Question updated successfully');
       } else {
-        const { error } = await supabase.from('questions').insert([payload]);
-        if (error) throw error;
+        await createQuestion(payload);
         toast.success('Question added successfully');
         resetTextFields();
       }
@@ -735,7 +799,7 @@ export default function QuestionForm({
             <label className="form-label">Class *</label>
             <select className="form-select" name="class_id" value={formData.class_id} onChange={handleChange} required>
               <option value="">Select Class</option>
-              {sortedClasses.map(c => <option key={toId(c.id)} value={toId(c.id)}>{c.name}{c.description ? ` — ${c.description}` : ''}</option>)}
+              {activeClasses.map(c => <option key={toId(c.id)} value={toId(c.id)}>{c.name}{c.description ? ` — ${c.description}` : ''}</option>)}
             </select>
           </div>
 
@@ -751,7 +815,10 @@ export default function QuestionForm({
             <label className="form-label">Chapter</label>
             <select className={`form-select ${isUrduSubject() ? 'urdu-text' : ''}`} name="chapter_id" value={formData.chapter_id} onChange={handleChange} disabled={!formData.class_id || !formData.subject_id}>
               <option value="">{isUrduSubject() ? 'چیپٹر کا انتخاب کریں' : 'Select Chapter'}</option>
-              {filteredChapters.map((c, i) => <option key={toId(c.id)} value={toId(c.id)}>{i + 1}-{c.name}</option>)}
+            {filteredChapters.map(c => (<option key={toId(c.id)} value={toId(c.id)}>
+            {c.chapterNo ?? '?'}-{c.name}
+  </option>
+))}
             </select>
           </div>
 
@@ -981,25 +1048,25 @@ export default function QuestionForm({
           {(formData.question_type === 'mcq' && (isEnglishSubject() || (!isEnglishSubject() && !isUrduSubject()))) && (
             <>
               {(['a','b','c','d'] as const).map(opt => {
-                const key = `option_${opt}` as 'option_a'|'option_b'|'option_c'|'option_d';
+                const key = `option_${opt}` as keyof typeof formData;
                 const required = opt === 'a' || opt === 'b';
                 return (
                   <div className="col-md-6" key={opt}>
                     <label className="form-label">Option {opt.toUpperCase()} (English){required ? ' *' : ''}</label>
-                    <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData[key]} onEditorChange={c => handleEditorChange(c, key)} init={englishOptionEditorConfig} />
-                    <PreviewBox html={formData[key]} />
+                    <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={String(formData[key] ?? '')} onEditorChange={c => handleEditorChange(c, key)} init={englishOptionEditorConfig} />
+                    <PreviewBox html={String(formData[key] ?? '')} />
                   </div>
                 );
               })}
 
               {/* Urdu options for bilingual subjects */}
               {!isEnglishSubject() && !isUrduSubject() && (['a','b','c','d'] as const).map(opt => {
-                const key = `option_${opt}_ur` as any;
+                const key = `option_${opt}_ur` as keyof typeof formData;
                 return (
                   <div className="col-md-6" key={`ur-${opt}`}>
                     <label className="form-label">Option {opt.toUpperCase()} (Urdu)</label>
-                    <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData[key]} onEditorChange={c => handleEditorChange(c, key)} init={urduOptionEditorConfig} />
-                    <PreviewBox html={formData[key]} dir="rtl" />
+                    <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={String(formData[key] ?? '')} onEditorChange={c => handleEditorChange(c, key)} init={urduOptionEditorConfig} />
+                    <PreviewBox html={String(formData[key] ?? '')} dir="rtl" />
                   </div>
                 );
               })}
@@ -1021,14 +1088,14 @@ export default function QuestionForm({
           {formData.question_type === 'mcq' && isUrduSubject() && (
             <>
               {(['a','b','c','d'] as const).map(opt => {
-                const key = `option_${opt}_ur` as any;
+                const key = `option_${opt}_ur` as keyof typeof formData;
                 const labels: any = { a:'آپشن اے', b:'آپشن بی', c:'آپشن سی', d:'آپشن ڈی' };
                 const required = opt === 'a' || opt === 'b';
                 return (
                   <div className="col-md-6" key={opt}>
                     <label className="form-label urdu-label">{labels[opt]} (اردو){required ? ' *' : ''}</label>
-                    <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData[key]} onEditorChange={c => handleEditorChange(c, key)} init={urduOptionEditorConfig} />
-                    <PreviewBox html={formData[key]} dir="rtl" />
+                    <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={String(formData[key] ?? '')} onEditorChange={c => handleEditorChange(c, key)} init={urduOptionEditorConfig} />
+                    <PreviewBox html={String(formData[key] ?? '')} dir="rtl" />
                   </div>
                 );
               })}

@@ -12,7 +12,7 @@ import {
 
 const supabase = createClientComponentClient();
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({ children, activeTab }: { children: React.ReactNode; activeTab?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const [showSidebar, setShowSidebar] = useState(false);
