@@ -7,18 +7,17 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-/**
- * GET /api/questions/export
- * Returns all question rows (with nested joins) that match optional filters.
- * The client side is responsible for XLSX generation.
- */
 export async function GET(req: NextRequest) {
   try {
-    const sp           = req.nextUrl.searchParams;
-    const difficulty   = sp.get('difficulty')    || '';
+    const sp            = req.nextUrl.searchParams;
+    const difficulty    = sp.get('difficulty')    || '';
     const question_type = sp.get('question_type') || '';
-    const source_type  = sp.get('source_type')   || '';
-    const topic_id     = sp.get('topic_id')      || '';
+    const source_type   = sp.get('source_type')   || '';
+    const topic_id      = sp.get('topic_id')      || '';
+    const chapter_id    = sp.get('chapter_id')    || '';
+    const subject_id    = sp.get('subject_id')    || '';
+    const class_id      = sp.get('class_id')      || '';
+    const search        = sp.get('search')        || '';
 
     let query = supabase
       .from('questions')
@@ -29,29 +28,64 @@ export async function GET(req: NextRequest) {
         correct_option, difficulty, question_type,
         source_type, source_year, answer_text, answer_text_ur,
         topic_id,
-        topic:topics!inner(
+        topic:topics(
           id, name, chapter_id,
-          chapter:chapters!inner(
+          chapter:chapters(
             id, name, chapterNo, class_subject_id,
-            class_subject:class_subjects!inner(
+            class_subject:class_subjects(
               id, class_id, subject_id,
-              class:classes!inner(id,name,description),
-              subject:subjects!inner(id,name,name_ur)
+              class:classes(id, name, description),
+              subject:subjects(id, name, name_ur)
             )
           )
         )
       `)
       .order('created_at', { ascending: false });
 
-    if (difficulty)    query = query.eq('difficulty',    difficulty);
+    // Direct question-level filters
+    if (difficulty)    query = query.eq('difficulty', difficulty);
     if (question_type) query = query.eq('question_type', question_type);
-    if (source_type)   query = query.eq('source_type',   source_type);
-    if (topic_id)      query = query.eq('topic_id',      topic_id);
+    if (source_type)   query = query.eq('source_type', source_type);
+    if (topic_id)      query = query.eq('topic_id', topic_id);
+
+    // Full-text search on question_text
+    if (search) query = query.ilike('question_text', `%${search}%`);
+
+    // For chapter/subject/class filters we filter via the joined topic relation.
+    // Supabase supports filtering on embedded relations using dot notation.
+    if (chapter_id) {
+      query = query.eq('topic.chapter_id', chapter_id);
+    }
+    if (subject_id) {
+      query = query.eq('topic.chapter.class_subject.subject_id', subject_id);
+    }
+    if (class_id) {
+      query = query.eq('topic.chapter.class_subject.class_id', class_id);
+    }
 
     const { data, error } = await query;
     if (error) throw error;
 
-    return NextResponse.json({ data });
+    // Post-filter: when filtering by chapter/subject/class via joined relation,
+    // Supabase returns all rows but nullifies the nested object when it doesn't match.
+    // We must drop rows where the join didn't satisfy the filter.
+    let filtered = data ?? [];
+
+    if (chapter_id) {
+      filtered = filtered.filter(q => (q.topic as any)?.chapter_id === chapter_id);
+    }
+    if (subject_id) {
+      filtered = filtered.filter(q =>
+        (q.topic as any)?.chapter?.class_subject?.subject_id === subject_id
+      );
+    }
+    if (class_id) {
+      filtered = filtered.filter(q =>
+        (q.topic as any)?.chapter?.class_subject?.class_id === class_id
+      );
+    }
+
+    return NextResponse.json({ data: filtered });
   } catch (err: any) {
     console.error('[GET /api/questions/export]', err);
     return NextResponse.json({ error: err.message }, { status: 500 });

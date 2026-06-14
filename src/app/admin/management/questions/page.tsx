@@ -378,106 +378,179 @@ export default function QuestionBank() {
   };
 
   /* ── export ── */
-  const handleExport = async () => {
-    setIsExporting(true);
-    try {
-      const { data } = await exportQuestions({
-        difficulty:    filters.difficulty,
-        question_type: filters.question_type,
-        source_type:   filters.source_type,
-        topic_id:      filters.topic,
-      });
+const handleExport = async () => {
+  setIsExporting(true);
+  try {
+    const { data } = await exportQuestions({
+      difficulty:    filters.difficulty,
+      question_type: filters.question_type,
+      source_type:   filters.source_type,
+      topic_id:      filters.topic,
+      chapter_id:    filters.chapter,   // ← new
+      subject_id:    filters.subject,   // ← new
+      class_id:      filters.class,     // ← new
+      search:        searchTerm || undefined, // ← new
+    });
+ 
+    if (!data?.length) {
+      toast.error('No questions to export with current filters');
+      return;
+    }
+ 
+    const rows = data.map((q: any) => {
+      const cs = q.topic?.chapter?.class_subject;
+      return {
+        'Question (HTML)':   q.question_text,
+        'Question (Plain)':  stripHtml(q.question_text || ''),
+        'Question (Urdu)':   q.question_text_ur  || '',
+        'Option A':          q.option_a           || '',
+        'Option B':          q.option_b           || '',
+        'Option C':          q.option_c           || '',
+        'Option D':          q.option_d           || '',
+        'Option A (Urdu)':   q.option_a_ur        || '',
+        'Option B (Urdu)':   q.option_b_ur        || '',
+        'Option C (Urdu)':   q.option_c_ur        || '',
+        'Option D (Urdu)':   q.option_d_ur        || '',
+        'Correct Option':    q.correct_option     || '',
+        Class:               cs?.class?.name      || '',
+        Subject:             cs?.subject?.name    || '',
+        Chapter:             q.topic?.chapter?.name || '',
+        Topic:               q.topic?.name        || '',
+        Difficulty:          q.difficulty,
+        'Question Type':     q.question_type,
+        'Source Type':       q.source_type,
+        'Source Year':       q.source_year        || '',
+        Answer:              q.answer_text        || '',
+        'Answer (Urdu)':     q.answer_text_ur     || '',
+      };
+    });
+ 
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Questions');
+    XLSX.writeFile(wb, 'question_bank_export.xlsx');
+    toast.success(`Exported ${rows.length} question(s)`);
+  } catch (err) {
+    console.error(err);
+    toast.error('Export failed');
+  } finally {
+    setIsExporting(false);
+  }
+};
+ 
 
-      const rows = data.map((q: any) => {
-        const cs = q.topic?.chapter?.class_subject;
+  /* ── import ── */
+
+/* ── import ── */
+/* ── import ── */
+  const handleImport = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsImporting(true);
+
+    try {
+      // 1. Parse the workbook first
+      const importBuf  = await file.arrayBuffer();
+      const importWb   = XLSX.read(importBuf);
+      const importRows = XLSX.utils.sheet_to_json(importWb.Sheets[importWb.SheetNames[0]]) as any[];
+
+      if (importRows.length === 0) {
+        toast.error('The file is empty');
+        return;
+      }
+
+      // 2. Collect unique chapter+topic pairs from the spreadsheet
+      const pairs = importRows
+        .map(row => ({
+          chapter: (row['Chapter'] || row['chapter'] || '').toString().trim(),
+          topic:   (row['Topic']   || row['topic']   || '').toString().trim(),
+        }))
+        .filter(p => p.chapter && p.topic);
+
+      // 3. Resolve topic IDs from the server in ONE query (no row-limit issues)
+      let topicMap: Record<string, string> = {};
+      if (pairs.length > 0) {
+        const res = await fetch('/api/admin/resolve-topic', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(pairs),
+        });
+        if (res.ok) {
+          topicMap = await res.json();
+        } else {
+          console.error('resolve-topic failed:', await res.text());
+        }
+      }
+
+      //console.log('=== TOPIC MAP FROM SERVER ===', topicMap);
+      //console.log('=== FIRST ROW ===', importRows[0]);
+
+      // 4. Build payload
+      let unmatchedCount = 0;
+
+      const payload = importRows.map((row, index) => {
+        const colChapter = (row['Chapter'] || row['chapter'] || '').toString().trim();
+        const colTopic   = (row['Topic']   || row['topic']   || '').toString().trim();
+
+        const keyNormal  = `${colChapter.toLowerCase()}||${colTopic.toLowerCase()}`;
+        const keyFlipped = `${colTopic.toLowerCase()}||${colChapter.toLowerCase()}`;
+        const topicId    = topicMap[keyNormal] ?? topicMap[keyFlipped] ?? null;
+
+        if (!topicId) {
+          unmatchedCount++;
+    //      console.warn(`Row ${index + 1}: no topic match. Chapter="${colChapter}" Topic="${colTopic}"`);
+        }
+
+        const questionText =
+          row['Question (HTML)'] ||
+          row['Question (Plain)'] ||
+          row['Question (Plain Text)'] ||
+          row['Question'] || '';
+
         return {
-          'Question (HTML)':  q.question_text,
-          'Question (Plain)': stripHtml(q.question_text || ''),
-          'Question (Urdu)':  q.question_text_ur,
-          'Option A': q.option_a,  'Option B': q.option_b,
-          'Option C': q.option_c,  'Option D': q.option_d,
-          'Option A (Urdu)': q.option_a_ur, 'Option B (Urdu)': q.option_b_ur,
-          'Option C (Urdu)': q.option_c_ur, 'Option D (Urdu)': q.option_d_ur,
-          'Correct Option':   q.correct_option,
-          Class:   cs?.class?.name    || '—',
-          Subject: cs?.subject?.name  || '—',
-          Chapter: q.topic?.chapter?.name || '—',
-          Topic:   q.topic?.name || '—',
-          Difficulty:      q.difficulty,
-          'Question Type': q.question_type,
-          'Source Type':   q.source_type,
-          'Source Year':   q.source_year,
-          Answer:          q.answer_text,
-          'Answer (Urdu)': q.answer_text_ur,
+          question_text:    questionText,
+          question_text_ur: row['Question (Urdu)']  || null,
+          option_a:         row['Option A']          || null,
+          option_b:         row['Option B']          || null,
+          option_c:         row['Option C']          || null,
+          option_d:         row['Option D']          || null,
+          option_a_ur:      row['Option A (Urdu)']   || null,
+          option_b_ur:      row['Option B (Urdu)']   || null,
+          option_c_ur:      row['Option C (Urdu)']   || null,
+          option_d_ur:      row['Option D (Urdu)']   || null,
+          correct_option:   row['Correct Option']
+                              ? row['Correct Option'].toString().trim().toUpperCase()
+                              : null,
+          topic_id:      topicId,
+          difficulty:    (row['Difficulty']    || 'easy').toString().toLowerCase().trim(),
+          question_type: (row['Question Type'] || 'mcq').toString().toLowerCase().trim(),
+          source_type:   (row['Source Type']   || 'custom').toString().toLowerCase().trim(),
+          source_year:   row['Source Year'] ? parseInt(row['Source Year']) : null,
+          answer_text:   row['Answer'] || row['Answer Text'] || null,
+          answer_text_ur: row['Answer (Urdu)'] || row['Answer Text (Urdu)'] || null,
         };
       });
 
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Questions');
-      XLSX.writeFile(wb, 'question_bank_export.xlsx');
-      toast.success(`Exported ${rows.length} questions`);
-    } catch (err) {
-      console.error(err);
-      toast.error('Export failed');
+      const { inserted } = await importQuestions(payload);
+
+      if (unmatchedCount > 0) {
+        toast.success(
+          `${inserted} question(s) imported. ⚠️ ${unmatchedCount} row(s) had unmatched Chapter/Topic — imported without topic link.`,
+          { duration: 6000 }
+        );
+      } else {
+        toast.success(`${inserted} question(s) imported successfully`);
+      }
+
+      loadQuestions(currentPage);
+    } catch (err: any) {
+      console.error('Import error:', err);
+      toast.error(`Import failed: ${err?.message || 'Unknown error'}`);
     } finally {
-      setIsExporting(false);
+      setIsImporting(false);
+      e.target.value = '';
     }
   };
-
-  /* ── import ── */
-const handleImport = async (e: ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0]; if (!file) return;
-  setIsImporting(true);
-  try {
-    // 1. Get fresh lookups to ensure we have the latest topics & chapters
-    const freshLookups = await fetchLookups();
-    const freshTopics = freshLookups.topics;
-    const freshChapters = freshLookups.chapters;
-
-    const buf  = await file.arrayBuffer();
-    const wb   = XLSX.read(buf);
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-
-    const payload = (rows as any[]).map(row => {
-      let topicId = null;
-      if (row.Topic && row.Chapter) {
-        const t = freshTopics.find(
-          t => t.name === row.Topic &&
-            freshChapters.find(c => c.id === t.chapter_id && c.name === row.Chapter)
-        );
-        topicId = t?.id || null;
-      }
-      // KEEP ALL ORIGINAL FIELDS – do NOT replace with { ... }
-      return {
-        question_text:    row['Question (HTML)'] || row.Question,
-        question_text_ur: row['Question (Urdu)'],
-        option_a: row['Option A'], option_b: row['Option B'],
-        option_c: row['Option C'], option_d: row['Option D'],
-        option_a_ur: row['Option A (Urdu)'], option_b_ur: row['Option B (Urdu)'],
-        option_c_ur: row['Option C (Urdu)'], option_d_ur: row['Option D (Urdu)'],
-        correct_option: row['Correct Option'],
-        topic_id:     topicId,   // ← uses the fresh match
-        difficulty:   row.Difficulty,
-        question_type: row['Question Type'],
-        source_type:  row['Source Type'],
-        source_year:  row['Source Year'],
-        answer_text:    row['Answer'],
-        answer_text_ur: row['Answer (Urdu)'],
-      };
-    });
-
-    const { inserted } = await importQuestions(payload);
-    toast.success(`${inserted} questions imported`);
-    loadQuestions(currentPage);
-  } catch (err: any) {
-    toast.error(`Import failed: ${err?.message || 'Error'}`);
-  } finally {
-    setIsImporting(false);
-    e.target.value = '';
-  }
-};
-
   /* ── derived ── */
   const totalPages  = Math.ceil(totalQ / itemsPerPage);
   const startIdx    = (currentPage - 1) * itemsPerPage;

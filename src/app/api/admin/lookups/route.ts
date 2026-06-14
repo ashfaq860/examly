@@ -8,9 +8,13 @@ const supabase = createClient(
 );
 
 /**
- * GET /api/lookups
+ * GET /api/admin/lookups
  * Returns all lookup tables in one request:
  *   { classes, subjects, chapters, topics, classSubjects }
+ *
+ * NOTE: .range(0, 9999) overrides Supabase's default 1000-row cap.
+ * Supabase silently truncates queries that exceed the limit without
+ * any error, which causes topic matching to fail on large datasets.
  */
 export async function GET() {
   try {
@@ -23,8 +27,8 @@ export async function GET() {
     ] = await Promise.all([
       supabase.from('classes').select('*').order('name'),
       supabase.from('subjects').select('*').order('name'),
-      supabase.from('chapters').select('*').order('chapterNo', { ascending: true, nullsFirst: false }),
-      supabase.from('topics').select('*').order('name'),
+      supabase.from('chapters').select('*').order('chapterNo', { ascending: true, nullsFirst: false }).range(0, 9999),
+      supabase.from('topics').select('*').order('name').range(0, 9999),
       supabase
         .from('class_subjects')
         .select(`
