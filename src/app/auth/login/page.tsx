@@ -1,11 +1,10 @@
-// app/auth/login/page.tsx
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import AuthLayout from '@/components/AuthLayout';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import Link from 'next/link';
-import { createBrowserClient } from '@supabase/ssr';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 const ALLOWED_ROLES = ['teacher', 'admin', 'super_admin', 'academy'] as const;
 type UserRole = (typeof ALLOWED_ROLES)[number];
@@ -18,41 +17,25 @@ function getRedirectPath(role: UserRole): string {
   return role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
 }
 
-function getCallbackUrl(): string {
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ??
-    window.location.origin;
-  return `${base}/auth/callback`;
-}
+// ---------------------------------------------------------------------------
+// Fetches the current user's role from our secure server-side API.
+// The API uses supabaseAdmin (bypasses RLS) and reads the session from
+// the HttpOnly cookie — no service key ever touches the browser.
+// Returns the role string, or throws with a user-facing message on failure.
+// ---------------------------------------------------------------------------
+async function fetchRole(): Promise<UserRole> {
+  const res = await fetch('/api/auth/get-role', { method: 'GET' });
+  const body = await res.json();
 
-// Try server API first (uses supabaseAdmin, bypasses RLS)
-async function fetchRoleFromApi(): Promise<UserRole | null> {
-  try {
-    const res = await fetch('/api/auth/get-role', { method: 'GET' });
-    const contentType = res.headers.get('content-type') ?? '';
-    if (!contentType.includes('application/json')) return null;
-    const body = await res.json();
-    if (!res.ok || !body.role) return null;
-    if (!isAllowedRole(body.role)) return null;
-    return body.role as UserRole;
-  } catch {
-    return null;
+  if (!res.ok || !body.role) {
+    throw new Error(body.error ?? 'Unable to verify your role. Please contact support.');
   }
-}
 
-// Fallback: direct client query using maybeSingle (never throws on missing rows)
-async function fetchRoleFromClient(
-  supabase: ReturnType<typeof createBrowserClient>,
-  userId: string
-): Promise<UserRole | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', userId)
-    .maybeSingle();
-  if (error || !data?.role) return null;
-  if (!isAllowedRole(data.role)) return null;
-  return data.role as UserRole;
+  if (!isAllowedRole(body.role)) {
+    throw new Error('Access denied: your account cannot access this portal.');
+  }
+
+  return body.role as UserRole;
 }
 
 export default function LoginPage() {
@@ -60,31 +43,19 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(true);
+  const [checking, setChecking] = useState(true); // true = silently verifying existing session
 
   const router = useRouter();
+  const supabase = createClientComponentClient();
 
-  // ✅ createBrowserClient from @supabase/ssr — stores PKCE verifier in cookies,
-  // matching what createServerClient reads in the callback route.
-  // This is the fix for AuthPKCECodeVerifierMissingError.
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
-  const resolveRole = useCallback(
-    async (userId: string): Promise<UserRole | null> => {
-      const apiRole = await fetchRoleFromApi();
-      if (apiRole) return apiRole;
-      console.warn('[resolveRole] API unavailable, falling back to client query');
-      return fetchRoleFromClient(supabase, userId);
-    },
-    [supabase]
-  );
-
+  // ---------------------------------------------------------------------------
+  // On mount: if the user already has a valid session, redirect them immediately.
+  // We never call setChecking(false) on redirect branches so the login form
+  // never flashes for a user who is already logged in.
+  // ---------------------------------------------------------------------------
   const redirectIfLoggedIn = useCallback(async () => {
     try {
-      // Handle error params from the OAuth callback route
+      // Handle error params written by the OAuth callback route.
       const params = new URLSearchParams(window.location.search);
       const callbackError = params.get('error');
       if (callbackError) {
@@ -106,36 +77,44 @@ export default function LoginPage() {
         return;
       }
 
-      const role = await resolveRole(session.user.id);
-
-      if (!role) {
+      // Session exists — ask the server for the role.
+      let role: UserRole;
+      try {
+        role = await fetchRole();
+      } catch {
+        // Profile missing or unauthorized — clear the session and show the form.
         await supabase.auth.signOut();
         setChecking(false);
         return;
       }
 
-      // Keep checking=true — page stays blank during navigation (no form flash)
+      // Keep checking=true so the page stays blank while Next.js navigates.
       Cookies.set('role', role, { expires: 7, path: '/' });
       router.replace(getRedirectPath(role));
     } catch (e) {
       console.error('Session check error:', e);
       setChecking(false);
     }
-  }, [router, supabase, resolveRole]);
+  }, [router, supabase]);
 
   useEffect(() => {
     redirectIfLoggedIn();
   }, [redirectIfLoggedIn]);
 
+  // Show nothing while we verify an existing session.
   if (checking) return null;
 
+  // ---------------------------------------------------------------------------
+  // Email / password login
+  // ---------------------------------------------------------------------------
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
     setLoading(true);
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      // Step 1: Authenticate credentials.
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -145,20 +124,19 @@ export default function LoginPage() {
         return;
       }
 
-      const userId = data.user?.id;
-      if (!userId) {
-        setErr('Login failed. Please try again.');
-        return;
-      }
-
-      const role = await resolveRole(userId);
-
-      if (!role) {
-        setErr('Unable to verify your role. Please contact support.');
+      // Step 2: Fetch role from the server API — bypasses RLS, handles missing
+      // profiles automatically, never exposes the service key to the client.
+      let role: UserRole;
+      try {
+        role = await fetchRole();
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Unable to verify your role. Please contact support.';
+        setErr(message);
         await supabase.auth.signOut();
         return;
       }
 
+      // Step 3: Persist role cookie and redirect.
       Cookies.set('role', role, { expires: 7, path: '/' });
       router.push(getRedirectPath(role));
     } catch (e) {
@@ -169,6 +147,9 @@ export default function LoginPage() {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Google OAuth login — the callback route handles everything after the redirect.
+  // ---------------------------------------------------------------------------
   const handleGoogleLogin = async () => {
     try {
       setErr(null);
@@ -177,15 +158,18 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: getCallbackUrl(),
+          redirectTo: `${window.location.origin}/auth/callback`,
+          // Force the account picker so switching Google accounts always works.
           queryParams: { prompt: 'select_account' },
         },
       });
 
       if (error) {
         setErr(error.message);
-        setLoading(false);
+        setLoading(false); // Reset only if we didn't navigate away.
       }
+      // On success the browser leaves this page — leave loading=true so the
+      // button stays disabled and there's no UI jank during the redirect.
     } catch (e) {
       console.error('Google login failed:', e);
       setErr('Google login failed. Please try again.');
