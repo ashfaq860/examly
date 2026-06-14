@@ -2,12 +2,17 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+const ADMIN_ROLES = ['admin', 'super_admin'];
+
 export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
   const userRole = request.cookies.get('role')?.value;
 
-  // Restrict /admin to admin role
-  if (request.nextUrl.pathname.startsWith('/admin') && userRole !== 'admin') {
-    return NextResponse.redirect(new URL('/auth/login', request.url));
+  // Protect /admin — only admin and super_admin may enter
+  if (pathname.startsWith('/admin')) {
+    if (!userRole || !ADMIN_ROLES.includes(userRole)) {
+      return NextResponse.redirect(new URL('/auth/login', request.url));
+    }
   }
 
   return NextResponse.next();
