@@ -1,23 +1,38 @@
-// src/middleware.ts
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse, type NextRequest } from 'next/server';
 
-const ADMIN_ROLES = ['admin', 'super_admin'];
+export async function middleware(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({ request });
 
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const userRole = request.cookies.get('role')?.value;
-
-  // Protect /admin — only admin and super_admin may enter
-  if (pathname.startsWith('/admin')) {
-    if (!userRole || !ADMIN_ROLES.includes(userRole)) {
-      return NextResponse.redirect(new URL('/auth/login', request.url));
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          );
+          supabaseResponse = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          );
+        },
+      },
     }
-  }
+  );
 
-  return NextResponse.next();
+  // Keeps session alive and syncs cookies on every request
+  await supabase.auth.getUser();
+
+  return supabaseResponse;
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 };

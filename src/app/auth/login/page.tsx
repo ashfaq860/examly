@@ -1,11 +1,11 @@
-//app/auth/login/page.tsx
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import AuthLayout from '@/components/AuthLayout';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import Link from 'next/link';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 
 const ALLOWED_ROLES = ['teacher', 'admin', 'super_admin', 'academy'] as const;
 type UserRole = (typeof ALLOWED_ROLES)[number];
@@ -18,13 +18,6 @@ function getRedirectPath(role: UserRole): string {
   return role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
 }
 
-// ---------------------------------------------------------------------------
-// Returns the correct OAuth callback URL for any environment.
-// NEXT_PUBLIC_SITE_URL must be set in .env:
-//   .env.local       → http://localhost:3000
-//   .env.production  → https://www.examly.pk   (no trailing slash)
-// Falls back to window.location.origin so dev works without the env var.
-// ---------------------------------------------------------------------------
 function getCallbackUrl(): string {
   const base =
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ??
@@ -32,49 +25,35 @@ function getCallbackUrl(): string {
   return `${base}/auth/callback`;
 }
 
-// ---------------------------------------------------------------------------
-// Fetch the user's role via the server API route.
-// Guards against HTML responses (404/500 pages) that would crash JSON.parse.
-// ---------------------------------------------------------------------------
 async function fetchRoleFromApi(): Promise<UserRole | null> {
   try {
     const res = await fetch('/api/auth/get-role', { method: 'GET' });
-
     const contentType = res.headers.get('content-type') ?? '';
     if (!contentType.includes('application/json')) {
-      // API route not found or crashed — fall through to client fallback
       console.warn('[fetchRole] API returned non-JSON, status:', res.status);
       return null;
     }
-
     const body = await res.json();
-
     if (!res.ok || !body.role) return null;
     if (!isAllowedRole(body.role)) return null;
-
     return body.role as UserRole;
   } catch {
     return null;
   }
 }
 
-// ---------------------------------------------------------------------------
-// Fallback: query profiles directly from the client when the API is unreachable.
-// Uses .maybeSingle() — never throws on missing rows (fixes the original {} bug).
-// ---------------------------------------------------------------------------
 async function fetchRoleFromClient(
-  supabase: ReturnType<typeof createClientComponentClient>,
+  supabase: ReturnType<typeof createBrowserClient>,
   userId: string
 ): Promise<UserRole | null> {
   const { data, error } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', userId)
-    .maybeSingle(); // ← key fix: returns null instead of error when no row found
+    .maybeSingle();
 
   if (error || !data?.role) return null;
   if (!isAllowedRole(data.role)) return null;
-
   return data.role as UserRole;
 }
 
@@ -86,46 +65,51 @@ export default function LoginPage() {
   const [checking, setChecking] = useState(true);
 
   const router = useRouter();
-  const supabase = createClientComponentClient();
 
-  // ---------------------------------------------------------------------------
-  // Resolve role: try the API first, fall back to direct client query.
-  // This means login works even if the API route has a path/config issue.
-  // ---------------------------------------------------------------------------
+  // ✅ Single stable instance — createBrowserClient from @supabase/ssr
+  const supabase = useMemo(
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      ),
+    []
+  );
+
   const resolveRole = useCallback(
     async (userId: string): Promise<UserRole | null> => {
       const apiRole = await fetchRoleFromApi();
       if (apiRole) return apiRole;
-
-      // API unavailable — fall back to direct query
       console.warn('[resolveRole] Falling back to client-side profile query');
       return fetchRoleFromClient(supabase, userId);
     },
     [supabase]
   );
 
-  // ---------------------------------------------------------------------------
-  // On mount: silently redirect already-logged-in users.
-  // Never calls setChecking(false) on redirect branches → no login form flash.
-  // ---------------------------------------------------------------------------
   const redirectIfLoggedIn = useCallback(async () => {
     try {
-      // Show error messages forwarded by the OAuth callback route
       const params = new URLSearchParams(window.location.search);
       const callbackError = params.get('error');
       if (callbackError) {
         const messages: Record<string, string> = {
           missing_code: 'OAuth flow was interrupted. Please try again.',
           auth_failed: 'Authentication failed. Please try again.',
-          profile_creation_failed: 'Could not create your profile. Please contact support.',
-          unauthorized_role: 'Your account does not have access to this portal.',
+          profile_creation_failed:
+            'Could not create your profile. Please contact support.',
+          unauthorized_role:
+            'Your account does not have access to this portal.',
         };
-        setErr(messages[callbackError] ?? `Login error: ${callbackError.replace(/_/g, ' ')}`);
+        setErr(
+          messages[callbackError] ??
+            `Login error: ${callbackError.replace(/_/g, ' ')}`
+        );
         setChecking(false);
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
       if (!session?.user) {
         setChecking(false);
@@ -140,7 +124,6 @@ export default function LoginPage() {
         return;
       }
 
-      // Keep checking=true — page stays blank while Next.js navigates
       Cookies.set('role', role, { expires: 7, path: '/' });
       router.replace(getRedirectPath(role));
     } catch (e) {
@@ -155,19 +138,14 @@ export default function LoginPage() {
 
   if (checking) return null;
 
-  // ---------------------------------------------------------------------------
-  // Email / password login
-  // ---------------------------------------------------------------------------
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
     setLoading(true);
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error: signInError } =
+        await supabase.auth.signInWithPassword({ email, password });
 
       if (signInError) {
         setErr(signInError.message);
@@ -188,12 +166,6 @@ export default function LoginPage() {
         return;
       }
 
-      if (!isAllowedRole(role)) {
-        setErr('Access denied: your account cannot access this portal.');
-        await supabase.auth.signOut();
-        return;
-      }
-
       Cookies.set('role', role, { expires: 7, path: '/' });
       router.push(getRedirectPath(role));
     } catch (e) {
@@ -204,20 +176,15 @@ export default function LoginPage() {
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Google OAuth — callback route handles session + profile creation
-  // ---------------------------------------------------------------------------
   const handleGoogleLogin = async () => {
     try {
       setErr(null);
       setLoading(true);
 
-      const callbackUrl = getCallbackUrl();
-
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: callbackUrl,
+          redirectTo: getCallbackUrl(),
           queryParams: { prompt: 'select_account' },
         },
       });
@@ -226,7 +193,7 @@ export default function LoginPage() {
         setErr(error.message);
         setLoading(false);
       }
-      // No error → browser navigates to Google → leave loading=true
+      // No error → browser navigates away → leave loading=true
     } catch (e) {
       console.error('Google login failed:', e);
       setErr('Google login failed. Please try again.');

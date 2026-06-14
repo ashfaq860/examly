@@ -1,12 +1,10 @@
-// lib/supabase/server.ts
-import { createServerClient as createSSRServerClient } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-// Named clearly to avoid shadowing @supabase/ssr's createServerClient
 export const createSupabaseServerClient = async () => {
   const cookieStore = await cookies();
 
-  return createSSRServerClient(
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {

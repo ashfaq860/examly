@@ -1,21 +1,41 @@
-// app/auth/callback/route.ts
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic'; // ← ADD THIS — prevents static caching
+export const dynamic = 'force-dynamic';
+
+const ALLOWED_ROLES = ['teacher', 'admin', 'super_admin', 'academy'] as const;
+type UserRole = (typeof ALLOWED_ROLES)[number];
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
 
   if (!code) {
-    return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=missing_code`);
+    return NextResponse.redirect(
+      `${requestUrl.origin}/auth/login?error=missing_code`
+    );
   }
 
-  // ✅ FIX 1: Pass `cookies` directly — do NOT await it
-  const supabase = createRouteHandlerClient({ cookies });
+  const cookieStore = await cookies();
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        },
+      },
+    }
+  );
 
   const {
     data: { session },
@@ -24,7 +44,9 @@ export async function GET(request: Request) {
 
   if (exchangeError || !session) {
     console.error('Session exchange error:', exchangeError?.message);
-    return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=auth_failed`);
+    return NextResponse.redirect(
+      `${requestUrl.origin}/auth/login?error=auth_failed`
+    );
   }
 
   try {
@@ -36,10 +58,12 @@ export async function GET(request: Request) {
 
     if (fetchError) {
       console.error('Profile fetch error:', fetchError);
-      return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=auth_failed`);
+      return NextResponse.redirect(
+        `${requestUrl.origin}/auth/login?error=auth_failed`
+      );
     }
 
-    let role = 'teacher';
+    let role: string = 'teacher';
 
     if (!existingProfile) {
       const { error: insertError } = await supabaseAdmin
@@ -68,8 +92,8 @@ export async function GET(request: Request) {
       role = existingProfile.role ?? 'teacher';
     }
 
-    const allowedRoles = ['teacher', 'admin', 'super_admin', 'academy'];
-    if (!allowedRoles.includes(role)) {
+    if (!ALLOWED_ROLES.includes(role as UserRole)) {
+      console.error('Unauthorized role via OAuth:', role);
       await supabase.auth.signOut();
       return NextResponse.redirect(
         `${requestUrl.origin}/auth/login?error=unauthorized_role`
@@ -79,19 +103,23 @@ export async function GET(request: Request) {
     const redirectPath =
       role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
 
-    // ✅ FIX 2: Use NextResponse.redirect and set role cookie on it
-    const response = NextResponse.redirect(`${requestUrl.origin}${redirectPath}`);
+    const response = NextResponse.redirect(
+      `${requestUrl.origin}${redirectPath}`
+    );
+
     response.cookies.set('role', role, {
       path: '/',
       maxAge: 60 * 60 * 24 * 7,
       httpOnly: false,
       sameSite: 'lax',
-      secure: true, // ← ADD: required on HTTPS (production)
+      secure: true,
     });
 
     return response;
   } catch (error) {
     console.error('Callback error:', error);
-    return NextResponse.redirect(`${requestUrl.origin}/auth/login?error=auth_failed`);
+    return NextResponse.redirect(
+      `${requestUrl.origin}/auth/login?error=auth_failed`
+    );
   }
 }
