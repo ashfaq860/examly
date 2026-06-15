@@ -1,17 +1,40 @@
 // src/lib/session.ts
-'use server'
+'use server';
 
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 export async function getCurrentSession() {
-  const supabase = await createSupabaseServerClient()
+  const cookieStore = await cookies();
 
-  // Instead of getSession (insecure), use getUser (verified by Supabase)
-  const { data: { user }, error } = await supabase.auth.getUser()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // setAll called from a Server Component — cookies are read-only, ignore
+          }
+        },
+      },
+    }
+  );
+
+  // getUser() verifies the JWT server-side — never use getSession() on the server
+  const { data: { user }, error } = await supabase.auth.getUser();
+
   if (error) {
-    console.error('Error fetching user:', error)
-    return null
+    console.error('Error fetching user:', error);
+    return null;
   }
 
-  return user
+  return user;
 }

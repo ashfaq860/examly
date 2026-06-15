@@ -1,97 +1,105 @@
-// lib/admin-auth.ts
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+// src/lib/admin-auth.ts
+'use client';
+
+import { createBrowserClient } from '@supabase/ssr';
+
+// Single browser client instance — reuse across calls in the same session
+function getBrowserClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 /**
- * Checks if the current user has admin access
- * @param router Next.js router object for client-side redirects
- * @returns Promise<boolean> True if user is admin, false otherwise
+ * Client-side: checks if the current user has admin access.
+ * Redirects via router if provided and access is denied.
  */
 export const checkAdminAccess = async (router?: any): Promise<boolean> => {
   try {
-    const supabase = createSupabaseBrowserClient()
-    
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabase = getBrowserClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      if (router) {
-        router.push('/auth/login')
-      }
-      return false
+      router?.push('/auth/login');
+      return false;
     }
 
-    const { data: roleData, error: rpcError } = await supabase
-      .rpc('get_user_role', { user_id: user.id })
-    
-    if (rpcError) {
-      console.error('Error fetching user role:', rpcError)
-      return false
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (error || !profile?.role) {
+      console.error('Error fetching user role:', error);
+      return false;
     }
 
-    if (roleData !== "admin") {
-      if (router) {
-        router.push('/unauthorized')
-      }
-      return false
+    if (profile.role !== 'admin' && profile.role !== 'super_admin') {
+      router?.push('/unauthorized');
+      return false;
     }
 
-    return true
+    return true;
   } catch (error) {
-    console.error('Error checking admin access:', error)
-    return false
+    console.error('Error checking admin access:', error);
+    return false;
   }
-}
+};
 
 /**
- * Gets the current user's role
- * @returns Promise<string | null> User role or null if not authenticated
+ * Client-side: gets the current user's role from their profile.
  */
 export const getUserRole = async (): Promise<string | null> => {
   try {
-    const supabase = createSupabaseBrowserClient()
-    
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return null
+    const supabase = getBrowserClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (error || !profile?.role) {
+      console.error('Error fetching user role:', error);
+      return null;
     }
 
-    const { data: roleData, error: rpcError } = await supabase
-      .rpc('get_user_role', { user_id: user.id })
-    
-    if (rpcError) {
-      console.error('Error fetching user role:', rpcError)
-      return null
-    }
-
-    return roleData
+    return profile.role;
   } catch (error) {
-    console.error('Error getting user role:', error)
-    return null
+    console.error('Error getting user role:', error);
+    return null;
   }
-}
+};
 
 /**
- * Server-side admin check for API routes or server components
+ * Server-side admin check — import and call from Server Components or API routes.
+ * Prefer using requireRole() from api-auth.ts in Route Handlers instead.
  */
 export const checkAdminAccessServer = async (): Promise<boolean> => {
+  // Dynamically import server-only modules to keep this file client-safe
+  const { getCurrentSession } = await import('@/lib/session');
+  const { supabaseAdmin } = await import('@/lib/supabaseAdmin');
+
   try {
-    const { createSupabaseServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createSupabaseServerClient()
-    
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return false
-    }
+    const user = await getCurrentSession();
+    if (!user) return false;
 
-    const { data: roleData, error: rpcError } = await supabase
-      .rpc('get_user_role', { user_id: user.id })
-    
-    if (rpcError) {
-      console.error('Error fetching user role:', rpcError)
-      return false
-    }
+    const { data: profile, error } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
 
-    return roleData === "admin"
+    if (error || !profile?.role) return false;
+
+    return profile.role === 'admin' || profile.role === 'super_admin';
   } catch (error) {
-    console.error('Error checking admin access (server):', error)
-    return false
+    console.error('Error checking admin access (server):', error);
+    return false;
   }
-}
+};
