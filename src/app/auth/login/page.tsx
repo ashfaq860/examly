@@ -5,7 +5,8 @@ import AuthLayout from '@/components/AuthLayout';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import Link from 'next/link';
-import { createBrowserClient } from '@supabase/ssr';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 const ALLOWED_ROLES = ['teacher', 'admin', 'super_admin', 'academy'] as const;
 type UserRole = (typeof ALLOWED_ROLES)[number];
@@ -19,10 +20,7 @@ function getRedirectPath(role: UserRole): string {
 }
 
 function getCallbackUrl(): string {
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ??
-    window.location.origin;
-  return `${base}/auth/callback`;
+  return `${window.location.origin}/auth/callback`;
 }
 
 async function fetchRoleFromApi(): Promise<UserRole | null> {
@@ -43,7 +41,7 @@ async function fetchRoleFromApi(): Promise<UserRole | null> {
 }
 
 async function fetchRoleFromClient(
-  supabase: ReturnType<typeof createBrowserClient>,
+  supabase: SupabaseClient,
   userId: string
 ): Promise<UserRole | null> {
   const { data, error } = await supabase
@@ -66,15 +64,7 @@ export default function LoginPage() {
 
   const router = useRouter();
 
-  // ✅ Single stable instance — createBrowserClient from @supabase/ssr
-  const supabase = useMemo(
-    () =>
-      createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      ),
-    []
-  );
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   const resolveRole = useCallback(
     async (userId: string): Promise<UserRole | null> => {

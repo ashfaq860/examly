@@ -13,6 +13,7 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const origin = requestUrl.origin;
   const code = requestUrl.searchParams.get('code');
+  const supabaseResponse = NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
 
   if (!code) {
     return NextResponse.redirect(`${origin}/auth/login?error=missing_code`);
@@ -22,8 +23,6 @@ export async function GET(request: Request) {
 
   // Build the final redirect response FIRST so we can write cookies onto it
   // inside setAll — this is the key fix for PKCE verifier not reaching browser
-  const successResponse = NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -38,12 +37,8 @@ export async function GET(request: Request) {
         // written by createBrowserClient is never readable server-side.
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            try { cookieStore.set(name, value, options); } catch {}
-            successResponse.cookies.set(name, value, {
-              ...options,
-              sameSite: 'lax',
-              secure: process.env.NODE_ENV === 'production',
-            });
+            cookieStore.set(name, value, options);
+            supabaseResponse.cookies.set(name, value, options);
           });
         },
       },
@@ -109,14 +104,8 @@ export async function GET(request: Request) {
     // Update the response to redirect to the correct destination
     const finalResponse = NextResponse.redirect(`${origin}${redirectPath}`);
 
-    // Copy all auth cookies from successResponse onto finalResponse
-    successResponse.cookies.getAll().forEach((cookie) => {
-      finalResponse.cookies.set(cookie.name, cookie.value, {
-        path: '/',
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: cookie.name.startsWith('sb-'),
-      });
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      finalResponse.cookies.set(cookie);
     });
 
     // Role cookie — JS-readable
