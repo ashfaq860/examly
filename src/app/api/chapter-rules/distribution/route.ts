@@ -1,11 +1,11 @@
 // app/api/chapter-rules/distribution/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createSupabaseRouteHandlerClient();
+    const supabase = await createSupabaseServerClient();
     
     const { subjectId, chapterIds, questionTypes } = await request.json();
     

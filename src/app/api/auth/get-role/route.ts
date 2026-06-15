@@ -1,31 +1,43 @@
-// app/api/auth/get-role/route.ts
+// src/app/api/auth/get-role/route.ts
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-// Required in Next.js 15 for route handlers that read cookies
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const supabase = await createSupabaseRouteHandlerClient();
+    const cookieStore = await cookies();
 
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll(); },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              );
+            } catch {}
+          },
+        },
+      }
+    );
 
-    if (sessionError || !session?.user) {
+    // getUser() validates JWT server-side — more reliable than getSession()
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const userId = session.user.id;
-
-    // maybeSingle() returns null (not an error) when no row is found
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('role')
-      .eq('id', userId)
+      .eq('id', user.id)
       .maybeSingle();
 
     if (profileError) {
@@ -33,19 +45,18 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch role' }, { status: 500 });
     }
 
-    // No profile yet — create one with default role 'teacher'
     if (!profile) {
       const fallbackName =
-        session.user.user_metadata?.full_name ||
-        session.user.user_metadata?.name ||
-        session.user.email?.split('@')[0] ||
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        user.email?.split('@')[0] ||
         'User';
 
       const { data: newProfile, error: insertError } = await supabaseAdmin
         .from('profiles')
         .insert({
-          id: userId,
-          email: session.user.email,
+          id: user.id,
+          email: user.email,
           full_name: fallbackName,
           role: 'teacher',
           login_method: 'email',

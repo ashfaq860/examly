@@ -1,10 +1,10 @@
 // src/app/api/subject-rules/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createSupabaseRouteHandlerClient();
+    const supabase = await createSupabaseServerClient();
     
     // Check authentication
     const { data: { session } } = await supabase.auth.getSession();
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
 // Update the POST method too
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createSupabaseRouteHandlerClient();
+    const supabase = await createSupabaseServerClient();
     
     // Check authentication
     const { data: { session } } = await supabase.auth.getSession();
@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const supabase = await createSupabaseRouteHandlerClient();
+    const supabase = await createSupabaseServerClient();
     
     // Check authentication
     const { data: { session } } = await supabase.auth.getSession();
@@ -319,7 +319,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createSupabaseRouteHandlerClient();
+    const supabase = await createSupabaseServerClient();
     
     // Check authentication
     const { data: { session } } = await supabase.auth.getSession();

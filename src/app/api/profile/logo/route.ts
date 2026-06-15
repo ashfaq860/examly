@@ -1,11 +1,11 @@
 // app/api/profile/logo/route.ts
 import { NextResponse } from "next/server";
-import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createSupabaseRouteHandlerClient();
+    const supabase = await createSupabaseServerClient();
     
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
 
 export async function DELETE() {
   try {
-    const supabase = await createSupabaseRouteHandlerClient();
+    const supabase = await createSupabaseServerClient();
     
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     

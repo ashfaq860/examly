@@ -1,10 +1,10 @@
-import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export async function GET() {
   try {
-    const supabase = await createSupabaseRouteHandlerClient()
+    const supabase = await createSupabaseServerClient()
     
     // Check if user is authenticated
     const { data: { session } } = await supabase.auth.getSession()

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   console.log("✅ API /api/instituteName was accessed");
 
   try {
-    const supabase = await createSupabaseRouteHandlerClient()
+    const supabase = await createSupabaseServerClient()
     
     const { data: { session } } = await supabase.auth.getSession()
     

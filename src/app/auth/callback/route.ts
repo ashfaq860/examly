@@ -1,3 +1,4 @@
+// src/app/auth/callback/route.ts
 import { createServerClient } from '@supabase/ssr';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { cookies } from 'next/headers';
@@ -10,15 +11,18 @@ type UserRole = (typeof ALLOWED_ROLES)[number];
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
+  const origin = requestUrl.origin;
   const code = requestUrl.searchParams.get('code');
 
   if (!code) {
-    return NextResponse.redirect(
-      `${requestUrl.origin}/auth/login?error=missing_code`
-    );
+    return NextResponse.redirect(`${origin}/auth/login?error=missing_code`);
   }
 
   const cookieStore = await cookies();
+
+  // Build the final redirect response FIRST so we can write cookies onto it
+  // inside setAll — this is the key fix for PKCE verifier not reaching browser
+  const successResponse = NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,9 +32,18 @@ export async function GET(request: Request) {
         getAll() {
           return cookieStore.getAll();
         },
+        // ✅ Write cookies onto BOTH cookieStore AND the response object.
+        // Without writing to the response, the browser never receives
+        // the session cookies after the redirect and the PKCE verifier
+        // written by createBrowserClient is never readable server-side.
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
+            try { cookieStore.set(name, value, options); } catch {}
+            successResponse.cookies.set(name, value, {
+              ...options,
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production',
+            });
           });
         },
       },
@@ -44,9 +57,7 @@ export async function GET(request: Request) {
 
   if (exchangeError || !session) {
     console.error('Session exchange error:', exchangeError?.message);
-    return NextResponse.redirect(
-      `${requestUrl.origin}/auth/login?error=auth_failed`
-    );
+    return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
   }
 
   try {
@@ -58,9 +69,7 @@ export async function GET(request: Request) {
 
     if (fetchError) {
       console.error('Profile fetch error:', fetchError);
-      return NextResponse.redirect(
-        `${requestUrl.origin}/auth/login?error=auth_failed`
-      );
+      return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
     }
 
     let role: string = 'teacher';
@@ -84,42 +93,45 @@ export async function GET(request: Request) {
 
       if (insertError) {
         console.error('Profile insert error:', insertError);
-        return NextResponse.redirect(
-          `${requestUrl.origin}/auth/login?error=profile_creation_failed`
-        );
+        return NextResponse.redirect(`${origin}/auth/login?error=profile_creation_failed`);
       }
     } else {
       role = existingProfile.role ?? 'teacher';
     }
 
     if (!ALLOWED_ROLES.includes(role as UserRole)) {
-      console.error('Unauthorized role via OAuth:', role);
       await supabase.auth.signOut();
-      return NextResponse.redirect(
-        `${requestUrl.origin}/auth/login?error=unauthorized_role`
-      );
+      return NextResponse.redirect(`${origin}/auth/login?error=unauthorized_role`);
     }
 
-    const redirectPath =
-      role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
+    const redirectPath = role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
 
-    const response = NextResponse.redirect(
-      `${requestUrl.origin}${redirectPath}`
-    );
+    // Update the response to redirect to the correct destination
+    const finalResponse = NextResponse.redirect(`${origin}${redirectPath}`);
 
-    response.cookies.set('role', role, {
+    // Copy all auth cookies from successResponse onto finalResponse
+    successResponse.cookies.getAll().forEach((cookie) => {
+      finalResponse.cookies.set(cookie.name, cookie.value, {
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: cookie.name.startsWith('sb-'),
+      });
+    });
+
+    // Role cookie — JS-readable
+    finalResponse.cookies.set('role', role, {
       path: '/',
       maxAge: 60 * 60 * 24 * 7,
       httpOnly: false,
       sameSite: 'lax',
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
     });
 
-    return response;
+    return finalResponse;
+
   } catch (error) {
     console.error('Callback error:', error);
-    return NextResponse.redirect(
-      `${requestUrl.origin}/auth/login?error=auth_failed`
-    );
+    return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
   }
 }
