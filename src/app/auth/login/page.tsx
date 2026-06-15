@@ -20,7 +20,10 @@ function getRedirectPath(role: UserRole): string {
 }
 
 function getCallbackUrl(): string {
-  return `${window.location.origin}/auth/callback`;
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ??
+    window.location.origin;
+  return `${base}/auth/callback`;
 }
 
 async function fetchRoleFromApi(): Promise<UserRole | null> {
@@ -66,6 +69,18 @@ export default function LoginPage() {
 
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
+  // Reset loading if user hits browser Back after Google OAuth redirect
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setLoading(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () =>
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   const resolveRole = useCallback(
     async (userId: string): Promise<UserRole | null> => {
       const apiRole = await fetchRoleFromApi();
@@ -98,15 +113,16 @@ export default function LoginPage() {
       }
 
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      if (!session?.user) {
+      if (userError || !user) {
         setChecking(false);
         return;
       }
 
-      const role = await resolveRole(session.user.id);
+      const role = await resolveRole(user.id);
 
       if (!role) {
         await supabase.auth.signOut();
@@ -117,7 +133,7 @@ export default function LoginPage() {
       Cookies.set('role', role, { expires: 7, path: '/' });
       router.replace(getRedirectPath(role));
     } catch (e) {
-      console.error('Session check error:', e);
+      console.error('[login] Session check error:', e);
       setChecking(false);
     }
   }, [router, supabase, resolveRole]);
@@ -159,7 +175,7 @@ export default function LoginPage() {
       Cookies.set('role', role, { expires: 7, path: '/' });
       router.push(getRedirectPath(role));
     } catch (e) {
-      console.error('Unexpected login error:', e);
+      console.error('[login] Unexpected error:', e);
       setErr('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -183,9 +199,8 @@ export default function LoginPage() {
         setErr(error.message);
         setLoading(false);
       }
-      // No error → browser navigates away → leave loading=true
     } catch (e) {
-      console.error('Google login failed:', e);
+      console.error('[login] Google login failed:', e);
       setErr('Google login failed. Please try again.');
       setLoading(false);
     }

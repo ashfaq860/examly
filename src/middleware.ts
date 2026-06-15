@@ -1,3 +1,4 @@
+// src/middleware.ts
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
@@ -25,7 +26,6 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Keeps session alive and syncs cookies on every request
   await supabase.auth.getUser();
 
   return supabaseResponse;
@@ -33,6 +33,13 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    /*
+     * Exclude:
+     * - _next/static, _next/image, favicon
+     * - /auth/callback  ← CRITICAL: must not run middleware here
+     * - /api/auth/*     ← auth API routes handle their own sessions
+     * - static files
+     */
+    '/((?!_next/static|_next/image|favicon.ico|auth/callback|api/auth|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
