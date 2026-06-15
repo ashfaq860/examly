@@ -1,8 +1,6 @@
-// src/app/auth/callback/route.ts
 import { createServerClient } from '@supabase/ssr';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -10,7 +8,7 @@ export const runtime = 'nodejs';
 const ALLOWED_ROLES = ['teacher', 'admin', 'super_admin', 'academy'] as const;
 type UserRole = (typeof ALLOWED_ROLES)[number];
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const origin = requestUrl.origin;
   const code = requestUrl.searchParams.get('code');
@@ -19,36 +17,26 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/auth/login?error=missing_code`);
   }
 
-  const cookieStore = await cookies();
+  // ✅ Build the success redirect response FIRST.
+  // We write session cookies onto THIS response so the browser receives them.
+  // The redirect destination will be updated below once we know the role.
+  const response = NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
 
-  // DEBUG — temporary, remove after confirming fix
-  const allCookies = cookieStore.getAll();
-  console.log(
-    '[callback] cookies present:',
-    allCookies.map((c) => c.name)
-  );
-  const hasVerifier = allCookies.some((c) =>
-    c.name.includes('code-verifier')
-  );
-  console.log('[callback] PKCE verifier cookie present:', hasVerifier);
-
-  // ✅ Single supabase client — reads AND writes only via cookieStore.
-  // Do NOT create a response before the exchange. The session cookies
-  // written by exchangeCodeForSession go into cookieStore, which we
-  // then copy onto the final response below.
+  // ✅ Read cookies from the INCOMING REQUEST (where the verifier lives).
+  // Write cookies onto the OUTGOING RESPONSE (so browser gets the session).
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {
-          return cookieStore.getAll();
+          // Read from the request — this is where the PKCE verifier cookie is
+          return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          // Write session cookies into the cookieStore only.
-          // We copy them onto the response manually after building it.
+          // Write onto the response — this is what the browser will receive
           cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
+            response.cookies.set(name, value, options ?? {});
           });
         },
       },
@@ -62,7 +50,7 @@ export async function GET(request: Request) {
 
   if (exchangeError || !session) {
     console.error('[callback] Session exchange error:', exchangeError?.message);
-    return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
+    return response; // already points to /auth/login?error=auth_failed
   }
 
   try {
@@ -74,7 +62,7 @@ export async function GET(request: Request) {
 
     if (fetchError) {
       console.error('[callback] Profile fetch error:', fetchError);
-      return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
+      return response;
     }
 
     let role: string = 'teacher';
@@ -108,7 +96,6 @@ export async function GET(request: Request) {
 
     if (!ALLOWED_ROLES.includes(role as UserRole)) {
       console.error('[callback] Unauthorized role:', role);
-      await supabase.auth.signOut();
       return NextResponse.redirect(
         `${origin}/auth/login?error=unauthorized_role`
       );
@@ -117,23 +104,12 @@ export async function GET(request: Request) {
     const redirectPath =
       role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
 
-    // ✅ Build the ONE final response here — after the exchange succeeds.
-    const response = NextResponse.redirect(`${origin}${redirectPath}`);
+    // ✅ Now redirect to the correct destination.
+    // Reuse the same response object so session cookies set by setAll() above
+    // are preserved — do NOT create a new NextResponse here.
+    response.headers.set('Location', `${origin}${redirectPath}`);
 
-    // ✅ Copy ALL cookies that were written into cookieStore during
-    // exchangeCodeForSession onto the outgoing response so the browser
-    // receives the session tokens (sb-*-auth-token cookies).
-    cookieStore.getAll().forEach((cookie) => {
-      response.cookies.set(cookie.name, cookie.value, {
-        path: '/',
-        // Preserve httpOnly/secure/sameSite for auth token cookies
-        httpOnly: cookie.name.startsWith('sb-'),
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-      });
-    });
-
-    // Role cookie — JS-readable for client-side role checks
+    // Role cookie — JS-readable
     response.cookies.set('role', role, {
       path: '/',
       maxAge: 60 * 60 * 24 * 7,
@@ -143,8 +119,9 @@ export async function GET(request: Request) {
     });
 
     return response;
+
   } catch (error) {
     console.error('[callback] Unexpected error:', error);
-    return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
+    return response;
   }
 }
