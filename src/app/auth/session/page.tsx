@@ -1,8 +1,6 @@
 // src/app/auth/session/page.tsx
-// Client-side session handler for implicit OAuth flow.
-// Supabase puts the access_token in the URL fragment (#access_token=...).
-// This page reads it, lets the Supabase client establish the session,
-// then fetches the role and redirects to the correct page.
+// Fallback handler — if the callback couldn't exchange the code server-side,
+// the client tries to recover the session from whatever Supabase stored.
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -21,44 +19,33 @@ export default function AuthSessionPage() {
 
     const handle = async () => {
       try {
-        // Give Supabase JS time to parse the fragment and set the session cookie
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        const { data: { session }, error } = await supabase.auth.getSession();
-
-        if (error || !session?.user) {
-          console.error('No session after OAuth:', error);
-          router.replace('/auth/login?error=auth_failed');
-          return;
-        }
-
-        setStatus('Verifying your account…');
-
-        // Try API first (server-side, bypasses RLS)
-        let role: string | null = null;
-        try {
-          const res = await fetch('/api/auth/get-role');
-          if (res.ok) {
-            const body = await res.json();
-            role = body.role ?? null;
+        // onAuthStateChange fires when Supabase processes the fragment
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            if (event === 'SIGNED_IN' && session?.user) {
+              subscription.unsubscribe();
+              setStatus('Verifying your account…');
+              await resolveAndRedirect(session.user.id, supabase);
+            }
           }
-        } catch {}
+        );
 
-        // Fallback: direct client query
-        if (!role) {
-          const { data } = await supabase
-            .from('profiles').select('role')
-            .eq('id', session.user.id).maybeSingle();
-          role = data?.role ?? null;
-        }
+        // Also check immediately in case session is already set
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const { data: { session } } = await supabase.auth.getSession();
 
-        if (!role || !ALLOWED_ROLES.includes(role as UserRole)) {
-          router.replace('/auth/login?error=unauthorized_role');
+        if (session?.user) {
+          subscription.unsubscribe();
+          setStatus('Verifying your account…');
+          await resolveAndRedirect(session.user.id, supabase);
           return;
         }
 
-        Cookies.set('role', role, { expires: 7, path: '/' });
-        router.replace(role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard');
+        // After 5 seconds with no session, give up
+        setTimeout(() => {
+          subscription.unsubscribe();
+          router.replace('/auth/login?error=auth_failed');
+        }, 5000);
 
       } catch (err) {
         console.error('Session page error:', err);
@@ -69,13 +56,43 @@ export default function AuthSessionPage() {
     handle();
   }, [router]);
 
+  async function resolveAndRedirect(
+    userId: string,
+    supabase: ReturnType<typeof createSupabaseBrowserClient>
+  ) {
+    let role: string | null = null;
+
+    try {
+      const res = await fetch('/api/auth/get-role');
+      if (res.ok) {
+        const body = await res.json();
+        role = body.role ?? null;
+      }
+    } catch {}
+
+    if (!role) {
+      const { data } = await supabase
+        .from('profiles').select('role').eq('id', userId).maybeSingle();
+      role = data?.role ?? null;
+    }
+
+    if (!role || !ALLOWED_ROLES.includes(role as UserRole)) {
+      router.replace('/auth/login?error=unauthorized_role');
+      return;
+    }
+
+    Cookies.set('role', role, { expires: 7, path: '/' });
+    router.replace(role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard');
+  }
+
   return (
     <div style={{
       display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', minHeight: '100vh'
+      alignItems: 'center', justifyContent: 'center', minHeight: '100vh',
+      gap: '1rem'
     }}>
-      <div className="spinner-border text-primary mb-3" role="status" />
-      <p className="text-muted">{status}</p>
+      <div className="spinner-border text-primary" role="status" />
+      <p className="text-muted mb-0">{status}</p>
     </div>
   );
 }
