@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/ssr';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,8 +11,6 @@ type UserRole = (typeof ALLOWED_ROLES)[number];
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const PROJECT_REF = SUPABASE_URL.split('//')[1].split('.')[0];
-const VERIFIER_COOKIE = `sb-${PROJECT_REF}-auth-token-code-verifier`;
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -27,38 +26,44 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/auth/session`);
   }
 
+  // 1. Properly pull Next.js 15 async cookies into memory
   const cookieStore = await cookies();
-  const codeVerifier = cookieStore.get(VERIFIER_COOKIE)?.value;
+  
+  // Force sync reading of headers to make sure Vercel/Next reads the request state completely
+  cookieStore.getAll(); 
 
-  if (!codeVerifier) {
-    console.error('[callback] Verifier cookie missing');
-    return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
-  }
+  // 2. Initialize a standard server client purely to manage token exchange safely
+  let supabaseSessionError = false;
+  let tokensData: any = null;
 
-  // Exchange code + verifier for tokens
-  const tokenRes = await fetch(
-    `${SUPABASE_URL}/auth/v1/token?grant_type=pkce`,
+  const supabaseExchangeClient = createServerClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
     {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          // Inside a route handler, we can write back to cookies using the response instead.
+          // We can let the exchange client read them safely here.
+        },
       },
-      body: JSON.stringify({
-        auth_code: code,
-        code_verifier: codeVerifier,
-      }),
     }
   );
 
-  if (!tokenRes.ok) {
-    const err = await tokenRes.text();
-    console.error('[callback] Token exchange failed:', err);
+  // 3. Exchange code for session using native Supabase SSR methods 
+  // This automatically reads the correct verifier cookie key name with zero guessing.
+  const { data: exchangeData, error: exchangeError } = 
+    await supabaseExchangeClient.auth.exchangeCodeForSession(code);
+
+  if (exchangeError || !exchangeData?.session) {
+    console.error('[callback] Token exchange failed via SDK:', exchangeError?.message);
     return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
   }
 
-  const tokens = await tokenRes.json();
-  const user = tokens.user;
+  const session = exchangeData.session;
+  const user = session.user;
 
   if (!user?.id) {
     return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
@@ -77,8 +82,8 @@ export async function GET(request: Request) {
   // so Supabase JS writes them in its own chunked format correctly.
   // -----------------------------------------------------------------------
   const tempSession = JSON.stringify({
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
     role,
   });
 
@@ -103,8 +108,9 @@ export async function GET(request: Request) {
     secure: process.env.NODE_ENV === 'production',
   });
 
-  // Clear used verifier
-  response.cookies.delete(VERIFIER_COOKIE);
+  // 4. Safely clear out the standard verifier cookie keys using standard SDK logic cleanups
+  const projectRef = SUPABASE_URL.split('//')[1].split('.')[0];
+  response.cookies.delete(`sb-${projectRef}-auth-token-code-verifier`);
 
   return response;
 }
