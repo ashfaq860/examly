@@ -26,20 +26,24 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // Refresh session if expired — required for Server Components to have fresh session
   await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+  const role = request.cookies.get('role')?.value;
+
+  // Protect /admin — only admin and super_admin
+  if (pathname.startsWith('/admin')) {
+    if (role !== 'admin' && role !== 'super_admin') {
+      return NextResponse.redirect(new URL('/auth/login', request.url));
+    }
+  }
 
   return supabaseResponse;
 }
 
 export const config = {
   matcher: [
-    /*
-     * Exclude:
-     * - _next/static, _next/image, favicon
-     * - /auth/callback  ← CRITICAL: must not run middleware here
-     * - /api/auth/*     ← auth API routes handle their own sessions
-     * - static files
-     */
-    '/((?!_next/static|_next/image|favicon.ico|auth/callback|api/auth|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|auth/callback|auth/session|api/auth|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

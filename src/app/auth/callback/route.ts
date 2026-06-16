@@ -1,8 +1,12 @@
 // src/app/auth/callback/route.ts
+// With implicit flow, Supabase sends the access_token in the URL *fragment* (#),
+// which servers cannot read. So this route only needs to handle the rare case
+// where a code param appears (e.g. email magic links), and redirect everything
+// else to /auth/session where the client reads the fragment.
+import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,114 +17,109 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const origin = requestUrl.origin;
   const code = requestUrl.searchParams.get('code');
-  const supabaseResponse = NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
+  const errorParam = requestUrl.searchParams.get('error');
 
-  if (!code) {
-    return NextResponse.redirect(`${origin}/auth/login?error=missing_code`);
+  if (errorParam) {
+    console.error('OAuth provider error:', errorParam);
+    return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
   }
 
-  const cookieStore = await cookies();
+  // -----------------------------------------------------------------------
+  // Implicit flow: token arrives in the URL fragment (#access_token=...).
+  // Fragments are never sent to the server, so redirect to the client-side
+  // /auth/session page which reads the fragment and establishes the session.
+  // -----------------------------------------------------------------------
+  if (!code) {
+    return NextResponse.redirect(`${origin}/auth/session`);
+  }
 
-  // Build the final redirect response FIRST so we can write cookies onto it
-  // inside setAll — this is the key fix for PKCE verifier not reaching browser
+  // -----------------------------------------------------------------------
+  // Code flow (magic links, email OTP): exchange the code for a session.
+  // -----------------------------------------------------------------------
+  const cookieStore = await cookies();
+  const response = NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        // ✅ Write cookies onto BOTH cookieStore AND the response object.
-        // Without writing to the response, the browser never receives
-        // the session cookies after the redirect and the PKCE verifier
-        // written by createBrowserClient is never readable server-side.
+        getAll() { return cookieStore.getAll(); },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-            supabaseResponse.cookies.set(name, value, options);
+            try { cookieStore.set(name, value, options); } catch {}
+            response.cookies.set(name, value, {
+              ...options,
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production',
+            });
           });
         },
       },
     }
   );
 
-  const {
-    data: { session },
-    error: exchangeError,
-  } = await supabase.auth.exchangeCodeForSession(code);
+  const { data: { session }, error: exchangeError } =
+    await supabase.auth.exchangeCodeForSession(code);
 
   if (exchangeError || !session) {
-    console.error('Session exchange error:', exchangeError?.message);
-    return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
+    console.error('Code exchange error:', exchangeError?.message);
+    // Fall through to session page — client may still recover
+    return NextResponse.redirect(`${origin}/auth/session`);
   }
 
-  try {
-    const { data: existingProfile, error: fetchError } = await supabaseAdmin
-      .from('profiles')
-      .select('id, role')
-      .eq('id', session.user.id)
-      .maybeSingle();
+  await ensureProfile(session.user);
 
-    if (fetchError) {
-      console.error('Profile fetch error:', fetchError);
-      return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
-    }
+  const role = await getRole(session.user.id);
+  if (!role || !ALLOWED_ROLES.includes(role as UserRole)) {
+    return NextResponse.redirect(`${origin}/auth/login?error=unauthorized_role`);
+  }
 
-    let role: string = 'teacher';
+  const finalResponse = NextResponse.redirect(
+    `${origin}${role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard'}`
+  );
 
-    if (!existingProfile) {
-      const { error: insertError } = await supabaseAdmin
-        .from('profiles')
-        .insert({
-          id: session.user.id,
-          email: session.user.email,
-          full_name:
-            session.user.user_metadata?.name ||
-            session.user.user_metadata?.full_name ||
-            session.user.email?.split('@')[0] ||
-            'User',
-          role: 'teacher',
-          login_method: 'google',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-
-      if (insertError) {
-        console.error('Profile insert error:', insertError);
-        return NextResponse.redirect(`${origin}/auth/login?error=profile_creation_failed`);
-      }
-    } else {
-      role = existingProfile.role ?? 'teacher';
-    }
-
-    if (!ALLOWED_ROLES.includes(role as UserRole)) {
-      await supabase.auth.signOut();
-      return NextResponse.redirect(`${origin}/auth/login?error=unauthorized_role`);
-    }
-
-    const redirectPath = role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
-
-    // Update the response to redirect to the correct destination
-    const finalResponse = NextResponse.redirect(`${origin}${redirectPath}`);
-
-    supabaseResponse.cookies.getAll().forEach((cookie) => {
-      finalResponse.cookies.set(cookie);
-    });
-
-    // Role cookie — JS-readable
-    finalResponse.cookies.set('role', role, {
+  // Copy session cookies onto final response
+  response.cookies.getAll().forEach(({ name, value }) => {
+    finalResponse.cookies.set(name, value, {
       path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-      httpOnly: false,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
+      httpOnly: name.startsWith('sb-'),
     });
+  });
 
-    return finalResponse;
+  finalResponse.cookies.set('role', role, {
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7,
+    httpOnly: false,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  });
 
-  } catch (error) {
-    console.error('Callback error:', error);
-    return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
+  return finalResponse;
+}
+
+async function getRole(userId: string): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from('profiles').select('role').eq('id', userId).maybeSingle();
+  return data?.role ?? null;
+}
+
+async function ensureProfile(user: any) {
+  const { data: existing } = await supabaseAdmin
+    .from('profiles').select('id').eq('id', user.id).maybeSingle();
+
+  if (!existing) {
+    await supabaseAdmin.from('profiles').insert({
+      id: user.id,
+      email: user.email,
+      full_name: user.user_metadata?.name || user.user_metadata?.full_name ||
+        user.email?.split('@')[0] || 'User',
+      role: 'teacher',
+      login_method: 'google',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
   }
 }

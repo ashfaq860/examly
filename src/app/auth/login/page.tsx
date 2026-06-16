@@ -1,12 +1,11 @@
+// src/app/auth/login/page.tsx
 'use client';
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import AuthLayout from '@/components/AuthLayout';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import Link from 'next/link';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'; // ✅ uses flowType: 'implicit'
 
 const ALLOWED_ROLES = ['teacher', 'admin', 'super_admin', 'academy'] as const;
 type UserRole = (typeof ALLOWED_ROLES)[number];
@@ -30,10 +29,7 @@ async function fetchRoleFromApi(): Promise<UserRole | null> {
   try {
     const res = await fetch('/api/auth/get-role', { method: 'GET' });
     const contentType = res.headers.get('content-type') ?? '';
-    if (!contentType.includes('application/json')) {
-      console.warn('[fetchRole] API returned non-JSON, status:', res.status);
-      return null;
-    }
+    if (!contentType.includes('application/json')) return null;
     const body = await res.json();
     if (!res.ok || !body.role) return null;
     if (!isAllowedRole(body.role)) return null;
@@ -44,7 +40,7 @@ async function fetchRoleFromApi(): Promise<UserRole | null> {
 }
 
 async function fetchRoleFromClient(
-  supabase: SupabaseClient,
+  supabase: ReturnType<typeof createSupabaseBrowserClient>,
   userId: string
 ): Promise<UserRole | null> {
   const { data, error } = await supabase
@@ -52,7 +48,6 @@ async function fetchRoleFromClient(
     .select('role')
     .eq('id', userId)
     .maybeSingle();
-
   if (error || !data?.role) return null;
   if (!isAllowedRole(data.role)) return null;
   return data.role as UserRole;
@@ -67,25 +62,15 @@ export default function LoginPage() {
 
   const router = useRouter();
 
+  // ✅ Uses createSupabaseBrowserClient which has flowType: 'implicit'
+  // This means signInWithOAuth will NOT generate a PKCE verifier cookie —
+  // the token comes back directly in the URL fragment instead.
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-
-  // Reset loading if user hits browser Back after Google OAuth redirect
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        setLoading(false);
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () =>
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
 
   const resolveRole = useCallback(
     async (userId: string): Promise<UserRole | null> => {
       const apiRole = await fetchRoleFromApi();
       if (apiRole) return apiRole;
-      console.warn('[resolveRole] Falling back to client-side profile query');
       return fetchRoleFromClient(supabase, userId);
     },
     [supabase]
@@ -99,48 +84,29 @@ export default function LoginPage() {
         const messages: Record<string, string> = {
           missing_code: 'OAuth flow was interrupted. Please try again.',
           auth_failed: 'Authentication failed. Please try again.',
-          profile_creation_failed:
-            'Could not create your profile. Please contact support.',
-          unauthorized_role:
-            'Your account does not have access to this portal.',
+          profile_creation_failed: 'Could not create your profile. Please contact support.',
+          unauthorized_role: 'Your account does not have access to this portal.',
         };
-        setErr(
-          messages[callbackError] ??
-            `Login error: ${callbackError.replace(/_/g, ' ')}`
-        );
+        setErr(messages[callbackError] ?? `Login error: ${callbackError.replace(/_/g, ' ')}`);
         setChecking(false);
         return;
       }
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) { setChecking(false); return; }
 
-      if (userError || !user) {
-        setChecking(false);
-        return;
-      }
-
-      const role = await resolveRole(user.id);
-
-      if (!role) {
-        await supabase.auth.signOut();
-        setChecking(false);
-        return;
-      }
+      const role = await resolveRole(session.user.id);
+      if (!role) { await supabase.auth.signOut(); setChecking(false); return; }
 
       Cookies.set('role', role, { expires: 7, path: '/' });
       router.replace(getRedirectPath(role));
     } catch (e) {
-      console.error('[login] Session check error:', e);
+      console.error('Session check error:', e);
       setChecking(false);
     }
   }, [router, supabase, resolveRole]);
 
-  useEffect(() => {
-    redirectIfLoggedIn();
-  }, [redirectIfLoggedIn]);
+  useEffect(() => { redirectIfLoggedIn(); }, [redirectIfLoggedIn]);
 
   if (checking) return null;
 
@@ -148,24 +114,14 @@ export default function LoginPage() {
     e.preventDefault();
     setErr(null);
     setLoading(true);
-
     try {
-      const { data, error: signInError } =
-        await supabase.auth.signInWithPassword({ email, password });
-
-      if (signInError) {
-        setErr(signInError.message);
-        return;
-      }
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) { setErr(signInError.message); return; }
 
       const userId = data.user?.id;
-      if (!userId) {
-        setErr('Login failed. Please try again.');
-        return;
-      }
+      if (!userId) { setErr('Login failed. Please try again.'); return; }
 
       const role = await resolveRole(userId);
-
       if (!role) {
         setErr('Unable to verify your role. Please contact support.');
         await supabase.auth.signOut();
@@ -175,7 +131,7 @@ export default function LoginPage() {
       Cookies.set('role', role, { expires: 7, path: '/' });
       router.push(getRedirectPath(role));
     } catch (e) {
-      console.error('[login] Unexpected error:', e);
+      console.error('Unexpected login error:', e);
       setErr('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -192,15 +148,14 @@ export default function LoginPage() {
         options: {
           redirectTo: getCallbackUrl(),
           queryParams: { prompt: 'select_account' },
+          // ✅ No skipBrowserRedirect needed — flowType: 'implicit' is set
+          // on the client, so Supabase sends token in fragment, not as code
         },
       });
 
-      if (error) {
-        setErr(error.message);
-        setLoading(false);
-      }
+      if (error) { setErr(error.message); setLoading(false); }
     } catch (e) {
-      console.error('[login] Google login failed:', e);
+      console.error('Google login failed:', e);
       setErr('Google login failed. Please try again.');
       setLoading(false);
     }
@@ -213,24 +168,14 @@ export default function LoginPage() {
 
         <div className="mb-3">
           <label className="form-label">Email</label>
-          <input
-            required
-            type="email"
-            className="form-control"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <input required type="email" className="form-control"
+            value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
 
         <div className="mb-3">
           <label className="form-label">Password</label>
-          <input
-            required
-            type="password"
-            className="form-control"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <input required type="password" className="form-control"
+            value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
 
         <button className="btn btn-primary w-100" disabled={loading}>
@@ -244,19 +189,10 @@ export default function LoginPage() {
 
         <div className="text-center my-3 text-muted">OR</div>
 
-        <button
-          type="button"
-          className="btn btn-outline-danger w-100"
-          onClick={handleGoogleLogin}
-          disabled={loading}
-        >
-          <img
-            src="https://www.svgrepo.com/show/475656/google-color.svg"
-            alt="Google"
-            width="20"
-            height="20"
-            className="me-2"
-          />
+        <button type="button" className="btn btn-outline-danger w-100"
+          onClick={handleGoogleLogin} disabled={loading}>
+          <img src="https://www.svgrepo.com/show/475656/google-color.svg"
+            alt="Google" width="20" height="20" className="me-2" />
           Continue with Google
         </button>
       </form>
