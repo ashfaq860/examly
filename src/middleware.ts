@@ -3,6 +3,14 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
+  const host = request.headers.get('host');
+  const { pathname, search } = request.nextUrl;
+
+  // 1. Force Canonical Subdomain Redirect (apex to www)
+  if (host === 'examly.pk') {
+    return NextResponse.redirect(`https://www.examly.pk${pathname}${search}`, 301);
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -26,22 +34,16 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // 1. Capture the verified user session data safely
+  // Refresh session if expired
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
   const role = request.cookies.get('role')?.value;
 
-  // 2. Protect /admin — Require an active session AND valid role claims
+  // Protect /admin — only admin and super_admin
   if (pathname.startsWith('/admin')) {
     if (!user || (role !== 'admin' && role !== 'super_admin')) {
       return NextResponse.redirect(new URL('/auth/login', request.url));
     }
-  }
-
-  // Optional: Protect /dashboard — Require a valid user session to prevent guests
-  if (pathname.startsWith('/dashboard') && !user) {
-    return NextResponse.redirect(new URL('/auth/login', request.url));
   }
 
   return supabaseResponse;
@@ -49,7 +51,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Correctly ignores auth assets and initialization loops
     '/((?!_next/static|_next/image|favicon.ico|auth/callback|auth/session|api/auth|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

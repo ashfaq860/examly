@@ -5,7 +5,7 @@ import AuthLayout from '@/components/AuthLayout';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import Link from 'next/link';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client'; // ✅ uses flowType: 'implicit'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'; 
 
 const ALLOWED_ROLES = ['teacher', 'admin', 'super_admin', 'academy'] as const;
 type UserRole = (typeof ALLOWED_ROLES)[number];
@@ -19,9 +19,11 @@ function getRedirectPath(role: UserRole): string {
 }
 
 function getCallbackUrl(): string {
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ??
-    window.location.origin;
+  // Always fallback safely to the active window location to avoid apex vs www mismatches
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/auth/callback`;
+  }
+  const base = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ?? '';
   return `${base}/auth/callback`;
 }
 
@@ -62,9 +64,7 @@ export default function LoginPage() {
 
   const router = useRouter();
 
-  // ✅ Uses createSupabaseBrowserClient which has flowType: 'implicit'
-  // This means signInWithOAuth will NOT generate a PKCE verifier cookie —
-  // the token comes back directly in the URL fragment instead.
+  // Initialize client instance
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   const resolveRole = useCallback(
@@ -134,7 +134,7 @@ export default function LoginPage() {
       console.error('Unexpected login error:', e);
       setErr('An unexpected error occurred. Please try again.');
     } finally {
-      setLoading(false);
+      loading && setLoading(false);
     }
   };
 
@@ -143,17 +143,22 @@ export default function LoginPage() {
       setErr(null);
       setLoading(true);
 
+      // Explicitly trigger standard PKCE handling
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: getCallbackUrl(),
-          queryParams: { prompt: 'select_account' },
-          // ✅ No skipBrowserRedirect needed — flowType: 'implicit' is set
-          // on the client, so Supabase sends token in fragment, not as code
+          queryParams: { 
+            prompt: 'select_account',
+            access_type: 'offline' // Ensures a secure refresh token gets issued for new users
+          },
         },
       });
 
-      if (error) { setErr(error.message); setLoading(false); }
+      if (error) { 
+        setErr(error.message); 
+        setLoading(false); 
+      }
     } catch (e) {
       console.error('Google login failed:', e);
       setErr('Google login failed. Please try again.');
