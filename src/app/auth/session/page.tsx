@@ -3,12 +3,14 @@
 // calls setSession() so Supabase JS stores them in its own chunked format,
 // then redirects to the correct page.
 'use client';
-import { useEffect, useState } from 'react';
+
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import Cookies from 'js-cookie';
 
-export default function AuthSessionPage() {
+// 1. Move the core logic into a component that reads the search parameters safely
+function SessionHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState('Completing sign in…');
@@ -76,5 +78,28 @@ export default function AuthSessionPage() {
       <div className="spinner-border text-primary" role="status" />
       <p className="text-muted mb-0">{status}</p>
     </div>
+  );
+}
+
+// 2. Wrap the handler component inside a Suspense boundary as required by Next.js 15
+export default function AuthSessionPage() {
+  return (
+    <Suspense 
+      fallback={
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          gap: '1rem',
+        }}>
+          <div className="spinner-border text-primary" role="status" />
+          <p className="text-muted mb-0">Loading setup...</p>
+        </div>
+      }
+    >
+      <SessionHandler />
+    </Suspense>
   );
 }
