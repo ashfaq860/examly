@@ -10,10 +10,7 @@ type UserRole = (typeof ALLOWED_ROLES)[number];
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-// Derived from SUPABASE_URL: https://gdrinwaykoscxkvjjtla.supabase.co
 const PROJECT_REF = SUPABASE_URL.split('//')[1].split('.')[0];
-// Cookie name Supabase JS uses for the PKCE verifier
 const VERIFIER_COOKIE = `sb-${PROJECT_REF}-auth-token-code-verifier`;
 
 export async function GET(request: Request) {
@@ -23,7 +20,6 @@ export async function GET(request: Request) {
   const errorParam = requestUrl.searchParams.get('error');
 
   if (errorParam) {
-    console.error('[callback] OAuth provider error:', errorParam);
     return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
   }
 
@@ -32,22 +28,14 @@ export async function GET(request: Request) {
   }
 
   const cookieStore = await cookies();
-
-  // Read the PKCE verifier using the exact cookie name
   const codeVerifier = cookieStore.get(VERIFIER_COOKIE)?.value;
 
-  console.log('[callback] project ref:', PROJECT_REF);
-  console.log('[callback] verifier cookie name:', VERIFIER_COOKIE);
-  console.log('[callback] verifier value found:', !!codeVerifier);
-  console.log('[callback] verifier length:', codeVerifier?.length);
-
   if (!codeVerifier) {
-    console.error('[callback] PKCE verifier cookie missing. Available cookies:',
-      cookieStore.getAll().map(c => c.name).join(', '));
-    return NextResponse.redirect(`${origin}/auth/session`);
+    console.error('[callback] Verifier cookie missing');
+    return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
   }
 
-  // Exchange code + verifier directly via REST API
+  // Exchange code + verifier for tokens
   const tokenRes = await fetch(
     `${SUPABASE_URL}/auth/v1/token?grant_type=pkce`,
     {
@@ -73,45 +61,40 @@ export async function GET(request: Request) {
   const user = tokens.user;
 
   if (!user?.id) {
-    console.error('[callback] No user in token response');
     return NextResponse.redirect(`${origin}/auth/login?error=auth_failed`);
   }
-
-  console.log('[callback] Token exchange success for user:', user.id);
 
   await ensureProfile(user);
 
   const role = await getRole(user.id);
   if (!role || !ALLOWED_ROLES.includes(role as UserRole)) {
-    console.error('[callback] Unauthorized role:', role);
     return NextResponse.redirect(`${origin}/auth/login?error=unauthorized_role`);
   }
 
-  const redirectPath = role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
-  const response = NextResponse.redirect(`${origin}${redirectPath}`);
-
-  // Write the full session into the Supabase auth cookie so the browser
-  // client picks it up immediately without needing another round-trip
-  const sessionData = JSON.stringify({
+  // -----------------------------------------------------------------------
+  // Pass tokens to /auth/session via a short-lived server-set cookie.
+  // The session page calls supabase.auth.setSession() with these tokens
+  // so Supabase JS writes them in its own chunked format correctly.
+  // -----------------------------------------------------------------------
+  const tempSession = JSON.stringify({
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
-    expires_at: Math.floor(Date.now() / 1000) + (tokens.expires_in ?? 3600),
-    expires_in: tokens.expires_in ?? 3600,
-    token_type: 'bearer',
-    user,
+    role,
   });
 
-  // Supabase chunks large cookies — write the session as a single cookie
-  // (it will be chunked automatically by the browser if needed)
-  response.cookies.set(`sb-${PROJECT_REF}-auth-token`, sessionData, {
+  const redirectPath = role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard';
+  const response = NextResponse.redirect(`${origin}/auth/session?to=${encodeURIComponent(redirectPath)}`);
+
+  // Short-lived temp cookie — only needed for the /auth/session page
+  response.cookies.set('sb-temp-session', tempSession, {
     path: '/',
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: 60, // 60 seconds — single use
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
   });
 
-  // Role cookie — JS-readable for middleware
+  // Role cookie
   response.cookies.set('role', role, {
     path: '/',
     maxAge: 60 * 60 * 24 * 7,
@@ -120,7 +103,7 @@ export async function GET(request: Request) {
     secure: process.env.NODE_ENV === 'production',
   });
 
-  // Clear the used verifier cookie
+  // Clear used verifier
   response.cookies.delete(VERIFIER_COOKIE);
 
   return response;
@@ -128,22 +111,16 @@ export async function GET(request: Request) {
 
 async function getRole(userId: string): Promise<string | null> {
   const { data } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', userId)
-    .maybeSingle();
+    .from('profiles').select('role').eq('id', userId).maybeSingle();
   return data?.role ?? null;
 }
 
 async function ensureProfile(user: any) {
   const { data: existing } = await supabaseAdmin
-    .from('profiles')
-    .select('id')
-    .eq('id', user.id)
-    .maybeSingle();
+    .from('profiles').select('id').eq('id', user.id).maybeSingle();
 
   if (!existing) {
-    const { error } = await supabaseAdmin.from('profiles').insert({
+    await supabaseAdmin.from('profiles').insert({
       id: user.id,
       email: user.email,
       full_name:
@@ -156,6 +133,5 @@ async function ensureProfile(user: any) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
-    if (error) console.error('[callback] Profile insert error:', error);
   }
 }
