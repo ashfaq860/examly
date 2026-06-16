@@ -100,17 +100,20 @@ export async function GET(request: Request) {
   });
 
   // Role cookie
-  response.cookies.set('role', role, {
+response.cookies.set('role', role, {
     path: '/',
     maxAge: 60 * 60 * 24 * 7,
-    httpOnly: false,
+    httpOnly: false, // Accessible to middleware and frontend state engines
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
   });
 
   // 4. Safely clear out the standard verifier cookie keys using standard SDK logic cleanups
-  const projectRef = SUPABASE_URL.split('//')[1].split('.')[0];
-  response.cookies.delete(`sb-${projectRef}-auth-token-code-verifier`);
+ const projectRef = SUPABASE_URL.split('//')[1].split('.')[0];
+  response.cookies.set(`sb-${projectRef}-auth-token-code-verifier`, '', {
+    path: '/',
+    maxAge: 0,
+  });
 
   return response;
 }
