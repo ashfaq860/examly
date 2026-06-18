@@ -240,6 +240,65 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
   const isTranslate = question?.question_type === 'translate_english';
   const urduLH = isOption ? lineSpacing : Math.max(1.0, lineSpacing - 0.3);
 
+  // Fix: If it's a bilingual MCQ option, display them inline right next to each other
+  if (isOption && isEnglish && isUrdu) {
+    return (
+      <div className="d-flex flex-wrap align-items-baseline w-100" style={{ gap: '0.5rem' }}>
+        {/* English option piece */}
+        <div
+          className="english-text question-lh-scope"
+          dir="ltr"
+          lang="en"
+          style={{
+            ...lhScope(lineSpacing),
+            marginTop: '-1px',
+            fontFamily: questionFontFamily,
+            fontSize: `${fontSize}px`,
+            textAlign: 'left',
+          }}
+        >
+          {isEditMode ? (
+            <EditableText
+              value={engValue || ''}
+              onChange={(v: string) => onTextChange(sectionId, questionId, engField, v)}
+            />
+          ) : (
+            <MathRenderer text={stripHtml(engValue)} />
+          )}
+        </div>
+
+        {/* Separator / Slash between English and Urdu options }
+        <span style={{ fontSize: `${fontSize}px`, color: '#6c757d', alignSelf: 'center' }}>/</span>
+
+        { Urdu option piece */}
+        <div
+          className="urdu-text question-lh-scope"
+          dir="rtl"
+          lang="ur"
+          style={{
+            ...lhScope(urduLH),
+            fontFamily: URDU_FONT,
+            fontSize: `${fontSize + urduFontSizeOffset}px`,
+            textAlign: 'right',
+            marginTop: '-3px',
+            marginBottom: '0px',
+            wordSpacing: '2px',
+          }}
+        >
+          {isEditMode ? (
+            <EditableText
+              value={urValue || ''}
+              onChange={(v: string) => onTextChange(sectionId, questionId, urField, v)}
+            />
+          ) : (
+            <MathRenderer text={stripHtml(urValue || '', isTranslate)} />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback layout for Standard Single-Language Options and Main Question Stems
   return (
     <div className={`d-flex w-100 ${isUrdu || isTranslate ? 'flex-row-reverse' : 'flex-row'} align-items-start`}>
 
@@ -522,6 +581,7 @@ const MCQRenderer: React.FC<MCQRendererProps> = ({
       </div>
 
       {/* Options */}
+      {/* Adjusted padding wrapper to allow flexible alignment structure inside options */}
       <div className={`row g-1 mx-0 ${isUrdu ? 'pe-2' : 'ps-2'}`}>
         {options.map(k => {
           const eng = question[`option_${k}`];

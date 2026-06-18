@@ -334,7 +334,7 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
         {questions.map((q, qIdx) => {
           const finalIndex = isLongType ? (paperLanguage === 'urdu' ? startNum : startNum + qIdx) : getQuestionDisplayIndex(qIdx);
           return (
-            <div key={`${q.id}-${qIdx}`} className={`${getDynamicColClass(q)} px-0 mt-1`}>
+            <div key={`${q.id}-${qIdx}`} className={`${getDynamicColClass(q)} px-2  mt-1`}>
               <QuestionRenderer
                 question={q}
                 index={finalIndex}

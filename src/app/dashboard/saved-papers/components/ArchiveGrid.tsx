@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Calendar, ChevronRight, Trash2, Clock, AlertCircle, X, Check, BookOpen, Globe } from 'lucide-react';
 
-// ... interfaces remain the same ...
+
 
 export const ArchiveGrid: React.FC<ArchiveGridProps> = ({ 
   papers, searchTerm, onOpen, onDelete, deletingId 

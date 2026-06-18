@@ -7,9 +7,16 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
 import { motion } from 'framer-motion';
 
+const SETTINGS_PANEL_WIDTH = 320; // px — must match SettingsPanel's own width
+
 export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
   const supabase = createSupabaseBrowserClient();
-  const [showSettings, setShowSettings] = useState(false);
+
+  // Auto-open on desktop only
+  const [showSettings, setShowSettings] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 992 : false
+  );
+
   const [currentSettings, setCurrentSettings] = useState(paper.settings || {});
   const [isSaving, setIsSaving] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -32,7 +39,7 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
   // ─── Mobile paper scale ───────────────────────────────────────────────────
   useEffect(() => {
     const computeScale = () => {
-      const PAPER_WIDTH_PX = 794; // 210mm at 96dpi
+      const PAPER_WIDTH_PX = 794;
       if (window.innerWidth <= 991) {
         const available = window.innerWidth - 16;
         const scale = Math.min(available / PAPER_WIDTH_PX, 1);
@@ -128,44 +135,49 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="paper-viewport-container">
-        <div className="paper-canvas-scaler">
-          <div className="paper-canvas shadow-lg">
-            <PaperLayoutRenderer
-              paperSections={paper.content}
-              settings={currentSettings}
-              paperLanguage={paper.language}
-              config={{
-                direction: paper.language === 'urdu' ? 'rtl' : 'ltr',
-                fontFamily:
-                  paper.language === 'urdu'
-                    ? 'Jameel Noori Nastaleeq'
-                    : currentSettings.questionFontFamily || 'Arial',
-              }}
-              isEditMode={false}
-              currentLayout={paper.layout}
-              onTextChange={() => {}}
-              renderInlineBilingual={true}
-              currentClass={{ name: paper.class_name }}
-              profile={profile}
-              isPremium={isUserPremium}
-              onSectionUpdate={() => {}}
-            />
+      {/* Main layout: paper area + settings panel side by side on desktop */}
+      <div className="main-layout">
+
+        {/* Paper Area */}
+        <div className="paper-viewport-container">
+          <div className="paper-canvas-scaler">
+            <div className="paper-canvas shadow-lg">
+              <PaperLayoutRenderer
+                paperSections={paper.content}
+                settings={currentSettings}
+                paperLanguage={paper.language}
+                config={{
+                  direction: paper.language === 'urdu' ? 'rtl' : 'ltr',
+                  fontFamily:
+                    paper.language === 'urdu'
+                      ? 'Jameel Noori Nastaleeq'
+                      : currentSettings.questionFontFamily || 'Arial',
+                }}
+                isEditMode={false}
+                currentLayout={paper.layout}
+                onTextChange={() => {}}
+                renderInlineBilingual={true}
+                currentClass={{ name: paper.class_name }}
+                profile={profile}
+                isPremium={isUserPremium}
+                onSectionUpdate={() => {}}
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Settings Panel */}
-      <SettingsPanel
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        settings={currentSettings}
-        onSettingChange={(k: any, v: any) =>
-          setCurrentSettings((p: any) => ({ ...p, [k]: v }))
-        }
-        isPremium={isUserPremium}
-      />
+        {/* Settings Panel — sticks to the right edge on desktop without overlapping the paper */}
+        <SettingsPanel
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
+          settings={currentSettings}
+          onSettingChange={(k: any, v: any) =>
+            setCurrentSettings((p: any) => ({ ...p, [k]: v }))
+          }
+          isPremium={isUserPremium}
+        />
+
+      </div>
 
       {/* Draggable Save Button */}
       {showSettings && (
@@ -202,61 +214,37 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
         /* ── Action Bar ── */
         .action-bar-fixed {
           position: fixed;
+          top: 0;
           left: 0;
           right: 0;
           z-index: 1040;
           background: rgba(255, 255, 255, 0.95);
           backdrop-filter: blur(10px);
           border-bottom: 1px solid #e2e8f0;
+          transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .action-buttons-group {
-          transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .action-buttons-group.active {
-          transform: translateX(0);
-        }
-
-
-        /* Desktop */
-        @media (min-width: 992px) {
-          .action-bar-fixed {
-            top: 0;
-            left: 280px !important;
-            padding: 7px;
-          }
-          .paper-viewport-container {
-            padding-top: 100px;
-          }
-          .settings-panel-open .action-buttons-group {
-            transform: translateX(-410px);
-          }
+        /* ── Main layout wrapper ── */
+        .main-layout {
+          display: flex;
+          flex-direction: row;
+          align-items: flex-start;
+          min-height: 100vh;
+          width: 100%;
         }
 
-        /* Tablet / Mobile */
-        @media (max-width: 991.98px) {
-          .action-bar-fixed {
-            top: 57px;
-          }
-          .paper-viewport-container {
-            padding-top: 80px;
-          }
-          .settings-panel-open .action-buttons-group {
-            transform: translateX(-80px);
-          }
-        }
-
-        /* ── Viewport & Paper Canvas ── */
+        /* ── Paper Viewport ── */
         .paper-viewport-container {
+          flex: 1 1 auto;
+          min-width: 0;               /* allow flex child to shrink below content size */
           display: flex;
           justify-content: center;
           align-items: flex-start;
-          min-height: 100vh;
           overflow: auto;
           -webkit-overflow-scrolling: touch;
-          /* Allow native pinch-zoom on mobile */
           touch-action: pan-x pan-y pinch-zoom;
           padding-bottom: 60px;
+          transition: margin-right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .paper-canvas-scaler {
@@ -271,21 +259,73 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
           margin: 0 auto;
         }
 
-        /* ── Mobile: scale paper to fit screen width ── */
-        @media (max-width: 991.98px) {
-          .paper-viewport-container {
-            overflow-x: hidden;
+        /* ── Action Buttons ── */
+        .action-buttons-group {
+          transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* ── Desktop ── */
+        @media (min-width: 992px) {
+          .action-bar-fixed {
+            top: 0;
+            left: 280px !important;
+            right: 0 !important;
           }
 
+          /* When the settings panel is open, shrink the action bar so its
+             buttons stay clear of the fixed panel on the right */
+          .settings-panel-open .action-bar-fixed {
+            right: ${SETTINGS_PANEL_WIDTH}px !important;
+          }
+
+          .paper-viewport-container {
+            padding-top: 100px;
+          }
+
+          /* Push the paper viewport left to make room for the fixed panel,
+             instead of letting the panel cover it */
+          .settings-panel-open .paper-viewport-container {
+            margin-right: ${SETTINGS_PANEL_WIDTH}px;
+          }
+
+          .settings-panel-open .action-buttons-group {
+            transform: translateX(0);
+          }
+        }
+
+        /* ── Tablet / Mobile ── */
+        @media (max-width: 991.98px) {
+          .action-bar-fixed {
+            top: 57px;
+            left: 0 !important;
+            right: 0 !important;
+          }
+
+          .main-layout {
+            flex-direction: column;
+          }
+
+          .paper-viewport-container {
+            padding-top: 80px;
+            overflow-x: hidden;
+            width: 100%;
+          }
+
+          /* Settings panel behaves as an overlay on mobile — paper never shifts */
+          .settings-panel-open .paper-viewport-container {
+            margin-right: 0;
+          }
+
+          /* Scale paper to fit screen width */
           .paper-canvas-scaler {
             transform: scale(var(--paper-scale, 0.42));
             transform-origin: top center;
-            /*
-              Collapse the dead whitespace that transform:scale() creates below.
-              Since scale reduces visual height but keeps layout height,
-              we apply a negative-ish margin equal to the lost space.
-            */
             margin-bottom: var(--paper-collapsed-margin, -460px);
+          }
+
+          /* On mobile, action buttons shift when panel is open */
+          .settings-panel-open .action-buttons-group {
+            transform: translateX(-80px);
           }
         }
 
@@ -299,6 +339,7 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
           align-items: center;
           color: #64748b;
           cursor: pointer;
+          white-space: nowrap;
         }
 
         .btn-preview-action {
@@ -312,6 +353,7 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
           align-items: center;
           gap: 8px;
           cursor: pointer;
+          white-space: nowrap;
         }
 
         .btn-preview-action.active {
@@ -331,6 +373,7 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
           align-items: center;
           gap: 8px;
           cursor: pointer;
+          white-space: nowrap;
         }
 
         /* ── Spin animation for settings icon ── */
@@ -400,8 +443,12 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
           .flying-save-wrapper {
             display: none !important;
           }
+          .main-layout {
+            display: block !important;
+          }
           .paper-viewport-container {
             padding: 0 !important;
+            margin-right: 0 !important;
             touch-action: auto;
           }
           .paper-canvas-scaler {

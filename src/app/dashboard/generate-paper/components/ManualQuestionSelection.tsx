@@ -424,7 +424,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
           flex-direction: row;
           align-items: flex-start;
           gap: 4px;
-          padding: 12px 8px;
+          padding: 2px 5px;
           border-bottom: 1px solid #f1f5f9;
           cursor: pointer;
           transition: background .12s;
@@ -482,7 +482,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         .q-bilingual-block {
           display: flex;
           flex-direction: row;
-          gap: 12px;
+          gap: 2px;
           width: 100%;
           align-items: flex-start;
           flex-wrap: wrap;
@@ -523,7 +523,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         .opts-bilingual-wrap {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 10px;
+          gap: 0px;
           margin-top: 4px;
           width: 100%;
         }
@@ -539,12 +539,12 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
           display: flex;
           align-items: center;
           flex-wrap: wrap;
-          gap: 4px;
-          font-size: 10px;
+          gap: 2px;
+          font-size: 8px;
           color: #94a3b8;
           font-family: monospace;
           text-transform: uppercase;
-          margin-top: 6px;
+          margin-top: 0px;
         }
         .q-meta-rtl { direction: rtl; justify-content: flex-end; }
         .dot { color: #cbd5e1; }

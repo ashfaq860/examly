@@ -175,14 +175,13 @@ const getClassNameUrdu = (className: string | number) => {
         </div>
       </div>
 
-      <div className="bise-row" >
-          <div className="bise-english" style={{ fontSize: `${Number(settings.metaFontSize) || 14}px`, lineHeight: '1.6', fontWeight: 'bold' }}>Paper : {paperPart === 'mcq' ? 'MCQ Type' : 'Essay Type'}</div>
-          <div className="bise-urdu" style={{ fontSize: `${Number(settings.metaFontSize)+2 || 14}px`, lineHeight: '1.6', fontWeight: 'bold' }}>پرچہ :{paperPart === 'mcq' ? 'معروضی طرز' : '(انشائیہ طرز)'} </div>
+ 
+<div className="bise-row">  
+   <div className=" bise-col" style={{ fontSize: `${Number(settings.metaFontSize) || 14}px`, lineHeight: '1.6', fontWeight: 'bold' }}>Paper : {paperPart === 'mcq' ? 'MCQ Type' : 'Essay Type'}</div>
+          <div className="bise-col" style={{ fontSize: `${Number(settings.metaFontSize)+2 || 14}px`, lineHeight: '1.6', fontWeight: 'bold' }}>پرچہ :{paperPart === 'mcq' ? 'معروضی طرز' : '(انشائیہ طرز)'} </div>
       
-      </div>
 
-<div className="bise-row">
-          <div className="bise-col" style={{ fontSize: `${settings.metaFontSize || 14}px`, lineHeight: '1.6',fontWeight:'bold' }}>
+          <div className="bise-col" style={{ fontSize: `${settings.metaFontSize || 14}px`, lineHeight: '1.6',fontWeight:'bold' , marginRight: '5px' }}>
               <div>Time Allowed : 2:10 hours</div>
           </div>
           <div className="bise-col" style={{ fontSize: `${Number(settings.metaFontSize) || 14}px`, lineHeight: '1.6',fontWeight:'bold'   }}>
