@@ -184,7 +184,7 @@ export default function LoginPage() {
         </div>
 
         <button className="btn btn-primary w-100" disabled={loading}>
-          {loading ? 'Signing in…' : 'Sign In'}
+          {loading ? 'Signing in...' : 'Sign In'}
         </button>
 
         <div className="mt-3 d-flex justify-content-between small">

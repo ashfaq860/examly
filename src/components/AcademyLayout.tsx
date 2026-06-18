@@ -247,7 +247,7 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
 
         {/* MAIN CONTENT */}
         <main className="flex-grow-1 d-flex flex-column min-vh-100 overflow-hidden">
-          <div className="p-0 p-lg-0 flex-grow-1">
+          <div className="p-0 p-lg-0 flex-grow-1 my-3">
             <div className="container-fluid max-w-7xl">
               {children}
             </div>

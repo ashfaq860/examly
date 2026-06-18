@@ -167,8 +167,8 @@ export default function AcademyDashboard() {
 
   const hoverEffect = (e: React.MouseEvent<HTMLDivElement, MouseEvent>, enter: boolean) => {
     const el = e.currentTarget;
-    el.style.transform = enter ? 'scale(1.05)' : 'scale(1)';
-    el.style.boxShadow = enter ? '0 10px 20px rgba(0,0,0,0.15)' : '0 4px 6px rgba(0,0,0,0.1)';
+    el.style.transform = enter ? 'translateY(-4px)' : 'translateY(0)';
+    el.style.boxShadow = enter ? 'var(--shadow-md)' : 'var(--shadow-sm)';
   };
 
   return (

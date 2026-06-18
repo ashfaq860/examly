@@ -235,6 +235,9 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
   questionFontFamily,
   urduNumberLabel,
   question,
+  headingFontSize,
+  isUrduSubject,
+  fontWeight = 'normal',
   onTextChange,
 }) => {
   const isTranslate = question?.question_type === 'translate_english';
@@ -316,6 +319,7 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
             marginTop: '-3px',
             marginBottom: '0px',
             wordSpacing: '2px',
+            fontWeight: fontWeight,
           }}
         >
           {isEditMode ? (
@@ -353,6 +357,7 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
             fontFamily: isTranslate ? URDU_FONT : questionFontFamily,
             fontSize: isTranslate ? `${fontSize + urduFontSizeOffset}px` : `${fontSize}px`,
             textAlign: isTranslate ? 'right' : 'left',
+            fontWeight: fontWeight,
           }}
         >
           {isEditMode ? (
@@ -388,9 +393,11 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   marks,
   isUrduSubject,
   isLast,
+  headingFontSize,
   shouldShowOr,
   onTextChange,
 }) => {
+
   useEffect(() => { injectPrintStyles(); }, []);
 
   const isTranslate       = question?.question_type === 'translate_english';
@@ -438,7 +445,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
             {showEnglishNumber && (
               <span
                 className="fw-bold text-nowrap"
-                style={{ minWidth: isLong ? '22px' : '18px', fontSize: isLong ? `${numberFontSize + 2}px` : `${numberFontSize}px`, lineHeight: currentLH, fontFamily: questionFontFamily, textAlign: 'left' }}
+                style={{ minWidth: isLong ? '22px' : '18px', fontSize: isLong && isUrduSubject ? `${headingFontSize}px` : `${numberFontSize}px`, lineHeight: currentLH, fontFamily: questionFontFamily, textAlign: 'left' }}
               >
                 {indexDisplay}
               </span>
@@ -446,7 +453,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
             {showUrduNumber && (
               <span
                 className="fw-bold text-nowrap"
-                style={{ minWidth: isLong ? '25px' : '18px', fontSize: `${numberFontSize}px`, lineHeight: currentLH, fontFamily: URDU_FONT, textAlign: 'right', direction: 'rtl' }}
+                style={{ fontWeight:`${isLong && isUrduSubject ? 'bold' : 'normal'}`,marginRight: `${isLong && isUrduSubject ? `-5px` : ``}`,marginTop: `${isLong && isUrduSubject ? `-4px` : ``}`, minWidth: isLong ? '25px' : '18px', fontSize: `${isLong && isUrduSubject ? `${headingFontSize+2}px` : `${numberFontSize}px`}`, lineHeight: currentLH, fontFamily: URDU_FONT, textAlign: 'right', direction: 'rtl' }}
               >
                 {indexDisplay}
               </span>
@@ -483,6 +490,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
               questionFontFamily={questionFontFamily}
               urduNumberLabel={urduNumberLabel}
               onTextChange={onTextChange}
+              isUrduSubject={isUrduSubject}
+              headingFontSize={headingFontSize}
             />
           )}
         </div>
@@ -622,6 +631,8 @@ interface SubjectiveRendererProps {
   lineHeight: number;
   questionFontFamily: string;
   urduNumberLabel?: string;
+  headingFontSize: number;
+  isUrduSubject?: boolean;
   onTextChange: (sid: string, qid: string, field: string, val: string) => void;
 }
 
@@ -636,8 +647,12 @@ const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
   lineHeight,
   questionFontFamily,
   urduNumberLabel,
+  headingFontSize,
+  isUrduSubject,
   onTextChange,
 }) => (
+  <>
+  
   <BilingualTextDisplay
     sectionId={sectionId}
     questionId={question.id}
@@ -648,11 +663,13 @@ const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
     urValue={question.question_text_ur}
     engField="question_text"
     urField="question_text_ur"
-    fontSize={fontSize + (isLong ? 4 : 0)}
+    fontWeight={isLong && isUrduSubject? 'bold' : 'normal'}
+    fontSize={isLong && isUrduSubject ?headingFontSize+2 : fontSize}
     lineSpacing={lineHeight}
-    questionFontFamily={questionFontFamily}
+    questionFontFamily={isLong && isUrduSubject ?"'JameelNoori', 'Noto Nastaliq Urdu', serif" : questionFontFamily}
     urduNumberLabel={urduNumberLabel}
     question={question}
     onTextChange={onTextChange}
   />
+  </>
 );

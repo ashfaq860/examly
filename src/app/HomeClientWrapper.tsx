@@ -84,7 +84,7 @@ export default function HomeClientWrapper() {
           <div className="container">
             <div className="text-center mb-3">
               <h1 className="display-5 fw-bold text-success">
-                ✨ Advanced <span className="text-primary">Test Maker</span> &{' '}
+                Advanced <span className="text-primary">Test Maker</span> &{' '}
                 <span className="text-primary">Question Paper Generator</span>
               </h1>
               <p className="lead text-muted">
@@ -92,7 +92,7 @@ export default function HomeClientWrapper() {
                 <strong>classes 5th to 12th</strong> using{' '}
                 <span className="text-success">full book</span>,{' '}
                 <span className="text-success">half book</span>, or{' '}
-                <span className="text-success">custom chapters</span>. Smart question selection, balanced difficulty, and instant downloads — all in one platform.
+                <span className="text-success">custom chapters</span>. Smart question selection, balanced difficulty, and instant downloads - all in one platform.
               </p>
             </div>
 
@@ -257,7 +257,7 @@ export default function HomeClientWrapper() {
         .scroll-animate {
           opacity: 0;
           transform: translateY(40px);
-          transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: all 0.45s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .scroll-animate.in-view {
@@ -276,32 +276,32 @@ export default function HomeClientWrapper() {
           transition: all 0.3s ease-in-out;
         }
         .feature-card:hover {
-          transform: translateY(-10px) scale(1.02);
-          box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
+          transform: translateY(-4px);
+          box-shadow: var(--shadow-md);
         }
 
         .feature-card.highlight {
-          border: 3px solid #1ba699;
-          background: linear-gradient(145deg, #e0f7f5, #c0f0eb);
+          border: 1px solid rgba(27, 166, 153, 0.35);
+          background: #f0fdfa;
         }
 
         .paper-card {
           position: relative;
           overflow: hidden;
           border: 2px solid transparent;
-          border-radius: 1rem;
+          border-radius: var(--radius-md);
           background: #fff;
           transition: all 0.3s ease-in-out;
         }
 
         .paper-card:hover {
-          transform: translateY(-8px) scale(1.03);
-          box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+          transform: translateY(-4px);
+          box-shadow: var(--shadow-md);
           border-color: #1ba699;
         }
 
         .paper-card iframe {
-          border-radius: 0.5rem 0.5rem 0 0;
+          border-radius: var(--radius-md) var(--radius-md) 0 0;
         }
 
         .watch-demo-overlay {
@@ -319,7 +319,7 @@ export default function HomeClientWrapper() {
           justify-content: center;
           opacity: 0;
           transition: opacity 0.3s ease;
-          border-radius: 0.5rem 0.5rem 0 0;
+          border-radius: var(--radius-md) var(--radius-md) 0 0;
           cursor: pointer;
         }
         .paper-card:hover .watch-demo-overlay {
@@ -337,7 +337,7 @@ const FeatureCard = memo(function FeatureCard({ img, title, subtitle, list, href
       <div
         data-animate
         style={{ transitionDelay: `${delay}ms` }}
-        className={`scroll-animate zoom-in card feature-card border-0 rounded-4 shadow-lg ${highlight ? 'highlight' : ''}`}
+        className={`scroll-animate zoom-in card feature-card border-0 shadow-sm ${highlight ? 'highlight' : ''}`}
       >
         <Image 
           src={img} 
@@ -379,7 +379,7 @@ const LazyYoutubeEmbed = memo(function LazyYoutubeEmbed({ youtubeId, title }: an
             fontSize: '1.5rem'
           }}
         >
-          ▶ Click to load video
+          Click to load video
         </div>
       ) : (
         <iframe
@@ -400,7 +400,7 @@ const PaperLayoutCard = memo(function PaperLayoutCard({ title, description, yout
       <div
         data-animate
         style={{ transitionDelay: `${delay}ms` }}
-        className="scroll-animate zoom-in card paper-card h-100 border-0 shadow-lg rounded-0"
+        className="scroll-animate zoom-in card paper-card h-100 border-0 shadow-sm"
       >
         <LazyYoutubeEmbed youtubeId={youtubeId} title={title} />
         <div className="card-body p-3">
@@ -451,5 +451,4 @@ const StudentCard = memo(function StudentCard({ img, title, description, btn, de
     </div>
   );
 });
-
 

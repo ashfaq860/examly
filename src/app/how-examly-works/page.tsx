@@ -296,7 +296,7 @@ export default function HowItWorks() {
                 </div>
                 <div className="mt-4">
                   <small className="opacity-75">
-                    ✓ Unlimited paper generation ✓ No credit card required ✓ Cancel anytime
+                    Unlimited paper generation | No credit card required | Cancel anytime
                   </small>
                 </div>
               </div>

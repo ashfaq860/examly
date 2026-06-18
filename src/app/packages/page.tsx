@@ -52,26 +52,26 @@ export default function Packages() {
             {packages.map((pkg) => (
               <div className="col-12 col-md-6 col-lg-4" key={pkg.id}>
                 <div
-                  className="card h-100 shadow-lg border-0 rounded-4 overflow-hidden package-card"
+                  className="card h-100 shadow-sm border-0 overflow-hidden package-card"
                   style={{
                     transition: "transform 0.3s, box-shadow 0.3s",
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-6px)";
+                    e.currentTarget.style.transform = "translateY(-4px)";
                     e.currentTarget.style.boxShadow =
-                      "0 1rem 2rem rgba(0,0,0,0.15)";
+                      "var(--shadow-md)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = "none";
                     e.currentTarget.style.boxShadow =
-                      "0 .5rem 1rem rgba(0,0,0,0.1)";
+                      "var(--shadow-sm)";
                   }}
                 >
                   <div
                     className="card-header text-white text-center py-3 fw-bold"
                     style={{
-                      background: "linear-gradient(135deg, #1BA699, #107060)",
-                      letterSpacing: "0.5px",
+                      background: "var(--brand-primary)",
+                      letterSpacing: "0",
                     }}
                   >
                     {pkg.name}
@@ -109,8 +109,8 @@ export default function Packages() {
                     <button
                       className="btn btn-success w-100 mt-auto fw-semibold py-2"
                       style={{
-                        borderRadius: "10px",
-                        background: "linear-gradient(135deg, #1BA699, #159380)",
+                        borderRadius: "var(--radius-md)",
+                        background: "var(--brand-accent)",
                         border: "none",
                         transition: "all 0.3s",
                       }}

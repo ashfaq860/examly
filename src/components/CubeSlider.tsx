@@ -4,7 +4,7 @@ import Link from "next/link";
 
 const defaultSlides = [
   {
-    title: "Examly — AI-Powered Test Generator for Educators",
+    title: "Examly - AI-Powered Test Generator for Educators",
     description:
       "Create exam papers in minutes with Examly's smart question paper generator. Generate full-book, half-book, and chapter-wise tests automatically. Save time with balanced assessments tailored to your curriculum.",
     shortDescription: "AI-powered test generator for educators - create exam papers in minutes",
@@ -12,11 +12,11 @@ const defaultSlides = [
     cta: "Try Now",
     link: "/auth/login",
     bgClass: "bg-educator",
-    icon: "📊",
+    icon: "01",
     imageStyle: "floating",
   },
   {
-    title: "3 Months Free — Unlimited Test Generation",
+    title: "3 Months Free - Unlimited Test Generation",
     description:
       "Get 3 months free access to Examly's test generator. Create unlimited exam papers for schools and colleges. Refer friends for extra free months. Professional, printable assessments made easy.",
     shortDescription: "3 months free unlimited test generation offer for educators",
@@ -24,7 +24,7 @@ const defaultSlides = [
     cta: "Claim Offer",
     link: "/auth/signup",
     bgClass: "bg-fullbook",
-    icon: "🎯",
+    icon: "02",
     imageStyle: "perspective",
   },
   {
@@ -36,7 +36,7 @@ const defaultSlides = [
     cta: "Try Quiz",
     link: "/auth/login",
     bgClass: "bg-halfbook",
-    icon: "⚡",
+    icon: "03",
     imageStyle: "layered",
   },
 ];
@@ -146,7 +146,6 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
                         <div className="slide-icon mb-3 mb-md-4">
                           <div className="icon-container">
                             <span className="icon-display">{slide.icon}</span>
-                            <div className="icon-glow"></div>
                           </div>
                         </div>
                         <div className="slide-badge mb-3">
@@ -169,7 +168,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
                         <div className="slide-actions">
                           <Link 
                             href={slide.link} 
-                            className="btn btn-light btn-lg px-4 px-md-5 py-2 py-md-3 rounded-lg font-semibold shadow-lg hover-lift"
+                            className="btn btn-light btn-lg px-4 px-md-5 py-2 py-md-3 font-semibold shadow-sm hover-lift"
                             style={{ pointerEvents: isActive ? 'auto' : 'none' }}
                             onClick={(e) => {
                               if (!isActive) {
@@ -326,15 +325,15 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
         
         /* Background gradients */
         .bg-educator {
-          background: linear-gradient(135deg, #1BA69A 0%, #2f5babff 100%);
+          background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-primary) 100%);
         }
         
         .bg-fullbook {
-          background: linear-gradient(135deg, #1BA69A 0%, #2f5babff 100%);
+          background: linear-gradient(135deg, #0f766e 0%, var(--brand-primary) 100%);
         }
         
         .bg-halfbook {
-          background: linear-gradient(135deg, #073E8C 0%, #00f2fe 100%);
+          background: linear-gradient(135deg, var(--brand-primary) 0%, #0e7490 100%);
         }
 
         /* Base Image Container - Simplified */
@@ -351,7 +350,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
         .floating-image .slide-image {
           width: 85%;
           max-width: 450px;
-          border-radius: 20px;
+          border-radius: var(--radius-lg);
           box-shadow: 
             0 25px 50px -12px rgba(0, 0, 0, 0.5),
             0 0 0 1px rgba(255, 255, 255, 0.1);
@@ -364,7 +363,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
         .perspective-image .slide-image {
           width: 90%;
           max-width: 500px;
-          border-radius: 15px;
+          border-radius: var(--radius-lg);
           box-shadow: 
             0 30px 60px -12px rgba(0, 0, 0, 0.6),
             0 0 0 1px rgba(255, 255, 255, 0.15);
@@ -382,7 +381,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
         .layered-image .slide-image {
           width: 80%;
           max-width: 420px;
-          border-radius: 25px;
+          border-radius: var(--radius-lg);
           box-shadow: 
             0 20px 40px -12px rgba(0, 0, 0, 0.4),
             0 0 0 1px rgba(255, 255, 255, 0.1);
@@ -398,7 +397,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           width: 85%;
           height: 100%;
           background: rgba(255, 255, 255, 0.05);
-          border-radius: 25px;
+          border-radius: var(--radius-lg);
           transform: rotate(-5deg) translateX(20px) translateY(10px);
           z-index: 2;
           backdrop-filter: blur(10px);
@@ -410,7 +409,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           width: 80%;
           height: 100%;
           background: rgba(255, 255, 255, 0.03);
-          border-radius: 25px;
+          border-radius: var(--radius-lg);
           transform: rotate(8deg) translateX(-15px) translateY(15px);
           z-index: 1;
           backdrop-filter: blur(5px);
@@ -458,24 +457,24 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
         }
 
         .icon-display {
-          font-size: 3.5rem;
-          filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
-          display: inline-block;
+          min-width: 3rem;
+          height: 3rem;
+          padding: 0 0.75rem;
+          border: 1px solid rgba(255, 255, 255, 0.35);
+          border-radius: var(--radius-md);
+          background: rgba(255, 255, 255, 0.18);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           z-index: 2;
           position: relative;
+          font-size: 1rem;
+          font-weight: 700;
+          letter-spacing: 0;
         }
 
         .icon-glow {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          width: 80px;
-          height: 80px;
-          background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 70%);
-          border-radius: 50%;
-          z-index: 1;
-          opacity: 0.6;
+          display: none;
         }
 
         /* Enhanced Navigation */
@@ -499,7 +498,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           background: rgba(255, 255, 255, 0.15);
           backdrop-filter: blur(10px);
           border: 1px solid rgba(255, 255, 255, 0.2);
-          border-radius: 50%;
+          border-radius: var(--radius-md);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -536,7 +535,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           font-weight: 600;
           background: rgba(0, 0, 0, 0.3);
           padding: 0.5rem 1rem;
-          border-radius: 20px;
+          border-radius: var(--radius-md);
           backdrop-filter: blur(10px);
           border: 1px solid rgba(255, 255, 255, 0.1);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -622,7 +621,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           }
           
           .icon-display {
-            font-size: 3rem;
+            font-size: 1rem;
           }
           
           .slider-nav-btn {
@@ -678,7 +677,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           }
           
           .icon-display {
-            font-size: 2.5rem;
+            font-size: 1rem;
           }
           
           .slider-nav-btn {
@@ -727,12 +726,12 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           }
           
           .icon-display {
-            font-size: 2rem;
+            font-size: 0.95rem;
           }
           
           .icon-glow {
-            width: 60px;
-            height: 60px;
+            width: 48px;
+            height: 48px;
           }
           
           .slider-nav-btn {
@@ -786,7 +785,7 @@ export default function CubeSlider({ slides = defaultSlides, autoRotateInterval 
           }
           
           .icon-display {
-            font-size: 1.75rem;
+            font-size: 0.9rem;
           }
           
           .slider-counter { 

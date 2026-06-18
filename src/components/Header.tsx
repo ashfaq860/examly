@@ -372,7 +372,7 @@ export default function Header() {
         .dark-toggle-btn {
           background: none;
           border: 1px solid #ddd;
-          border-radius: 20px;
+          border-radius: var(--radius-md);
           padding: 5px 12px;
           cursor: pointer;
           font-size: 14px;

@@ -1,10 +1,11 @@
 //dashboard/generate-paper/components/PaperLayoutRenderer.tsx
 'use client';
-import React, { useMemo } from 'react';
+import React, { useMemo,useEffect } from 'react';
 import { PaperSection, PaperSettings, LanguageConfig } from '@/types/paper-builder';
 import { PaperHeader } from './PaperHeader';
 import { SectionHeader } from './SectionHeader';
 import { QuestionRenderer } from './QuestionRenderer';
+import { toast } from 'react-hot-toast';
 
 interface Props {
   paperSections: PaperSection[];
@@ -131,7 +132,65 @@ const globalNumbering = useMemo(() => {
     subjectives: paperSections.filter(s => s.type !== 'mcq')
   }), [paperSections]);
 
+// four papers per page layout
+const { shortQuestions, longQuestions, shortOverflow, longOverflow } = useMemo(() => {
+  if (currentLayout !== 'four_papers') {
+    return { shortQuestions: [], longQuestions: [], shortOverflow: false, longOverflow: false };
+  }
+  const shortSections = paperSections.filter(s => s.type === 'short');
+  const longSections = paperSections.filter(s => s.type === 'long');
 
+  const allShort = shortSections.flatMap(s => s.questions || []);
+  const allLong = longSections.flatMap(s => s.questions || []);
+
+  return {
+    shortQuestions: allShort.slice(0, 6),
+    longQuestions: allLong.slice(0, 5),
+    shortOverflow: allShort.length > 6,
+    longOverflow: allLong.length > 5,
+  };
+}, [paperSections, currentLayout]);
+
+
+const fourPaperShortSection: PaperSection | null = useMemo(() => {
+  if (currentLayout !== 'four_papers' || shortQuestions.length === 0) return null;
+  const sourceSections = paperSections.filter(s => s.type === 'short');
+  const marksEach = sourceSections[0]?.marksEach || 1;
+  return {
+    id: 'four-papers-short',
+    type: 'short',
+    instructions: sourceSections[0]?.instructions || 'Attempt the following short questions.',
+    questions: shortQuestions,
+    totalQuestions: shortQuestions.length,
+    attemptCount: shortQuestions.length,
+    marksEach,
+    totalMarks: shortQuestions.length * marksEach,
+    subject,
+    language: paperLanguage,
+    layout: currentLayout,
+    timestamp: new Date().toISOString(),
+  } as PaperSection;
+}, [currentLayout, shortQuestions, paperSections, subject, paperLanguage]);
+
+const fourPaperLongSection: PaperSection | null = useMemo(() => {
+  if (currentLayout !== 'four_papers' || longQuestions.length === 0) return null;
+  const sourceSections = paperSections.filter(s => s.type === 'long');
+  const marksEach = sourceSections[0]?.marksEach || 1;
+  return {
+    id: 'four-papers-long',
+    type: 'long',
+    instructions: sourceSections[0]?.instructions || 'Attempt the following long questions.',
+    questions: longQuestions,
+    totalQuestions: longQuestions.length,
+    attemptCount: longQuestions.length,
+    marksEach,
+    totalMarks: longQuestions.length * marksEach,
+    subject,
+    language: paperLanguage,
+    layout: currentLayout,
+    timestamp: new Date().toISOString(),
+  } as PaperSection;
+}, [currentLayout, longQuestions, paperSections, subject, paperLanguage]);
   const mcqTotalMarks = useMemo(() => mcqs.reduce((t, s) => t + s.totalMarks, 0), [mcqs]);
   const subTotalMarks = useMemo(() => subjectives.reduce((t, s) => t + s.totalMarks, 0), [subjectives]);
 
@@ -147,7 +206,15 @@ const globalNumbering = useMemo(() => {
     });
     onSectionUpdate(updated);
   };
-
+  useEffect(() => {
+  if (currentLayout !== 'four_papers') return;
+  if (shortOverflow) {
+    toast.error('4-papers layout allows max 6 short questions — extra questions were hidden.');
+  }
+  if (longOverflow) {
+    toast.error('4-papers layout allows max 5 long questions — extra questions were hidden.');
+  }
+}, [currentLayout, shortOverflow, longOverflow]);
 
   
 const sheetBaseStyle: React.CSSProperties = {
@@ -354,7 +421,7 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
                 marks={q.marks || section.marksEach}
                 isUrduSubject={isUrduOrEnglish}
                 isLast={qIdx === questions.length - 1}
-                
+                headingFontSize={settings.headingFontSize}
                 shouldShowOr={isLongType && isUrduOrEnglish && section.totalQuestions === 2 && section.attemptCount === 1}
                 renderInlineBilingual={renderInlineBilingual}
               />
@@ -676,7 +743,93 @@ const renderContent = () => {
         </div>
       );
     }
+  }// =========================
+// FOUR PAPERS (Short front / Long back, 6 short max / 5 long max)
+// =========================
+else if (currentLayout === 'four_papers') {
+  const count = 4;
+  const slotHeight = '71mm'; // 297mm / 4 minus margins/cut-lines, matches the two/three-paper pattern
+  const fontShrink = 4;
+  const watermarkScale = 0.4;
+
+  // FRONT SIDE — Short questions
+  if (fourPaperShortSection) {
+    pages.push(
+      <div key="four-papers-short-page" className="paper-sheet border shadow-sm print-break" style={sheetBaseStyle}>
+        {[...Array(count)].map((_, i) => (
+          <React.Fragment key={i}>
+            <PaperSlot height={slotHeight}>
+              <div style={{ position: 'relative', zIndex: 1, padding: '0mm', height: '100%' }}>
+                <Watermark
+                  isPremium={isPremium}
+                  logoUrl={profile?.logo}
+                  settings={settings}
+                  scale={watermarkScale}
+                  top="60%"
+                />
+                <PaperHeader
+                  totalMarks={fourPaperShortSection.totalMarks}
+                  subject={subject}
+                  paperSections={[fourPaperShortSection]}
+                  isEditMode={isEditMode}
+                  settings={{ ...settings, fontSize: settings.fontSize - fontShrink }}
+                  paperLanguage={paperLanguage}
+                  config={config}
+                  currentLayout={currentLayout}
+                  currentClass={currentClass}
+                  profile={profile}
+                  paperPart="subjective"
+                  subjectUrduName={subjectUrduName}
+                />
+                <SectionBlock key={`${i}-short`} section={fourPaperShortSection} />
+              </div>
+            </PaperSlot>
+            {i < count - 1 && <DashedLine />}
+          </React.Fragment>
+        ))}
+      </div>
+    );
   }
+
+  // BACK SIDE — Long questions
+  if (fourPaperLongSection) {
+    pages.push(
+      <div key="four-papers-long-page" className="paper-sheet border shadow-sm print-break" style={sheetBaseStyle}>
+        {[...Array(count)].map((_, i) => (
+          <React.Fragment key={i}>
+            <PaperSlot height={slotHeight}>
+              <div style={{ position: 'relative', zIndex: 1, padding: '0mm', height: '100%' }}>
+                <Watermark
+                  isPremium={isPremium}
+                  logoUrl={profile?.logo}
+                  settings={settings}
+                  scale={watermarkScale}
+                  top="60%"
+                />
+                <PaperHeader
+                  totalMarks={fourPaperLongSection.totalMarks}
+                  subject={subject}
+                  paperSections={[fourPaperLongSection]}
+                  isEditMode={isEditMode}
+                  settings={{ ...settings, fontSize: settings.fontSize - fontShrink }}
+                  paperLanguage={paperLanguage}
+                  config={config}
+                  currentLayout={currentLayout}
+                  currentClass={currentClass}
+                  profile={profile}
+                  paperPart="subjective"
+                  subjectUrduName={subjectUrduName}
+                />
+                <SectionBlock key={`${i}-long`} section={fourPaperLongSection} />
+              </div>
+            </PaperSlot>
+            {i < count - 1 && <DashedLine />}
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  }
+}
 
   // =========================
   // MCQ ANSWER KEYS

@@ -446,7 +446,7 @@ if (response.ok) {
                 </div>
                 <div className="mt-4">
                   <small className="opacity-75">
-                    ✓ Free 3 Month Trial ✓ No Credit Card Required ✓ Expert Support Available
+                    Free 3 Month Trial | No Credit Card Required | Expert Support Available
                   </small>
                 </div>
               </div>

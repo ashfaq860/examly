@@ -1,3 +1,4 @@
+// dashboard/generate-paper/components/PaperHeader.tsx
 'use client';
 import React from 'react';
 import StandardHeader from './layouts/StandardHeader';
@@ -11,6 +12,8 @@ import BilingualHeader from './layouts/BilingualHeader';
 import UniversityHeader from './layouts/UniversityHeader';
 import DataBarHeader from './layouts/DataBarHeader';
 import { PaperSettings } from '@/types/paperBuilderTypes';
+
+import SmartHeader from './layouts/SmartHeader';
 /**
  * Note: Since EditableText might be an external dependency that's occasionally undefined 
  * in certain environments, we use a simple fallback to ensure the app doesn't crash.
@@ -46,35 +49,34 @@ export interface PaperHeaderProps {
 
 // Main Component - Ensuring it is exported as a default export
 export const PaperHeader: React.FC<PaperHeaderProps> = (props) => {
-  const { settings, paperLanguage, currentLayout,currentClass,profile } = props;
+  const { settings, paperLanguage, currentLayout, currentClass, profile } = props;
   const isRTL = paperLanguage === 'urdu';
   const isCompact = currentLayout && (currentLayout.startsWith('two') || currentLayout.startsWith('three'));
-//console.log('Rendering PaperHeader with props:', currentClass); // Debug log to trace rendering and props
   const textAlign = isRTL ? 'text-end' : 'text-start';
 
-  // Base styles to ensure print fidelity
-  const printStyles = {
-  /*  printColorAdjust: 'exact',
-    WebkitPrintColorAdjust: 'exact',
-  */
-    } as React.CSSProperties;
+  const printStyles = {} as React.CSSProperties;
 
   return (
     <div style={printStyles} className="print-header-container">
       {(() => {
-        // 1. Force Compact Mode if layout is multi-paper
-        if (isCompact) return <CompactHeader {...props} isRTL={isRTL} directionClass={textAlign} profile={profile} />;
+        // 1. Four-papers layout always uses SmartHeader
+        if (currentLayout === 'four_papers')
+          return <SmartHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile} />;
 
-        // 2. Live Switch based on SettingsPanel
+        // 2. Force Compact for two/three paper layouts
+        if (isCompact)
+          return <CompactHeader {...props} isRTL={isRTL} directionClass={textAlign} profile={profile} />;
+
+        // 3. Live switch based on SettingsPanel
         switch (settings.headerLayout) {
-          case 'classic': return <ClassicHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
-          case 'modern': return <ModernHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
-          case 'instructional': return <InstructionalHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
-          case 'scorecard': return <ScorecardHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
-          case 'bilingual': return <BilingualHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
-          case 'university': return <UniversityHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
-          case 'databar': return <DataBarHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
-          default: return <StandardHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile}/>;
+          case 'classic':       return <ClassicHeader       {...props} isRTL={isRTL} currentClass={currentClass} profile={profile} />;
+          case 'modern':        return <ModernHeader        {...props} isRTL={isRTL} currentClass={currentClass} profile={profile} />;
+          case 'instructional': return <InstructionalHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile} />;
+          case 'scorecard':     return <ScorecardHeader     {...props} isRTL={isRTL} currentClass={currentClass} profile={profile} />;
+          case 'bilingual':     return <BilingualHeader     {...props} isRTL={isRTL} currentClass={currentClass} profile={profile} />;
+          case 'university':    return <UniversityHeader    {...props} isRTL={isRTL} currentClass={currentClass} profile={profile} />;
+          case 'databar':       return <DataBarHeader       {...props} isRTL={isRTL} currentClass={currentClass} profile={profile} />;
+          default:              return <StandardHeader      {...props} isRTL={isRTL} currentClass={currentClass} profile={profile} />;
         }
       })()}
     </div>

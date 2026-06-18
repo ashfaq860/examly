@@ -47,13 +47,14 @@ export const QuestionSelectorModal: React.FC<any> = ({
   const isGlobalConfigDisabled = paperData.sections.length > 0;
 
   // --- Layout & Limits Logic ---
-  const getLimitsForLayout = (layoutValue: string) => {
-    switch (layoutValue) {
-      case "two_papers": return { maxMcq: 5, maxSubjective: 15 };
-      case "three_papers": return { maxMcq: 5, maxSubjective: 10 };
-      default: return { maxMcq: 0, maxSubjective: 0 };
-    }
-  };
+ const getLimitsForLayout = (layoutValue: string) => {
+  switch (layoutValue) {
+    case "two_papers": return { maxMcq: 5, maxSubjective: 15 };
+    case "three_papers": return { maxMcq: 5, maxSubjective: 10 };
+    case "four_papers": return { maxMcq: 0, maxShort: 6, maxLong: 5 };
+    default: return { maxMcq: 0, maxSubjective: 0 };
+  }
+};
 
   const updateLocalState = () => {
     if (typeof window !== 'undefined') {
@@ -74,47 +75,74 @@ export const QuestionSelectorModal: React.FC<any> = ({
 
   useEffect(() => { updateLocalState(); }, []);
 
-  const processAndSave = (type: string, questions: any[], attempt: number, marks: number) => {
-    const { maxMcq, maxSubjective } = getLimitsForLayout(paperData.layout);
-    const subjectName = currentSubject?.name || 'General';
+const processAndSave = (type: string, questions: any[], attempt: number, marks: number) => {
+  const limits = getLimitsForLayout(paperData.layout);
+  const subjectName = currentSubject?.name || 'General';
 
-    const existingCount = paperData.sections
-      .filter((p: any) => p.subject === subjectName && (type === 'mcq' ? p.type === 'mcq' : p.type !== 'mcq'))
-      .reduce((sum: number, p: any) => sum + p.questions.length, 0);
+  let finalQuestions = questions;
 
-    const newCount = questions.length;
-    
-    if (type === 'mcq' && maxMcq > 0 && (existingCount + newCount) > maxMcq) {
-      toast.error(`Limit exceeded: Layout allows max ${maxMcq} MCQs.`);
+  if (paperData.layout === 'four_papers') {
+    // four_papers: hard block (existing behaviour is correct)
+    if (type === 'mcq') {
+      toast.error("MCQ sections aren't supported in the 4-papers layout.");
       return false;
     }
-    if (type !== 'mcq' && maxSubjective > 0 && (existingCount + newCount) > maxSubjective) {
-      toast.error(`Limit exceeded: Layout allows max ${maxSubjective} questions.`);
-      return false;
+    const capKey = type === 'short' ? 'maxShort' : type === 'long' ? 'maxLong' : null;
+    if (capKey) {
+      const cap = (limits as any)[capKey];
+      const existingCount = paperData.sections
+        .filter((p: any) => p.subject === subjectName && p.type === type)
+        .reduce((sum: number, p: any) => sum + p.questions.length, 0);
+      const remaining = cap - existingCount;
+      if (remaining <= 0) {
+        toast.error(`Limit reached: max ${cap} ${type} questions for 4-papers layout.`);
+        return false;
+      }
+      if (existingCount + questions.length > cap) {
+        finalQuestions = questions.slice(0, remaining);
+        toast(`Only ${remaining} ${type} question(s) added — layout cap is ${cap}.`, { icon: '⚠️' });
+      }
     }
+  } else {
+    // two_papers / three_papers: soft cap (truncate + toast)
+    const { maxMcq, maxSubjective } = limits as any;
+    const isMcq = type === 'mcq';
+    const cap = isMcq ? maxMcq : maxSubjective;
 
-    const newSection = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      type, 
-      questions, 
-      totalQuestions: newCount,
-      attemptCount: attempt, 
-      marksEach: marks, 
-      totalMarks: attempt * marks,
-      subject: subjectName, 
-      timestamp: new Date().toISOString()
-    };
+    if (cap > 0) {
+      const existingCount = paperData.sections
+        .filter((p: any) => p.subject === subjectName && (isMcq ? p.type === 'mcq' : p.type !== 'mcq'))
+        .reduce((sum: number, p: any) => sum + p.questions.length, 0);
+      const remaining = cap - existingCount;
 
-    const updatedPaper = {
-      ...paperData,
-      sections: [...paperData.sections, newSection]
-    };
+      if (remaining <= 0) {
+        toast.error(`Limit reached: max ${cap} ${isMcq ? 'MCQ' : 'subjective'} questions for this layout.`);
+        return false;
+      }
+      if (existingCount + questions.length > cap) {
+        finalQuestions = questions.slice(0, remaining);
+        toast(`Only ${remaining} question(s) added — layout cap is ${cap}.`, { icon: '⚠️' });
+      }
+    }
+  }
 
-    localStorage.setItem('questionPapers', JSON.stringify(updatedPaper));
-    setPaperData(updatedPaper);
-    return true;
+  const newSection = {
+    id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+    type,
+    questions: finalQuestions,
+    totalQuestions: finalQuestions.length,
+    attemptCount: Math.min(attempt, finalQuestions.length),
+    marksEach: marks,
+    totalMarks: Math.min(attempt, finalQuestions.length) * marks,
+    subject: subjectName,
+    timestamp: new Date().toISOString()
   };
 
+  const updatedPaper = { ...paperData, sections: [...paperData.sections, newSection] };
+  localStorage.setItem('questionPapers', JSON.stringify(updatedPaper));
+  setPaperData(updatedPaper);
+  return true;
+};
   const handleAutoAdd = () => {
     if (!selectedType || !totalQuestions || totalQuestions === 0) {
     toast.error("Select type & total questions");
@@ -182,10 +210,26 @@ const handleTotalChange = (val: number | '') => {
     setAttemptCount('');
     return;
   }
-  const { maxMcq, maxSubjective } = getLimitsForLayout(paperData.layout);
-  let finalVal = val;
-  if (selectedType === 'mcq' && maxMcq > 0) finalVal = Math.min(val, maxMcq);
-  else if (selectedType !== 'mcq' && selectedType !== '' && maxSubjective > 0) finalVal = Math.min(val, maxSubjective);
+
+  const limits = getLimitsForLayout(paperData.layout);
+  let cap = 0;
+
+  if (paperData.layout === 'four_papers') {
+    // four_papers: cap by short/long, MCQ is already blocked in the type selector
+    if (selectedType === 'short') cap = (limits as any).maxShort ?? 0;
+    else if (selectedType === 'long') cap = (limits as any).maxLong ?? 0;
+  } else {
+    const { maxMcq, maxSubjective } = limits as any;
+    if (selectedType === 'mcq') cap = maxMcq;
+    else if (selectedType !== '') cap = maxSubjective;
+  }
+
+  const finalVal = cap > 0 ? Math.min(val, cap) : val;
+
+  if (cap > 0 && val > cap) {
+    toast.error(`Max ${cap} ${selectedType || ''} questions allowed for this layout.`);
+  }
+
   setTotalQuestions(finalVal);
   setAttemptCount(finalVal);
 };
@@ -225,7 +269,28 @@ const handleTotalChange = (val: number | '') => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+  // change questions if user changes type or layout after selecting total questions
+useEffect(() => {
+  if (!selectedType || totalQuestions === '' || totalQuestions === 0) return;
 
+  const limits = getLimitsForLayout(paperData.layout);
+  let cap = 0;
+
+  if (paperData.layout === 'four_papers') {
+    if (selectedType === 'short') cap = (limits as any).maxShort ?? 0;
+    else if (selectedType === 'long') cap = (limits as any).maxLong ?? 0;
+  } else {
+    const { maxMcq, maxSubjective } = limits as any;
+    if (selectedType === 'mcq') cap = maxMcq;
+    else cap = maxSubjective;
+  }
+
+  if (cap > 0 && (totalQuestions as number) > cap) {
+    setTotalQuestions(cap);
+    setAttemptCount(cap);
+    toast.error(`Max ${cap} ${selectedType} questions for this layout. Value capped to ${cap}.`);
+  }
+}, [paperData.layout, selectedType]);
   if (!isOpen) return null;
   const isInputDisabled = !selectedType;
 
@@ -269,7 +334,8 @@ const handleTotalChange = (val: number | '') => {
                         { label: 'Separate MCQ/subjective', value: 'separate' },
                         { label: 'Same Page MCQ/subjective', value: 'same_page' },
                         { label: '2 paper Per Page', value: 'two_papers' },
-                        { label: '3 paper Per Page', value: 'three_papers' }
+                        { label: '3 paper Per Page', value: 'three_papers' },
+                         { label: '4 paper Per Page (Short/Long only)', value: 'four_papers' }
                       ].map(opt => (
                         <div key={opt.value} className="drop-item" onClick={() => handleLayoutChange(opt.value)}>
                           {opt.label}
@@ -325,7 +391,10 @@ const handleTotalChange = (val: number | '') => {
                 <label><span className="full-lbl">Question Type</span><span className="short-lbl">Qs Type</span></label>
                 <select className="mini-input" value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
                   <option value=''>Select Type</option>
-                  {questionTypes.map((t: any) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  {questionTypes
+                    .filter((t: any) => paperData.layout !== 'four_papers' || t.value !== 'mcq')
+                    .map((t: any) => <option key={t.value} value={t.value}>{t.label}
+                  </option>)}
                 </select>
               </div>
 

@@ -42,7 +42,7 @@ export default function NewUserPage() {
     setLoading(true);
 
     try {
-      // convert subjects string → array
+      // Convert the comma-separated subjects field into an array.
       const payload = {
         ...form,
         subjects: form.subjects
@@ -69,9 +69,9 @@ export default function NewUserPage() {
   return (
     <AdminLayout>
       <div className="container mt-4">
-        <div className="card shadow-lg border-0">
+        <div className="card shadow-sm border-0">
           <div className="card-header bg-primary text-white">
-            <h4 className="mb-0">✨ Create New User</h4>
+            <h4 className="mb-0">Create New User</h4>
           </div>
           <div className="card-body p-4">
             <form onSubmit={handleSubmit}>
@@ -113,7 +113,7 @@ export default function NewUserPage() {
                       value={form.password}
                       onChange={handleChange}
                       required
-                      placeholder="••••••••"
+                      placeholder="********"
                     />
                   </div>
 

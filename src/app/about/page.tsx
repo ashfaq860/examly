@@ -160,7 +160,7 @@ export default function AboutUs() {
                   </div>
                   <h3 className="fw-bold mb-3 text-dark">Our Mission</h3>
                   <p className="text-muted fs-5">
-                    To empower educators with intelligent tools that enable them to create papers and tests within seconds—saving valuable time and allowing them to focus on teaching effectiveness—while providing students with a platform to assess their learning and drive academic success.
+                    To empower educators with intelligent tools that enable them to create papers and tests within seconds, saving valuable time and allowing them to focus on teaching effectiveness while providing students with a platform to assess their learning and drive academic success.
                   </p>
                 </div>
               </div>
@@ -365,7 +365,7 @@ export default function AboutUs() {
                 </div>
                 <div className="mt-4">
                   <small className="opacity-75">
-                    ✓ 1 Month Free Trial ✓ No Credit Card Required ✓ Cancel Anytime
+                    1 Month Free Trial | No Credit Card Required | Cancel Anytime
                   </small>
                 </div>
               </div>
