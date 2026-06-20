@@ -1,7 +1,7 @@
 //dashboard/generate-paper/components/modals/QuestionSelectorModal.tsx
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
+import {
   Settings2, Layers, Search, Database, Languages, X, ChevronDown,
   Sparkles, MousePointer2, Check, Calculator,
   Shuffle, Eye, Layout as LayoutIcon
@@ -9,6 +9,8 @@ import {
 import { ManualQuestionSelection } from '../ManualQuestionSelection';
 import { toast } from 'react-hot-toast';
 import Loading from '../../loading';
+import { getBucket } from '@/lib/paperQuestionBuckets';
+
 export const QuestionSelectorModal: React.FC<any> = ({
   isOpen, onClose, onAddQuestions, subjectId, classId, chapterOption,
   selectedChapters, chapters, subjects = [],
@@ -16,9 +18,8 @@ export const QuestionSelectorModal: React.FC<any> = ({
 }) => {
   // --- States ---
   const [selectedType, setSelectedType] = useState<string>('');
-  const [selectedSources, setSelectedSources] = useState<string[]>(['all']); 
+  const [selectedSources, setSelectedSources] = useState<string[]>(['all']);
   const [currentLanguage, setCurrentLanguage] = useState(initialLanguage || 'english');
-  // Change these three state initializations
   const [totalQuestions, setTotalQuestions] = useState<number | ''>('');
   const [attemptCount, setAttemptCount] = useState<number | ''>('');
   const [marksEach, setMarksEach] = useState<number | ''>('');
@@ -29,7 +30,7 @@ export const QuestionSelectorModal: React.FC<any> = ({
   const [showLayoutDropdown, setShowLayoutDropdown] = useState(false);
   const [questionsShuffled, setQuestionsShuffled] = useState<boolean>(false);
   const [showSelectedQuestions, setShowSelectedQuestions] = useState<boolean>(false);
-  const [paperData, setPaperData] = useState<{layout: string, language: string, sections: any[]}>({
+  const [paperData, setPaperData] = useState<{ layout: string, language: string, sections: any[] }>({
     layout: watch('mcqPlacement') || 'separate',
     language: initialLanguage || 'english',
     sections: []
@@ -37,36 +38,37 @@ export const QuestionSelectorModal: React.FC<any> = ({
   const [autoSelectSeed, setAutoSelectSeed] = useState<number>(0);
   const [manualShuffleTrigger, setManualShuffleTrigger] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const sourceDropdownRef = useRef<HTMLDivElement>(null);
   const layoutDropdownRef = useRef<HTMLDivElement>(null);
-  
+
   const questionTypes = getQuestionTypes ? getQuestionTypes() : [];
-  
+
   // Disable layout/lang if any sections exist
   const isGlobalConfigDisabled = paperData.sections.length > 0;
 
   // --- Layout & Limits Logic ---
- const getLimitsForLayout = (layoutValue: string) => {
-  switch (layoutValue) {
-    case "two_papers": return { maxMcq: 5, maxSubjective: 15 };
-    case "three_papers": return { maxMcq: 5, maxSubjective: 10 };
-    case "four_papers": return { maxMcq: 0, maxShort: 6, maxLong: 5 };
-    default: return { maxMcq: 0, maxSubjective: 0 };
-  }
-};
+  // NOTE: four_papers uses maxShort/maxLong (bucketed caps) instead of
+  // maxMcq/maxSubjective, since short and long types have different,
+  // independent caps rather than a single combined "subjective" pool.
+  const getLimitsForLayout = (layoutValue: string) => {
+    switch (layoutValue) {
+      case "two_papers": return { maxMcq: 5, maxSubjective: 15 };
+      case "three_papers": return { maxMcq: 5, maxSubjective: 10 };
+      case "four_papers": return { maxMcq: 0, maxShort: 7, maxLong: 5 };
+      default: return { maxMcq: 0, maxSubjective: 0 };
+    }
+  };
 
   const updateLocalState = () => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('questionPapers');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Handle legacy array format or new object format
         if (Array.isArray(parsed)) {
           setPaperData({ layout: 'separate', language: 'english', sections: parsed });
         } else {
           setPaperData(parsed);
-          // Sync watch value with stored layout
           setValue('mcqPlacement', parsed.layout);
         }
       }
@@ -75,85 +77,90 @@ export const QuestionSelectorModal: React.FC<any> = ({
 
   useEffect(() => { updateLocalState(); }, []);
 
-const processAndSave = (type: string, questions: any[], attempt: number, marks: number) => {
-  const limits = getLimitsForLayout(paperData.layout);
-  const subjectName = currentSubject?.name || 'General';
+  const processAndSave = (type: string, questions: any[], attempt: number, marks: number) => {
+    const limits = getLimitsForLayout(paperData.layout);
+    const subjectName = currentSubject?.name || 'General';
+    let finalQuestions = questions;
 
-  let finalQuestions = questions;
+    if (paperData.layout === 'four_papers') {
+      // four_papers: bucket by short/long classification (covers all
+      // English/Urdu-specific types like idiom_phrases, gazal, etc.)
+      const bucket = getBucket(type);
 
-  if (paperData.layout === 'four_papers') {
-    // four_papers: hard block (existing behaviour is correct)
-    if (type === 'mcq') {
-      toast.error("MCQ sections aren't supported in the 4-papers layout.");
-      return false;
-    }
-    const capKey = type === 'short' ? 'maxShort' : type === 'long' ? 'maxLong' : null;
-    if (capKey) {
-      const cap = (limits as any)[capKey];
-      const existingCount = paperData.sections
-        .filter((p: any) => p.subject === subjectName && p.type === type)
-        .reduce((sum: number, p: any) => sum + p.questions.length, 0);
-      const remaining = cap - existingCount;
-      if (remaining <= 0) {
-        toast.error(`Limit reached: max ${cap} ${type} questions for 4-papers layout.`);
+      if (bucket === 'mcq') {
+        toast.error("MCQ sections aren't supported in the 4-papers layout.");
         return false;
       }
-      if (existingCount + questions.length > cap) {
-        finalQuestions = questions.slice(0, remaining);
-        toast(`Only ${remaining} ${type} question(s) added — layout cap is ${cap}.`, { icon: '⚠️' });
+      if (bucket === 'other') {
+        toast.error(`"${type}" isn't supported in the 4-papers layout.`);
+        return false;
       }
-    }
-  } else {
-    // two_papers / three_papers: soft cap (truncate + toast)
-    const { maxMcq, maxSubjective } = limits as any;
-    const isMcq = type === 'mcq';
-    const cap = isMcq ? maxMcq : maxSubjective;
 
-    if (cap > 0) {
+      const cap = bucket === 'short' ? (limits as any).maxShort : (limits as any).maxLong;
       const existingCount = paperData.sections
-        .filter((p: any) => p.subject === subjectName && (isMcq ? p.type === 'mcq' : p.type !== 'mcq'))
+        .filter((p: any) => p.subject === subjectName && getBucket(p.type) === bucket)
         .reduce((sum: number, p: any) => sum + p.questions.length, 0);
       const remaining = cap - existingCount;
 
       if (remaining <= 0) {
-        toast.error(`Limit reached: max ${cap} ${isMcq ? 'MCQ' : 'subjective'} questions for this layout.`);
+        toast.error(`Limit reached: max ${cap} ${bucket}-type questions for 4-papers layout.`);
         return false;
       }
       if (existingCount + questions.length > cap) {
         finalQuestions = questions.slice(0, remaining);
-        toast(`Only ${remaining} question(s) added — layout cap is ${cap}.`, { icon: '⚠️' });
+        toast(`Only ${remaining} question(s) added — layout cap is ${cap} ${bucket}-type questions.`, { icon: '⚠️' });
+      }
+    } else {
+      // two_papers / three_papers: unchanged — mcq vs everything-else
+      const { maxMcq, maxSubjective } = limits as any;
+      const isMcq = type === 'mcq';
+      const cap = isMcq ? maxMcq : maxSubjective;
+
+      if (cap > 0) {
+        const existingCount = paperData.sections
+          .filter((p: any) => p.subject === subjectName && (isMcq ? p.type === 'mcq' : p.type !== 'mcq'))
+          .reduce((sum: number, p: any) => sum + p.questions.length, 0);
+        const remaining = cap - existingCount;
+
+        if (remaining <= 0) {
+          toast.error(`Limit reached: max ${cap} ${isMcq ? 'MCQ' : 'subjective'} questions for this layout.`);
+          return false;
+        }
+        if (existingCount + questions.length > cap) {
+          finalQuestions = questions.slice(0, remaining);
+          toast(`Only ${remaining} question(s) added — layout cap is ${cap}.`, { icon: '⚠️' });
+        }
       }
     }
-  }
 
-  const newSection = {
-    id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-    type,
-    questions: finalQuestions,
-    totalQuestions: finalQuestions.length,
-    attemptCount: Math.min(attempt, finalQuestions.length),
-    marksEach: marks,
-    totalMarks: Math.min(attempt, finalQuestions.length) * marks,
-    subject: subjectName,
-    timestamp: new Date().toISOString()
+    const newSection = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      type,
+      questions: finalQuestions,
+      totalQuestions: finalQuestions.length,
+      attemptCount: Math.min(attempt, finalQuestions.length),
+      marksEach: marks,
+      totalMarks: Math.min(attempt, finalQuestions.length) * marks,
+      subject: subjectName,
+      timestamp: new Date().toISOString()
+    };
+
+    const updatedPaper = { ...paperData, sections: [...paperData.sections, newSection] };
+    localStorage.setItem('questionPapers', JSON.stringify(updatedPaper));
+    setPaperData(updatedPaper);
+    return true;
   };
 
-  const updatedPaper = { ...paperData, sections: [...paperData.sections, newSection] };
-  localStorage.setItem('questionPapers', JSON.stringify(updatedPaper));
-  setPaperData(updatedPaper);
-  return true;
-};
   const handleAutoAdd = () => {
     if (!selectedType || !totalQuestions || totalQuestions === 0) {
-    toast.error("Select type & total questions");
-    return;
-  }
+      toast.error("Select type & total questions");
+      return;
+    }
     setUseManualSelection(false);
     setAutoSelectSeed(Date.now());
   };
 
-  // 1. Get the selected topics from the parent form
-const selectedTopics = watch('selectedTopics') || [];
+  const selectedTopics = watch('selectedTopics') || [];
   useEffect(() => {
     if (!selectedType || totalQuestions === 0 || useManualSelection || autoSelectSeed === 0) return;
 
@@ -164,7 +171,7 @@ const selectedTopics = watch('selectedTopics') || [];
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            subjectId, classId, chapterIds: selectedChapters,topicIds: selectedTopics,
+            subjectId, classId, chapterIds: selectedChapters, topicIds: selectedTopics,
             questionType: selectedType, language: paperData.language,
             sourceTypes: selectedSources, limit: totalQuestions, seed: autoSelectSeed
           })
@@ -191,7 +198,7 @@ const selectedTopics = watch('selectedTopics') || [];
 
   const handleDiscard = () => {
     if (paperData.sections.length === 0 && !selectedType) return;
-    
+
     if (window.confirm("Are you sure you want to discard all selected questions?")) {
       localStorage.removeItem('questionPapers');
       setPaperData(prev => ({ ...prev, sections: [] }));
@@ -204,35 +211,36 @@ const selectedTopics = watch('selectedTopics') || [];
     }
   };
 
-const handleTotalChange = (val: number | '') => {
-  if (val === '') {
-    setTotalQuestions('');
-    setAttemptCount('');
-    return;
-  }
+  const handleTotalChange = (val: number | '') => {
+    if (val === '') {
+      setTotalQuestions('');
+      setAttemptCount('');
+      return;
+    }
 
-  const limits = getLimitsForLayout(paperData.layout);
-  let cap = 0;
+    const limits = getLimitsForLayout(paperData.layout);
+    let cap = 0;
 
-  if (paperData.layout === 'four_papers') {
-    // four_papers: cap by short/long, MCQ is already blocked in the type selector
-    if (selectedType === 'short') cap = (limits as any).maxShort ?? 0;
-    else if (selectedType === 'long') cap = (limits as any).maxLong ?? 0;
-  } else {
-    const { maxMcq, maxSubjective } = limits as any;
-    if (selectedType === 'mcq') cap = maxMcq;
-    else if (selectedType !== '') cap = maxSubjective;
-  }
+    if (paperData.layout === 'four_papers') {
+      const bucket = getBucket(selectedType);
+      if (bucket === 'short') cap = (limits as any).maxShort ?? 0;
+      else if (bucket === 'long') cap = (limits as any).maxLong ?? 0;
+      // bucket === 'mcq' or 'other' is already blocked at the type-select level
+    } else {
+      const { maxMcq, maxSubjective } = limits as any;
+      if (selectedType === 'mcq') cap = maxMcq;
+      else if (selectedType !== '') cap = maxSubjective;
+    }
 
-  const finalVal = cap > 0 ? Math.min(val, cap) : val;
+    const finalVal = cap > 0 ? Math.min(val, cap) : val;
 
-  if (cap > 0 && val > cap) {
-    toast.error(`Max ${cap} ${selectedType || ''} questions allowed for this layout.`);
-  }
+    if (cap > 0 && val > cap) {
+      toast.error(`Max ${cap} ${selectedType || ''} questions allowed for this layout.`);
+    }
 
-  setTotalQuestions(finalVal);
-  setAttemptCount(finalVal);
-};
+    setTotalQuestions(finalVal);
+    setAttemptCount(finalVal);
+  };
 
   const handleLayoutChange = (val: string) => {
     setPaperData(prev => ({ ...prev, layout: val }));
@@ -269,28 +277,30 @@ const handleTotalChange = (val: number | '') => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-  // change questions if user changes type or layout after selecting total questions
-useEffect(() => {
-  if (!selectedType || totalQuestions === '' || totalQuestions === 0) return;
 
-  const limits = getLimitsForLayout(paperData.layout);
-  let cap = 0;
+  // Re-cap totalQuestions if the user changes type or layout after already setting a value
+  useEffect(() => {
+    if (!selectedType || totalQuestions === '' || totalQuestions === 0) return;
 
-  if (paperData.layout === 'four_papers') {
-    if (selectedType === 'short') cap = (limits as any).maxShort ?? 0;
-    else if (selectedType === 'long') cap = (limits as any).maxLong ?? 0;
-  } else {
-    const { maxMcq, maxSubjective } = limits as any;
-    if (selectedType === 'mcq') cap = maxMcq;
-    else cap = maxSubjective;
-  }
+    const limits = getLimitsForLayout(paperData.layout);
+    let cap = 0;
 
-  if (cap > 0 && (totalQuestions as number) > cap) {
-    setTotalQuestions(cap);
-    setAttemptCount(cap);
-    toast.error(`Max ${cap} ${selectedType} questions for this layout. Value capped to ${cap}.`);
-  }
-}, [paperData.layout, selectedType]);
+    if (paperData.layout === 'four_papers') {
+      const bucket = getBucket(selectedType);
+      if (bucket === 'short') cap = (limits as any).maxShort ?? 0;
+      else if (bucket === 'long') cap = (limits as any).maxLong ?? 0;
+    } else {
+      const { maxMcq, maxSubjective } = limits as any;
+      cap = selectedType === 'mcq' ? maxMcq : maxSubjective;
+    }
+
+    if (cap > 0 && (totalQuestions as number) > cap) {
+      setTotalQuestions(cap);
+      setAttemptCount(cap);
+      toast.error(`Max ${cap} questions for this layout. Value capped to ${cap}.`);
+    }
+  }, [paperData.layout, selectedType]);
+
   if (!isOpen) return null;
   const isInputDisabled = !selectedType;
 
@@ -305,7 +315,7 @@ useEffect(() => {
               <div className="header-text">
                 <h3>Paper Configuration</h3>
                 <p>
-                 Class: <span className="subject-tag">{(currentClass?.name || 'General')} </span> | Subject: <span className="subject-tag">{(currentSubject?.name || 'General')}</span>
+                  Class: <span className="subject-tag">{(currentClass?.name || 'General')} </span> | Subject: <span className="subject-tag">{(currentSubject?.name || 'General')}</span>
                   {paperData.sections.length > 0 && (
                     <span className="section-count">
                       ({paperData.sections.length} sections added)
@@ -322,8 +332,8 @@ useEffect(() => {
               {/* Layout Dropdown */}
               <div className="tool-box" ref={layoutDropdownRef}>
                 <label><span className="full-lbl">Paper Layout</span><span className="short-lbl">Layout</span></label>
-                <div 
-                  className={`mini-input clickable ${isGlobalConfigDisabled ? 'disabled-cfg' : ''}`} 
+                <div
+                  className={`mini-input clickable ${isGlobalConfigDisabled ? 'disabled-cfg' : ''}`}
                   onClick={() => !isGlobalConfigDisabled && setShowLayoutDropdown(!showLayoutDropdown)}
                 >
                   <span className="truncate-text">{paperData.layout.replace('_', ' ')}</span>
@@ -335,7 +345,7 @@ useEffect(() => {
                         { label: 'Same Page MCQ/subjective', value: 'same_page' },
                         { label: '2 paper Per Page', value: 'two_papers' },
                         { label: '3 paper Per Page', value: 'three_papers' },
-                         { label: '4 paper Per Page (Short/Long only)', value: 'four_papers' }
+                        { label: '4 paper Per Page (Short/Long only)', value: 'four_papers' }
                       ].map(opt => (
                         <div key={opt.value} className="drop-item" onClick={() => handleLayoutChange(opt.value)}>
                           {opt.label}
@@ -345,67 +355,72 @@ useEffect(() => {
                   )}
                 </div>
               </div>
-    {/* Source Dropdown */}
+
+              {/* Source Dropdown */}
               <div className="tool-box" ref={sourceDropdownRef}>
                 <label><span className="full-lbl">Source</span><span className="short-lbl">Source</span></label>
                 <div className="mini-input clickable" onClick={() => setShowSourceDropdown(!showSourceDropdown)}>
                   <span className="truncate-text">
-  {selectedSources.includes('all')
-    ? 'All'
-    : selectedSources.length === 1
-      ? { book: 'Book Exercise', model_paper: 'Model Paper', past_paper: 'Past Paper', custom: 'Additional Questions', conceptual: 'Conceptual' }[selectedSources[0]]
-      : `${selectedSources.length} Selected`}
-</span>      <ChevronDown size={14} />
+                    {selectedSources.includes('all')
+                      ? 'All'
+                      : selectedSources.length === 1
+                        ? { book: 'Book Exercise', model_paper: 'Model Paper', past_paper: 'Past Paper', custom: 'Additional Questions', conceptual: 'Conceptual' }[selectedSources[0]]
+                        : `${selectedSources.length} Selected`}
+                  </span> <ChevronDown size={14} />
                   {showSourceDropdown && (
                     <div className="floating-dropdown">
-                 {[
-            { value: 'all',         label: 'All' },
-            { value: 'book',        label: 'Book Exercise' },
-            { value: 'custom',      label: 'Additional Questions' },
-              { value: 'conceptual',  label: 'Conceptual' },
-            { value: 'model_paper', label: 'Model Paper' },
-            { value: 'past_paper',  label: 'Past Paper' },
-        ].map(opt => (
-          <div
-            key={opt.value}
-            className={`drop-item ${selectedSources.includes(opt.value) ? 'active' : ''}`}
-            onClick={() => {
-              if (opt.value === 'all') setSelectedSources(['all']);
-              else setSelectedSources(prev =>
-                prev.includes(opt.value)
-                  ? prev.filter(s => s !== opt.value)
-                  : [...prev.filter(s => s !== 'all'), opt.value]
-              );
-            }}
-        >
-          {opt.label}
-          {selectedSources.includes(opt.value) && <Check size={12} />}
-        </div>
-      ))}
+                      {[
+                        { value: 'all', label: 'All' },
+                        { value: 'book', label: 'Book Exercise' },
+                        { value: 'custom', label: 'Additional Questions' },
+                        { value: 'conceptual', label: 'Conceptual' },
+                        { value: 'model_paper', label: 'Model Paper' },
+                        { value: 'past_paper', label: 'Past Paper' },
+                      ].map(opt => (
+                        <div
+                          key={opt.value}
+                          className={`drop-item ${selectedSources.includes(opt.value) ? 'active' : ''}`}
+                          onClick={() => {
+                            if (opt.value === 'all') setSelectedSources(['all']);
+                            else setSelectedSources(prev =>
+                              prev.includes(opt.value)
+                                ? prev.filter(s => s !== opt.value)
+                                : [...prev.filter(s => s !== 'all'), opt.value]
+                            );
+                          }}
+                        >
+                          {opt.label}
+                          {selectedSources.includes(opt.value) && <Check size={12} />}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
               </div>
+
               {/* Question Type */}
               <div className="tool-box">
                 <label><span className="full-lbl">Question Type</span><span className="short-lbl">Qs Type</span></label>
-                <select className="mini-input" value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
+                <select className="mini-input" style={{
+  fontFamily:currentSubject?.name?.toLowerCase() === 'urdu'? "'JameelNoori', 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu'": 'inherit',
+}} value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
                   <option value=''>Select Type</option>
                   {questionTypes
-                    .filter((t: any) => paperData.layout !== 'four_papers' || t.value !== 'mcq')
-                    .map((t: any) => <option key={t.value} value={t.value}>{t.label}
-                  </option>)}
+                    .filter((t: any) => {
+                      if (paperData.layout !== 'four_papers') return true;
+                      const bucket = getBucket(t.value);
+                      return bucket === 'short' || bucket === 'long';
+                    })
+                    .map((t: any) => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
-
-          
 
               {/* Language */}
               <div className="tool-box">
                 <label><span className="full-lbl">Language</span><span className="short-lbl">Lang</span></label>
-                <select 
-                  className={`mini-input ${isGlobalConfigDisabled ? 'disabled-cfg' : ''}`} 
-                  value={paperData.language} 
+                <select
+                  className={`mini-input ${isGlobalConfigDisabled ? 'disabled-cfg' : ''}`}
+                  value={paperData.language}
                   disabled={isGlobalConfigDisabled}
                   onChange={(e) => handleLanguageChange(e.target.value)}
                 >
@@ -422,40 +437,38 @@ useEffect(() => {
                   <div className={`metric-box ${isInputDisabled ? 'disabled-opacity' : ''}`}>
                     <label>Total Qs</label>
                     <input
-                          type="number"
-                          className="no-spinner-input"
-                          value={totalQuestions}
-                          disabled={isInputDisabled}
-                           placeholder="0"
-                          onChange={(e) => handleTotalChange(e.target.value === '' ? '' : Number(e.target.value))}
-                        />
-                    </div>
+                      type="number"
+                      className="no-spinner-input"
+                      value={totalQuestions}
+                      disabled={isInputDisabled}
+                      placeholder="0"
+                      onChange={(e) => handleTotalChange(e.target.value === '' ? '' : Number(e.target.value))}
+                    />
+                  </div>
                   <div className={`metric-box ${isInputDisabled ? 'disabled-opacity' : ''}`}>
                     <label>Attempt</label>
-                   {/* Attempt */}
                     <input
                       type="number"
                       className="no-spinner-input"
                       value={attemptCount}
                       disabled={isInputDisabled}
-                       placeholder="0"
+                      placeholder="0"
                       onChange={(e) => {
                         const v = e.target.value === '' ? '' : Number(e.target.value);
                         setAttemptCount(v === '' ? '' : Math.min(v, totalQuestions || 0));
                       }}
                     />
-                    </div>
+                  </div>
                   <div className={`metric-box ${isInputDisabled ? 'disabled-opacity' : ''}`}>
                     <label>MarksEach</label>
-                    {/* MarksEach */}
-                  <input
-                    type="number"
-                    className="no-spinner-input"
-                    value={marksEach}
-                    placeholder="0"
-                    disabled={isInputDisabled}
-                    onChange={(e) => setMarksEach(e.target.value === '' ? '' : Number(e.target.value))}
-                  />
+                    <input
+                      type="number"
+                      className="no-spinner-input"
+                      value={marksEach}
+                      placeholder="0"
+                      disabled={isInputDisabled}
+                      onChange={(e) => setMarksEach(e.target.value === '' ? '' : Number(e.target.value))}
+                    />
                   </div>
                   <div className="metric-box">
                     <label>Total</label>
@@ -468,7 +481,7 @@ useEffect(() => {
                     onClick={() => { if (!isInputDisabled) { handleAutoAdd(); } }} disabled={isInputDisabled}>
                     <Sparkles size={14} /> <span className="d-none d-sm-inline">Auto </span><span>Add</span>
                   </button>
-                 <button className={`btn-action outline ${useManualSelection ? 'active' : ''}`}
+                  <button className={`btn-action outline ${useManualSelection ? 'active' : ''}`}
                     onClick={() => {
                       if (isInputDisabled) return;
                       if (!totalQuestions || totalQuestions === 0) {
@@ -485,11 +498,11 @@ useEffect(() => {
               </div>
             </div>
           </div>
-      
+
           <div className="app-modal-body">
             {useManualSelection ? (
               <ManualQuestionSelection
-                subjectId={subjectId} classId={classId} chapterOption={chapterOption} 
+                subjectId={subjectId} classId={classId} chapterOption={chapterOption}
                 selectedChapters={selectedChapters} selectedTopics={selectedTopics} chapters={chapters} language={paperData.language}
                 source_type={selectedSources} typeCounts={{ [selectedType]: totalQuestions }}
                 onQuestionsSelected={handleQuestionsSelected} shuffleTrigger={manualShuffleTrigger}
@@ -501,7 +514,7 @@ useEffect(() => {
                   <img src="/examly.jpg" alt="Logo" className="opacity-25" style={{ width: "120px" }} />
                   <h4>{isInputDisabled ? "Select Question Type" : "Ready to build?"}</h4>
                   <p>Configure settings above to generate questions.</p>
-                  
+
                   {paperData.sections.length > 0 && (
                     <div className="added-sections-list">
                       <strong>Added Sections ({paperData.language}):</strong>
@@ -521,13 +534,13 @@ useEffect(() => {
             <div className="footer-left">
               <button className="btn-ghost" onClick={handleDiscard}>Discard</button>
               <div className="v-divider"></div>
-              <button className={`btn-icon-text ${questionsShuffled ? 'active-shuffle' : ''}`} 
+              <button className={`btn-icon-text ${questionsShuffled ? 'active-shuffle' : ''}`}
                 onClick={() => setManualShuffleTrigger(prev => prev + 1)}
                 disabled={!selectedType || totalQuestions === 0}>
                 <Shuffle size={14} /> Shuffle
               </button>
               {manualSelectionComplete && (
-                <button className={`btn-icon-text ${showSelectedQuestions ? 'highlight' : ''}`} 
+                <button className={`btn-icon-text ${showSelectedQuestions ? 'highlight' : ''}`}
                   onClick={() => setShowSelectedQuestions(!showSelectedQuestions)}>
                   <Eye size={14} /> {showSelectedQuestions ? 'Show All' : 'Show Selected'}
                 </button>
@@ -536,8 +549,8 @@ useEffect(() => {
             <div className="footer-right">
               {useManualSelection && manualSelectionComplete && (
                 <button className="btn btn-primary btn-save" onClick={handleAddPaperManual}>
-                    <span> <MousePointer2 size={14} /> Add</span>
-                    <span className="d-none d-sm-inline"> to Paper</span>
+                  <span> <MousePointer2 size={14} /> Add</span>
+                  <span className="d-none d-sm-inline"> to Paper</span>
                 </button>
               )}
             </div>
@@ -548,7 +561,7 @@ useEffect(() => {
       <style jsx>{`
         :global(#react-hot-toast) { z-index: 999999 !important; }
         .app-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 12px; }
-        .app-modal-container { background: #fff; width: 100%; max-width: 950px; height: 85dvh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); 
+        .app-modal-container { background: #fff; width: 100%; max-width: 950px; height: 85dvh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
         transform: translateZ(0);
         backface-visibility: hidden;
         will-change: transform;
@@ -565,14 +578,12 @@ useEffect(() => {
         .toolbar-row-top { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 12px 20px; }
         .tool-box { display: flex; flex-direction: column; gap: 4px; position: relative; }
         .tool-box label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
-        
-        /* Input & Global Config Styles */
+
         .mini-input { height: 36px; background: #fff; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 0 10px; font-size: 12px; font-weight: 600; outline: none; width: 100%; color: #334155; }
         .mini-input.clickable { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
         .mini-input.disabled-cfg { background: #f1f5f9; cursor: not-allowed; opacity: 0.7; border-color: #e2e8f0; }
         .mini-input:disabled { background: #f1f5f9; cursor: not-allowed; }
-        
-        /* Hiding Number Spinners */
+
         .no-spinner-input::-webkit-outer-spin-button,
         .no-spinner-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .no-spinner-input[type=number] { -moz-appearance: textfield; }
@@ -604,7 +615,7 @@ useEffect(() => {
         .btn-icon-text.highlight { background: #eff6ff; color: #2563eb; padding: 6px 12px; border-radius: 6px; font-weight: 700; }
         .btn-save { background: #10b981; color: #fff; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 13px; }
         .btn-ghost { background: none; border: none; color: #ef4444; font-weight: 600; cursor: pointer; }
-        
+
         @media (max-width: 640px) {
           .app-modal-overlay { padding: 0px; }
           .app-modal-container { height: 100dvh; border-radius: 0; }
@@ -615,9 +626,9 @@ useEffect(() => {
           .horizontal-scroll-container { overflow-x: auto; padding: 0 10px; scrollbar-width: none; gap:2px; }
           .metrics-group, .action-btns { flex-shrink: 0; gap:2px; }
           .btn-action{ padding:0 12px;}
-          .app-modal-footer{padding:2px 2px !important;}    
-          .no-spinner-input {width: 40px; }  
-          .floating-dropdown {width:175px;} 
+          .app-modal-footer{padding:2px 2px !important;}
+          .no-spinner-input {width: 40px; }
+          .floating-dropdown {width:175px;}
         }
       `}</style>
     </>

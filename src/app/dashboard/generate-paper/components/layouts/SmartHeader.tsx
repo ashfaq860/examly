@@ -94,7 +94,7 @@ const SmartHeader: React.FC<SmartHeaderProps> = ({
   </div>
 
   <div className="fw-bold text-nowrap" style={{ fontSize: "11px", minWidth: "85px", textAlign: isRTL ? "left" : "right" }}>
-    MARKS: {totalMarks}
+    {isRTL ? 'نمبر:' : 'MARKS:'} {totalMarks}
   </div>
 </div>
 
@@ -113,27 +113,27 @@ const SmartHeader: React.FC<SmartHeaderProps> = ({
         }}
       >
         <div className="d-flex align-items-end">
-          <span className="text-nowrap">NAME:</span>
+          <span className="text-nowrap">{isRTL ? 'نام' : 'NAME:'}</span>
           <div className={`flex-grow-1 ${marginSpacingClass}`} style={lineStyle}></div>
         </div>
 
         <div className="d-flex align-items-end">
-          <span className="text-nowrap">SUB:</span>
+          <span className="text-nowrap">{isRTL ? 'مضمون' : 'SUB:'}</span>
           <div className={`flex-grow-1 ${marginSpacingClass} text-center`} style={lineStyle}>{subject}</div>
         </div>
 
         <div className="d-flex align-items-end">
-          <span className="text-nowrap">CLASS:</span>
+          <span className="text-nowrap">{isRTL ? 'کلاس' : 'CLASS:'}</span>
           <div className={`flex-grow-1 ${marginSpacingClass} text-center`} style={lineStyle}>{currentClass?.name || '___'}</div>
         </div>
 
         <div className="d-flex align-items-end">
-          <span className="text-nowrap">SEC:</span>
+          <span className="text-nowrap">{isRTL ? 'سیکشن' : 'SEC:'}</span>
           <div className={`flex-grow-1 ${marginSpacingClass}`} style={lineStyle}></div>
         </div>
 
         <div className="d-flex align-items-end">
-          <span className="text-nowrap">DATE:</span>
+          <span className="text-nowrap">{isRTL ? 'تاریخ' : 'DATE:'}</span>
           <div className={`flex-grow-1 ${marginSpacingClass}`} style={lineStyle}></div>
         </div>
       </div>

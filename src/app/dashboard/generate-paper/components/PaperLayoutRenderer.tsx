@@ -1,11 +1,12 @@
 //dashboard/generate-paper/components/PaperLayoutRenderer.tsx
 'use client';
-import React, { useMemo,useEffect } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { PaperSection, PaperSettings, LanguageConfig } from '@/types/paper-builder';
 import { PaperHeader } from './PaperHeader';
 import { SectionHeader } from './SectionHeader';
 import { QuestionRenderer } from './QuestionRenderer';
 import { toast } from 'react-hot-toast';
+import { getBucket, FOUR_PAPERS_SHORT_CAP, FOUR_PAPERS_LONG_CAP } from '@/lib/paperQuestionBuckets';
 
 interface Props {
   paperSections: PaperSection[];
@@ -22,13 +23,13 @@ interface Props {
   profile: any;
   questionLineSpacing?: number;
   subjectUrduName?: string;
-  paperPart:any;
+  paperPart: any;
 }
 
-const Watermark = ({ 
-  isPremium, 
-  logoUrl, 
-  settings, 
+const Watermark = ({
+  isPremium,
+  logoUrl,
+  settings,
   scale = 1,
   top = '50%'
 }: { isPremium: boolean; logoUrl?: string; settings: PaperSettings; scale?: number; top?: string }) => {
@@ -63,8 +64,66 @@ const Watermark = ({
   );
 };
 
+// ── PAIR ORDERING ──────────────────────────────────────────────────
+// poetry_explanation ("حصہ نظم") and gazal ("حصہ غزل") are always meant
+// to be explained together as one combined question (see SectionBlock's
+// isFirstPartOfPair/isSecondPartOfPair + combinedPoetryInstruction).
+// That pairing logic only works if gazal is the very next section after
+// its poetry_explanation partner in the array every renderer reads from.
+//
+// Authors can add these two sections in any order in the builder UI, so
+// we cannot assume the incoming `paperSections` already satisfies that
+// adjacency. reorderPoetryGazalPairs() normalizes the array ONCE, before
+// any layout branch (same/separate/two/three/four papers) consumes it:
+//   - poetry_explanation always comes first
+//   - its matching gazal section is moved to sit immediately after it
+//   - all other sections keep their relative order untouched
+//
+// The same normalization is reused for sentence_correction /
+// sentence_completion since they follow the identical pairing pattern
+// (see isSecondPartOfPair / isFirstPartOfPair below).
+const reorderPoetryGazalPairs = (sections: PaperSection[]): PaperSection[] => {
+  if (!Array.isArray(sections) || sections.length < 2) return sections;
+
+  const isType = (s: PaperSection, needle: string) => s.type.toLowerCase().includes(needle);
+
+  const poetryIdx = sections.findIndex(s => isType(s, 'poetry_explanation'));
+  const gazalIdx = sections.findIndex(s => isType(s, 'gazal'));
+  const correctionIdx = sections.findIndex(s => isType(s, 'sentence_correction'));
+  const completionIdx = sections.findIndex(s => isType(s, 'sentence_completion'));
+
+  // Nothing to pair — return as-is (avoids unnecessary array churn / re-renders).
+  const needsPoetryFix = poetryIdx !== -1 && gazalIdx !== -1 && gazalIdx !== poetryIdx + 1;
+  const needsCorrectionFix = correctionIdx !== -1 && completionIdx !== -1 && completionIdx !== correctionIdx + 1;
+  if (!needsPoetryFix && !needsCorrectionFix) return sections;
+
+  let result = [...sections];
+
+  const movePairAdjacent = (firstIdx: number, secondIdx: number) => {
+    if (firstIdx === -1 || secondIdx === -1) return;
+    const current = result;
+    const fIdx = current.findIndex(s => s.id === sections[firstIdx].id);
+    const sIdx = current.findIndex(s => s.id === sections[secondIdx].id);
+    if (fIdx === -1 || sIdx === -1 || sIdx === fIdx + 1) return;
+
+    const without = current.filter((_, i) => i !== sIdx);
+    const newFIdx = without.findIndex(s => s.id === sections[firstIdx].id);
+    const second = current[sIdx];
+    result = [
+      ...without.slice(0, newFIdx + 1),
+      second,
+      ...without.slice(newFIdx + 1),
+    ];
+  };
+
+  movePairAdjacent(poetryIdx, gazalIdx);
+  movePairAdjacent(correctionIdx, completionIdx);
+
+  return result;
+};
+
 export const PaperLayoutRenderer: React.FC<Props> = ({
-  paperSections = [],
+  paperSections: rawPaperSections = [],
   settings,
   paperLanguage,
   config,
@@ -78,126 +137,165 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
   profile,
   subjectUrduName
 }) => {
-    const subject = useMemo(() => paperSections[0]?.subject || '', [paperSections]);
-  if (!settings) return <div className="p-5 text-center">Loading settings...</div>;
-const isOverflowLocked = ['same', 'same_page', 'combined', 'separate'].includes(currentLayout);
- // Inside PaperLayoutRenderer
-const globalNumbering = useMemo(() => {
-  const sectionStartNumbers: Record<string, number> = {};
-  let currentCount = 1;
+  // ── ALL HOOKS MUST RUN UNCONDITIONALLY, EVERY RENDER ──
+  // The early "if (!settings) return ..." guard lives AFTER every hook
+  // call below. Putting it above any hook would change the number of
+  // hooks React sees between the "settings not loaded yet" render and
+  // the "settings loaded" render, which breaks React's hook-order rule
+  // and produces "cannot access before initialization" style errors.
 
-  paperSections.forEach((section, index) => {
-    const sectionType = section.type.toLowerCase();
-    const isUrduOrEnglish = subject.toLowerCase() === 'urdu' || subject.toLowerCase() === 'english';
-    
-    // --- JOINING LOGIC ---
-    const prevSection = index > 0 ? paperSections[index - 1] : null;
-    const prevType = prevSection?.type.toLowerCase() || '';
+  // Normalize ordering ONCE so poetry_explanation→gazal (and
+  // sentence_correction→sentence_completion) are always adjacent,
+  // regardless of how they were added in the builder UI. Every layout
+  // branch below (same / separate / two / three / four papers) reads
+  // from this corrected array instead of the raw prop.
+  const paperSections = useMemo(
+    () => reorderPoetryGazalPairs(rawPaperSections),
+    [rawPaperSections]
+  );
 
-    // Detection for joined pairs
-  const isSecondPartOfPair = 
-    (sectionType.includes('gazal') && prevType.includes('poetry_explanation')) ||
-    (sectionType.includes('sentence_completion') && prevType.includes('sentence_correction'));
+  const subject = useMemo(() => paperSections[0]?.subject || '', [paperSections]);
 
-    //const shouldShareNumber = isPoetryPair || isSentencePair;
+  const isOverflowLocked = ['same', 'same_page', 'combined', 'separate'].includes(currentLayout);
 
-    if (isSecondPartOfPair) {
-    // Assign the same number but do NOT increment currentCount
-    sectionStartNumbers[section.id] = currentCount - 1;
-  } else {
-      // Normal logic: Assign new number
-      sectionStartNumbers[section.id] = currentCount;
+  const globalNumbering = useMemo(() => {
+    const sectionStartNumbers: Record<string, number> = {};
+    let currentCount = 1;
 
-      // Determine if we increment for the NEXT section
-      const isLong = sectionType.includes('long') || sectionType.includes('summary') || sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma');
-      
-      if (isLong) {
-        if (isUrduOrEnglish) {
-          currentCount += 1; // One number for the whole block
-        } else {
-          const qCount = Array.isArray(section.questions) ? section.questions.length : 0;
-          currentCount += qCount;
-        }
+    paperSections.forEach((section, index) => {
+      const sectionType = section.type.toLowerCase();
+      const isUrduOrEnglish = subject.toLowerCase() === 'urdu' || subject.toLowerCase() === 'english';
+
+      const prevSection = index > 0 ? paperSections[index - 1] : null;
+      const prevType = prevSection?.type.toLowerCase() || '';
+
+      const isSecondPartOfPair =
+        (sectionType.includes('gazal') && prevType.includes('poetry_explanation')) ||
+        (sectionType.includes('sentence_completion') && prevType.includes('sentence_correction'));
+
+      if (isSecondPartOfPair) {
+        sectionStartNumbers[section.id] = currentCount - 1;
       } else {
-        currentCount += 1; // Standard increment
-      }
-    }
-  });
+        sectionStartNumbers[section.id] = currentCount;
 
-  return sectionStartNumbers;
-}, [paperSections, subject]);
+        const isLong = sectionType.includes('long') || sectionType.includes('summary') || sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma');
+
+        if (isLong) {
+          if (isUrduOrEnglish) {
+            currentCount += 1;
+          } else {
+            const qCount = Array.isArray(section.questions) ? section.questions.length : 0;
+            currentCount += qCount;
+          }
+        } else {
+          currentCount += 1;
+        }
+      }
+    });
+
+    return sectionStartNumbers;
+  }, [paperSections, subject]);
 
   const { mcqs, subjectives } = useMemo(() => ({
     mcqs: paperSections.filter(s => s.type === 'mcq'),
     subjectives: paperSections.filter(s => s.type !== 'mcq')
   }), [paperSections]);
 
-// four papers per page layout
-const { shortQuestions, longQuestions, shortOverflow, longOverflow } = useMemo(() => {
-  if (currentLayout !== 'four_papers') {
-    return { shortQuestions: [], longQuestions: [], shortOverflow: false, longOverflow: false };
-  }
-  const shortSections = paperSections.filter(s => s.type === 'short');
-  const longSections = paperSections.filter(s => s.type === 'long');
+  // ── FOUR PAPERS LAYOUT ──
+  // Bucket REAL sections (not flattened questions) into short-side /
+  // long-side groups using getBucket(), then trim by question COUNT
+  // down to the layout caps — but keep each section's own `type`,
+  // `instructions`, and `marksEach` intact. This is what lets
+  // SectionHeader render the correct type-specific instruction text
+  // (e.g. "Explain the following verses..." for poetry_explanation)
+  // instead of a generic "Write Short Answers..." placeholder that
+  // would show up if we relabeled everything as type:'short'/'long'.
+  //
+  // poetry_explanation and gazal are both SHORT_BUCKET_TYPES (see
+  // paperQuestionBuckets.ts), so they always land in the same bucket
+  // together and — because `paperSections` is already pair-ordered
+  // above — stay adjacent through this filter. trimToCap() walks
+  // sections in array order, so as long as the combined short-bucket
+  // cap (FOUR_PAPERS_SHORT_CAP) isn't exhausted mid-pair, both halves
+  // survive together. If the cap genuinely lands between them, the
+  // existing shortOverflow toast already warns the user that
+  // something was trimmed.
+  const { fourPaperShortSections, fourPaperLongSections, shortOverflow, longOverflow } = useMemo(() => {
+    if (currentLayout !== 'four_papers') {
+      return { fourPaperShortSections: [] as PaperSection[], fourPaperLongSections: [] as PaperSection[], shortOverflow: false, longOverflow: false };
+    }
 
-  const allShort = shortSections.flatMap(s => s.questions || []);
-  const allLong = longSections.flatMap(s => s.questions || []);
+    const shortSections = paperSections.filter(s => getBucket(s.type) === 'short');
+    const longSections = paperSections.filter(s => getBucket(s.type) === 'long');
 
-  return {
-    shortQuestions: allShort.slice(0, 6),
-    longQuestions: allLong.slice(0, 5),
-    shortOverflow: allShort.length > 6,
-    longOverflow: allLong.length > 5,
-  };
-}, [paperSections, currentLayout]);
+    const totalShortQs = shortSections.reduce((sum, s) => sum + (s.questions?.length || 0), 0);
+    const totalLongQs = longSections.reduce((sum, s) => sum + (s.questions?.length || 0), 0);
 
+    // Trim a list of sections down to `cap` total questions, preserving
+    // each section's identity. Only the LAST section that crosses the
+    // cap boundary gets its question list truncated; earlier sections
+    // are untouched.
+    const trimToCap = (sections: PaperSection[], cap: number): PaperSection[] => {
+      const result: PaperSection[] = [];
+      let remaining = cap;
+      for (const s of sections) {
+        if (remaining <= 0) break;
+        const qs = s.questions || [];
+        if (qs.length <= remaining) {
+          result.push(s);
+          remaining -= qs.length;
+        } else {
+          const keptCount = remaining;
+          result.push({
+            ...s,
+            questions: qs.slice(0, keptCount),
+            totalQuestions: keptCount,
+            attemptCount: Math.min(s.attemptCount, keptCount),
+            totalMarks: Math.min(s.attemptCount, keptCount) * (s.marksEach || 1),
+          });
+          remaining = 0;
+        }
+      }
+      return result;
+    };
 
-const fourPaperShortSection: PaperSection | null = useMemo(() => {
-  if (currentLayout !== 'four_papers' || shortQuestions.length === 0) return null;
-  const sourceSections = paperSections.filter(s => s.type === 'short');
-  const marksEach = sourceSections[0]?.marksEach || 1;
-  return {
-    id: 'four-papers-short',
-    type: 'short',
-    instructions: sourceSections[0]?.instructions || 'Attempt the following short questions.',
-    questions: shortQuestions,
-    totalQuestions: shortQuestions.length,
-    attemptCount: shortQuestions.length,
-    marksEach,
-    totalMarks: shortQuestions.length * marksEach,
-    subject,
-    language: paperLanguage,
-    layout: currentLayout,
-    timestamp: new Date().toISOString(),
-  } as PaperSection;
-}, [currentLayout, shortQuestions, paperSections, subject, paperLanguage]);
+    return {
+      fourPaperShortSections: trimToCap(shortSections, FOUR_PAPERS_SHORT_CAP),
+      fourPaperLongSections: trimToCap(longSections, FOUR_PAPERS_LONG_CAP),
+      shortOverflow: totalShortQs > FOUR_PAPERS_SHORT_CAP,
+      longOverflow: totalLongQs > FOUR_PAPERS_LONG_CAP,
+    };
+  }, [paperSections, currentLayout]);
 
-const fourPaperLongSection: PaperSection | null = useMemo(() => {
-  if (currentLayout !== 'four_papers' || longQuestions.length === 0) return null;
-  const sourceSections = paperSections.filter(s => s.type === 'long');
-  const marksEach = sourceSections[0]?.marksEach || 1;
-  return {
-    id: 'four-papers-long',
-    type: 'long',
-    instructions: sourceSections[0]?.instructions || 'Attempt the following long questions.',
-    questions: longQuestions,
-    totalQuestions: longQuestions.length,
-    attemptCount: longQuestions.length,
-    marksEach,
-    totalMarks: longQuestions.length * marksEach,
-    subject,
-    language: paperLanguage,
-    layout: currentLayout,
-    timestamp: new Date().toISOString(),
-  } as PaperSection;
-}, [currentLayout, longQuestions, paperSections, subject, paperLanguage]);
   const mcqTotalMarks = useMemo(() => mcqs.reduce((t, s) => t + s.totalMarks, 0), [mcqs]);
   const subTotalMarks = useMemo(() => subjectives.reduce((t, s) => t + s.totalMarks, 0), [subjectives]);
 
-  const isSubjectUrduEnglish = useMemo(() => 
-  subject.toLowerCase() === 'urdu' ||subject.toLowerCase() === 'english', 
-  [subject]
-);
+  const fourPaperShortTotalMarks = useMemo(
+    () => fourPaperShortSections.reduce((t, s) => t + s.totalMarks, 0),
+    [fourPaperShortSections]
+  );
+  const fourPaperLongTotalMarks = useMemo(
+    () => fourPaperLongSections.reduce((t, s) => t + s.totalMarks, 0),
+    [fourPaperLongSections]
+  );
+
+  const isSubjectUrduEnglish = useMemo(() =>
+    subject.toLowerCase() === 'urdu' || subject.toLowerCase() === 'english',
+    [subject]
+  );
+
+  useEffect(() => {
+    if (currentLayout !== 'four_papers') return;
+    if (shortOverflow) {
+      toast.error(`4-papers layout allows max ${FOUR_PAPERS_SHORT_CAP} short-type questions — extra questions were hidden.`);
+    }
+    if (longOverflow) {
+      toast.error(`4-papers layout allows max ${FOUR_PAPERS_LONG_CAP} long-type questions — extra questions were hidden.`);
+    }
+  }, [currentLayout, shortOverflow, longOverflow]);
+
+  // ── EARLY RETURN — safely placed AFTER every hook above ──
+  if (!settings) return <div className="p-5 text-center">Loading settings...</div>;
 
   const handleHeaderChange = (sectionId: string, field: 'en' | 'ur', value: string) => {
     const updated = paperSections.map(s => {
@@ -206,36 +304,24 @@ const fourPaperLongSection: PaperSection | null = useMemo(() => {
     });
     onSectionUpdate(updated);
   };
-  useEffect(() => {
-  if (currentLayout !== 'four_papers') return;
-  if (shortOverflow) {
-    toast.error('4-papers layout allows max 6 short questions — extra questions were hidden.');
-  }
-  if (longOverflow) {
-    toast.error('4-papers layout allows max 5 long questions — extra questions were hidden.');
-  }
-}, [currentLayout, shortOverflow, longOverflow]);
 
-  
-const sheetBaseStyle: React.CSSProperties = {
-  width: '210mm',
-  height: '297mm',
-
- 
-  padding: '4mm',
-  backgroundColor: 'white',
-  margin: '0 auto',
-  position: 'relative',
-  overflow: 'hidden',
-  display: 'flex',
-  flexDirection: 'column',
-  color: 'black',
-  fontFamily: settings.fontFamily,
-  boxSizing: 'border-box',
-  border: 'none',
-  outline: 'none',
-  boxShadow: 'none'
-};
+  const sheetBaseStyle: React.CSSProperties = {
+    width: '210mm',
+    height: '297mm',
+    padding: '4mm',
+    backgroundColor: 'white',
+    margin: '0 auto',
+    position: 'relative',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    color: 'black',
+    fontFamily: settings.fontFamily,
+    boxSizing: 'border-box',
+    border: 'none',
+    outline: 'none',
+    boxShadow: 'none'
+  };
 
   /**
    * Helper to calculate global question index.
@@ -243,144 +329,136 @@ const sheetBaseStyle: React.CSSProperties = {
    */
   const getQuestionStartIndex = (section: PaperSection, globalSectionIndex: number) => {
     if (section.type === 'long') {
-      return globalSectionIndex; // This makes the first long question "Q.5" if it's the 5th section
+      return globalSectionIndex;
     }
-    // For other sections, you might want to sum previous questions or just use 0
-    // To keep numbering continuous for the whole paper, use a reducer:
     let count = 0;
     for (let i = 0; i < globalSectionIndex; i++) {
-        const s = paperSections[i];
-        // If previous was long, it only counts as one "block", but usually 
-        // standard question counting resets or follows specific board rules.
-        count += s.questions?.length || 0;
+      const s = paperSections[i];
+      count += s.questions?.length || 0;
     }
-    return 0; // Defaulting to local index unless 'long'
+    return 0;
   };
 
+  const SectionBlock = ({ section }: { section: PaperSection }) => {
+    if (!section) return null;
+    const questions = Array.isArray(section.questions) ? section.questions : [];
+    const sectionType = section.type.toLowerCase();
+    const startNum = globalNumbering[section.id] || 1;
+    const isUrduOrEnglish = subject.toLowerCase() === 'urdu' || subject.toLowerCase() === 'english';
 
-const SectionBlock = ({ section }: { section: PaperSection }) => {
-  if (!section) return null;
-  const questions = Array.isArray(section.questions) ? section.questions : [];
-  const sectionType = section.type.toLowerCase();
-  const startNum = globalNumbering[section.id] || 1;
-  const isUrduOrEnglish = subject.toLowerCase() === 'urdu' || subject.toLowerCase() === 'english';
+    const sectionIndexInArray = paperSections.findIndex(s => s.id === section.id);
+    const prevSection = sectionIndexInArray > 0 ? paperSections[sectionIndexInArray - 1] : null;
+    const nextSection = paperSections[sectionIndexInArray + 1];
 
-  const sectionIndexInArray = paperSections.findIndex(s => s.id === section.id);
-  console.log('section index',sectionIndexInArray);
-  const prevSection = sectionIndexInArray > 0 ? paperSections[sectionIndexInArray - 1] : null;
-  const nextSection = paperSections[sectionIndexInArray + 1];
+    const isPoetry = sectionType.includes('poetry_explanation');
+    const isGazal = sectionType.includes('gazal');
+    const isCorrection = sectionType.includes('sentence_correction');
+    const isCompletion = sectionType.includes('sentence_completion');
 
-  const isPoetry = sectionType.includes('poetry_explanation');
-  const isGazal = sectionType.includes('gazal');
-  const isCorrection = sectionType.includes('sentence_correction');
-  const isCompletion = sectionType.includes('sentence_completion');
+    const isSecondPartOfPair =
+      (isGazal && prevSection?.type.toLowerCase().includes('poetry')) ||
+      (isCompletion && prevSection?.type.toLowerCase().includes('sentence_correction'));
 
-  const isSecondPartOfPair = 
-    (isGazal && prevSection?.type.toLowerCase().includes('poetry')) ||
-    (isCompletion && prevSection?.type.toLowerCase().includes('sentence_correction'));
+    const isFirstPartOfPair =
+      (isPoetry && nextSection?.type.toLowerCase().includes('gazal')) ||
+      (isCorrection && nextSection?.type.toLowerCase().includes('sentence_completion'));
 
-  const isFirstPartOfPair = 
-    (isPoetry && nextSection?.type.toLowerCase().includes('gazal')) ||
-    (isCorrection && nextSection?.type.toLowerCase().includes('sentence_completion'));
+    const nazamAttempt = section.attemptCount || 0;
+    const gazalAttempt = nextSection?.attemptCount || 0;
 
-  // 1. COMBINED INSTRUCTION (Only for Nazam/Part A)
-  // Extract attempts: Current (Nazam) and Next (Gazal)
-  const nazamAttempt = section.attemptCount || 0;
-  const gazalAttempt = nextSection?.attemptCount || 0;
-  
-  const combinedPoetryInstruction = `درج زیل نظم وغزل کے اشعار کی تشریح کیجئے۔ (حصہ نظم سے ${nazamAttempt} اور حصہ غزل سے ${gazalAttempt} اشعار منتخب کیجئے)`;
+    const combinedPoetryInstruction = `درج زیل نظم وغزل کے اشعار کی تشریح کیجئے۔ (حصہ نظم سے ${nazamAttempt} اور حصہ غزل سے ${gazalAttempt} اشعار منتخب کیجئے)`;
 
+    const totalAttempt = (section.attemptCount || 0) + (nextSection?.attemptCount || 0);
+    const marksEach = section.marksEach || 1;
+    const totalMarksPair = totalAttempt * marksEach;
+    const combinedCorrectCompleteInstruction = `درج ذیل میں سے کوئی سے ${totalAttempt} اجزاء کی درستگی/تکمیل کیجئے۔ (${marksEach}x${totalAttempt}=${totalMarksPair})`;
+    let finalAttemptCount = section.attemptCount;
+    let finalTotalMarks = section.totalMarks;
 
-  // Logic for Correction/Completion
-  const totalAttempt = (section.attemptCount || 0) + (nextSection?.attemptCount || 0);
-  const marksEach = section.marksEach || 1;
-  const totalMarksPair = totalAttempt * marksEach;
-  const combinedCorrectCompleteInstruction = `درج ذیل میں سے کوئی سے ${totalAttempt} اجزاء کی درستگی/تکمیل کیجئے۔ (${marksEach}x${totalAttempt}=${totalMarksPair})`; 
-  let finalAttemptCount = section.attemptCount;
-  let finalTotalMarks = section.totalMarks;
-
-  if (isFirstPartOfPair && nextSection) {
-    finalAttemptCount = section.attemptCount + (nextSection.attemptCount || 0);
-    finalTotalMarks = section.totalMarks + (nextSection.totalMarks || 0);
-  } else if (isSecondPartOfPair) {
-    finalAttemptCount = 0;
-    finalTotalMarks = 0;
-  }
-
-  // Formatting for sub-headers
-  const subHeaderFontSize = settings.headingFontSize - 2;
-
-  const getQuestionDisplayIndex = (localIdx: number) => {
-    if (isSecondPartOfPair && prevSection) {
-      return (prevSection.questions?.length || 0) + localIdx;
+    if (isFirstPartOfPair && nextSection) {
+      finalAttemptCount = section.attemptCount + (nextSection.attemptCount || 0);
+      finalTotalMarks = section.totalMarks + (nextSection.totalMarks || 0);
+    } else if (isSecondPartOfPair) {
+      finalAttemptCount = 0;
+      finalTotalMarks = 0;
     }
-    return localIdx;
-  };
 
-  const getDynamicColClass = (q: any) => {
-      if (section.type === 'mcq' || section.type === 'long' ||section.type === 'summary' || (section.type === 'short' && subject.toLowerCase() !== 'urdu')|| sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma')) return 'col-12';
+    const subHeaderFontSize = settings.headingFontSize - 2;
+
+    const getQuestionDisplayIndex = (localIdx: number) => {
+      if (isSecondPartOfPair && prevSection) {
+        return (prevSection.questions?.length || 0) + localIdx;
+      }
+      return localIdx;
+    };
+
+    const getDynamicColClass = (q: any) => {
+      if (section.type === 'mcq' || section.type === 'long' || section.type === 'summary' || (section.type === 'short' && subject.toLowerCase() !== 'urdu') || sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma')) return 'col-12';
       if (section.type === 'short' && subject.toLowerCase() === 'urdu') return 'col-6';
+      // Poetry/gazal verses always render one-per-row, full width,
+      // numbered straight down (i, ii, iii, ...) — matching board-exam
+      // typography. They must NOT fall through to the variable-width
+      // text-length branch below, which previously caused random
+      // col-3/col-4/col-6/col-12 sizing per verse and visible
+      // overlap/spacing inconsistencies between English and Urdu runs.
+      if (isPoetry || isGazal) return 'col-6';
       const engText = q.question_text || q.question || '';
       const urText = q.question_text_ur || '';
       const totalVisualLength = engText.length + (urText.length * 1.5);
       return totalVisualLength < 50 ? 'col-3' : totalVisualLength < 60 ? 'col-4' : totalVisualLength < 110 ? 'col-6 ' : 'col-12';
     };
 
-  const isLongType = sectionType.includes('long') || sectionType.includes('summary')|| sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma');
-  const isSingleAttemptLong = isLongType && (section.totalQuestions <= 2 && section.attemptCount === 1);
-  const hideHeader = isUrduOrEnglish && isSingleAttemptLong && !isPoetry && !isGazal && !isCorrection && isCompletion;
+    const isLongType = sectionType.includes('long') || sectionType.includes('summary') || sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma');
+    const isSingleAttemptLong = isLongType && (section.totalQuestions <= 2 && section.attemptCount === 1);
+    const hideHeader = isUrduOrEnglish && isSingleAttemptLong && !isPoetry && !isGazal && !isCorrection && isCompletion;
 
-  return (
-    <div 
-      className="section-block" 
-      style={{ 
-        border: isEditMode ? "2px dashed #ccc" : "none", 
-        marginBottom: isFirstPartOfPair ? '0px' : '0px',
-        marginTop: isSecondPartOfPair ? '5px' : '5px',
-        width: '100%' 
-      }}
-    >
-      {/* 2. RENDER THE COMBINED INSTRUCTION HEADER FOR NAZAM */}
-      {isFirstPartOfPair && (
-        <SectionHeader
-          sectionId={section.id}
-          sectionIndex={startNum - 1} 
-          sectionType="custom"
-          totalQuestions={section.totalQuestions}
-          attemptCount={finalAttemptCount}
-          totalMarks={finalTotalMarks}
-          headingFontSize={settings.headingFontSize}
-          headingFontFamily={settings.headingFontFamily}
-          paperLanguage={paperLanguage}
-          customUrHeader={isPoetry ? combinedPoetryInstruction : combinedCorrectCompleteInstruction}
-         
-        customEnHeader={section.customEnHeader}
-          onHeaderChange={handleHeaderChange}
-          isEditMode={isEditMode}
-        />
-      )}
+    return (
+      <div
+        className="section-block"
+        style={{
+          border: isEditMode ? "2px dashed #ccc" : "none",
+          marginBottom: isFirstPartOfPair ? '0px' : '0px',
+          marginTop: isSecondPartOfPair ? '5px' : '5px',
+          width: '100%'
+        }}
+      >
+        {isFirstPartOfPair && (
+          <SectionHeader
+            sectionId={section.id}
+            sectionIndex={startNum - 1}
+            sectionType="custom"
+            totalQuestions={section.totalQuestions}
+            attemptCount={finalAttemptCount}
+            totalMarks={finalTotalMarks}
+            headingFontSize={settings.headingFontSize}
+            headingFontFamily={settings.headingFontFamily}
+            paperLanguage={paperLanguage}
+            customUrHeader={isPoetry ? combinedPoetryInstruction : combinedCorrectCompleteInstruction}
+            customEnHeader={section.customEnHeader}
+            onHeaderChange={handleHeaderChange}
+            isEditMode={isEditMode}
+          />
+        )}
 
-      {/* 3. RENDER THE SUB-HEADER (Hissa Nazam / Hissa Gazal) */}
-      {!hideHeader && (
-        <div 
-          className="sub-section-title px-0" 
-          style={{ 
-            textAlign: 'right', 
-            direction: 'rtl',
-            fontWeight: 'bold',
-            fontSize: `${subHeaderFontSize}px`,
-            fontFamily: "'JameelNoori', serif",
-            marginTop: isFirstPartOfPair ? '0px' : '0px',
-             marginBottom: isFirstPartOfPair ? '4px' : '4px'
-          }}
-        >
-          {isPoetry ? 'حصہ نظم:' : isGazal ? 'حصہ غزل:' : ''}
-          
-          {/* Default header for non-poetry sections */}
-          {!isPoetry && !isGazal && !isFirstPartOfPair && !isSecondPartOfPair && (!isLongType || !isUrduOrEnglish) &&(
-             <SectionHeader
+        {!hideHeader && (
+          <div
+            className="sub-section-title px-0"
+            style={{
+              textAlign: 'right',
+              direction: 'rtl',
+              fontWeight: 'bold',
+              fontSize: `${subHeaderFontSize}px`,
+              fontFamily: "'JameelNoori', serif",
+              marginTop: isFirstPartOfPair ? '0px' : '0px',
+              marginBottom: isFirstPartOfPair ? '4px' : '4px'
+            }}
+          >
+            {isPoetry ? 'حصہ نظم:' : isGazal ? 'حصہ غزل:' : ''}
+
+            {!isPoetry && !isGazal && !isFirstPartOfPair && !isSecondPartOfPair && (!isLongType || !isUrduOrEnglish) && (
+              <SectionHeader
                 sectionId={section.id}
-                sectionIndex={isSecondPartOfPair ? -1 : startNum - 1} 
+                sectionIndex={isSecondPartOfPair ? -1 : startNum - 1}
                 sectionType={section.type}
                 totalQuestions={section.totalQuestions}
                 attemptCount={finalAttemptCount}
@@ -392,46 +470,47 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
                 customUrHeader={section.customUrHeader}
                 onHeaderChange={handleHeaderChange}
                 isEditMode={isEditMode}
-             />
-          )}
-        </div>
-      )}
-
-      <div className="questions-list row g-2 mx-0" style={{ direction: sectionType === 'translate_english' ? 'rtl' : '' }}>
-        {questions.map((q, qIdx) => {
-          const finalIndex = isLongType ? (paperLanguage === 'urdu' ? startNum : startNum + qIdx) : getQuestionDisplayIndex(qIdx);
-          return (
-            <div key={`${q.id}-${qIdx}`} className={`${getDynamicColClass(q)} px-2  mt-1`}>
-              <QuestionRenderer
-                question={q}
-                index={finalIndex}
-                qIdx={qIdx}
-                sectionType={section.type}
-                sectionId={section.id}
-                paperLanguage={paperLanguage}
-                isEditMode={isEditMode}
-                config={config}
-                fontSize={settings.fontSize}
-                metaFontSize={settings.metaFontSize}
-                questionFontFamily={settings.fontFamily}
-                questionLineSpacing={settings.lineHeight}
-                mcqFontSize={settings.mcqFontSize}
-                mcqLineHeight={settings.mcqLineHeight}
-                onTextChange={onTextChange}
-                marks={q.marks || section.marksEach}
-                isUrduSubject={isUrduOrEnglish}
-                isLast={qIdx === questions.length - 1}
-                headingFontSize={settings.headingFontSize}
-                shouldShowOr={isLongType && isUrduOrEnglish && section.totalQuestions === 2 && section.attemptCount === 1}
-                renderInlineBilingual={renderInlineBilingual}
               />
-            </div>
-          );
-        })}
+            )}
+          </div>
+        )}
+
+        <div className="questions-list row g-2 mx-0" style={{ direction: sectionType === 'translate_english' ? 'rtl' : '' }}>
+          {questions.map((q, qIdx) => {
+            const finalIndex = isLongType ? (paperLanguage === 'urdu' ? startNum : startNum + qIdx) : getQuestionDisplayIndex(qIdx);
+            return (
+              <div key={`${q.id}-${qIdx}`} className={`${getDynamicColClass(q)} px-2  mt-1`}>
+                <QuestionRenderer
+                  question={q}
+                  index={finalIndex}
+                  qIdx={qIdx}
+                  sectionType={section.type}
+                  sectionId={section.id}
+                  paperLanguage={paperLanguage}
+                  isEditMode={isEditMode}
+                  config={config}
+                  fontSize={settings.fontSize}
+                  metaFontSize={settings.metaFontSize}
+                  questionFontFamily={settings.fontFamily}
+                  questionLineSpacing={settings.lineHeight}
+                  mcqFontSize={settings.mcqFontSize}
+                  mcqLineHeight={settings.mcqLineHeight}
+                  onTextChange={onTextChange}
+                  marks={q.marks || section.marksEach}
+                  isUrduSubject={isUrduOrEnglish}
+                  isLast={qIdx === questions.length - 1}
+                  headingFontSize={settings.headingFontSize}
+                  shouldShowOr={isLongType && isUrduOrEnglish && section.totalQuestions === 2 && section.attemptCount === 1}
+                  renderInlineBilingual={renderInlineBilingual}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
+
   const MCQAnswerKeyPage = () => {
     const allMCQs = mcqs.flatMap(s => s.questions || []);
     if (allMCQs.length === 0) return null;
@@ -474,466 +553,458 @@ const SectionBlock = ({ section }: { section: PaperSection }) => {
   };
 
   const DashedLine = () => (
-  <div
-    className="w-100 my-1 border-top border-dark position-relative"
-    style={{
-      borderStyle: 'dashed',
-      borderWidth: '2px',
-      height: '1px'
-    }}
-  >
-    <span
-      className="position-absolute bg-white px-0 fw-bold"
+    <div
+      className="w-100 my-1 border-top border-dark position-relative"
       style={{
-        fontSize: '12px',
-        top: '-10px',
-        left: '0mm',
-        zIndex: 1
+        borderStyle: 'dashed',
+        borderWidth: '2px',
+        height: '1px'
       }}
     >
-      ✂
-    </span>
-  </div>
-);
-
-const PaperSlot = ({
-  height,
-  children
-}: {
-  height: string;
-  children: React.ReactNode;
-}) => (
-  <div
-    style={{
-      height,
-      overflow: 'clip',
-      position: 'relative'
-    }}
-  >
-    {children}
-  </div>
-);
-
-const renderContent = () => {
-  let pages: React.ReactNode[] = [];
-
-  const renderPaperGroup = (
-    group: PaperSection[],
-    marks: number,
-    keyPrefix: string,
-    mini = false,
-     part: 'mcq' | 'subjective' | 'combined' = 'combined'  // ← add this
-  ) => {
-    if (group.length === 0) return null;
-
-    return (
-      <div
-        key={keyPrefix}
-        className="paper-sheet border shadow-sm print-break"
-        style={sheetBaseStyle}
+      <span
+        className="position-absolute bg-white px-0 fw-bold"
+        style={{
+          fontSize: '12px',
+          top: '-10px',
+          left: '0mm',
+          zIndex: 1
+        }}
       >
-        <Watermark
-          isPremium={isPremium}
-          logoUrl={profile?.logo}
-          settings={settings}
-        />
+        ✂
+      </span>
+    </div>
+  );
 
+  const PaperSlot = ({
+    height,
+    children
+  }: {
+    height: string;
+    children: React.ReactNode;
+  }) => (
+    <div
+      style={{
+        height,
+        overflow: 'clip',
+        position: 'relative'
+      }}
+    >
+      {children}
+    </div>
+  );
+
+  const renderContent = () => {
+    let pages: React.ReactNode[] = [];
+
+    const renderPaperGroup = (
+      group: PaperSection[],
+      marks: number,
+      keyPrefix: string,
+      mini = false,
+      part: 'mcq' | 'subjective' | 'combined' = 'combined'
+    ) => {
+      if (group.length === 0) return null;
+
+      return (
         <div
-          style={{
-            position: 'relative',
-            zIndex: 1
-          }}
+          key={keyPrefix}
+          className="paper-sheet border shadow-sm print-break"
+          style={sheetBaseStyle}
         >
-          <PaperHeader
-            totalMarks={marks}
-            subject={subject}
-            paperSections={group}
-            isEditMode={isEditMode}
+          <Watermark
+            isPremium={isPremium}
+            logoUrl={profile?.logo}
             settings={settings}
-            paperLanguage={paperLanguage}
-            config={config}
-            currentLayout={currentLayout}
-            currentClass={currentClass}
-            profile={profile}
-            paperPart={part}
-            subjectUrduName={subjectUrduName}
           />
 
-          {group.map((s) => (
-            <SectionBlock
-              key={s.id}
-              section={s}
+          <div
+            style={{
+              position: 'relative',
+              zIndex: 1
+            }}
+          >
+            <PaperHeader
+              totalMarks={marks}
+              subject={subject}
+              paperSections={group}
+              isEditMode={isEditMode}
+              settings={settings}
+              paperLanguage={paperLanguage}
+              config={config}
+              currentLayout={currentLayout}
+              currentClass={currentClass}
+              profile={profile}
+              paperPart={part}
+              subjectUrduName={subjectUrduName}
             />
-          ))}
+
+            {group.map((s) => (
+              <SectionBlock
+                key={s.id}
+                section={s}
+              />
+            ))}
+          </div>
         </div>
+      );
+    };
+
+    // =========================
+    // SAME LAYOUT
+    // =========================
+    if (['same', 'same_page', 'combined'].includes(currentLayout)) {
+      pages.push(
+        renderPaperGroup(
+          [...mcqs, ...subjectives],
+          mcqTotalMarks + subTotalMarks,
+          'same-paper'
+        )
+      );
+    }
+
+    // =========================
+    // SEPARATE LAYOUT
+    // =========================
+    else if (currentLayout === 'separate') {
+      if (mcqs.length > 0) {
+        pages.push(
+          renderPaperGroup(
+            mcqs,
+            mcqTotalMarks,
+            'mcq-separate',
+            false,
+            'mcq'
+          )
+        );
+      }
+
+      if (subjectives.length > 0) {
+        pages.push(
+          renderPaperGroup(
+            subjectives,
+            subTotalMarks,
+            'sub-separate',
+            false,
+            'subjective'
+          )
+        );
+      }
+    }
+
+    // =========================
+    // TWO / THREE PAPERS
+    // =========================
+    else if (
+      ['two_papers', 'two_paper', 'three_papers', 'three_paper'].includes(
+        currentLayout
+      )
+    ) {
+      const count = currentLayout.startsWith('two') ? 2 : 3;
+      const slotHeight =
+        count === 2 ? '142mm' : '95mm';
+
+      // MCQ PAGE
+      if (mcqs.length > 0) {
+        pages.push(
+          <div
+            key="mcq-mini-page"
+            className="paper-sheet border shadow-sm print-break"
+            style={sheetBaseStyle}
+          >
+            {[...Array(count)].map((_, i) => (
+              <React.Fragment key={i}>
+                <PaperSlot height={slotHeight}>
+                  <div
+                    style={{
+                      position: 'relative',
+                      zIndex: 1,
+                      padding: '0mm',
+                      height: '100%'
+                    }}
+                  >
+                    <Watermark
+                      isPremium={isPremium}
+                      logoUrl={profile?.logo}
+                      settings={settings}
+                      scale={currentLayout.startsWith('two') ? 0.7 : 0.5}
+                      top="60%"
+                    />
+                    <PaperHeader
+                      totalMarks={mcqTotalMarks}
+                      subject={subject}
+                      paperSections={mcqs}
+                      isEditMode={isEditMode}
+                      settings={{
+                        ...settings,
+                        fontSize: currentLayout.startsWith('three') ? settings.fontSize - 3 : settings.fontSize - 1
+                      }}
+                      paperLanguage={paperLanguage}
+                      config={config}
+                      currentLayout={currentLayout}
+                      currentClass={currentClass}
+                      profile={profile}
+                      paperPart="mcq"
+                    />
+
+                    {mcqs.map((s) => (
+                      <SectionBlock
+                        key={`${i}-${s.id}`}
+                        section={s}
+                      />
+                    ))}
+                  </div>
+                </PaperSlot>
+
+                {i < count - 1 && <DashedLine />}
+              </React.Fragment>
+            ))}
+          </div>
+        );
+      }
+
+      // SUBJECTIVE PAGE
+      if (subjectives.length > 0) {
+        pages.push(
+          <div
+            key="subjective-mini-page"
+            className="paper-sheet border shadow-sm print-break"
+            style={sheetBaseStyle}
+          >
+            {[...Array(count)].map((_, i) => (
+              <React.Fragment key={i}>
+                <PaperSlot height={slotHeight}>
+                  <div
+                    style={{
+                      position: 'relative',
+                      zIndex: 1,
+                      padding: '0mm',
+                      height: '100%'
+                    }}
+                  >
+                    <Watermark
+                      isPremium={isPremium}
+                      logoUrl={profile?.logo}
+                      settings={settings}
+                      scale={currentLayout.startsWith('two') ? 0.7 : 0.5}
+                      top="60%"
+                    />
+                    <PaperHeader
+                      totalMarks={subTotalMarks}
+                      subject={subject}
+                      paperSections={subjectives}
+                      isEditMode={isEditMode}
+                      settings={{
+                        ...settings,
+                        fontSize: currentLayout.startsWith('three') ? settings.fontSize - 3 : settings.fontSize - 1
+                      }}
+                      paperLanguage={paperLanguage}
+                      config={config}
+                      currentLayout={currentLayout}
+                      currentClass={currentClass}
+                      profile={profile}
+                      paperPart="subjective"
+                    />
+
+                    {subjectives.map((s) => (
+                      <SectionBlock
+                        key={`${i}-${s.id}`}
+                        section={s}
+                      />
+                    ))}
+                  </div>
+                </PaperSlot>
+
+                {i < count - 1 && <DashedLine />}
+              </React.Fragment>
+            ))}
+          </div>
+        );
+      }
+    }
+
+    // =========================
+    // FOUR PAPERS (Short front / Long back, 7 short max / 5 long max)
+    // Renders the REAL sections (each keeping its own type, e.g.
+    // poetry_explanation / gazal / idiom_phrases / translate_urdu),
+    // not a single relabeled fake 'short'/'long' section. This is what
+    // makes SectionHeader show the correct type-specific instruction
+    // text for every question type instead of generic short/long text.
+    // =========================
+    else if (currentLayout === 'four_papers') {
+      const count = 4;
+      const slotHeight = '71mm';
+      const fontShrink = 4;
+      const watermarkScale = 0.4;
+
+      // FRONT SIDE — Short-bucket sections
+      if (fourPaperShortSections.length > 0) {
+        pages.push(
+          <div key="four-papers-short-page" className="paper-sheet border shadow-sm print-break" style={sheetBaseStyle}>
+            {[...Array(count)].map((_, i) => (
+              <React.Fragment key={i}>
+                <PaperSlot height={slotHeight}>
+                  <div style={{ position: 'relative', zIndex: 1, padding: '0mm', height: '100%' }}>
+                    <Watermark
+                      isPremium={isPremium}
+                      logoUrl={profile?.logo}
+                      settings={settings}
+                      scale={watermarkScale}
+                      top="60%"
+                    />
+                    <PaperHeader
+                      totalMarks={fourPaperShortTotalMarks}
+                      subject={subject}
+                      paperSections={fourPaperShortSections}
+                      isEditMode={isEditMode}
+                      settings={{ ...settings, fontSize: settings.fontSize - fontShrink }}
+                      paperLanguage={paperLanguage}
+                      config={config}
+                      currentLayout={currentLayout}
+                      currentClass={currentClass}
+                      profile={profile}
+                      paperPart="subjective"
+                      subjectUrduName={subjectUrduName}
+                    />
+                    {fourPaperShortSections.map((s) => (
+                      <SectionBlock key={`${i}-${s.id}`} section={s} />
+                    ))}
+                  </div>
+                </PaperSlot>
+                {i < count - 1 && <DashedLine />}
+              </React.Fragment>
+            ))}
+          </div>
+        );
+      }
+
+      // BACK SIDE — Long-bucket sections
+      if (fourPaperLongSections.length > 0) {
+        pages.push(
+          <div key="four-papers-long-page" className="paper-sheet border shadow-sm print-break" style={sheetBaseStyle}>
+            {[...Array(count)].map((_, i) => (
+              <React.Fragment key={i}>
+                <PaperSlot height={slotHeight}>
+                  <div style={{ position: 'relative', zIndex: 1, padding: '0mm', height: '100%' }}>
+                    <Watermark
+                      isPremium={isPremium}
+                      logoUrl={profile?.logo}
+                      settings={settings}
+                      scale={watermarkScale}
+                      top="60%"
+                    />
+                    <PaperHeader
+                      totalMarks={fourPaperLongTotalMarks}
+                      subject={subject}
+                      paperSections={fourPaperLongSections}
+                      isEditMode={isEditMode}
+                      settings={{ ...settings, fontSize: settings.fontSize - fontShrink }}
+                      paperLanguage={paperLanguage}
+                      config={config}
+                      currentLayout={currentLayout}
+                      currentClass={currentClass}
+                      profile={profile}
+                      paperPart="subjective"
+                      subjectUrduName={subjectUrduName}
+                    />
+                    {fourPaperLongSections.map((s) => (
+                      <SectionBlock key={`${i}-${s.id}`} section={s} />
+                    ))}
+                  </div>
+                </PaperSlot>
+                {i < count - 1 && <DashedLine />}
+              </React.Fragment>
+            ))}
+          </div>
+        );
+      }
+    }
+
+    // =========================
+    // MCQ ANSWER KEYS
+    // =========================
+    pages.push(
+      <MCQAnswerKeyPage key="mcq-keys" />
+    );
+
+    return (
+      <div className="print-container">
+        {pages}
       </div>
     );
   };
 
-  // =========================
-  // SAME LAYOUT
-  // =========================
-  if (['same', 'same_page', 'combined'].includes(currentLayout)) {
-    pages.push(
-      renderPaperGroup(
-        [...mcqs, ...subjectives],
-        mcqTotalMarks + subTotalMarks,
-        'same-paper'
-      )
-    );
-  }
-
-  // =========================
-  // SEPARATE LAYOUT
-  // =========================
-  else if (currentLayout === 'separate') {
-    if (mcqs.length > 0) {
-      pages.push(
-        renderPaperGroup(
-          mcqs,
-          mcqTotalMarks,
-          'mcq-separate',
-          false,
-          'mcq' 
-        )
-      );
-    }
-
-    if (subjectives.length > 0) {
-      pages.push(
-        renderPaperGroup(
-          subjectives,
-          subTotalMarks,
-          'sub-separate',
-          false,
-          'subjective'
-        )
-      );
-    }
-  }
-
-  // =========================
-  // TWO / THREE PAPERS
-  // =========================
-  else if (
-    ['two_papers', 'two_paper', 'three_papers', 'three_paper'].includes(
-      currentLayout
-    )
-  ) {
-    const count = currentLayout.startsWith('two') ? 2 : 3;
-    const slotHeight =
-      count === 2 ? '142mm' : '95mm';
-
-    // MCQ PAGE
-    if (mcqs.length > 0) {
-      pages.push(
-        <div
-          key="mcq-mini-page"
-          className="paper-sheet border shadow-sm print-break"
-          style={sheetBaseStyle}
-        >
-
-          {[...Array(count)].map((_, i) => (
-            <React.Fragment key={i}>
-              <PaperSlot height={slotHeight}>
-                <div
-                  style={{
-                    position: 'relative',
-                    zIndex: 1,
-                    padding: '0mm',
-                    height: '100%'
-                  }}
-                >
-                  <Watermark
-                    isPremium={isPremium}
-                    logoUrl={profile?.logo}
-                    settings={settings}
-                    scale={currentLayout.startsWith('two') ? 0.7 : 0.5}
-                    top="60%"
-                  />
-                  <PaperHeader
-                    totalMarks={mcqTotalMarks}
-                    subject={subject}
-                    paperSections={mcqs}
-                    isEditMode={isEditMode}
-                    settings={{
-                      ...settings,
-                      fontSize: currentLayout.startsWith('three') ? settings.fontSize - 3 : settings.fontSize - 1
-                    }}
-                    paperLanguage={paperLanguage}
-                    config={config}
-                    currentLayout={currentLayout}
-                    currentClass={currentClass}
-                    profile={profile}
-                    paperPart="mcq"
-                  />
-
-                  {mcqs.map((s) => (
-                    <SectionBlock
-                      key={`${i}-${s.id}`}
-                      section={s}
-                    />
-                  ))}
-                </div>
-              </PaperSlot>
-
-              {i < count - 1 && <DashedLine />}
-            </React.Fragment>
-          ))}
-        </div>
-      );
-    }
-
-    // SUBJECTIVE PAGE
-    if (subjectives.length > 0) {
-      pages.push(
-        <div
-          key="subjective-mini-page"
-          className="paper-sheet border shadow-sm print-break"
-          style={sheetBaseStyle}
-        >
-
-          {[...Array(count)].map((_, i) => (
-            <React.Fragment key={i}>
-              <PaperSlot height={slotHeight}>
-                <div
-                  style={{
-                    position: 'relative',
-                    zIndex: 1,
-                    padding: '0mm',
-                    height: '100%'
-                  }}
-                >
-                  <Watermark
-                    isPremium={isPremium}
-                    logoUrl={profile?.logo}
-                    settings={settings}
-                    scale={currentLayout.startsWith('two') ? 0.7 : 0.5}
-                    top="60%"
-                  />
-                  <PaperHeader
-                    totalMarks={subTotalMarks}
-                    subject={subject}
-                    paperSections={subjectives}
-                    isEditMode={isEditMode}
-                    settings={{
-                      ...settings,
-                      fontSize: currentLayout.startsWith('three') ? settings.fontSize - 3 : settings.fontSize - 1
-                    }}
-                    paperLanguage={paperLanguage}
-                    config={config}
-                    currentLayout={currentLayout}
-                    currentClass={currentClass}
-                    profile={profile}
-                    paperPart="subjective"
-                  />
-
-                  {subjectives.map((s) => (
-                    <SectionBlock
-                      key={`${i}-${s.id}`}
-                      section={s}
-                    />
-                  ))}
-                </div>
-              </PaperSlot>
-
-              {i < count - 1 && <DashedLine />}
-            </React.Fragment>
-          ))}
-        </div>
-      );
-    }
-  }// =========================
-// FOUR PAPERS (Short front / Long back, 6 short max / 5 long max)
-// =========================
-else if (currentLayout === 'four_papers') {
-  const count = 4;
-  const slotHeight = '71mm'; // 297mm / 4 minus margins/cut-lines, matches the two/three-paper pattern
-  const fontShrink = 4;
-  const watermarkScale = 0.4;
-
-  // FRONT SIDE — Short questions
-  if (fourPaperShortSection) {
-    pages.push(
-      <div key="four-papers-short-page" className="paper-sheet border shadow-sm print-break" style={sheetBaseStyle}>
-        {[...Array(count)].map((_, i) => (
-          <React.Fragment key={i}>
-            <PaperSlot height={slotHeight}>
-              <div style={{ position: 'relative', zIndex: 1, padding: '0mm', height: '100%' }}>
-                <Watermark
-                  isPremium={isPremium}
-                  logoUrl={profile?.logo}
-                  settings={settings}
-                  scale={watermarkScale}
-                  top="60%"
-                />
-                <PaperHeader
-                  totalMarks={fourPaperShortSection.totalMarks}
-                  subject={subject}
-                  paperSections={[fourPaperShortSection]}
-                  isEditMode={isEditMode}
-                  settings={{ ...settings, fontSize: settings.fontSize - fontShrink }}
-                  paperLanguage={paperLanguage}
-                  config={config}
-                  currentLayout={currentLayout}
-                  currentClass={currentClass}
-                  profile={profile}
-                  paperPart="subjective"
-                  subjectUrduName={subjectUrduName}
-                />
-                <SectionBlock key={`${i}-short`} section={fourPaperShortSection} />
-              </div>
-            </PaperSlot>
-            {i < count - 1 && <DashedLine />}
-          </React.Fragment>
-        ))}
-      </div>
-    );
-  }
-
-  // BACK SIDE — Long questions
-  if (fourPaperLongSection) {
-    pages.push(
-      <div key="four-papers-long-page" className="paper-sheet border shadow-sm print-break" style={sheetBaseStyle}>
-        {[...Array(count)].map((_, i) => (
-          <React.Fragment key={i}>
-            <PaperSlot height={slotHeight}>
-              <div style={{ position: 'relative', zIndex: 1, padding: '0mm', height: '100%' }}>
-                <Watermark
-                  isPremium={isPremium}
-                  logoUrl={profile?.logo}
-                  settings={settings}
-                  scale={watermarkScale}
-                  top="60%"
-                />
-                <PaperHeader
-                  totalMarks={fourPaperLongSection.totalMarks}
-                  subject={subject}
-                  paperSections={[fourPaperLongSection]}
-                  isEditMode={isEditMode}
-                  settings={{ ...settings, fontSize: settings.fontSize - fontShrink }}
-                  paperLanguage={paperLanguage}
-                  config={config}
-                  currentLayout={currentLayout}
-                  currentClass={currentClass}
-                  profile={profile}
-                  paperPart="subjective"
-                  subjectUrduName={subjectUrduName}
-                />
-                <SectionBlock key={`${i}-long`} section={fourPaperLongSection} />
-              </div>
-            </PaperSlot>
-            {i < count - 1 && <DashedLine />}
-          </React.Fragment>
-        ))}
-      </div>
-    );
-  }
-}
-
-  // =========================
-  // MCQ ANSWER KEYS
-  // =========================
-  pages.push(
-    <MCQAnswerKeyPage key="mcq-keys" />
-  );
-
   return (
-    <div className="print-container">
-      {pages}
+    <div className="paper-builder-renderer bg-secondary-subtle">
+      <style>{`
+        @media screen {
+          .paper-sheet {
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border: 1px solid #dee2e6;
+            margin: 20px auto;
+            background: white;
+          }
+        }
+
+        @media print {
+          @page {
+            size: A4;
+            margin: 0mm !important;
+          }
+
+          html,
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
+            background: white !important;
+          }
+
+          body * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          main { margin: 0 !important; padding: 0 !important; }
+
+          .paper-builder-renderer {
+            padding: 0 !important;
+            background: white !important;
+          }
+
+          .paper-sheet {
+            margin: 0 !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            outline: 0 !important;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+            height: 297mm !important;
+            overflow: hidden !important;
+          }
+
+          .print-container > .paper-sheet:last-child {
+            page-break-after: avoid !important;
+          }
+
+          .section-block {
+            page-break-inside: avoid !important;
+          }
+
+          .no-print,
+          nav,
+          .sidebar,
+          .page-border,
+          .app-header,
+          .appHeaderContent,
+          header:not(.paper-header),
+          .btn {
+            display: none !important;
+          }
+        }
+      `}</style>
+
+      {renderContent()}
     </div>
   );
 };
-
-return (
-  <div className="paper-builder-renderer bg-secondary-subtle">
-    <style>{`
-    
-      @media screen {
-        .paper-sheet {
-       
-        box-shadow: 0 0 10px rgba(0,0,0,0.1);
-          border: 1px solid #dee2e6;
-          margin: 20px auto;
-          background: white;
-        }
-      }
-
-      @media print {
-
-        @page {
-          size: A4;
-          margin: 0mm !important;
-        }
-
-        html,
-        body {
-          margin: 0 !important;
-          padding: 0 !important;
-          height: auto !important;
-          overflow: visible !important;
-          background: white !important;
-        }
-
-        body * {
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-
-        main { margin: 0 !important; padding: 0 !important; }
-
-        .paper-builder-renderer {
-          padding: 0 !important;
-          background: white !important;
-        }
-
-        .paper-sheet {
-          margin: 0 !important;
-          border: 0 !important;
-          box-shadow: none !important;
-          outline: 0 !important;
-          page-break-after: always !important;
-          page-break-inside: avoid !important;
-           height: 297mm !important;
-          overflow: hidden !important;
-        }
-
-        /* Aggressively remove borders and shadows from common containers and utility classes 
-        .paper-sheet .page-border,
-      
-        .paper-sheet .border,
-        .paper-sheet .border-info,
-        .paper-sheet .shadow-sm,
-        .paper-sheet .shadow-lg,
-        .paper-sheet .container-fluid {
-          border: none !important;
-          box-shadow: none !important;
-        }
-*/
-        .print-container > .paper-sheet:last-child {
-          page-break-after: avoid !important;
-        }
-
-        .section-block {
-          page-break-inside: avoid !important;
-        }
-
-        .no-print,
-        nav,
-        .sidebar,
-        .page-border,
-        .app-header,
-        .appHeaderContent,
-        header:not(.paper-header),
-        .btn {
-          display: none !important;
-        }
-      }
-    `}</style>
-
-    {renderContent()}
-  </div>
-);
-};
-
-
