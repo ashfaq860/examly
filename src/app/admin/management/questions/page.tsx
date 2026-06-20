@@ -166,7 +166,9 @@ export default function QuestionBank() {
   const [chapters,      setChapters]      = useState<Chapter[]>([]);
   const [topics,        setTopics]        = useState<Topic[]>([]);
   const [topicsLoading, setTopicsLoading] = useState(false);
-  // allTopics holds the full list from lookups, used only for the import matcher
+  // allTopics holds the full list from lookups, used for the import matcher
+  // AND as a fallback source for the edit modal (see modalTopics below) so
+  // editing a question doesn't depend on the filter-driven `topics` state.
   const [allTopics,     setAllTopics]     = useState<Topic[]>([]);
   const [classes,       setClasses]       = useState<Class[]>([]);
   const [classSubjects, setClassSubjects] = useState<ClassSubject[]>([]);
@@ -203,7 +205,7 @@ export default function QuestionBank() {
         setClasses(data.classes);
         setSubjects(data.subjects);
         setChapters(data.chapters);
-        setAllTopics(data.topics); // kept for import topic-matching only
+        setAllTopics(data.topics); // import topic-matching + edit-modal fallback
         setClassSubjects(data.classSubjects);
       } catch (err) {
         console.error(err);
@@ -212,7 +214,8 @@ export default function QuestionBank() {
     })();
   }, []);
 
-  /* ── fetch topics fresh whenever chapter filter changes ── */
+  /* ── fetch topics fresh whenever the FILTER chapter changes ──
+     (this is unrelated to the edit modal — see modalTopics below) */
   useEffect(() => {
     if (!filters.chapter) {
       setTopics([]);
@@ -220,7 +223,7 @@ export default function QuestionBank() {
     }
     setTopicsLoading(true);
     fetchTopicsByChapter(filters.chapter)
-      .then(data => setTopics(data))   // existing API returns flat array, not { data: [] }
+      .then(data => setTopics(data))
       .catch(err => { console.error(err); toast.error('Failed to load topics'); })
       .finally(() => setTopicsLoading(false));
   }, [filters.chapter]);
@@ -299,9 +302,6 @@ export default function QuestionBank() {
       .sort((a, b) => (a.chapterNo || 0) - (b.chapterNo || 0));
   };
 
-  // topics state is populated dynamically per-chapter by the useEffect above
-  // (already sorted by name from the API)
-
   const sortedClasses = () =>
     [...classes].sort((a, b) => {
       const an = parseInt(a.name), bn = parseInt(b.name);
@@ -378,71 +378,67 @@ export default function QuestionBank() {
   };
 
   /* ── export ── */
-const handleExport = async () => {
-  setIsExporting(true);
-  try {
-    const { data } = await exportQuestions({
-      difficulty:    filters.difficulty,
-      question_type: filters.question_type,
-      source_type:   filters.source_type,
-      topic_id:      filters.topic,
-      chapter_id:    filters.chapter,   // ← new
-      subject_id:    filters.subject,   // ← new
-      class_id:      filters.class,     // ← new
-      search:        searchTerm || undefined, // ← new
-    });
- 
-    if (!data?.length) {
-      toast.error('No questions to export with current filters');
-      return;
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const { data } = await exportQuestions({
+        difficulty:    filters.difficulty,
+        question_type: filters.question_type,
+        source_type:   filters.source_type,
+        topic_id:      filters.topic,
+        chapter_id:    filters.chapter,
+        subject_id:    filters.subject,
+        class_id:      filters.class,
+        search:        searchTerm || undefined,
+      });
+
+      if (!data?.length) {
+        toast.error('No questions to export with current filters');
+        return;
+      }
+
+      const rows = data.map((q: any) => {
+        const cs = q.topic?.chapter?.class_subject;
+        return {
+          'Question (HTML)':   q.question_text,
+          'Question (Plain)':  stripHtml(q.question_text || ''),
+          'Question (Urdu)':   q.question_text_ur  || '',
+          'Option A':          q.option_a           || '',
+          'Option B':          q.option_b           || '',
+          'Option C':          q.option_c           || '',
+          'Option D':          q.option_d           || '',
+          'Option A (Urdu)':   q.option_a_ur        || '',
+          'Option B (Urdu)':   q.option_b_ur        || '',
+          'Option C (Urdu)':   q.option_c_ur        || '',
+          'Option D (Urdu)':   q.option_d_ur        || '',
+          'Correct Option':    q.correct_option     || '',
+          Class:               cs?.class?.name      || '',
+          Subject:             cs?.subject?.name    || '',
+          Chapter:             q.topic?.chapter?.name || '',
+          Topic:               q.topic?.name        || '',
+          Difficulty:          q.difficulty,
+          'Question Type':     q.question_type,
+          'Source Type':       q.source_type,
+          'Source Year':       q.source_year        || '',
+          Answer:              q.answer_text        || '',
+          'Answer (Urdu)':     q.answer_text_ur     || '',
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Questions');
+      XLSX.writeFile(wb, 'question_bank_export.xlsx');
+      toast.success(`Exported ${rows.length} question(s)`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Export failed');
+    } finally {
+      setIsExporting(false);
     }
- 
-    const rows = data.map((q: any) => {
-      const cs = q.topic?.chapter?.class_subject;
-      return {
-        'Question (HTML)':   q.question_text,
-        'Question (Plain)':  stripHtml(q.question_text || ''),
-        'Question (Urdu)':   q.question_text_ur  || '',
-        'Option A':          q.option_a           || '',
-        'Option B':          q.option_b           || '',
-        'Option C':          q.option_c           || '',
-        'Option D':          q.option_d           || '',
-        'Option A (Urdu)':   q.option_a_ur        || '',
-        'Option B (Urdu)':   q.option_b_ur        || '',
-        'Option C (Urdu)':   q.option_c_ur        || '',
-        'Option D (Urdu)':   q.option_d_ur        || '',
-        'Correct Option':    q.correct_option     || '',
-        Class:               cs?.class?.name      || '',
-        Subject:             cs?.subject?.name    || '',
-        Chapter:             q.topic?.chapter?.name || '',
-        Topic:               q.topic?.name        || '',
-        Difficulty:          q.difficulty,
-        'Question Type':     q.question_type,
-        'Source Type':       q.source_type,
-        'Source Year':       q.source_year        || '',
-        Answer:              q.answer_text        || '',
-        'Answer (Urdu)':     q.answer_text_ur     || '',
-      };
-    });
- 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Questions');
-    XLSX.writeFile(wb, 'question_bank_export.xlsx');
-    toast.success(`Exported ${rows.length} question(s)`);
-  } catch (err) {
-    console.error(err);
-    toast.error('Export failed');
-  } finally {
-    setIsExporting(false);
-  }
-};
- 
+  };
 
   /* ── import ── */
-
-/* ── import ── */
-/* ── import ── */
   const handleImport = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -482,9 +478,6 @@ const handleExport = async () => {
         }
       }
 
-      //console.log('=== TOPIC MAP FROM SERVER ===', topicMap);
-      //console.log('=== FIRST ROW ===', importRows[0]);
-
       // 4. Build payload
       let unmatchedCount = 0;
 
@@ -498,7 +491,6 @@ const handleExport = async () => {
 
         if (!topicId) {
           unmatchedCount++;
-    //      console.warn(`Row ${index + 1}: no topic match. Chapter="${colChapter}" Topic="${colTopic}"`);
         }
 
         const questionText =
@@ -551,12 +543,19 @@ const handleExport = async () => {
       e.target.value = '';
     }
   };
+
   /* ── derived ── */
   const totalPages  = Math.ceil(totalQ / itemsPerPage);
   const startIdx    = (currentPage - 1) * itemsPerPage;
   const endIdx      = Math.min(startIdx + itemsPerPage, totalQ);
   const displayedQs = questions.filter(q => activeTab === 'all' || q?.question_type === activeTab);
   const activeCount = Object.values(filters).filter(Boolean).length + (searchTerm ? 1 : 0);
+
+  // The edit modal must NOT depend on the filter-driven `topics` state
+  // (that's empty unless a chapter filter happens to be selected). Instead
+  // give the form the full topic lookup table — QuestionForm's own
+  // hydration effect resolves the question's actual topic_id against this.
+  const modalTopics = allTopics;
 
   const pageNums = (() => {
     const total = totalPages, cur = currentPage;
@@ -632,7 +631,8 @@ const handleExport = async () => {
         .qb-hd p  { font-size:.8rem; color:var(--qb-muted); margin:0; }
         .qb-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
         .qb-btn { display:inline-flex; align-items:center; gap:5px; font-size:.81rem; font-weight:650; border-radius:var(--qb-rsm); padding:8px 14px; border:none; cursor:pointer; transition:all .14s; white-space:nowrap; font-family:var(--qb-font); }
-        .qb-btn:disabled { opacity:.5; cursor:not-allowed; }
+        .qb-btn[disabled],
+        .qb-btn.is-disabled { opacity:.5; cursor:not-allowed; pointer-events:none; }
         .qb-btn-primary { background:var(--qb-accent); color:#fff; }
         .qb-btn-primary:hover:not(:disabled) { background:#2345c8; box-shadow:0 4px 14px rgba(47,84,235,.35); }
         .qb-btn-ghost   { background:var(--qb-surface); color:var(--qb-text); border:1.5px solid var(--qb-border); }
@@ -640,7 +640,7 @@ const handleExport = async () => {
         .qb-btn-danger  { background:var(--qb-red); color:#fff; }
         .qb-btn-danger:hover:not(:disabled) { background:#e03131; box-shadow:0 4px 14px rgba(250,82,82,.35); }
         .qb-btn-icon    { padding:7px 9px; position:relative; }
-        .qb-tabs { display:flex; gap:3px; background:var(--qb-surface); border:1.5px solid var(--qb-border); border-radius:var(--qb-rsm); padding:4px; width:fit-content; margin-bottom:18px; }
+        .qb-tabs { display:flex; gap:3px; background:var(--qb-surface); border:1.5px solid var(--qb-border); border-radius:var(--qb-rsm); padding:4px; width:fit-content; margin-bottom:18px; flex-wrap:wrap; }
         .qb-tab  { display:inline-flex; align-items:center; gap:5px; font-size:.79rem; font-weight:650; padding:6px 13px; border-radius:5px; border:none; background:transparent; color:var(--qb-muted); cursor:pointer; transition:all .14s; font-family:var(--qb-font); }
         .qb-tab:hover { color:var(--qb-text); }
         .qb-tab.on    { background:var(--qb-accent); color:#fff; box-shadow:0 2px 8px rgba(47,84,235,.3); }
@@ -655,7 +655,7 @@ const handleExport = async () => {
         .qb-sel:focus   { border-color:var(--qb-accent); background:#fff; }
         .qb-sel:disabled{ opacity:.4; cursor:not-allowed; }
         .qb-fbadge { position:absolute; top:-6px; right:-6px; background:var(--qb-accent); color:#fff; font-size:.66rem; font-weight:700; border-radius:99px; width:16px; height:16px; display:flex; align-items:center; justify-content:center; }
-        .qb-bulk-bar { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--qb-accent-lt); border:1.5px solid var(--qb-accent); border-radius:var(--qb-rsm); margin-bottom:12px; animation:qb-slideDown .2s ease; }
+        .qb-bulk-bar { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--qb-accent-lt); border:1.5px solid var(--qb-accent); border-radius:var(--qb-rsm); margin-bottom:12px; animation:qb-slideDown .2s ease; flex-wrap:wrap; }
         @keyframes qb-slideDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
         .qb-bulk-bar span { font-size:.82rem; font-weight:650; color:var(--qb-accent); }
         .qb-sb  { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
@@ -692,8 +692,8 @@ const handleExport = async () => {
         .qb-hard     { background:#ffe3e3; color:#c92a2a; }
         .qb-b-source { background:#f1f3f9; color:var(--qb-muted); }
         .qb-ab { display:inline-flex; align-items:center; justify-content:center; width:29px; height:29px; border-radius:6px; border:1.5px solid var(--qb-border); background:var(--qb-surface); color:var(--qb-muted); cursor:pointer; transition:all .13s; }
-        .qb-ab:hover.edit   { border-color:var(--qb-accent); color:var(--qb-accent); background:var(--qb-accent-lt); }
-        .qb-ab:hover.delete { border-color:var(--qb-red);    color:var(--qb-red);    background:var(--qb-red-bg); }
+        .qb-ab.edit:hover   { border-color:var(--qb-accent); color:var(--qb-accent); background:var(--qb-accent-lt); }
+        .qb-ab.delete:hover { border-color:var(--qb-red);    color:var(--qb-red);    background:var(--qb-red-bg); }
         .qb-empty { text-align:center; padding:60px 24px; color:var(--qb-muted); }
         .qb-empty-ico { font-size:2.8rem; margin-bottom:10px; opacity:.25; }
         .qb-empty h3  { font-size:.95rem; font-weight:700; color:var(--qb-text); margin:0 0 5px; }
@@ -709,10 +709,10 @@ const handleExport = async () => {
         .qb-pgb.dots { border:none; background:transparent; cursor:default; color:var(--qb-muted); letter-spacing:.1em; }
         .qb-mo  { position:fixed; inset:0; background:rgba(18,30,64,.6); z-index:1050; display:flex; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(3px); }
         .qb-md  { background:var(--qb-surface); border-radius:var(--qb-radius); box-shadow:0 12px 48px rgba(18,30,64,.22); width:100%; max-width:900px; max-height:94vh; display:flex; flex-direction:column; overflow:hidden; }
-        .qb-mhd { display:flex; justify-content:space-between; align-items:center; padding:16px 22px; border-bottom:1.5px solid var(--qb-border); background:#f7f8fc; }
+        .qb-mhd { display:flex; justify-content:space-between; align-items:center; padding:16px 22px; border-bottom:1.5px solid var(--qb-border); background:#f7f8fc; flex-shrink:0; }
         .qb-mhd h5 { font-size:.95rem; font-weight:750; color:var(--qb-navy); margin:0; }
         .qb-mbd { overflow-y:auto; flex:1; padding:22px; }
-        .qb-xcl { display:inline-flex; align-items:center; justify-content:center; width:29px; height:29px; border-radius:6px; border:1.5px solid var(--qb-border); background:transparent; color:var(--qb-muted); cursor:pointer; transition:all .13s; }
+        .qb-xcl { display:inline-flex; align-items:center; justify-content:center; width:29px; height:29px; border-radius:6px; border:1.5px solid var(--qb-border); background:transparent; color:var(--qb-muted); cursor:pointer; transition:all .13s; flex-shrink:0; }
         .qb-xcl:hover { border-color:var(--qb-red); color:var(--qb-red); background:var(--qb-red-bg); }
         .qb-meta { display:flex; flex-direction:column; gap:2px; }
         .qb-meta-main { font-size:.82rem; color:var(--qb-text); white-space:nowrap; }
@@ -722,6 +722,8 @@ const handleExport = async () => {
           .qb-hd h1 { font-size:1.15rem; }
           .qb-table th, .qb-table td { padding:9px 8px; }
           .qb-q-cell { max-width:220px; }
+          .qb-md { max-height:96vh; }
+          .qb-mbd { padding:16px; }
         }
       `}</style>
 
@@ -734,8 +736,10 @@ const handleExport = async () => {
             <p>{totalQ.toLocaleString()} total questions</p>
           </div>
           <div className="qb-actions">
-            <label className={`qb-btn qb-btn-ghost${isImporting ? ' qb-btn:disabled' : ''}`}
-              style={{ cursor: isImporting ? 'not-allowed' : 'pointer' }}>
+            <label
+              className={`qb-btn qb-btn-ghost${isImporting ? ' is-disabled' : ''}`}
+              style={{ cursor: isImporting ? 'not-allowed' : 'pointer' }}
+            >
               <FiUpload size={13} />
               {isImporting ? 'Importing…' : 'Import'}
               <input type="file" style={{ display: 'none' }} onChange={handleImport}
@@ -1011,7 +1015,7 @@ const handleExport = async () => {
                 subjects={subjects}
                 classSubjects={classSubjects}
                 chapters={chapters}
-                topics={topics}
+                topics={modalTopics}
                 onClose={() => { setShowModal(false); loadQuestions(currentPage, undefined, false); }}
               />
             </div>
