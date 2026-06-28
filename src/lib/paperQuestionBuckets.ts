@@ -16,7 +16,7 @@ export const SHORT_BUCKET_TYPES = new Set<string>([
   'sentence_completion',
   'directInDirect',
   'activePassive',
-    'gazal',
+  'gazal',
 ]);
 
 export const LONG_BUCKET_TYPES = new Set<string>([

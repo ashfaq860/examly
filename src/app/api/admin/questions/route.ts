@@ -1,140 +1,142 @@
-// app/api/questions/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+// src/app/api/admin/questions/route.ts
+//
+// Question Bank CRUD — list (GET) + create (POST).
+// This path is owned by lib/questionsApi.ts (admin Question Bank page).
+// It is NOT the paper-generator sampling endpoint — that lives at
+// /api/questions (see src/app/api/questions/route.ts), which is called
+// by PaperBuilderApp / useGeneratePaper / ruleBasedSelector etc.
+// Do not merge paper-generator sampling logic back into this file.
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!, // server-only service role key
-);
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 const QUESTION_SELECT = `
-  id, question_text, question_text_ur,
-  option_a, option_b, option_c, option_d,
-  option_a_ur, option_b_ur, option_c_ur, option_d_ur,
-  correct_option, difficulty, question_type,
-  source_type, source_year, answer_text, answer_text_ur,
-  created_at, topic_id,
-  topic:topics(
+  *,
+  topic:topics (
     id, name, chapter_id,
-    chapter:chapters(
-      id, name, chapterNo, class_subject_id,
-      class_subject:class_subjects(
+    chapter:chapters (
+      id, name, "chapterNo", class_subject_id,
+      class_subject:class_subjects (
         id, class_id, subject_id,
-        class:classes(id,name,description),
-        subject:subjects(id,name,name_ur)
+        class:classes ( id, name, description ),
+        subject:subjects ( id, name, name_ur )
       )
     )
+  ),
+  question_category_rel:question_categories (
+    id, question_type, category_value, label_en, label_ur
   )
 `;
 
-async function resolveTopicIds(params: {
-  class_id?: string;
-  subject_id?: string;
-  chapter_id?: string;
-}): Promise<string[] | null> {
-  const { class_id, subject_id, chapter_id } = params;
-  if (!class_id && !subject_id && !chapter_id) return null;
+// ── GET /api/admin/questions ────────────────────────────────────────────────
+// Paginated, filtered list for the Question Bank admin table.
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
 
-  if (chapter_id) {
-    const { data } = await supabase
-      .from('topics')
-      .select('id')
-      .eq('chapter_id', chapter_id);
-    return data?.length ? data.map((t: any) => t.id) : ['-1'];
-  }
-
-  // Resolve class_subjects → chapters → topics
-  let csQuery = supabase.from('class_subjects').select('id');
-  if (class_id)   csQuery = csQuery.eq('class_id',   class_id);
-  if (subject_id) csQuery = csQuery.eq('subject_id', subject_id);
-  const { data: csData } = await csQuery;
-
-  let chQuery = supabase.from('chapters').select('id, class_subject_id');
-  if (csData?.length) chQuery = chQuery.in('class_subject_id', csData.map((c: any) => c.id));
-  else chQuery = chQuery.in('id', ['-1']);
-  const { data: chData } = await chQuery;
-
-  let tQuery = supabase.from('topics').select('id');
-  if (chData?.length) tQuery = tQuery.in('chapter_id', chData.map((c: any) => c.id));
-  else tQuery = tQuery.in('id', ['-1']);
-  const { data: tData } = await tQuery;
-
-  return tData?.length ? tData.map((t: any) => t.id) : ['-1'];
-}
-
-/** GET /api/questions */
-export async function GET(req: NextRequest) {
   try {
-    const sp = req.nextUrl.searchParams;
+    const page     = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const perPage  = Math.max(1, parseInt(searchParams.get('per_page') || '20', 10));
 
-    const page        = Math.max(1, Number(sp.get('page')  || 1));
-    const perPage     = Math.min(200, Math.max(1, Number(sp.get('per_page') || 20)));
-    const search      = sp.get('search')        || '';
-    const class_id    = sp.get('class_id')      || '';
-    const subject_id  = sp.get('subject_id')    || '';
-    const chapter_id  = sp.get('chapter_id')    || '';
-    const topic_id    = sp.get('topic_id')      || '';
-    const difficulty  = sp.get('difficulty')    || '';
-    const question_type = sp.get('question_type') || '';
-    const source_type = sp.get('source_type')   || '';
+    const search               = searchParams.get('search');
+    const classId              = searchParams.get('class_id');
+    const subjectId            = searchParams.get('subject_id');
+    const chapterId             = searchParams.get('chapter_id');
+    const topicId               = searchParams.get('topic_id');
+    const difficulty            = searchParams.get('difficulty');
+    const questionType          = searchParams.get('question_type');
+    const sourceType            = searchParams.get('source_type');
+    const questionCategoryId    = searchParams.get('question_category_id');
 
-    // Resolve topic IDs from hierarchical filters
-    const topicIds = await resolveTopicIds({
-      class_id:   class_id   || undefined,
-      subject_id: subject_id || undefined,
-      chapter_id: chapter_id || undefined,
+    const from = (page - 1) * perPage;
+    const to   = from + perPage - 1;
+
+    let q = supabaseAdmin
+      .from('questions')
+      .select(QUESTION_SELECT, { count: 'exact' });
+
+    // Nested-relation filters require !inner so the filter actually
+    // restricts the parent row set (Supabase/PostgREST quirk: a plain
+    // left join filter on a nested column is ignored unless the join
+    // is forced to inner).
+    if (classId || subjectId) {
+      q = supabaseAdmin
+        .from('questions')
+        .select(
+          QUESTION_SELECT.replace('topic:topics (', 'topic:topics!inner (')
+                          .replace('chapter:chapters (', 'chapter:chapters!inner (')
+                          .replace('class_subject:class_subjects (', 'class_subject:class_subjects!inner (')
+          , { count: 'exact' }
+        );
+      if (classId)   q = q.eq('topic.chapter.class_subject.class_id', classId);
+      if (subjectId) q = q.eq('topic.chapter.class_subject.subject_id', subjectId);
+    }
+
+    if (chapterId)            q = q.eq('topic.chapter_id', chapterId);
+    if (topicId)               q = q.eq('topic_id', topicId);
+    if (difficulty)            q = q.eq('difficulty', difficulty);
+    if (questionType)          q = q.eq('question_type', questionType);
+    if (questionCategoryId)    q = q.eq('question_category_id', questionCategoryId);
+
+    if (sourceType) {
+      const sources = sourceType.split(',').map(s => s.trim()).filter(Boolean);
+      if (sources.length === 1) q = q.eq('source_type', sources[0]);
+      else if (sources.length > 1) q = q.in('source_type', sources);
+    }
+
+    if (search) {
+      q = q.or(
+        `question_text.ilike.%${search}%,question_text_ur.ilike.%${search}%`
+      );
+    }
+
+    q = q.order('created_at', { ascending: false }).range(from, to);
+
+    const { data, error, count } = await q;
+    if (error) throw error;
+
+    return NextResponse.json({
+      data: data || [],
+      total: count || 0,
+      page,
+      per_page: perPage,
     });
 
-    const applyFilters = (base: any) => {
-      let b = base;
-      if (search.trim()) {
-        b = b.or(`question_text.ilike.*${search.trim()}*,question_text_ur.ilike.*${search.trim()}*`);
-      }
-      if (topicIds)      b = b.in('topic_id', topicIds);
-      if (topic_id)      b = b.eq('topic_id',      topic_id);
-      if (difficulty)    b = b.eq('difficulty',    difficulty);
-      if (question_type) b = b.eq('question_type', question_type);
-      if (source_type)   b = b.eq('source_type',   source_type);
-      return b;
-    };
-
-    // Count
-    const { count, error: countError } = await applyFilters(
-      supabase.from('questions').select('id', { count: 'exact', head: true })
+  } catch (error: any) {
+    console.error('GET /api/admin/questions error:', error.message, error.details);
+    return NextResponse.json(
+      { error: error.message || 'Failed to load questions' },
+      { status: 500 }
     );
-    if (countError) throw countError;
-
-    // Data
-    const from = (page - 1) * perPage;
-    const { data, error } = await applyFilters(
-      supabase
-        .from('questions')
-        .select(QUESTION_SELECT)
-        .order('created_at', { ascending: false })
-        .range(from, from + perPage - 1)
-    );
-    if (error) throw error;
-
-    return NextResponse.json({ data, total: count ?? 0, page, per_page: perPage });
-  } catch (err: any) {
-    console.error('[GET /api/questions]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-/** POST /api/questions  — bulk import */
-export async function POST(req: NextRequest) {
+// ── POST /api/admin/questions ───────────────────────────────────────────────
+// Create a single question from the Add Question form.
+// Body: { rows: [questionObject] } — always exactly one row.
+export async function POST(request: NextRequest) {
   try {
-    const body = await req.json();
-    const rows: any[] = body.rows;
-    if (!Array.isArray(rows) || rows.length === 0) {
-      return NextResponse.json({ error: 'rows array required' }, { status: 400 });
+    const body = await request.json();
+    const rows = Array.isArray(body?.rows) ? body.rows : null;
+
+    if (!rows || rows.length === 0) {
+      return NextResponse.json({ error: 'rows is required and must be a non-empty array' }, { status: 400 });
     }
-    const { error } = await supabase.from('questions').insert(rows);
+
+    const { data, error } = await supabaseAdmin
+      .from('questions')
+      .insert(rows)
+      .select('id');
+
     if (error) throw error;
-    return NextResponse.json({ inserted: rows.length });
-  } catch (err: any) {
-    console.error('[POST /api/questions]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+
+    return NextResponse.json({ inserted: data?.length || 0 });
+
+  } catch (error: any) {
+    console.error('POST /api/admin/questions error:', error.message, error.details);
+    return NextResponse.json(
+      { error: error.message || 'Failed to create question' },
+      { status: 500 }
+    );
   }
 }

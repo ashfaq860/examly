@@ -58,6 +58,13 @@ import { Editor } from '@tinymce/tinymce-react';
  *      since those effects exist to reset stale children when a user
  *      manually changes a parent field — not to fight against a programmatic
  *      hydration that sets parent+child together.
+ *
+ * ── CATEGORY FIELD NOTE ──────────────────────────────────────────────────
+ * question_category_id (uuid, FK -> question_categories.id) is the ONLY
+ * category field this form reads or writes. The legacy question_category
+ * (text) column still exists in the DB for backward compatibility with old
+ * rows, but this form never touches it — every read and every write below
+ * goes through question_category_id exclusively.
  */
 declare global {
   interface Window {
@@ -206,6 +213,13 @@ function buildMathButton(editor: any) {
 /* ═══════════════════════════════════════════════════════════════════════════
    Types & constants
 ═══════════════════════════════════════════════════════════════════════════*/
+interface QuestionCategory {
+  id: string; question_type: string; category_value: string;
+  label_en: string; label_ur?: string | null;
+  subject_hint?: string | null; class_hint?: string | null;
+  default_marks?: number | null; sort_order: number; is_active: boolean;
+}
+
 interface QuestionFormProps {
   question?: any;
   classes: any[];
@@ -213,16 +227,18 @@ interface QuestionFormProps {
   chapters: any[];
   topics: any[];
   classSubjects: any[];
+  questionCategories?: QuestionCategory[];
   onClose: () => void;
 }
 
 type QuestionType =
   | 'mcq' | 'short' | 'long'
   | 'translate_urdu' | 'translate_english' | 'idiom_phrases' | 'passage'
-  | 'poetry_explanation' | 'prose_explanation' | 'sentence_correction'
-  | 'sentence_completion' | 'directInDirect' | 'activePassive'
-  | 'darkhwast_khat' | 'kahani_makalma' | 'Nasarkhulasa_markziKhyal'
-  | 'gazal' | 'summary';
+  | 'poetry_explanation' | 'stanza_explanation' | 'prose_explanation'
+  | 'sentence_correction' | 'sentence_completion' | 'punctuation'
+  | 'directInDirect' | 'activePassive' | 'application' | 'letter'
+  | 'mokalma' | 'Nasarkhulasa' | 'markziKhyal'
+  | 'gazal' | 'summary' | 'pair_of_words' | 'essay' | 'story';
 
 const EMPTY_TEXT_FIELDS = {
   question_text: '', question_text_ur: '',
@@ -235,13 +251,17 @@ const EMPTY_TEXT_FIELDS = {
   direct_sentence: '', indirect_sentence: '',
   active_sentence: '', passive_sentence: '',
   darkhwast_text: '', kahani_text: '', nasar_text: '', summary_text: '',
+  diagram: '', question_category_id: '',
+  story_text: '',      // English story prompt
+  story_text_ur: '',   // Urdu story prompt
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
    QuestionForm
 ═══════════════════════════════════════════════════════════════════════════*/
 export default function QuestionForm({
-  question, classes, subjects, chapters, topics, classSubjects, onClose,
+  question, classes, subjects, chapters, topics, classSubjects,
+  questionCategories = [], onClose,
 }: QuestionFormProps) {
   const toId = useCallback((v: any) => (v === null || v === undefined ? '' : String(v)), []);
 
@@ -269,26 +289,17 @@ export default function QuestionForm({
   const [lookupChapters, setLookupChapters] = useState<any[]>(chapters);
   const [lookupTopics, setLookupTopics] = useState<any[]>(topics);
   const [lookupClassSubjects, setLookupClassSubjects] = useState<any[]>(classSubjects);
-  // True once the form's own fetchLookups() call has resolved. Edit-mode
-  // hydration waits for this so the topic→chapter→subject→class walk has
-  // real data to work with, instead of racing against an empty array.
+  const [lookupQuestionCategories, setLookupQuestionCategories] = useState<QuestionCategory[]>(questionCategories);
   const [lookupsReady, setLookupsReady] = useState(false);
 
   const [filteredSubjects, setFilteredSubjects] = useState<any[]>([]);
   const [filteredChapters, setFilteredChapters] = useState<any[]>([]);
   const [filteredTopics, setFilteredTopics] = useState<any[]>([]);
+  const [filteredQuestionCategories, setFilteredQuestionCategories] = useState<QuestionCategory[]>([]);
   const [loading, setLoading] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
 
-  // Guards the cascading class→subject→chapter→topic effects from wiping
-  // out fields that hydration just set together as a group. Without this,
-  // setting class_id during hydration immediately triggers the "clear
-  // subject/chapter/topic if they don't belong to this class" effect,
-  // because filteredSubjects/filteredChapters haven't been recomputed yet
-  // on that same render pass.
   const hydratingRef = useRef(false);
-  // Tracks which question.id we've already hydrated, so the effect doesn't
-  // re-run (and doesn't need lookup arrays in its dependency list).
   const hydratedForId = useRef<string | null>(null);
 
   const activeClasses = useMemo(
@@ -308,6 +319,7 @@ export default function QuestionForm({
     [compareLabels, lookupTopics, topics]
   );
   const activeClassSubjects = lookupClassSubjects.length ? lookupClassSubjects : classSubjects;
+  const activeQuestionCategories = lookupQuestionCategories.length ? lookupQuestionCategories : questionCategories;
 
   const isEnglishSubject = useCallback(() => {
     const s = activeSubjects.find(s => toId(s.id) === formData.subject_id);
@@ -402,6 +414,7 @@ export default function QuestionForm({
         setLookupChapters(data.chapters || []);
         setLookupTopics(data.topics || []);
         setLookupClassSubjects(data.classSubjects || []);
+        setLookupQuestionCategories(data.questionCategories || []);
       } catch (err) {
         console.error('Failed to load lookup data:', err);
       } finally {
@@ -453,28 +466,35 @@ export default function QuestionForm({
 
   /* ════════════════════════════════════════════════════════════════════
      EDIT-MODE HYDRATION
-     Runs once lookups are ready, and only once per question.id. Sets
-     class/subject/chapter/topic + all text fields together in a single
-     setFormData call, guarded by hydratingRef so the cascading-filter
-     effects below don't immediately clear what we just set.
   ════════════════════════════════════════════════════════════════════*/
   useEffect(() => {
     if (!question) {
-      // Switching to "Add" mode (no question) — allow future edits to hydrate again.
       hydratedForId.current = null;
       return;
     }
     if (!lookupsReady) return;
     const qid = toId(question.id);
-    if (hydratedForId.current === qid) return; // already hydrated for this question
+    if (hydratedForId.current === qid) return;
 
     let poetryText = '', proseText = '', sentenceText = '', passageText = '', passageTextUr = '';
     let idiomPhrase = '', directSentence = '', indirectSentence = '', activeSentence = '';
     let darkhwastText = '', kahaniText = '', nasarText = '', summaryText = '';
     let passageQuestionText = '', passageQuestionTextUr = '';
+    let storyText = '', storyTextUr = '';
 
+    // Story specific extraction
+    if (question.question_type === 'story') {
+      storyText = question.question_text || '';
+      storyTextUr = question.question_text_ur || '';
+    }
+
+    // For Urdu poetry/stanza/prose/gazal: we store the text in question_text_ur
+    // For English stanza_explanation: we store text in question_text
     if (question.question_type === 'poetry_explanation' && question.question_text_ur) {
       const m = question.question_text_ur.match(/اس شعر کی تشریح کریں: (.*)/);
+      poetryText = m ? m[1] : question.question_text_ur;
+    } else if (question.question_type === 'stanza_explanation' && question.question_text_ur) {
+      const m = question.question_text_ur.match(/اس بند کی تشریح کریں: (.*)/);
       poetryText = m ? m[1] : question.question_text_ur;
     } else if (question.question_type === 'gazal' && question.question_text_ur) {
       const m = question.question_text_ur.match(/اس غزل کی تشریح کریں: (.*)/);
@@ -482,7 +502,7 @@ export default function QuestionForm({
     } else if (question.question_type === 'prose_explanation' && question.question_text_ur) {
       const m = question.question_text_ur.match(/اس نثر پارے کی تشریح کریں: (.*)/);
       proseText = m ? m[1] : question.question_text_ur;
-    } else if (['sentence_correction', 'sentence_completion'].includes(question.question_type) && question.question_text_ur) {
+    } else if (['sentence_correction', 'sentence_completion', 'punctuation'].includes(question.question_type) && question.question_text_ur) {
       const m = question.question_text_ur.match(/(درج ذیل جملے کو درست کریں|درج ذیل جملے کو مکمل کریں): (.*)/);
       sentenceText = m ? m[2] : question.question_text_ur;
     } else if (question.question_type === 'idiom_phrases' && question.question_text) {
@@ -492,10 +512,21 @@ export default function QuestionForm({
       directSentence = question.question_text.replace('Convert the following direct speech into indirect speech: ', '');
     } else if (question.question_type === 'activePassive' && question.question_text) {
       activeSentence = question.question_text.replace('Convert the following active voice into passive voice: ', '');
-    } else if (question.question_type === 'darkhwast_khat') darkhwastText = question.question_text_ur || '';
-    else if (question.question_type === 'kahani_makalma') kahaniText = question.question_text_ur || '';
-    else if (question.question_type === 'Nasarkhulasa_markziKhyal') nasarText = question.question_text_ur || '';
-    else if (question.question_type === 'passage') {
+    } else if (question.question_type === 'application') {
+      // Application questions - keep as-is
+    } else if (question.question_type === 'letter') {
+      // Letter questions
+    } else if (question.question_type === 'mokalma') {
+      // Mokalma questions
+    } else if (question.question_type === 'Nasarkhulasa' && question.question_text_ur) {
+      nasarText = question.question_text_ur || '';
+    } else if (question.question_type === 'markziKhyal' && question.question_text_ur) {
+      nasarText = question.question_text_ur || '';
+    } else if (question.question_type === 'pair_of_words') {
+      // Pair of words
+    } else if (question.question_type === 'essay') {
+      // Essay
+    } else if (question.question_type === 'passage') {
       if (question.question_text) {
         const parts = question.question_text.split('\n\nQUESTION: ');
         passageText = parts[0] || ''; passageQuestionText = parts[1] || '';
@@ -505,10 +536,7 @@ export default function QuestionForm({
       }
     } else if (question.question_type === 'summary' && question.question_text) summaryText = question.question_text;
 
-    // Walk topic_id UP to chapter → class_subject → class/subject.
-    // Prefer the topic_id's own embedded chapter (if the API already joined
-    // it, e.g. question.topic?.chapter) before falling back to the lookup
-    // table walk — this makes hydration work even if lookups are thin.
+    // Walk topic_id UP to chapter → class_subject → class/subject
     const embeddedChapter = question.topic?.chapter;
     const currentTopic = activeTopics.find(t => toId(t.id) === toId(question.topic_id));
     const chapterIdToFind = toId(embeddedChapter?.id) || toId(currentTopic?.chapter_id);
@@ -529,9 +557,6 @@ export default function QuestionForm({
 
     hydratingRef.current = true;
 
-    // Pre-seed the cascading dropdown lists synchronously so the selects
-    // are populated on the very first paint, instead of waiting one extra
-    // render for the cascading effects to catch up.
     if (resolvedClassId) {
       setFilteredSubjects(
         activeSubjects.filter(s =>
@@ -554,9 +579,20 @@ export default function QuestionForm({
       setFilteredTopics(ts.length ? ts : (currentTopic ? [currentTopic] : []));
     }
 
+    // Filter question categories by type
+    setFilteredQuestionCategories(
+      activeQuestionCategories.filter(qc => qc.question_type === question.question_type && qc.is_active)
+    );
+
+    // For English stanza_explanation, we use question_text and answer_text directly.
+    // For Urdu, we use the extracted poetryText etc. into question_text_ur and answer_text_ur.
+    // In the generic case, we set question_text from question.question_text.
+    const finalQuestionText = passageQuestionText || question.question_text || '';
+    const finalQuestionTextUr = passageQuestionTextUr || question.question_text_ur || '';
+
     setFormData({
-      question_text: passageQuestionText || question.question_text || '',
-      question_text_ur: passageQuestionTextUr || question.question_text_ur || '',
+      question_text: finalQuestionText,
+      question_text_ur: finalQuestionTextUr,
       option_a: question.option_a || '', option_b: question.option_b || '',
       option_c: question.option_c || '', option_d: question.option_d || '',
       option_a_ur: question.option_a_ur || '', option_b_ur: question.option_b_ur || '',
@@ -580,17 +616,26 @@ export default function QuestionForm({
       darkhwast_text: darkhwastText, kahani_text: kahaniText,
       nasar_text: nasarText, summary_text: summaryText,
       passage_questions_count: 1,
+      diagram: question.diagram || '',
+      question_category_id: question.question_category_id || '',
+      story_text: storyText,
+      story_text_ur: storyTextUr,
     });
 
     hydratedForId.current = qid;
 
-    // Release the guard on the next tick, after the cascading effects have
-    // had a chance to see the already-correct values and become no-ops.
     const t = setTimeout(() => { hydratingRef.current = false; }, 0);
     return () => clearTimeout(t);
-  }, [question, lookupsReady, activeChapters, activeClassSubjects, activeTopics, activeSubjects, compareLabels, toId]);
+  }, [question, lookupsReady, activeChapters, activeClassSubjects, activeTopics, activeSubjects, activeQuestionCategories, compareLabels, toId]);
 
-  /* ── cascading dropdowns (user-driven changes only — see hydratingRef guard) ── */
+  /* ── Filter question categories when question_type changes ── */
+  useEffect(() => {
+    setFilteredQuestionCategories(
+      activeQuestionCategories.filter(qc => qc.question_type === formData.question_type && qc.is_active)
+    );
+  }, [formData.question_type, activeQuestionCategories]);
+
+  /* ── cascading dropdowns ── */
   useEffect(() => {
     if (hydratingRef.current) return;
     const classId = formData.class_id;
@@ -657,6 +702,14 @@ export default function QuestionForm({
     return () => { mounted = false; };
   }, [activeTopics, compareLabels, formData.chapter_id, formData.topic_id, toId]);
 
+  /* ── category clean-up ── */
+  useEffect(() => {
+    if (hydratingRef.current) return;
+    if (!formData.question_category_id) return;
+    if (filteredQuestionCategories.some(qc => qc.id === formData.question_category_id)) return;
+    setFormData(p => ({ ...p, question_category_id: '' }));
+  }, [filteredQuestionCategories, formData.question_category_id]);
+
   /* ── submit ── */
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -671,6 +724,8 @@ export default function QuestionForm({
         source_type: formData.source_type,
         source_year: formData.source_year ? parseInt(formData.source_year) : null,
         created_by: user?.id ?? null,
+        diagram: formData.diagram || null,
+        question_category_id: formData.question_category_id || null,
       };
 
       let specific: any = {};
@@ -701,27 +756,66 @@ export default function QuestionForm({
             specific = { question_text: formData.active_sentence, question_text_ur: null, answer_text: formData.answer_text, answer_text_ur: null, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
           case 'summary':
             specific = { question_text: formData.summary_text, question_text_ur: null, answer_text: formData.answer_text, answer_text_ur: null, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
+          case 'essay':
+            specific = { question_text: formData.question_text, question_text_ur: null, answer_text: formData.answer_text, answer_text_ur: null, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
+          case 'application': case 'letter': case 'punctuation': case 'pair_of_words':
+            specific = { question_text: formData.question_text, question_text_ur: null, answer_text: formData.answer_text, answer_text_ur: null, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
+          case 'story':
+            specific = {
+              question_text: formData.story_text,
+              question_text_ur: null,
+              answer_text: formData.answer_text,
+              answer_text_ur: null,
+              option_a: null, option_b: null, option_c: null, option_d: null,
+              option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+          case 'stanza_explanation':
+            // ✅ store stanza in question_text, explanation in answer_text
+            specific = {
+              question_text: formData.question_text,
+              question_text_ur: null,
+              answer_text: formData.answer_text,
+              answer_text_ur: null,
+              option_a: null, option_b: null, option_c: null, option_d: null,
+              option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null,
+              correct_option: null,
+            };
+            break;
+          // You can add poetry_explanation, prose_explanation, etc. for English if needed
         }
       } else if (isUrduSubject()) {
         switch (formData.question_type) {
           case 'mcq':
             specific = { question_text: null, question_text_ur: formData.question_text_ur, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: formData.option_a_ur, option_b_ur: formData.option_b_ur, option_c_ur: formData.option_c_ur || null, option_d_ur: formData.option_d_ur || null, correct_option: formData.correct_option, answer_text: null, answer_text_ur: null }; break;
-          case 'poetry_explanation': case 'gazal':
+          case 'poetry_explanation': case 'stanza_explanation': case 'gazal':
             specific = { question_text: null, question_text_ur: formData.poetry_text, answer_text: null, answer_text_ur: formData.answer_text_ur, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
           case 'prose_explanation':
             specific = { question_text: null, question_text_ur: formData.prose_text, answer_text: null, answer_text_ur: formData.answer_text_ur, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
           case 'short': case 'long':
             specific = { question_text: null, question_text_ur: formData.question_text_ur, answer_text: null, answer_text_ur: formData.answer_text_ur, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
-          case 'sentence_correction': case 'sentence_completion':
+          case 'sentence_correction': case 'sentence_completion': case 'punctuation':
             specific = { question_text: null, question_text_ur: formData.sentence_text, answer_text: null, answer_text_ur: formData.answer_text_ur, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
           case 'passage':
             specific = { question_text: null, question_text_ur: `${formData.passage_text_ur}\n\nQUESTION: ${formData.question_text_ur}`, answer_text: null, answer_text_ur: formData.answer_text_ur, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
-          case 'darkhwast_khat':
-            specific = { question_text: null, question_text_ur: formData.darkhwast_text, answer_text: null, answer_text_ur: formData.answer_text_ur, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
-          case 'kahani_makalma':
+          case 'mokalma':
             specific = { question_text: null, question_text_ur: formData.kahani_text, answer_text: null, answer_text_ur: formData.answer_text_ur, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
-          case 'Nasarkhulasa_markziKhyal':
+          case 'Nasarkhulasa': case 'markziKhyal':
             specific = { question_text: null, question_text_ur: formData.nasar_text, answer_text: null, answer_text_ur: formData.answer_text_ur, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
+          case 'application': case 'letter': case 'essay':
+            specific = { question_text: null, question_text_ur: formData.question_text_ur, answer_text: null, answer_text_ur: formData.answer_text_ur, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
+          case 'story':
+            specific = {
+              question_text: null,
+              question_text_ur: formData.story_text_ur,
+              answer_text: null,
+              answer_text_ur: formData.answer_text_ur,
+              option_a: null, option_b: null, option_c: null, option_d: null,
+              option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null,
+              correct_option: null,
+            };
+            break;
         }
       } else {
         switch (formData.question_type) {
@@ -737,12 +831,14 @@ export default function QuestionForm({
       if (question) {
         await updateQuestion(String(question.id), payload);
         toast.success('Question updated successfully');
+        // ✅ Keep form open – do NOT call onClose()
       } else {
         await createQuestion(payload);
         toast.success('Question added successfully');
-        resetTextFields();
+        resetTextFields(); // clear for next new question
+        // ✅ Keep form open – do NOT call onClose()
       }
-      onClose();
+      // ❌ Removed: onClose();
     } catch (error: any) {
       console.error('Error saving question:', error);
       toast.error(error.message || 'Failed to save question');
@@ -770,20 +866,33 @@ export default function QuestionForm({
       { value: 'directInDirect', label: 'Direct In Direct' },
       { value: 'activePassive', label: 'Active Voice / Passive Voice' },
       { value: 'summary', label: 'Summary' },
+      { value: 'essay', label: 'Essay' },
+      { value: 'application', label: 'Application' },
+      { value: 'letter', label: 'Letter' },
+      { value: 'punctuation', label: 'Punctuation' },
+      { value: 'pair_of_words', label: 'Pair of Words' },
+      { value: 'story', label: 'Story Writing' },
+      { value: 'stanza_explanation', label: 'Stanza Explanation' },
     ];
     if (isUrduSubject()) return [
-      { value: 'mcq', label: 'MCQ (اردو)' },
-      { value: 'poetry_explanation', label: 'اشعار کی تشریح' },
-      { value: 'prose_explanation', label: 'نثرپاروں کی تشریح' },
-      { value: 'gazal', label: 'غزل' },
-      { value: 'short', label: 'مختصر سوالات' },
-      { value: 'long', label: 'تفصیلی جوابات' },
-      { value: 'sentence_correction', label: 'جملوں کی درستگی' },
-      { value: 'sentence_completion', label: 'جملوں کی تکمیل' },
-      { value: 'passage', label: 'نثر پارہ اور سوالات' },
-      { value: 'darkhwast_khat', label: 'درخواست / خط' },
-      { value: 'kahani_makalma', label: 'کہانی / مکالمہ' },
-      { value: 'Nasarkhulasa_markziKhyal', label: 'نثر / خلاصہ / مرکزی خیال' },
+      // ✅ All labels in English
+      { value: 'mcq', label: 'MCQ' },
+      { value: 'poetry_explanation', label: 'Poetry Explanation' },
+      { value: 'stanza_explanation', label: 'Stanza Explanation' },
+      { value: 'prose_explanation', label: 'Prose Explanation' },
+      { value: 'gazal', label: 'Ghazal' },
+      { value: 'short', label: 'Short Answer' },
+      { value: 'long', label: 'Long Answer' },
+      { value: 'sentence_correction', label: 'Sentence Correction' },
+      { value: 'sentence_completion', label: 'Sentence Completion' },
+      { value: 'passage', label: 'Passage & Questions' },
+      { value: 'mokalma', label: 'Mokalma' },
+      { value: 'Nasarkhulasa', label: 'Nasar Khulasa' },
+      { value: 'markziKhyal', label: 'Markzi Khyal' },
+      { value: 'application', label: 'Application' },
+      { value: 'letter', label: 'Letter' },
+      { value: 'essay', label: 'Essay' },
+      { value: 'story', label: 'Story Writing' },
     ];
     return [
       { value: 'mcq', label: 'Multiple Choice' },
@@ -793,8 +902,8 @@ export default function QuestionForm({
   }, [isEnglishSubject, isUrduSubject]);
 
   const shouldShowQuestionTextField = useCallback(() => {
-    if (isEnglishSubject()) return !['translate_urdu', 'translate_english', 'idiom_phrases', 'directInDirect', 'activePassive', 'passage', 'summary'].includes(formData.question_type);
-    if (isUrduSubject()) return ['mcq', 'short', 'long'].includes(formData.question_type);
+    if (isEnglishSubject()) return !['translate_urdu', 'translate_english', 'idiom_phrases', 'directInDirect', 'activePassive', 'passage', 'summary', 'story'].includes(formData.question_type);
+    if (isUrduSubject()) return ['mcq', 'short', 'long', 'essay', 'application', 'letter'].includes(formData.question_type);
     return true;
   }, [isEnglishSubject, isUrduSubject, formData.question_type]);
 
@@ -804,32 +913,54 @@ export default function QuestionForm({
   return (
     <form onSubmit={handleSubmit} className="qfm-form">
       <style>{`
-        .qfm-form { font-size: .92rem; }
+        :root {
+          --qfm-navy: #101935;
+          --qfm-accent: #2f4fe0;
+          --qfm-accent-soft: #eef1ff;
+          --qfm-border: #e6e8f1;
+          --qfm-text: #15192b;
+          --qfm-muted: #686f8c;
+          --qfm-bg: #f8f9fc;
+          --qfm-font: 'Lexend','Inter',system-ui,sans-serif;
+        }
+        .qfm-form { font-size: .92rem; font-family: var(--qfm-font); color: var(--qfm-text); }
+
         .qfm-section-title {
-          font-size: .78rem; font-weight: 750; text-transform: uppercase;
-          letter-spacing: .06em; color: #6c7a99; margin: 0 0 12px;
-          display: flex; align-items: center; gap: 8px;
+          font-size: .76rem; font-weight: 750; text-transform: uppercase;
+          letter-spacing: .07em; color: var(--qfm-muted); margin: 0 0 14px;
+          display: flex; align-items: center; gap: 9px;
         }
-        .qfm-section-title::after { content: ''; flex: 1; height: 1px; background: #e3e7f0; }
-        .qfm-section { margin-bottom: 28px; }
-        .qfm-label { font-size: .82rem; font-weight: 600; color: #1a2540; margin-bottom: 6px; display: block; }
-        .qfm-label.urdu-label { text-align: right; direction: rtl; font-family: "Jameel Noori Nastaleeq","Noto Nastaliq Urdu",serif; font-size: .95rem; }
+        .qfm-section-title::before {
+          content: ''; width: 5px; height: 5px; border-radius: 50%;
+          background: var(--qfm-accent); flex-shrink: 0;
+        }
+        .qfm-section-title::after { content: ''; flex: 1; height: 1px; background: var(--qfm-border); }
+        .qfm-section {
+          margin-bottom: 22px; padding: 18px; background: var(--qfm-bg);
+          border: 1px solid var(--qfm-border); border-radius: 14px;
+        }
+
+        .qfm-label { font-size: .81rem; font-weight: 600; color: var(--qfm-text); margin-bottom: 6px; display: block; }
+        .qfm-label.urdu-label { text-align: right; direction: rtl; font-family: "Jameel Noori Nastaleeq","Noto Nastaliq Urdu",serif; font-size: .96rem; }
+
         .qfm-hint {
-          font-size: .8rem; color: #2f54eb; background: #eef2ff; border: 1px solid #d7e0ff;
-          border-radius: 8px; padding: 8px 12px; margin-bottom: 20px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+          font-size: .8rem; color: var(--qfm-accent); background: var(--qfm-accent-soft); border: 1px solid #d7deff;
+          border-radius: 11px; padding: 10px 14px; margin-bottom: 20px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
         }
-        .qfm-hint code { background: #fff; border: 1px solid #d7e0ff; padding: 1px 6px; border-radius: 5px; font-size: .76rem; }
+        .qfm-hint code { background: #fff; border: 1px solid #d7deff; padding: 1px 6px; border-radius: 6px; font-size: .76rem; }
+
         .qfm-field-group { margin-bottom: 18px; }
-        .qfm-math-hint { font-size: .74rem; color: #6c7a99; margin-top: 5px; }
-        .qfm-math-hint code { background: #f0f2f8; padding: 1px 5px; border-radius: 4px; font-size: .72rem; }
-        .qfm-preview-wrap { margin-top: 8px; }
+        .qfm-math-hint { font-size: .74rem; color: var(--qfm-muted); margin-top: 6px; }
+        .qfm-math-hint code { background: #eef0f6; padding: 1px 5px; border-radius: 4px; font-size: .72rem; }
+
+        .qfm-preview-wrap { margin-top: 9px; }
         .qfm-preview-label {
-          font-size: .7rem; font-weight: 700; text-transform: uppercase;
-          letter-spacing: .05em; color: #8890a4; margin-bottom: 4px; display: block;
+          font-size: .68rem; font-weight: 700; text-transform: uppercase;
+          letter-spacing: .06em; color: #9197ad; margin-bottom: 5px; display: block;
         }
         .qfm-preview-box {
-          padding: 10px 14px; background: #f8f9fc; border: 1px solid #e3e7f0;
-          border-radius: 8px; word-break: break-word;
+          padding: 11px 14px; background: #fff; border: 1px solid var(--qfm-border);
+          border-radius: 10px; word-break: break-word;
         }
         .qfm-preview-en { font-size: .9rem; line-height: 1.6; }
         .qfm-preview-ur {
@@ -845,21 +976,57 @@ export default function QuestionForm({
           font-family: "Jameel Noori Nastaleeq","Noto Nastaliq Urdu","Urdu Typesetting",serif !important;
           font-size: 1.15em; line-height: 1.6;
         }
+
         .qfm-option-card {
-          border: 1px solid #e3e7f0; border-radius: 10px; padding: 12px 14px;
-          background: #fbfbfd; height: 100%;
+          border: 1px solid var(--qfm-border); border-radius: 12px; padding: 13px 15px;
+          background: #fff; height: 100%;
         }
         .qfm-correct-card {
-          border: 1px solid #e3e7f0; border-radius: 10px; padding: 14px 16px;
-          background: #fbfbfd; margin-top: 6px;
+          border: 1.5px solid #d7deff; border-radius: 12px; padding: 15px 17px;
+          background: var(--qfm-accent-soft); margin-top: 6px;
         }
+
         .qfm-footer-bar {
           display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap;
-          padding-top: 18px; margin-top: 8px; border-top: 1px solid #e3e7f0;
+          padding-top: 18px; margin-top: 4px; border-top: 1px solid var(--qfm-border);
+          position: sticky; bottom: -22px; background: #fff;
         }
+
+        .qfm-diagram-preview {
+          max-width: 200px; max-height: 150px; border-radius: 10px;
+          border: 1px solid var(--qfm-border); margin-top: 9px;
+        }
+
+        /* form control overrides */
+        .qfm-form .form-select, .qfm-form .form-control {
+          border: 1.5px solid var(--qfm-border); border-radius: 9px;
+          font-size: .85rem; padding: 9px 12px; font-family: var(--qfm-font);
+          color: var(--qfm-text); background-color: #fff;
+          transition: border-color .15s, box-shadow .15s;
+        }
+        .qfm-form .form-select:focus, .qfm-form .form-control:focus {
+          border-color: var(--qfm-accent); box-shadow: 0 0 0 3px rgba(47,79,224,.12); outline: none;
+        }
+        .qfm-form .form-select:disabled, .qfm-form .form-control:disabled { background-color: #f1f2f7; opacity: .7; }
+        .qfm-form .btn {
+          font-family: var(--qfm-font); font-weight: 650; font-size: .84rem;
+          border-radius: 10px; padding: 9px 18px; border: none; transition: all .15s;
+        }
+        .qfm-form .btn-primary { background: var(--qfm-accent); color: #fff; }
+        .qfm-form .btn-primary:hover:not(:disabled) { background: #2540bf; }
+        .qfm-form .btn-primary:disabled { opacity: .55; }
+        .qfm-form .btn-secondary { background: #eef0f6; color: var(--qfm-text); }
+        .qfm-form .btn-secondary:hover:not(:disabled) { background: #e3e6ee; }
+        .qfm-form .btn-outline-primary { background: transparent; color: var(--qfm-accent); border: 1.5px solid #c7d2ff; }
+        .qfm-form .btn-outline-primary:hover:not(:disabled) { background: var(--qfm-accent-soft); }
+
+        .qfm-form .text-success { color: #1d8a52 !important; font-size: .76rem; }
+
         @media (max-width: 576px) {
-          .qfm-footer-bar { justify-content: stretch; }
+          .qfm-section { padding: 14px; border-radius: 12px; }
+          .qfm-footer-bar { justify-content: stretch; position: static; }
           .qfm-footer-bar > button { flex: 1; }
+          .qfm-hint { font-size: .77rem; }
         }
       `}</style>
 
@@ -915,6 +1082,26 @@ export default function QuestionForm({
           </div>
 
           <div className="col-md-6">
+            <label className="qfm-label">Question Category</label>
+            <select
+              className="form-select"
+              name="question_category_id"
+              value={formData.question_category_id}
+              onChange={handleChange}
+            >
+              <option value="">Select Category (optional)</option>
+              {filteredQuestionCategories
+                .sort((a, b) => a.sort_order - b.sort_order)
+                .map(qc => (
+                  <option key={qc.id} value={qc.id}>
+                    {qc.label_en}{qc.label_ur ? ` — ${qc.label_ur}` : ''}
+                  </option>
+                ))
+              }
+            </select>
+          </div>
+
+          <div className="col-md-6">
             <label className="qfm-label">Difficulty *</label>
             <select className="form-select" name="difficulty" value={formData.difficulty} onChange={handleChange} required>
               <option value="easy">Easy</option>
@@ -940,6 +1127,26 @@ export default function QuestionForm({
               <input type="number" className="form-control" name="source_year" value={formData.source_year} onChange={handleChange} min="1900" max={new Date().getFullYear()} />
             </div>
           )}
+
+          <div className="col-md-12">
+            <label className="qfm-label">Diagram URL</label>
+            <input
+              type="url"
+              className="form-control"
+              name="diagram"
+              value={formData.diagram}
+              onChange={handleChange}
+              placeholder="https://example.com/diagram.png"
+            />
+            {formData.diagram && (
+              <img
+                src={formData.diagram}
+                alt="Diagram preview"
+                className="qfm-diagram-preview"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -953,7 +1160,9 @@ export default function QuestionForm({
             <>
               {shouldShowQuestionTextField() && (
                 <div className="col-12 qfm-field-group">
-                  <label className="qfm-label">Question Text (English) *</label>
+                  <label className="qfm-label">
+                    {formData.question_type === 'stanza_explanation' ? 'Stanza Text *' : 'Question Text (English) *'}
+                  </label>
                   <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.question_text} onEditorChange={c => handleEditorChange(c, 'question_text')} init={englishEditorConfig} />
                   <PreviewBox html={formData.question_text} label="Preview" />
                   <p className="qfm-math-hint">Tip: click <strong>f(x)</strong> or type <code>\( formula \)</code> for inline math</p>
@@ -977,6 +1186,13 @@ export default function QuestionForm({
                 <div className="col-12 qfm-field-group">
                   <label className="qfm-label">Idiom/Phrase (English) *</label>
                   <textarea className="form-control" name="idiom_phrase" value={formData.idiom_phrase} onChange={handleChange} required placeholder="e.g., 'Break a leg'" rows={3} />
+                </div>
+              )}
+              {formData.question_type === 'story' && (
+                <div className="col-12 qfm-field-group">
+                  <label className="qfm-label">Story Title / Prompt (English) *</label>
+                  <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.story_text} onEditorChange={c => handleEditorChange(c, 'story_text')} init={englishEditorConfig} />
+                  <PreviewBox html={formData.story_text} label="Preview" />
                 </div>
               )}
               {formData.question_type === 'passage' && (
@@ -1014,6 +1230,13 @@ export default function QuestionForm({
                   <PreviewBox html={formData.summary_text} label="Preview" />
                 </div>
               )}
+              {['essay', 'application', 'letter', 'punctuation', 'pair_of_words'].includes(formData.question_type) && (
+                <div className="col-12 qfm-field-group">
+                  <label className="qfm-label">Question Text (English) *</label>
+                  <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.question_text} onEditorChange={c => handleEditorChange(c, 'question_text')} init={englishEditorConfig} />
+                  <PreviewBox html={formData.question_text} label="Preview" />
+                </div>
+              )}
             </>
           )}
 
@@ -1030,6 +1253,13 @@ export default function QuestionForm({
               {formData.question_type === 'poetry_explanation' && (
                 <div className="col-12 qfm-field-group">
                   <label className="qfm-label urdu-label">شعر *</label>
+                  <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.poetry_text} onEditorChange={c => handleEditorChange(c, 'poetry_text')} init={urduEditorConfig} />
+                  <PreviewBox html={formData.poetry_text} dir="rtl" label="پیش نظارہ" />
+                </div>
+              )}
+              {formData.question_type === 'stanza_explanation' && (
+                <div className="col-12 qfm-field-group">
+                  <label className="qfm-label urdu-label">بند *</label>
                   <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.poetry_text} onEditorChange={c => handleEditorChange(c, 'poetry_text')} init={urduEditorConfig} />
                   <PreviewBox html={formData.poetry_text} dir="rtl" label="پیش نظارہ" />
                 </div>
@@ -1055,9 +1285,13 @@ export default function QuestionForm({
                   <PreviewBox html={formData.question_text_ur} dir="rtl" label="پیش نظارہ" />
                 </div>
               )}
-              {(formData.question_type === 'sentence_correction' || formData.question_type === 'sentence_completion') && (
+              {(formData.question_type === 'sentence_correction' || formData.question_type === 'sentence_completion' || formData.question_type === 'punctuation') && (
                 <div className="col-12 qfm-field-group">
-                  <label className="qfm-label urdu-label">{formData.question_type === 'sentence_correction' ? 'جملہ (درستگی کے لیے) *' : 'جملہ (تکمیل کے لیے) *'}</label>
+                  <label className="qfm-label urdu-label">
+                    {formData.question_type === 'sentence_correction' ? 'جملہ (درستگی کے لیے) *' :
+                     formData.question_type === 'sentence_completion' ? 'جملہ (تکمیل کے لیے) *' :
+                     'جملہ (اوقاف کے لیے) *'}
+                  </label>
                   <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.sentence_text} onEditorChange={c => handleEditorChange(c, 'sentence_text')} init={urduEditorConfig} />
                   <PreviewBox html={formData.sentence_text} dir="rtl" label="پیش نظارہ" />
                 </div>
@@ -1076,25 +1310,35 @@ export default function QuestionForm({
                   </div>
                 </>
               )}
-              {formData.question_type === 'darkhwast_khat' && (
+              {formData.question_type === 'mokalma' && (
                 <div className="col-12 qfm-field-group">
-                  <label className="qfm-label urdu-label">درخواست/خط کا متن *</label>
-                  <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.darkhwast_text} onEditorChange={c => handleEditorChange(c, 'darkhwast_text')} init={urduEditorConfig} />
-                  <PreviewBox html={formData.darkhwast_text} dir="rtl" label="پیش نظارہ" />
-                </div>
-              )}
-              {formData.question_type === 'kahani_makalma' && (
-                <div className="col-12 qfm-field-group">
-                  <label className="qfm-label urdu-label">کہانی/مکالمہ کا متن *</label>
+                  <label className="qfm-label urdu-label">مکالمہ کا متن *</label>
                   <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.kahani_text} onEditorChange={c => handleEditorChange(c, 'kahani_text')} init={urduEditorConfig} />
                   <PreviewBox html={formData.kahani_text} dir="rtl" label="پیش نظارہ" />
                 </div>
               )}
-              {formData.question_type === 'Nasarkhulasa_markziKhyal' && (
+              {(formData.question_type === 'Nasarkhulasa' || formData.question_type === 'markziKhyal') && (
                 <div className="col-12 qfm-field-group">
-                  <label className="qfm-label urdu-label">نثر/خلاصہ/مرکزی خیال *</label>
+                  <label className="qfm-label urdu-label">{formData.question_type === 'Nasarkhulasa' ? 'نثر خلاصہ *' : 'مرکزی خیال *'}</label>
                   <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.nasar_text} onEditorChange={c => handleEditorChange(c, 'nasar_text')} init={urduEditorConfig} />
                   <PreviewBox html={formData.nasar_text} dir="rtl" label="پیش نظارہ" />
+                </div>
+              )}
+              {['essay', 'application', 'letter'].includes(formData.question_type) && (
+                <div className="col-12 qfm-field-group">
+                  <label className="qfm-label urdu-label">
+                    {formData.question_type === 'essay' ? 'مضمون *' :
+                     formData.question_type === 'application' ? 'درخواست *' : 'خط *'}
+                  </label>
+                  <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.question_text_ur} onEditorChange={c => handleEditorChange(c, 'question_text_ur')} init={urduEditorConfig} />
+                  <PreviewBox html={formData.question_text_ur} dir="rtl" label="پیش نظارہ" />
+                </div>
+              )}
+              {formData.question_type === 'story' && (
+                <div className="col-12 qfm-field-group">
+                  <label className="qfm-label urdu-label">کہانی / عنوان (اردو) *</label>
+                  <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.story_text_ur} onEditorChange={c => handleEditorChange(c, 'story_text_ur')} init={urduEditorConfig} />
+                  <PreviewBox html={formData.story_text_ur} dir="rtl" label="پیش نظارہ" />
                 </div>
               )}
             </>
@@ -1119,13 +1363,11 @@ export default function QuestionForm({
         </div>
       </div>
 
-      {/* ── MCQ Options (Bootstrap grid layout — no custom CSS grid) ── */}
+      {/* ── MCQ Options ── */}
       {formData.question_type === 'mcq' && (
         <div className="qfm-section">
           <p className="qfm-section-title">{isUrduSubject() ? 'آپشنز' : 'Answer Options'}</p>
           <div className="row g-3">
-
-            {/* English & bilingual MCQ options */}
             {(isEnglishSubject() || (!isEnglishSubject() && !isUrduSubject())) && (['a', 'b', 'c', 'd'] as const).map(opt => {
               const key = `option_${opt}` as keyof typeof formData;
               const required = opt === 'a' || opt === 'b';
@@ -1139,8 +1381,6 @@ export default function QuestionForm({
                 </div>
               );
             })}
-
-            {/* Urdu options for bilingual subjects */}
             {!isEnglishSubject() && !isUrduSubject() && (['a', 'b', 'c', 'd'] as const).map(opt => {
               const key = `option_${opt}_ur` as keyof typeof formData;
               return (
@@ -1153,8 +1393,6 @@ export default function QuestionForm({
                 </div>
               );
             })}
-
-            {/* Urdu-subject MCQ options */}
             {isUrduSubject() && (['a', 'b', 'c', 'd'] as const).map(opt => {
               const key = `option_${opt}_ur` as keyof typeof formData;
               const labels: any = { a: 'آپشن اے', b: 'آپشن بی', c: 'آپشن سی', d: 'آپشن ڈی' };
@@ -1169,8 +1407,6 @@ export default function QuestionForm({
                 </div>
               );
             })}
-
-            {/* Correct option selector */}
             <div className="col-12">
               <div className="qfm-correct-card">
                 {isUrduSubject() ? (
@@ -1209,7 +1445,9 @@ export default function QuestionForm({
           <div className="row g-3">
             {isEnglishSubject() && (
               <div className="col-12 qfm-field-group">
-                <label className="qfm-label">Answer (English) *</label>
+                <label className="qfm-label">
+                  {formData.question_type === 'stanza_explanation' ? 'Explanation *' : 'Answer (English) *'}
+                </label>
                 <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.answer_text} onEditorChange={c => handleEditorChange(c, 'answer_text')} init={englishEditorConfig} />
                 <PreviewBox html={formData.answer_text} label="Answer preview" />
               </div>

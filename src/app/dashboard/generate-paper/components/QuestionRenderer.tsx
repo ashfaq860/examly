@@ -1,3 +1,4 @@
+// dashboard/generate-paper/components/QuestionRenderer.tsx
 'use client';
 import React, { useEffect, useMemo } from 'react';
 import { LanguageConfig } from '@/types/paperBuilderTypes';
@@ -30,6 +31,16 @@ interface QuestionRendererProps {
   isUrduSubject?: boolean;
   isLast?: boolean;
   shouldShowOr?: boolean;
+  hasSubGroups?:boolean;
+  // ── Paired long-question sub-part label (NEW, optional, additive) ──
+  // When provided, renders as a small element directly between the
+  // "Q.{index}" number and the question text, on the SAME line/row that
+  // QuestionRenderer already owns — e.g. "Q.5 (a) question text...".
+  // Only used by the paired long-question (is_paired) rendering path;
+  // every other call site (MCQ, short, plain long, etc.) never passes
+  // this and renders exactly as before. When present, the row's w-100
+  // is relaxed so the extra label doesn't force a wrap onto its own line.
+  inlineLabel?: React.ReactNode;
 }
 
 interface BilingualProps {
@@ -237,9 +248,12 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
   question,
   headingFontSize,
   isUrduSubject,
+  hasSubgroups,
+  sectionType,
   fontWeight = 'normal',
   onTextChange,
 }) => {
+  console.log("section types", sectionType)
   const isTranslate = question?.question_type === 'translate_english';
   const urduLH = isOption ? lineSpacing : Math.max(1.0, lineSpacing - 0.3);
 
@@ -337,9 +351,17 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
                   {urduNumberLabel}
                 </span>
               )}
-              <span style={{ display: 'block', flex: '1 1 0', minWidth: 0, textAlign: 'right' }}>
-                <MathRenderer text={stripHtml(urValue || (isOption ? '' : engValue), isTranslate)} />
-              </span>
+            <span style={{
+              display: 'block',
+              flex: '1 1 0',
+              minWidth: 0,
+              textAlign: 'right',
+              direction: 'rtl',
+              unicodeBidi: 'embed',
+              fontFamily: URDU_FONT,
+            }}>
+              <MathRenderer text={stripHtml(urValue || '', isTranslate)} />
+            </span>
             </span>
           )}
         </div>
@@ -394,15 +416,18 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   isUrduSubject,
   isLast,
   headingFontSize,
+  suppressNumbering,
   shouldShowOr,
+  hasSubGroups,
   onTextChange,
+  inlineLabel,
 }) => {
 
   useEffect(() => { injectPrintStyles(); }, []);
 
   const isTranslate       = question?.question_type === 'translate_english';
   const isUrdu            = paperLanguage === 'urdu' || paperLanguage === 'bilingual' || isTranslate;
-  const isEnglish         = (paperLanguage === 'english' || paperLanguage === 'bilingual') && !isTranslate;
+  const isEnglish         = (paperLanguage === 'english' || paperLanguage === 'bilingual');
   const showUrduNumber    = paperLanguage === 'urdu' || isTranslate;
   const showEnglishNumber = (paperLanguage === 'english' || paperLanguage === 'bilingual') && !isTranslate;
   const showUrduSideNumber = paperLanguage === 'bilingual' && !isTranslate;
@@ -424,7 +449,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   const isSecondPartOfOr = shouldShowOr
     ? isLong ? (qIdx || 0) % 2 !== 0 : index % 2 !== 0
     : false;
-  const showNumber = !isSecondPartOfOr;
+ 
+const showNumber = !isSecondPartOfOr && !suppressNumbering && index !== -1;
 
   let indexDisplay = '';
   if (showNumber) {
@@ -435,9 +461,16 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
 
   const urduNumberLabel = showUrduSideNumber ? indexDisplay : undefined;
 
+  // inlineLabel presence is what the paired long-question rendering path
+  // (PaperLayoutRenderer's renderPairedQuestions) uses to inject "(a)" /
+  // "(ب)" etc. directly beside "Q.5" on the same row. Every other call
+  // site never passes this prop, so `hasInlineLabel` is false there and
+  // the row keeps its original w-100 behavior unchanged.
+  const hasInlineLabel = inlineLabel != null;
+
   return (
     <div className={`question-wrapper mb-1 ${isUrdu || isTranslate ? 'rtl' : 'ltr'}`}>
-      <div className="d-flex align-items-start gap-1 w-100 flex-row">
+      <div className={`d-flex align-items-start gap-1 flex-row${hasInlineLabel ? '' : ' w-100'}`}>
 
         {/* ── 1. Number ── */}
         {showNumber && (
@@ -458,6 +491,19 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 {indexDisplay}
               </span>
             )}
+          </div>
+        )}
+
+        {/* ── 1.5. Inline sub-part label (e.g. "(a)" / "(ب)") ──
+            Sits directly between the Q.No and the question text, on the
+            SAME line. Deliberately rendered smaller than the Q.No label
+            above (font-size controlled entirely by the caller via the
+            inlineLabel node itself, e.g. PaperLayoutRenderer passes its
+            own <span style={{fontSize: subLabelFontSize}}>). Only present
+            when the caller explicitly passes inlineLabel. */}
+        {inlineLabel && (
+          <div className="d-flex align-items-start" style={{ flexShrink: 0 }}>
+            {inlineLabel}
           </div>
         )}
 
@@ -491,6 +537,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
               urduNumberLabel={urduNumberLabel}
               onTextChange={onTextChange}
               isUrduSubject={isUrduSubject}
+              hasSubGroups={hasSubGroups}
+              sectionType={sectionType}
               headingFontSize={headingFontSize}
             />
           )}
@@ -633,6 +681,8 @@ interface SubjectiveRendererProps {
   urduNumberLabel?: string;
   headingFontSize: number;
   isUrduSubject?: boolean;
+  sectionType: string;
+  hasSubGroups?: boolean;
   onTextChange: (sid: string, qid: string, field: string, val: string) => void;
 }
 
@@ -649,6 +699,8 @@ const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
   urduNumberLabel,
   headingFontSize,
   isUrduSubject,
+  hasSubGroups,
+  sectionType,
   onTextChange,
 }) => (
   <>
@@ -669,6 +721,8 @@ const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
     questionFontFamily={isLong && isUrduSubject ?"'JameelNoori', 'Noto Nastaliq Urdu', serif" : questionFontFamily}
     urduNumberLabel={urduNumberLabel}
     question={question}
+    hasSubGroups={hasSubGroups}
+    sectionType={sectionType}
     onTextChange={onTextChange}
   />
   </>

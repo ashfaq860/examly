@@ -10,20 +10,25 @@ const supabase = createClient(
 /**
  * GET /api/admin/lookups
  * Returns all lookup tables in one request:
- *   { classes, subjects, chapters, topics, classSubjects }
+ *   { classes, subjects, chapters, topics, classSubjects, questionCategories }
  *
  * NOTE: .range(0, 9999) overrides Supabase's default 1000-row cap.
  * Supabase silently truncates queries that exceed the limit without
  * any error, which causes topic matching to fail on large datasets.
+ * question_categories is a small, hand-curated table (a few dozen rows
+ * at most), so it doesn't need .range() — included here for consistency
+ * with the rest of this route's pattern, but the default cap is in no
+ * danger of being hit.
  */
 export async function GET() {
   try {
     const [
-      { data: classes,       error: e1 },
-      { data: subjects,      error: e2 },
-      { data: chapters,      error: e3 },
-      { data: topics,        error: e4 },
-      { data: classSubjects, error: e5 },
+      { data: classes,            error: e1 },
+      { data: subjects,           error: e2 },
+      { data: chapters,           error: e3 },
+      { data: topics,             error: e4 },
+      { data: classSubjects,      error: e5 },
+      { data: questionCategories, error: e6 },
     ] = await Promise.all([
       supabase.from('classes').select('*').order('name'),
       supabase.from('subjects').select('*').order('name'),
@@ -37,12 +42,17 @@ export async function GET() {
           class:classes(id,name,description)
         `)
         .order('class_id'),
+      supabase
+        .from('question_categories')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true }),
     ]);
 
-    const firstError = e1 || e2 || e3 || e4 || e5;
+    const firstError = e1 || e2 || e3 || e4 || e5 || e6;
     if (firstError) throw firstError;
 
-    return NextResponse.json({ classes, subjects, chapters, topics, classSubjects });
+    return NextResponse.json({ classes, subjects, chapters, topics, classSubjects, questionCategories });
   } catch (err: any) {
     console.error('[GET /api/admin/lookups]', err);
     return NextResponse.json({ error: err.message }, { status: 500 });

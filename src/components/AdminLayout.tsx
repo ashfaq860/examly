@@ -1,13 +1,14 @@
+// src/components/AdminLayout.tsx
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { 
-  LayoutDashboard, Users, ShoppingBag, Settings, 
-  Layers, Grid, BookOpen, FilePlus, Book, 
-  ChevronDown, ChevronRight, Menu, X, LogOut, 
-  ShieldCheck, Zap 
+import {
+  LayoutDashboard, Users, ShoppingBag, Settings,
+  Layers, Grid, BookOpen, FilePlus, Book,
+  ChevronRight, Menu, X, LogOut,
+  ShieldCheck, Sparkles
 } from 'lucide-react';
 
 const supabase = createSupabaseBrowserClient();
@@ -17,6 +18,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
   const pathname = usePathname();
   const [showSidebar, setShowSidebar] = useState(false);
   const [openParents, setOpenParents] = useState<string[]>([]);
+  const [scrolled, setScrolled] = useState(false);
 
   const navItems = [
     { id: '', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
@@ -27,11 +29,12 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
       label: 'System Setup',
       icon: <Settings size={18} />,
       subItems: [
-        { id: 'management/classes', label: 'Classes', icon: <Layers size={16} /> },
-        { id: 'management/subjects', label: 'Subjects', icon: <Grid size={16} /> },
-        { id: 'management/chapters', label: 'Chapters', icon: <BookOpen size={16} /> },
-        { id: 'management/topics', label: 'Topics', icon: <FilePlus size={16} /> },
-        { id: 'management/questions', label: 'Question Bank', icon: <Book size={16} /> }
+        { id: 'management/classes', label: 'Classes', icon: <Layers size={15} /> },
+        { id: 'management/subjects', label: 'Subjects', icon: <Grid size={15} /> },
+        { id: 'management/chapters', label: 'Chapters', icon: <BookOpen size={15} /> },
+        { id: 'management/topics', label: 'Topics', icon: <FilePlus size={15} /> },
+        { id: 'management/question-categories', label: 'Question categories', icon: <Book size={15} /> },
+        { id: 'management/questions', label: 'Question Bank', icon: <Book size={15} /> }
       ]
     },
     { id: 'subject-rules', label: 'Question Rules', icon: <ShieldCheck size={18} /> },
@@ -54,8 +57,21 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
         activeParents.push(item.id);
       }
     });
-    setOpenParents(activeParents);
+    setOpenParents(prev => Array.from(new Set([...prev, ...activeParents])));
+    setShowSidebar(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 4);
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // lock body scroll while the mobile drawer is open
+  useEffect(() => {
+    document.body.style.overflow = showSidebar ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [showSidebar]);
 
   const toggleParent = (parentId: string) => {
     setOpenParents(prev =>
@@ -63,283 +79,338 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
     );
   };
 
+  const currentLabel = (() => {
+    for (const item of navItems) {
+      if (isItemActive(item.id) && !item.subItems) return item.label;
+      if (item.subItems) {
+        const sub = item.subItems.find(si => isItemActive(si.id));
+        if (sub) return sub.label;
+      }
+    }
+    return 'Dashboard';
+  })();
+
   return (
-    <div className="admin-container">
-      {/* Top Header */}
-      <header className="admin-header">
-        <div className="d-flex align-items-center gap-3">
-          <button className="menu-toggle d-lg-none" onClick={() => setShowSidebar(!showSidebar)}>
-            {showSidebar ? <X size={20} /> : <Menu size={20} />}
+    <div className="adm-shell">
+      {/* ───────── Header ───────── */}
+      <header className={`adm-header ${scrolled ? 'is-scrolled' : ''}`}>
+        <div className="adm-header-left">
+          <button
+            className="adm-menu-btn"
+            onClick={() => setShowSidebar(s => !s)}
+            aria-label={showSidebar ? 'Close menu' : 'Open menu'}
+            aria-expanded={showSidebar}
+          >
+            {showSidebar ? <X size={19} /> : <Menu size={19} />}
           </button>
-          <div className="brand-box">
-            <div className="brand-logo"><Zap size={16} fill="currentColor" /></div>
-            <span className="brand-text">EXAMLY <span className="text-muted fw-normal">ADMIN</span></span>
-          </div>
+          <Link href="/admin" className="adm-brand">
+            <span className="adm-brand-mark">E</span>
+            <span className="adm-brand-text">
+              Examly<span className="adm-brand-sub">Admin</span>
+            </span>
+          </Link>
+          <span className="adm-crumb-divider" aria-hidden="true" />
+          <span className="adm-crumb">{currentLabel}</span>
         </div>
 
-        <div className="header-actions">
-          <button className="logout-pill" onClick={handleLogout}>
-            <LogOut size={16} />
-            <span>Sign Out</span>
+        <div className="adm-header-right">
+          <span className="adm-status-pill">
+            <Sparkles size={13} />
+            Live
+          </span>
+          <button className="adm-logout-btn" onClick={handleLogout}>
+            <LogOut size={15} />
+            <span>Sign out</span>
           </button>
         </div>
       </header>
 
-      <div className="main-layout">
-        {/* Sidebar */}
-        <aside className={`admin-sidebar ${showSidebar ? 'mobile-show' : ''}`}>
-          <nav className="sidebar-nav">
-            <div className="nav-section-label">Main Menu</div>
+      <div className="adm-body">
+        {/* ───────── Sidebar ───────── */}
+        <aside className={`adm-sidebar ${showSidebar ? 'is-open' : ''}`}>
+          <div className="adm-sidebar-spine" aria-hidden="true" />
+          <nav className="adm-nav">
+            <div className="adm-nav-label">Main menu</div>
             {navItems.map(item => (
-              <div key={item.id} className="nav-group">
+              <div key={item.id || 'dashboard'} className="adm-nav-group">
                 {item.subItems ? (
                   <>
                     <button
-                      className={`nav-item-btn ${openParents.includes(item.id) ? 'expanded' : ''} ${item.subItems.some(si => isItemActive(si.id)) ? 'active' : ''}`}
+                      type="button"
+                      className={`adm-nav-link adm-nav-parent ${openParents.includes(item.id) ? 'is-expanded' : ''} ${item.subItems.some(si => isItemActive(si.id)) ? 'is-active' : ''}`}
                       onClick={() => toggleParent(item.id)}
+                      aria-expanded={openParents.includes(item.id)}
                     >
-                      <span className="nav-icon">{item.icon}</span>
-                      <span className="nav-label">{item.label}</span>
-                      <ChevronRight className="arrow-icon" size={14} />
+                      <span className="adm-nav-icon">{item.icon}</span>
+                      <span className="adm-nav-text">{item.label}</span>
+                      <ChevronRight className="adm-nav-arrow" size={14} />
                     </button>
-                    <div className={`sub-nav ${openParents.includes(item.id) ? 'open' : ''}`}>
-                      {item.subItems.map(subItem => (
-                        <Link
-                          key={subItem.id}
-                          href={`/admin/${subItem.id}`}
-                          className={`sub-nav-item ${isItemActive(subItem.id) ? 'active' : ''}`}
-                          onClick={() => window.innerWidth < 992 && setShowSidebar(false)}
-                        >
-                          {subItem.label}
-                        </Link>
-                      ))}
+                    <div
+                      className={`adm-subnav ${openParents.includes(item.id) ? 'is-open' : ''}`}
+                      style={{ '--count': item.subItems.length } as React.CSSProperties}
+                    >
+                      <div className="adm-subnav-inner">
+                        {item.subItems.map(subItem => (
+                          <Link
+                            key={subItem.id}
+                            href={`/admin/${subItem.id}`}
+                            className={`adm-subnav-link ${isItemActive(subItem.id) ? 'is-active' : ''}`}
+                          >
+                            <span className="adm-subnav-dot" />
+                            {subItem.label}
+                          </Link>
+                        ))}
+                      </div>
                     </div>
                   </>
                 ) : (
                   <Link
                     href={`/admin/${item.id}`}
-                    className={`nav-item-btn ${isItemActive(item.id) ? 'active' : ''}`}
-                    onClick={() => window.innerWidth < 992 && setShowSidebar(false)}
+                    className={`adm-nav-link ${isItemActive(item.id) ? 'is-active' : ''}`}
                   >
-                    <span className="nav-icon">{item.icon}</span>
-                    <span className="nav-label">{item.label}</span>
+                    <span className="adm-nav-icon">{item.icon}</span>
+                    <span className="adm-nav-text">{item.label}</span>
                   </Link>
                 )}
               </div>
             ))}
           </nav>
+
+          <div className="adm-sidebar-foot">
+            <div className="adm-sidebar-foot-card">
+              <span className="adm-sidebar-foot-label">Bilingual engine</span>
+              <span className="adm-sidebar-foot-value">EN / UR</span>
+            </div>
+          </div>
         </aside>
 
-        {/* Content Area */}
-        <main className="content-area">
-          <div className="content-wrapper">
+        {showSidebar && (
+          <button
+            className="adm-overlay"
+            aria-label="Close menu"
+            onClick={() => setShowSidebar(false)}
+          />
+        )}
+
+        {/* ───────── Content ───────── */}
+        <main className="adm-content">
+          <div className="adm-content-inner">
             {children}
           </div>
         </main>
       </div>
 
-      {showSidebar && <div className="sidebar-overlay" onClick={() => setShowSidebar(false)} />}
-
       <style jsx global>{`
         :root {
-          --sidebar-width: 260px;
-          --header-height: 70px;
-          --primary-blue: #2563eb;
-          --bg-soft: #f8fafc;
-          --border-color: #f1f5f9;
-          --text-main: #1e293b;
-          --text-muted: #64748b;
+          --adm-sidebar-w: 264px;
+          --adm-header-h: 64px;
+          --adm-navy: #101935;
+          --adm-navy-soft: #1a2647;
+          --adm-accent: #2f4fe0;
+          --adm-accent-soft: #eef1ff;
+          --adm-bg: #f5f6fb;
+          --adm-surface: #ffffff;
+          --adm-border: #e6e8f1;
+          --adm-text: #15192b;
+          --adm-muted: #686f8c;
+          --adm-danger: #c8473a;
+          --adm-danger-soft: #fdeeec;
+          --adm-radius-lg: 16px;
+          --adm-radius-md: 11px;
+          --adm-radius-sm: 8px;
+          --adm-font-ui: 'Lexend', 'Inter', system-ui, -apple-system, sans-serif;
+          --adm-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+          --adm-shadow-sm: 0 1px 2px rgba(16, 25, 53, .04), 0 1px 1px rgba(16, 25, 53, .03);
+          --adm-shadow-md: 0 6px 20px rgba(16, 25, 53, .08), 0 2px 6px rgba(16, 25, 53, .05);
+          --adm-shadow-lg: 0 16px 40px rgba(16, 25, 53, .14);
         }
 
-        body {
-          background-color: var(--bg-soft);
-          color: var(--text-main);
-          font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        @media (prefers-reduced-motion: reduce) {
+          * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
         }
 
-        .admin-header {
-          height: var(--header-height);
-          background: #fff;
-          border-bottom: 1px solid var(--border-color);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0 1.5rem;
-          position: fixed;
-          top: 0;
-          width: 100%;
-          z-index: 1050;
+        html, body { background: var(--adm-bg); }
+        body { color: var(--adm-text); font-family: var(--adm-font-ui); -webkit-font-smoothing: antialiased; }
+
+        .adm-shell { min-height: 100vh; background: var(--adm-bg); }
+
+        /* ───────── Header ───────── */
+        .adm-header {
+          position: fixed; top: 0; left: 0; right: 0; z-index: 1100;
+          height: var(--adm-header-h);
+          background: rgba(255, 255, 255, .92);
+          backdrop-filter: blur(10px);
+          border-bottom: 1px solid var(--adm-border);
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0 16px 0 14px;
+          transition: box-shadow .2s ease, background .2s ease;
+        }
+        .adm-header.is-scrolled { box-shadow: var(--adm-shadow-sm); }
+
+        .adm-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .adm-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+        .adm-menu-btn {
+          display: none; align-items: center; justify-content: center;
+          width: 38px; height: 38px; border-radius: var(--adm-radius-sm);
+          border: 1.5px solid var(--adm-border); background: var(--adm-surface);
+          color: var(--adm-navy); cursor: pointer; flex-shrink: 0;
+          transition: border-color .15s, color .15s, background .15s;
+        }
+        .adm-menu-btn:hover { border-color: var(--adm-accent); color: var(--adm-accent); background: var(--adm-accent-soft); }
+
+        .adm-brand { display: flex; align-items: center; gap: 9px; text-decoration: none; flex-shrink: 0; }
+        .adm-brand-mark {
+          width: 30px; height: 30px; border-radius: 9px;
+          background: linear-gradient(155deg, var(--adm-navy) 0%, var(--adm-accent) 130%);
+          color: #fff; font-family: var(--adm-font-mono); font-weight: 700; font-size: .92rem;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 2px 6px rgba(47, 79, 224, .35);
+          flex-shrink: 0;
+        }
+        .adm-brand-text {
+          font-weight: 700; font-size: 1.02rem; letter-spacing: -.01em; color: var(--adm-navy);
+          white-space: nowrap;
+        }
+        .adm-brand-sub {
+          font-weight: 500; color: var(--adm-muted); font-size: .82rem; margin-left: 5px;
+          padding-left: 8px; border-left: 1px solid var(--adm-border);
         }
 
-        .brand-box {
-          display: flex;
-          align-items: center;
-          gap: 12px;
+        .adm-crumb-divider { width: 1px; height: 18px; background: var(--adm-border); flex-shrink: 0; }
+        .adm-crumb {
+          font-size: .82rem; color: var(--adm-muted); font-weight: 500;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
 
-        .brand-logo {
-          width: 32px;
-          height: 32px;
-          background: var(--primary-blue);
-          color: white;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+        .adm-status-pill {
+          display: inline-flex; align-items: center; gap: 5px;
+          font-size: .72rem; font-weight: 650; letter-spacing: .03em;
+          color: #1d8a52; background: #e9f9ef; border: 1px solid #c9eed9;
+          padding: 5px 10px; border-radius: 99px;
         }
 
-        .brand-text {
-          font-weight: 800;
-          letter-spacing: -0.5px;
-          font-size: 1.1rem;
+        .adm-logout-btn {
+          display: inline-flex; align-items: center; gap: 7px;
+          font-size: .82rem; font-weight: 650; color: var(--adm-navy);
+          background: var(--adm-bg); border: 1.5px solid var(--adm-border);
+          padding: 7px 14px; border-radius: 99px; cursor: pointer;
+          transition: all .15s; font-family: var(--adm-font-ui);
         }
+        .adm-logout-btn:hover { background: var(--adm-danger-soft); border-color: #f3cac4; color: var(--adm-danger); }
+        .adm-logout-btn span { display: inline; }
 
-        .logout-pill {
-          background: var(--bg-soft);
-          border: 1px solid var(--border-color);
-          padding: 6px 16px;
-          border-radius: 100px;
-          font-size: 0.85rem;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.2s;
-        }
+        /* ───────── Body / layout grid ───────── */
+        .adm-body { display: flex; padding-top: var(--adm-header-h); min-height: 100vh; }
 
-        .logout-pill:hover {
-          background: #fee2e2;
-          border-color: #fecaca;
-          color: #dc2626;
-        }
-
-        .main-layout {
-          display: flex;
-          padding-top: var(--header-height);
-          min-height: 100vh;
-        }
-
-        .admin-sidebar {
-          width: var(--sidebar-width);
-          background: #fff;
-          border-right: 1px solid var(--border-color);
-          position: fixed;
-          height: calc(100vh - var(--header-height));
-          overflow-y: auto;
-          padding: 1.5rem 1rem;
-          z-index: 1040;
-          transition: transform 0.3s ease;
-        }
-
-        .nav-section-label {
-          font-size: 0.7rem;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          color: var(--text-muted);
-          font-weight: 700;
-          margin-bottom: 1rem;
-          padding-left: 0.75rem;
-        }
-
-        .nav-item-btn {
-          display: flex;
-          align-items: center;
-          width: 100%;
-          padding: 10px 12px;
-          border-radius: 10px;
-          color: var(--text-main);
-          font-weight: 500;
-          font-size: 0.925rem;
-          background: transparent;
-          border: none;
-          transition: all 0.2s;
-          margin-bottom: 4px;
-          text-decoration: none;
-        }
-
-        .nav-item-btn:hover {
-          background: var(--bg-soft);
-          color: var(--primary-blue);
-        }
-
-        .nav-item-btn.active {
-          background: #eff6ff;
-          color: var(--primary-blue);
-          font-weight: 600;
-        }
-
-        .nav-icon {
-          margin-right: 12px;
-          display: flex;
-          align-items: center;
-          opacity: 0.7;
-        }
-
-        .nav-item-btn.active .nav-icon {
-          opacity: 1;
-        }
-
-        .arrow-icon {
-          margin-left: auto;
-          transition: transform 0.2s;
-        }
-
-        .nav-item-btn.expanded .arrow-icon {
-          transform: rotate(90deg);
-        }
-
-        .sub-nav {
-          max-height: 0;
+        /* ───────── Sidebar ───────── */
+        .adm-sidebar {
+          width: var(--adm-sidebar-w); flex-shrink: 0;
+          background: var(--adm-surface);
+          border-right: 1px solid var(--adm-border);
+          position: fixed; top: var(--adm-header-h); left: 0; bottom: 0;
+          display: flex; flex-direction: column;
           overflow: hidden;
-          transition: max-height 0.3s ease-out;
-          padding-left: 2.2rem;
+          z-index: 1090;
+        }
+        .adm-sidebar-spine {
+          position: absolute; top: 0; left: 0; bottom: 0; width: 3px;
+          background: linear-gradient(180deg, var(--adm-accent), var(--adm-navy) 70%);
         }
 
-        .sub-nav.open {
-          max-height: 500px;
+        .adm-nav { flex: 1; overflow-y: auto; padding: 18px 14px 8px; }
+        .adm-nav-label {
+          font-size: .68rem; text-transform: uppercase; letter-spacing: .09em;
+          color: var(--adm-muted); font-weight: 700; margin: 0 10px 10px;
+        }
+        .adm-nav-group { margin-bottom: 2px; }
+
+        .adm-nav-link {
+          display: flex; align-items: center; width: 100%; gap: 11px;
+          padding: 9px 11px; border-radius: var(--adm-radius-sm);
+          color: var(--adm-text); font-weight: 550; font-size: .87rem;
+          background: transparent; border: none; text-decoration: none;
+          cursor: pointer; transition: background .15s, color .15s;
+          font-family: var(--adm-font-ui); text-align: left;
+        }
+        .adm-nav-link:hover { background: var(--adm-bg); color: var(--adm-accent); }
+        .adm-nav-link.is-active { background: var(--adm-accent-soft); color: var(--adm-accent); font-weight: 650; }
+
+        .adm-nav-icon { display: flex; align-items: center; opacity: .75; flex-shrink: 0; }
+        .adm-nav-link.is-active .adm-nav-icon { opacity: 1; }
+        .adm-nav-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .adm-nav-arrow { transition: transform .2s ease; flex-shrink: 0; opacity: .6; }
+        .adm-nav-parent.is-expanded .adm-nav-arrow { transform: rotate(90deg); }
+
+        .adm-subnav {
+          display: grid; grid-template-rows: 0fr; overflow: hidden;
+          transition: grid-template-rows .22s ease;
+        }
+        .adm-subnav.is-open { grid-template-rows: 1fr; }
+        .adm-subnav-inner { min-height: 0; padding-left: 16px; margin-top: 2px; }
+
+        .adm-subnav-link {
+          display: flex; align-items: center; gap: 9px;
+          padding: 7px 11px; font-size: .81rem; color: var(--adm-muted);
+          text-decoration: none; border-radius: var(--adm-radius-sm);
+          transition: color .15s, background .15s;
+        }
+        .adm-subnav-dot {
+          width: 5px; height: 5px; border-radius: 50%; background: var(--adm-border);
+          flex-shrink: 0; transition: background .15s;
+        }
+        .adm-subnav-link:hover { color: var(--adm-accent); background: var(--adm-bg); }
+        .adm-subnav-link:hover .adm-subnav-dot { background: var(--adm-accent); }
+        .adm-subnav-link.is-active { color: var(--adm-accent); font-weight: 650; }
+        .adm-subnav-link.is-active .adm-subnav-dot { background: var(--adm-accent); }
+
+        .adm-sidebar-foot { padding: 12px 16px 18px; border-top: 1px solid var(--adm-border); flex-shrink: 0; }
+        .adm-sidebar-foot-card {
+          display: flex; align-items: center; justify-content: space-between;
+          background: var(--adm-navy); border-radius: var(--adm-radius-md);
+          padding: 11px 13px;
+        }
+        .adm-sidebar-foot-label { font-size: .72rem; color: #aab3d6; font-weight: 550; }
+        .adm-sidebar-foot-value {
+          font-family: var(--adm-font-mono); font-size: .76rem; font-weight: 700;
+          color: #fff; background: rgba(255,255,255,.12); padding: 2px 8px; border-radius: 6px;
         }
 
-        .sub-nav-item {
-          display: block;
-          padding: 8px 12px;
-          font-size: 0.85rem;
-          color: var(--text-muted);
-          text-decoration: none;
-          border-left: 1px solid var(--border-color);
-          transition: all 0.2s;
+        .adm-overlay {
+          display: none; position: fixed; inset: var(--adm-header-h) 0 0 0;
+          background: rgba(15, 20, 40, .45); backdrop-filter: blur(2px);
+          border: none; z-index: 1080; cursor: pointer;
         }
 
-        .sub-nav-item:hover, .sub-nav-item.active {
-          color: var(--primary-blue);
-          border-left-color: var(--primary-blue);
-        }
+        /* ───────── Content ───────── */
+        .adm-content { flex: 1; min-width: 0; margin-left: var(--adm-sidebar-w); }
+        .adm-content-inner { max-width: 1480px; }
 
-        .content-area {
-          flex-grow: 1;
-          margin-left: var(--sidebar-width);
-          padding: 2rem;
-          background-color: var(--bg-soft);
-        }
-
+        /* ───────── Responsive ───────── */
         @media (max-width: 991px) {
-          .admin-sidebar {
+          .adm-menu-btn { display: flex; }
+          .adm-brand-sub { display: none; }
+          .adm-crumb-divider, .adm-crumb { display: none; }
+
+          .adm-sidebar {
             transform: translateX(-100%);
+            transition: transform .25s ease;
+            box-shadow: var(--adm-shadow-lg);
+            width: min(82vw, 300px);
           }
-          .admin-sidebar.mobile-show {
-            transform: translateX(0);
-          }
-          .content-area {
-            margin-left: 0;
-            padding: 1.5rem;
-          }
+          .adm-sidebar.is-open { transform: translateX(0); }
+
+          .adm-overlay { display: block; }
+
+          .adm-content { margin-left: 0; }
         }
 
-        .sidebar-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(15, 23, 42, 0.4);
-          backdrop-filter: blur(4px);
-          z-index: 1035;
+        @media (max-width: 560px) {
+          .adm-header { padding: 0 10px; }
+          .adm-logout-btn span { display: none; }
+          .adm-logout-btn { padding: 9px; }
+          .adm-status-pill { display: none; }
+          .adm-brand-text { font-size: .94rem; }
         }
       `}</style>
     </div>

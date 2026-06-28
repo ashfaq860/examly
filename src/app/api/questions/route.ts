@@ -1,3 +1,4 @@
+//api/questions/route.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
@@ -20,7 +21,8 @@ const fetchForSource = async (
   requestedTopicIds: string[],
   language: string | null,
   difficulty: string | null,
-  fetchLimit: number
+  fetchLimit: number,
+  categoryId: string | null,
 ): Promise<any[]> => {
 
   // --- PATH A: Topic-based ---
@@ -43,6 +45,7 @@ const fetchForSource = async (
 
     if (classId)  q = q.eq('topics.chapters.class_subjects.class_id', classId);
     if (subjectId) q = q.eq('topics.chapters.class_subjects.subject_id', subjectId);
+    if (categoryId) q = q.eq('question_category_id', categoryId);
     if (language === 'urdu') q = q.not('question_text_ur', 'is', null);
     if (difficulty && difficulty !== 'any') q = q.eq('difficulty', difficulty);
 
@@ -76,6 +79,7 @@ const fetchForSource = async (
       if (classId)   q = q.eq('topics.chapters.class_subjects.class_id', classId);
       if (subjectId) q = q.eq('topics.chapters.class_subjects.subject_id', subjectId);
       if (chapterId) q = q.eq('topics.chapter_id', chapterId);
+      if (categoryId) q = q.eq('question_category_id', categoryId);
       if (language === 'urdu') q = q.not('question_text_ur', 'is', null);
       if (difficulty && difficulty !== 'any') q = q.eq('difficulty', difficulty);
 
@@ -107,6 +111,7 @@ export async function GET(request: NextRequest) {
     const questionIdsParam = searchParams.get('questionIds');
     const language        = searchParams.get('language');
     const sourceTypeParam = searchParams.get('source_type');
+    const categoryId      = searchParams.get('categoryId');
 
     // --- CASE A: Fetch by specific IDs ---
     if (questionIdsParam) {
@@ -140,7 +145,10 @@ export async function GET(request: NextRequest) {
       ? allSources
       : sourceTypeParam.split(',').map(s => s.trim()).filter(Boolean);
 
-    const TOTAL_TARGET = 500;
+    // When filtering by a specific category, a smaller, tighter target avoids
+    // over-fetching across 5 sources for what's usually a narrow pool of
+    // category-tagged questions (e.g. "Synonyms" bank for chapters 1-14).
+    const TOTAL_TARGET = categoryId ? 150 : 500;
     const initialPerSource = Math.ceil(TOTAL_TARGET / sourcesToQuery.length);
 
     // 2. Resolve chapters & topics
@@ -178,19 +186,17 @@ export async function GET(request: NextRequest) {
         firstPassResults[source] = await fetchForSource(
           source, questionType, classId, subjectId,
           resolvedChapterIds, requestedTopicIds,
-          language, difficulty, initialPerSource
+          language, difficulty, initialPerSource,
+          categoryId
         );
       })
     );
-
-    //console.log('First pass counts:', Object.entries(firstPassResults).map(([s, r]) => `${s}: ${r.length}`));
 
     // 4. Redistribute quota from under-performing sources to others
     let totalFetched = Object.values(firstPassResults).reduce((sum, r) => sum + r.length, 0);
     let deficit = TOTAL_TARGET - totalFetched;
 
     if (deficit > 0) {
-      // Find sources that have room to give more
       const sourcesWithData = sourcesToQuery.filter(
         s => firstPassResults[s].length >= initialPerSource
       );
@@ -198,30 +204,24 @@ export async function GET(request: NextRequest) {
       if (sourcesWithData.length > 0) {
         const extraPerSource = Math.ceil(deficit / sourcesWithData.length);
 
-      //  console.log(`Redistributing deficit of ${deficit} across ${sourcesWithData.length} sources (+${extraPerSource} each)`);
-
         await Promise.all(
           sourcesWithData.map(async (source) => {
             const newLimit = initialPerSource + extraPerSource;
             firstPassResults[source] = await fetchForSource(
               source, questionType, classId, subjectId,
               resolvedChapterIds, requestedTopicIds,
-              language, difficulty, newLimit
+              language, difficulty, newLimit, categoryId
             );
           })
         );
       }
     }
 
-    //console.log('Final per source counts:', Object.entries(firstPassResults).map(([s, r]) => `${s}: ${r.length}`));
-
     // 5. Combine & shuffle
     const combined = Object.values(firstPassResults).flat();
     if (combined.length === 0) return NextResponse.json([]);
 
     const finalResult = [...combined].sort(() => Math.random() - 0.5);
-
-    //console.log('Total questions returned:', finalResult.length);
 
     return NextResponse.json(finalResult.map(flattenQuestion));
 

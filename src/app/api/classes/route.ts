@@ -1,4 +1,4 @@
-
+//api/classes/route.ts
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 

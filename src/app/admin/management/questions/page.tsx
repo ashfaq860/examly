@@ -6,6 +6,7 @@ import {
   FiSearch, FiEdit, FiTrash2, FiDownload, FiPlus, FiUpload, FiX,
   FiChevronLeft, FiChevronRight, FiChevronsLeft, FiChevronsRight,
   FiLayers, FiAlignLeft, FiBarChart2, FiBook, FiCheckSquare,
+  FiImage, FiSliders
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
@@ -60,6 +61,8 @@ interface Question {
   source_year?: number | null;
   created_at: string;
   topic_id?: string | null;
+  diagram?: string | null;
+  question_category_id?: string | null;
   topic?: {
     id: string; name: string; chapter_id: string;
     chapter?: {
@@ -70,6 +73,10 @@ interface Question {
         subject?: { id: string; name: string; name_ur?: string };
       };
     };
+  };
+  question_category_rel?: {
+    id: string; question_type: string; category_value: string;
+    label_en: string; label_ur?: string | null;
   };
   _class?: string; _class_desc?: string; _subject?: string;
 }
@@ -83,9 +90,16 @@ interface ClassSubject {
   subject?: Subject;
   class?: { id: string; name: string; description?: string };
 }
+interface QuestionCategory {
+  id: string; question_type: string; category_value: string;
+  label_en: string; label_ur?: string | null;
+  subject_hint?: string | null; class_hint?: string | null;
+  default_marks?: number | null; sort_order: number; is_active: boolean;
+}
 interface Filters {
   class?: string; subject?: string; chapter?: string; topic?: string;
   difficulty?: string; question_type?: string; source_type?: string;
+  question_category_id?: string;
 }
 
 /* ═══════════════════════════ constants ══════════════════════════════════════*/
@@ -93,6 +107,7 @@ const QUESTION_TYPES = [
   { value: 'mcq',                      label: 'MCQ' },
   { value: 'short',                    label: 'Short Answer' },
   { value: 'long',                     label: 'Long Answer' },
+  { value: 'story',                    label: 'Story Writing' },
   { value: 'translate_urdu',           label: 'Translate → Urdu' },
   { value: 'translate_english',        label: 'Translate → English' },
   { value: 'idiom_phrases',            label: 'Idiom / Phrases' },
@@ -100,24 +115,30 @@ const QUESTION_TYPES = [
   { value: 'directInDirect',           label: 'Direct / Indirect' },
   { value: 'activePassive',            label: 'Active / Passive' },
   { value: 'poetry_explanation',       label: 'Poetry Explanation' },
+  { value: 'stanza_explanation',       label: 'Stanza Explanation' },
   { value: 'prose_explanation',        label: 'Prose Explanation' },
   { value: 'gazal',                    label: 'Ghazal' },
   { value: 'sentence_correction',      label: 'Sentence Correction' },
   { value: 'sentence_completion',      label: 'Sentence Completion' },
+  { value: 'punctuation',              label: 'Punctuation' },
   { value: 'fill_in_the_blanks',       label: 'Fill in the Blanks' },
   { value: 'true_false',               label: 'True / False' },
   { value: 'match_the_column',         label: 'Match the Column' },
   { value: 'summary',                  label: 'Summary' },
-  { value: 'darkhwast_khat',           label: 'Darkhwast / Khat' },
-  { value: 'kahani_makalma',           label: 'Kahani / Makalma' },
-  { value: 'Nasarkhulasa_markziKhyal', label: 'Nasar Khulasa' },
+  { value: 'application',              label: 'Application' },
+  { value: 'letter',                   label: 'Letter' },
+  { value: 'mokalma',                  label: 'Mokalma' },
+  { value: 'Nasarkhulasa',             label: 'Nasar Khulasa' },
+  { value: 'markziKhyal',              label: 'Markzi Khyal' },
+  { value: 'pair_of_words',            label: 'Pair of Words' },
+  { value: 'essay',                    label: 'Essay' },
 ];
 
 const TAB_TYPES = [
-  { value: 'all',   label: 'All',   icon: <FiLayers    size={12} /> },
-  { value: 'mcq',   label: 'MCQ',   icon: <FiBarChart2 size={12} /> },
-  { value: 'short', label: 'Short', icon: <FiAlignLeft size={12} /> },
-  { value: 'long',  label: 'Long',  icon: <FiBook      size={12} /> },
+  { value: 'all',   label: 'All',   icon: <FiLayers    size={13} /> },
+  { value: 'mcq',   label: 'MCQ',   icon: <FiBarChart2 size={13} /> },
+  { value: 'short', label: 'Short', icon: <FiAlignLeft size={13} /> },
+  { value: 'long',  label: 'Long',  icon: <FiBook      size={13} /> },
 ];
 
 const DIFF: Record<string, { cls: string; label: string }> = {
@@ -166,12 +187,10 @@ export default function QuestionBank() {
   const [chapters,      setChapters]      = useState<Chapter[]>([]);
   const [topics,        setTopics]        = useState<Topic[]>([]);
   const [topicsLoading, setTopicsLoading] = useState(false);
-  // allTopics holds the full list from lookups, used for the import matcher
-  // AND as a fallback source for the edit modal (see modalTopics below) so
-  // editing a question doesn't depend on the filter-driven `topics` state.
   const [allTopics,     setAllTopics]     = useState<Topic[]>([]);
   const [classes,       setClasses]       = useState<Class[]>([]);
   const [classSubjects, setClassSubjects] = useState<ClassSubject[]>([]);
+  const [questionCategories, setQuestionCategories] = useState<QuestionCategory[]>([]);
   const [filters,       setFilters]       = useState<Filters>({});
   const [loading,       setLoading]       = useState(true);
   const [searchTerm,    setSearchTerm]    = useState('');
@@ -185,6 +204,7 @@ export default function QuestionBank() {
   const [totalQ,        setTotalQ]        = useState(0);
   const [selectedIds,   setSelectedIds]   = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
   const router = useRouter();
@@ -205,8 +225,9 @@ export default function QuestionBank() {
         setClasses(data.classes);
         setSubjects(data.subjects);
         setChapters(data.chapters);
-        setAllTopics(data.topics); // import topic-matching + edit-modal fallback
+        setAllTopics(data.topics);
         setClassSubjects(data.classSubjects);
+        setQuestionCategories(data.questionCategories || []);
       } catch (err) {
         console.error(err);
         toast.error('Failed to load lookup data');
@@ -214,8 +235,7 @@ export default function QuestionBank() {
     })();
   }, []);
 
-  /* ── fetch topics fresh whenever the FILTER chapter changes ──
-     (this is unrelated to the edit modal — see modalTopics below) */
+  /* ── fetch topics fresh whenever the FILTER chapter changes ── */
   useEffect(() => {
     if (!filters.chapter) {
       setTopics([]);
@@ -244,6 +264,7 @@ export default function QuestionBank() {
         difficulty:   filters.difficulty,
         question_type: filters.question_type,
         source_type:  filters.source_type,
+        question_category_id: filters.question_category_id,
       });
 
       setTotalQ(result.total);
@@ -265,25 +286,30 @@ export default function QuestionBank() {
     }
   }, [searchTerm, filters, itemsPerPage]);
 
-  // Keep a stable ref to loadQuestions so filter/perPage effects don't
-  // need it in their dep arrays (avoids infinite re-render loops).
   const loadQuestionsRef = useRef(loadQuestions);
   useEffect(() => { loadQuestionsRef.current = loadQuestions; }, [loadQuestions]);
 
   /* ── init questions ── */
   useEffect(() => { loadQuestionsRef.current(1); }, []);
 
-  /* ── re-fetch on filter change — resets selection intentionally ── */
+  /* ── re-fetch on filter change ── */
   useEffect(() => {
     setCurrentPage(1);
-    loadQuestionsRef.current(1, undefined, true); // true = reset selection on filter change
+    loadQuestionsRef.current(1, undefined, true);
   }, [
     filters.class, filters.subject, filters.chapter, filters.topic,
     filters.difficulty, filters.question_type, filters.source_type,
+    filters.question_category_id,
   ]);
 
   /* ── re-fetch on per-page change ── */
   useEffect(() => { loadQuestionsRef.current(1, undefined, true); }, [itemsPerPage]);
+
+  /* ── lock body scroll while the mobile filter drawer is open ── */
+  useEffect(() => {
+    document.body.style.overflow = showFilterDrawer ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [showFilterDrawer]);
 
   /* ── dropdown helpers ── */
   const filteredSubjects = () =>
@@ -302,6 +328,15 @@ export default function QuestionBank() {
       .sort((a, b) => (a.chapterNo || 0) - (b.chapterNo || 0));
   };
 
+  // Category list narrows by the currently-selected question_type filter,
+  // same pattern as Topic narrowing by Chapter.
+  const filteredCategoriesForFilter = () => {
+    if (!filters.question_type) return [];
+    return questionCategories
+      .filter(qc => qc.question_type === filters.question_type && qc.is_active)
+      .sort((a, b) => a.sort_order - b.sort_order);
+  };
+
   const sortedClasses = () =>
     [...classes].sort((a, b) => {
       const an = parseInt(a.name), bn = parseInt(b.name);
@@ -314,12 +349,15 @@ export default function QuestionBank() {
     if (key === 'class')   next = { ...next, subject: undefined, chapter: undefined, topic: undefined };
     if (key === 'subject') next = { ...next, chapter: undefined, topic: undefined };
     if (key === 'chapter') next = { ...next, topic: undefined };
+    // Changing the type filter invalidates any previously-selected
+    // category (it was scoped to the old type's category list).
+    if (key === 'question_type') next = { ...next, question_category_id: undefined };
     setFilters(next);
   };
 
   const clearFilters = () => {
     setFilters({});
-    setTopics([]);      // clear dynamic topic list
+    setTopics([]);
     setSearchTerm('');
     setCurrentPage(1);
     loadQuestions(1, '');
@@ -390,6 +428,7 @@ export default function QuestionBank() {
         subject_id:    filters.subject,
         class_id:      filters.class,
         search:        searchTerm || undefined,
+        question_category_id: filters.question_category_id,
       });
 
       if (!data?.length) {
@@ -422,6 +461,8 @@ export default function QuestionBank() {
           'Source Year':       q.source_year        || '',
           Answer:              q.answer_text        || '',
           'Answer (Urdu)':     q.answer_text_ur     || '',
+          Diagram:             q.diagram            || '',
+          'Question Category': q.question_category_rel?.label_en || '',
         };
       });
 
@@ -445,7 +486,6 @@ export default function QuestionBank() {
     setIsImporting(true);
 
     try {
-      // 1. Parse the workbook first
       const importBuf  = await file.arrayBuffer();
       const importWb   = XLSX.read(importBuf);
       const importRows = XLSX.utils.sheet_to_json(importWb.Sheets[importWb.SheetNames[0]]) as any[];
@@ -455,7 +495,6 @@ export default function QuestionBank() {
         return;
       }
 
-      // 2. Collect unique chapter+topic pairs from the spreadsheet
       const pairs = importRows
         .map(row => ({
           chapter: (row['Chapter'] || row['chapter'] || '').toString().trim(),
@@ -463,7 +502,6 @@ export default function QuestionBank() {
         }))
         .filter(p => p.chapter && p.topic);
 
-      // 3. Resolve topic IDs from the server in ONE query (no row-limit issues)
       let topicMap: Record<string, string> = {};
       if (pairs.length > 0) {
         const res = await fetch('/api/admin/resolve-topic', {
@@ -478,7 +516,34 @@ export default function QuestionBank() {
         }
       }
 
-      // 4. Build payload
+      // Category resolution — parallel to the topic resolution above.
+      // Collect {type, category} pairs from rows that actually have a
+      // "Question Category" cell filled in (most rows won't, since
+      // category is optional), then resolve them in ONE request against
+      // /api/admin/resolve-category, which matches against either the
+      // category's label_en (human-readable) or its category_value
+      // (machine key) — see that route for the exact matching rules.
+      const categoryPairs = importRows
+        .map(row => ({
+          type: (row['Question Type'] || 'mcq').toString().trim().toLowerCase(),
+          category: (row['Question Category'] || '').toString().trim(),
+        }))
+        .filter(p => p.category);
+
+      let categoryMap: Record<string, string> = {};
+      if (categoryPairs.length > 0) {
+        const catRes = await fetch('/api/admin/question-category', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(categoryPairs),
+        });
+        if (catRes.ok) {
+          categoryMap = await catRes.json();
+        } else {
+          console.error('resolve-category failed:', await catRes.text());
+        }
+      }
+
       let unmatchedCount = 0;
 
       const payload = importRows.map((row, index) => {
@@ -492,6 +557,12 @@ export default function QuestionBank() {
         if (!topicId) {
           unmatchedCount++;
         }
+
+        const rowType = (row['Question Type'] || 'mcq').toString().trim().toLowerCase();
+        const rowCategoryLabel = (row['Question Category'] || '').toString().trim();
+        const categoryId = rowCategoryLabel
+          ? (categoryMap[`${rowType}||${rowCategoryLabel.toLowerCase()}`] ?? null)
+          : null;
 
         const questionText =
           row['Question (HTML)'] ||
@@ -520,14 +591,23 @@ export default function QuestionBank() {
           source_year:   row['Source Year'] ? parseInt(row['Source Year']) : null,
           answer_text:   row['Answer'] || row['Answer Text'] || null,
           answer_text_ur: row['Answer (Urdu)'] || row['Answer Text (Urdu)'] || null,
+          diagram:       row['Diagram'] || null,
+          question_category_id: categoryId,
         };
       });
 
       const { inserted } = await importQuestions(payload);
 
-      if (unmatchedCount > 0) {
+      const unmatchedCategoryCount = payload.filter(
+        (p, i) => importRows[i]['Question Category'] && !p.question_category_id
+      ).length;
+
+      if (unmatchedCount > 0 || unmatchedCategoryCount > 0) {
+        const parts: string[] = [];
+        if (unmatchedCount > 0) parts.push(`${unmatchedCount} row(s) had unmatched Chapter/Topic`);
+        if (unmatchedCategoryCount > 0) parts.push(`${unmatchedCategoryCount} row(s) had an unmatched Question Category label`);
         toast.success(
-          `${inserted} question(s) imported. ⚠️ ${unmatchedCount} row(s) had unmatched Chapter/Topic — imported without topic link.`,
+          `${inserted} question(s) imported. ⚠️ ${parts.join('; ')}.`,
           { duration: 6000 }
         );
       } else {
@@ -551,10 +631,6 @@ export default function QuestionBank() {
   const displayedQs = questions.filter(q => activeTab === 'all' || q?.question_type === activeTab);
   const activeCount = Object.values(filters).filter(Boolean).length + (searchTerm ? 1 : 0);
 
-  // The edit modal must NOT depend on the filter-driven `topics` state
-  // (that's empty unless a chapter filter happens to be selected). Instead
-  // give the form the full topic lookup table — QuestionForm's own
-  // hydration effect resolves the question's actual topic_id against this.
   const modalTopics = allTopics;
 
   const pageNums = (() => {
@@ -564,6 +640,75 @@ export default function QuestionBank() {
     if (cur >= total - 3)  return [1,'…',total-4,total-3,total-2,total-1,total];
     return [1,'…',cur-1,cur,cur+1,'…',total];
   })();
+
+  /* ── shared filter controls (rendered both inline + inside drawer) ── */
+  const renderFilterFields = () => (
+    <>
+      <select className="qb-sel" value={filters.class || ''}
+        onChange={e => handleFilterChange('class', e.target.value)}>
+        <option value="">All Classes</option>
+        {sortedClasses().map(c =>
+          <option key={c.id} value={c.id}>{c.name}{c.description ? ` – ${c.description}` : ''}</option>
+        )}
+      </select>
+      <select className="qb-sel" value={filters.subject || ''}
+        onChange={e => handleFilterChange('subject', e.target.value)} disabled={!filters.class}>
+        <option value="">All Subjects</option>
+        {filteredSubjects().map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+      </select>
+      <select className="qb-sel" value={filters.chapter || ''}
+        onChange={e => handleFilterChange('chapter', e.target.value)}
+        disabled={!filters.class || !filters.subject}>
+        <option value="">All Chapters</option>
+        {filteredChapters().map(c =>
+          <option key={c.id} value={c.id}>{c.chapterNo ? `Ch ${c.chapterNo}: ` : ''}{c.name}</option>
+        )}
+      </select>
+      <select
+        className="qb-sel"
+        value={filters.topic || ''}
+        onChange={e => handleFilterChange('topic', e.target.value)}
+        disabled={!filters.chapter || topicsLoading}
+      >
+        <option value="">
+          {topicsLoading ? 'Loading topics…' : topics.length === 0 && filters.chapter ? 'No topics found' : 'All Topics'}
+        </option>
+        {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+      </select>
+      <select className="qb-sel" value={filters.difficulty || ''}
+        onChange={e => handleFilterChange('difficulty', e.target.value)}>
+        <option value="">All Difficulty</option>
+        <option value="easy">Easy</option>
+        <option value="medium">Medium</option>
+        <option value="hard">Hard</option>
+      </select>
+      <select className="qb-sel" value={filters.question_type || ''}
+        onChange={e => handleFilterChange('question_type', e.target.value)}>
+        <option value="">All Types</option>
+        {QUESTION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+      </select>
+      <select
+        className="qb-sel"
+        value={filters.question_category_id || ''}
+        onChange={e => handleFilterChange('question_category_id', e.target.value)}
+        disabled={!filters.question_type}
+      >
+        <option value="">
+          {!filters.question_type ? 'All Categories' : filteredCategoriesForFilter().length === 0 ? 'No categories' : 'All Categories'}
+        </option>
+        {filteredCategoriesForFilter().map(qc => <option key={qc.id} value={qc.id}>{qc.label_en}</option>)}
+      </select>
+      <select className="qb-sel" value={filters.source_type || ''}
+        onChange={e => handleFilterChange('source_type', e.target.value)}>
+        <option value="">All Sources</option>
+        <option value="book">Book</option>
+        <option value="past_paper">Past Paper</option>
+        <option value="model_paper">Model Paper</option>
+        <option value="conceptual">Conceptual</option>
+        <option value="custom">Custom</option>
+      </select>
+    </>
+  );
 
   /* ═════════════════════════════════════════════════════════════════════════*/
   return (
@@ -609,68 +754,87 @@ export default function QuestionBank() {
 
       <style>{`
         :root {
-          --qb-bg       : #f2f4f8;
+          --qb-bg       : #f5f6fb;
           --qb-surface  : #ffffff;
-          --qb-border   : #e3e7f0;
-          --qb-navy     : #18243f;
-          --qb-accent   : #2f54eb;
-          --qb-accent-lt: #eef2ff;
-          --qb-text     : #1a2540;
-          --qb-muted    : #6c7a99;
-          --qb-shadow   : 0 1px 4px rgba(24,36,63,.07),0 4px 18px rgba(24,36,63,.06);
-          --qb-radius   : 12px;
-          --qb-rsm      : 7px;
-          --qb-font     : 'DM Sans','Segoe UI',system-ui,sans-serif;
+          --qb-border   : #e6e8f1;
+          --qb-navy     : #101935;
+          --qb-accent   : #2f4fe0;
+          --qb-accent-lt: #eef1ff;
+          --qb-text     : #15192b;
+          --qb-muted    : #686f8c;
+          --qb-shadow   : 0 1px 2px rgba(16,25,53,.04),0 6px 20px rgba(16,25,53,.07);
+          --qb-radius   : 16px;
+          --qb-rsm      : 9px;
+          --qb-font     : 'Lexend','Inter','Segoe UI',system-ui,sans-serif;
           --qb-mono     : 'JetBrains Mono',ui-monospace,monospace;
-          --qb-red      : #fa5252;
-          --qb-red-bg   : #fff5f5;
+          --qb-red      : #c8473a;
+          --qb-red-bg   : #fdeeec;
+          --qb-green    : #1d8a52;
+          --qb-green-bg : #e9f9ef;
         }
-        .qb { background:var(--qb-bg); min-height:100vh; padding:28px 24px 60px; font-family:var(--qb-font); color:var(--qb-text); }
-        .qb-hd { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:26px; }
-        .qb-hd h1 { font-size:1.45rem; font-weight:750; color:var(--qb-navy); letter-spacing:-.5px; margin:0 0 2px; }
-        .qb-hd p  { font-size:.8rem; color:var(--qb-muted); margin:0; }
+        .qb { background:var(--qb-bg); min-height:100vh; padding:26px 28px 60px; font-family:var(--qb-font); color:var(--qb-text); }
+
+        /* ── Header ── */
+        .qb-hd { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:22px; }
+        .qb-hd-eyebrow { display:flex; align-items:center; gap:8px; font-size:.7rem; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--qb-accent); margin-bottom:6px; }
+        .qb-hd-eyebrow-dot { width:6px; height:6px; border-radius:50%; background:var(--qb-accent); }
+        .qb-hd h1 { font-size:1.5rem; font-weight:700; color:var(--qb-navy); letter-spacing:-.02em; margin:0 0 3px; }
+        .qb-hd p  { font-size:.84rem; color:var(--qb-muted); margin:0; }
         .qb-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-        .qb-btn { display:inline-flex; align-items:center; gap:5px; font-size:.81rem; font-weight:650; border-radius:var(--qb-rsm); padding:8px 14px; border:none; cursor:pointer; transition:all .14s; white-space:nowrap; font-family:var(--qb-font); }
+        .qb-btn { display:inline-flex; align-items:center; gap:6px; font-size:.81rem; font-weight:650; border-radius:var(--qb-rsm); padding:9px 15px; border:none; cursor:pointer; transition:all .14s; white-space:nowrap; font-family:var(--qb-font); }
         .qb-btn[disabled],
         .qb-btn.is-disabled { opacity:.5; cursor:not-allowed; pointer-events:none; }
-        .qb-btn-primary { background:var(--qb-accent); color:#fff; }
-        .qb-btn-primary:hover:not(:disabled) { background:#2345c8; box-shadow:0 4px 14px rgba(47,84,235,.35); }
+        .qb-btn-primary { background:var(--qb-accent); color:#fff; box-shadow:0 2px 8px rgba(47,79,224,.25); }
+        .qb-btn-primary:hover:not(:disabled) { background:#2540bf; box-shadow:0 5px 16px rgba(47,79,224,.38); transform:translateY(-1px); }
         .qb-btn-ghost   { background:var(--qb-surface); color:var(--qb-text); border:1.5px solid var(--qb-border); }
         .qb-btn-ghost:hover:not(:disabled)   { border-color:var(--qb-accent); color:var(--qb-accent); background:var(--qb-accent-lt); }
         .qb-btn-danger  { background:var(--qb-red); color:#fff; }
-        .qb-btn-danger:hover:not(:disabled) { background:#e03131; box-shadow:0 4px 14px rgba(250,82,82,.35); }
-        .qb-btn-icon    { padding:7px 9px; position:relative; }
-        .qb-tabs { display:flex; gap:3px; background:var(--qb-surface); border:1.5px solid var(--qb-border); border-radius:var(--qb-rsm); padding:4px; width:fit-content; margin-bottom:18px; flex-wrap:wrap; }
-        .qb-tab  { display:inline-flex; align-items:center; gap:5px; font-size:.79rem; font-weight:650; padding:6px 13px; border-radius:5px; border:none; background:transparent; color:var(--qb-muted); cursor:pointer; transition:all .14s; font-family:var(--qb-font); }
+        .qb-btn-danger:hover:not(:disabled) { background:#a83a2f; box-shadow:0 4px 14px rgba(200,71,58,.35); }
+        .qb-btn-icon    { padding:8px 10px; position:relative; }
+
+        /* ── Tabs ── */
+        .qb-tabs { display:flex; gap:3px; background:var(--qb-surface); border:1.5px solid var(--qb-border); border-radius:12px; padding:4px; width:fit-content; margin-bottom:16px; flex-wrap:wrap; max-width:100%; overflow-x:auto; }
+        .qb-tab  { display:inline-flex; align-items:center; gap:6px; font-size:.8rem; font-weight:650; padding:7px 14px; border-radius:8px; border:none; background:transparent; color:var(--qb-muted); cursor:pointer; transition:all .14s; font-family:var(--qb-font); white-space:nowrap; }
         .qb-tab:hover { color:var(--qb-text); }
-        .qb-tab.on    { background:var(--qb-accent); color:#fff; box-shadow:0 2px 8px rgba(47,84,235,.3); }
-        .qb-fc  { background:var(--qb-surface); border:1.5px solid var(--qb-border); border-radius:var(--qb-radius); padding:16px 18px; margin-bottom:18px; box-shadow:var(--qb-shadow); }
-        .qb-fr  { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+        .qb-tab.on    { background:var(--qb-navy); color:#fff; box-shadow:0 2px 8px rgba(16,25,53,.25); }
+
+        /* ── Filters (desktop inline bar) ── */
+        .qb-fc  { background:var(--qb-surface); border:1.5px solid var(--qb-border); border-radius:var(--qb-radius); padding:16px 18px; margin-bottom:16px; box-shadow:var(--qb-shadow); }
+        .qb-fc-row1 { display:flex; gap:10px; align-items:center; }
+        .qb-fr  { display:flex; flex-wrap:wrap; gap:8px; align-items:center; flex:1; }
         .qb-fr+.qb-fr { margin-top:10px; padding-top:10px; border-top:1px solid var(--qb-border); }
-        .qb-si  { position:relative; flex:1 1 210px; min-width:190px; }
-        .qb-si svg { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--qb-muted); pointer-events:none; }
-        .qb-si input { width:100%; padding:8px 10px 8px 32px; font-size:.82rem; border:1.5px solid var(--qb-border); border-radius:var(--qb-rsm); background:var(--qb-bg); color:var(--qb-text); outline:none; transition:border .13s; font-family:var(--qb-font); box-sizing:border-box; }
+        .qb-si  { position:relative; flex:1 1 210px; min-width:160px; }
+        .qb-si svg { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--qb-muted); pointer-events:none; }
+        .qb-si input { width:100%; padding:9px 11px 9px 33px; font-size:.83rem; border:1.5px solid var(--qb-border); border-radius:var(--qb-rsm); background:var(--qb-bg); color:var(--qb-text); outline:none; transition:border .13s,background .13s; font-family:var(--qb-font); box-sizing:border-box; }
         .qb-si input:focus { border-color:var(--qb-accent); background:#fff; }
-        .qb-sel { flex:1 1 130px; min-width:120px; padding:8px 10px; font-size:.81rem; border:1.5px solid var(--qb-border); border-radius:var(--qb-rsm); background:var(--qb-bg); color:var(--qb-text); outline:none; cursor:pointer; font-family:var(--qb-font); transition:border .13s; }
+        .qb-sel { flex:1 1 130px; min-width:120px; padding:9px 11px; font-size:.81rem; border:1.5px solid var(--qb-border); border-radius:var(--qb-rsm); background:var(--qb-bg); color:var(--qb-text); outline:none; cursor:pointer; font-family:var(--qb-font); transition:border .13s; max-width:100%; }
         .qb-sel:focus   { border-color:var(--qb-accent); background:#fff; }
         .qb-sel:disabled{ opacity:.4; cursor:not-allowed; }
-        .qb-fbadge { position:absolute; top:-6px; right:-6px; background:var(--qb-accent); color:#fff; font-size:.66rem; font-weight:700; border-radius:99px; width:16px; height:16px; display:flex; align-items:center; justify-content:center; }
-        .qb-bulk-bar { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--qb-accent-lt); border:1.5px solid var(--qb-accent); border-radius:var(--qb-rsm); margin-bottom:12px; animation:qb-slideDown .2s ease; flex-wrap:wrap; }
+        .qb-fbadge { position:absolute; top:-6px; right:-6px; background:var(--qb-accent); color:#fff; font-size:.66rem; font-weight:700; border-radius:99px; width:17px; height:17px; display:flex; align-items:center; justify-content:center; }
+        .qb-filters-desktop { display:contents; }
+        .qb-filter-trigger { display:none; }
+
+        /* ── Bulk bar ── */
+        .qb-bulk-bar { display:flex; align-items:center; gap:10px; padding:11px 15px; background:var(--qb-accent-lt); border:1.5px solid var(--qb-accent); border-radius:var(--qb-rsm); margin-bottom:12px; animation:qb-slideDown .2s ease; flex-wrap:wrap; }
         @keyframes qb-slideDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
         .qb-bulk-bar span { font-size:.82rem; font-weight:650; color:var(--qb-accent); }
-        .qb-sb  { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-        .qb-sb-l{ font-size:.8rem; color:var(--qb-muted); }
-        .qb-sb-l strong { color:var(--qb-text); }
+
+        /* ── Stats bar ── */
+        .qb-sb  { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+        .qb-sb-l{ font-size:.81rem; color:var(--qb-muted); }
+        .qb-sb-l strong { color:var(--qb-text); font-family:var(--qb-mono); font-weight:600; }
         .qb-sb-r{ display:flex; align-items:center; gap:7px; font-size:.8rem; color:var(--qb-muted); }
-        .qb-pps { padding:5px 8px; font-size:.78rem; border:1.5px solid var(--qb-border); border-radius:6px; background:var(--qb-surface); color:var(--qb-text); cursor:pointer; font-family:var(--qb-font); }
+        .qb-pps { padding:6px 9px; font-size:.78rem; border:1.5px solid var(--qb-border); border-radius:7px; background:var(--qb-surface); color:var(--qb-text); cursor:pointer; font-family:var(--qb-font); }
+
+        /* ── Table (desktop) ── */
         .qb-card  { background:var(--qb-surface); border:1.5px solid var(--qb-border); border-radius:var(--qb-radius); box-shadow:var(--qb-shadow); overflow:hidden; margin-bottom:20px; }
         .qb-tw    { overflow-x:auto; }
         .qb-table { width:100%; border-collapse:collapse; font-size:.82rem; }
-        .qb-table thead tr { background:#f7f8fc; border-bottom:2px solid var(--qb-border); }
-        .qb-table th { padding:10px 13px; font-size:.71rem; font-weight:750; text-transform:uppercase; letter-spacing:.07em; color:var(--qb-muted); text-align:left; white-space:nowrap; }
-        .qb-table td { padding:12px 13px; vertical-align:top; border-bottom:1px solid #eff1f8; }
+        .qb-table thead tr { background:#f8f9fc; border-bottom:2px solid var(--qb-border); }
+        .qb-table th { padding:11px 13px; font-size:.7rem; font-weight:750; text-transform:uppercase; letter-spacing:.07em; color:var(--qb-muted); text-align:left; white-space:nowrap; }
+        .qb-table td { padding:13px; vertical-align:top; border-bottom:1px solid #eff1f8; }
         .qb-table tbody tr:hover { background:#f9fafd; }
-        .qb-table tbody tr.selected { background:#eef2ff; }
+        .qb-table tbody tr.selected { background:var(--qb-accent-lt); }
         .qb-table tbody tr:last-child td { border-bottom:none; }
         .qb-cb { width:16px; height:16px; cursor:pointer; accent-color:var(--qb-accent); margin:0; }
         .qb-q-cell { max-width:400px; min-width:220px; }
@@ -687,43 +851,103 @@ export default function QuestionBank() {
         .qb-serial { font-size:.73rem; color:var(--qb-muted); font-family:var(--qb-mono); white-space:nowrap; }
         .qb-badge { display:inline-flex; align-items:center; font-size:.69rem; font-weight:750; letter-spacing:.04em; padding:3px 9px; border-radius:99px; white-space:nowrap; }
         .qb-b-type   { background:var(--qb-accent-lt); color:var(--qb-accent); }
-        .qb-easy     { background:#ebfbee; color:#2b8a3e; }
-        .qb-medium   { background:#fff3bf; color:#d97706; }
-        .qb-hard     { background:#ffe3e3; color:#c92a2a; }
+        .qb-easy     { background:#e9f9ef; color:#1d8a52; }
+        .qb-medium   { background:#fff3bf; color:#a3650a; }
+        .qb-hard     { background:#fdeeec; color:#c8473a; }
         .qb-b-source { background:#f1f3f9; color:var(--qb-muted); }
-        .qb-ab { display:inline-flex; align-items:center; justify-content:center; width:29px; height:29px; border-radius:6px; border:1.5px solid var(--qb-border); background:var(--qb-surface); color:var(--qb-muted); cursor:pointer; transition:all .13s; }
+        .qb-b-diagram { background:var(--qb-green-bg); color:var(--qb-green); }
+        .qb-b-category { background:#f0f4ff; color:#4f6ef6; }
+        .qb-ab { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:7px; border:1.5px solid var(--qb-border); background:var(--qb-surface); color:var(--qb-muted); cursor:pointer; transition:all .13s; }
         .qb-ab.edit:hover   { border-color:var(--qb-accent); color:var(--qb-accent); background:var(--qb-accent-lt); }
         .qb-ab.delete:hover { border-color:var(--qb-red);    color:var(--qb-red);    background:var(--qb-red-bg); }
-        .qb-empty { text-align:center; padding:60px 24px; color:var(--qb-muted); }
+        .qb-empty { text-align:center; padding:64px 24px; color:var(--qb-muted); }
         .qb-empty-ico { font-size:2.8rem; margin-bottom:10px; opacity:.25; }
         .qb-empty h3  { font-size:.95rem; font-weight:700; color:var(--qb-text); margin:0 0 5px; }
         .qb-empty p   { font-size:.8rem; margin:0; }
         .qb-loader { text-align:center; padding:80px; }
         .qb-spin   { width:36px; height:36px; border:3px solid var(--qb-border); border-top-color:var(--qb-accent); border-radius:50%; animation:qs .65s linear infinite; margin:0 auto; }
         @keyframes qs { to { transform:rotate(360deg); } }
+
+        /* ── Mobile card list (replaces table under 860px) ── */
+        .qb-cards { display:none; }
+        .qb-rowcard {
+          background:var(--qb-surface); border:1.5px solid var(--qb-border); border-radius:14px;
+          padding:14px; margin-bottom:10px; box-shadow:var(--qb-shadow);
+        }
+        .qb-rowcard.selected { border-color:var(--qb-accent); background:var(--qb-accent-lt); }
+        .qb-rowcard-top { display:flex; align-items:flex-start; gap:10px; margin-bottom:10px; }
+        .qb-rowcard-serial { font-family:var(--qb-mono); font-size:.72rem; color:var(--qb-muted); margin-top:2px; }
+        .qb-rowcard-actions { display:flex; gap:6px; margin-left:auto; flex-shrink:0; }
+        .qb-rowcard-meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+        .qb-rowcard-metarow { display:flex; flex-wrap:wrap; gap:10px; font-size:.76rem; color:var(--qb-muted); margin-top:8px; padding-top:8px; border-top:1px dashed var(--qb-border); }
+        .qb-rowcard-metarow b { color:var(--qb-text); font-weight:600; }
+
+        /* ── Pagination ── */
         .qb-pg  { display:flex; justify-content:center; align-items:center; gap:4px; flex-wrap:wrap; padding-top:4px; }
-        .qb-pgb { display:inline-flex; align-items:center; justify-content:center; min-width:34px; height:34px; padding:0 6px; border-radius:7px; border:1.5px solid var(--qb-border); background:var(--qb-surface); color:var(--qb-text); font-size:.81rem; font-weight:650; cursor:pointer; transition:all .13s; font-family:var(--qb-font); }
+        .qb-pgb { display:inline-flex; align-items:center; justify-content:center; min-width:36px; height:36px; padding:0 7px; border-radius:8px; border:1.5px solid var(--qb-border); background:var(--qb-surface); color:var(--qb-text); font-size:.81rem; font-weight:650; cursor:pointer; transition:all .13s; font-family:var(--qb-font); }
         .qb-pgb:hover:not(:disabled):not(.on) { border-color:var(--qb-accent); color:var(--qb-accent); }
-        .qb-pgb.on   { background:var(--qb-accent); border-color:var(--qb-accent); color:#fff; }
+        .qb-pgb.on   { background:var(--qb-navy); border-color:var(--qb-navy); color:#fff; }
         .qb-pgb:disabled { opacity:.3; cursor:not-allowed; }
         .qb-pgb.dots { border:none; background:transparent; cursor:default; color:var(--qb-muted); letter-spacing:.1em; }
-        .qb-mo  { position:fixed; inset:0; background:rgba(18,30,64,.6); z-index:1050; display:flex; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(3px); }
-        .qb-md  { background:var(--qb-surface); border-radius:var(--qb-radius); box-shadow:0 12px 48px rgba(18,30,64,.22); width:100%; max-width:900px; max-height:94vh; display:flex; flex-direction:column; overflow:hidden; }
-        .qb-mhd { display:flex; justify-content:space-between; align-items:center; padding:16px 22px; border-bottom:1.5px solid var(--qb-border); background:#f7f8fc; flex-shrink:0; }
-        .qb-mhd h5 { font-size:.95rem; font-weight:750; color:var(--qb-navy); margin:0; }
+
+        /* ── Modal ── */
+        .qb-mo  { position:fixed; inset:0; background:rgba(13,18,38,.55); z-index:1200; display:flex; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(3px); }
+        .qb-md  { background:var(--qb-surface); border-radius:18px; box-shadow:0 24px 64px rgba(13,18,38,.3); width:100%; max-width:920px; max-height:94vh; display:flex; flex-direction:column; overflow:hidden; }
+        .qb-mhd { display:flex; justify-content:space-between; align-items:center; padding:16px 22px; border-bottom:1.5px solid var(--qb-border); background:#f8f9fc; flex-shrink:0; }
+        .qb-mhd h5 { font-size:.96rem; font-weight:750; color:var(--qb-navy); margin:0; }
         .qb-mbd { overflow-y:auto; flex:1; padding:22px; }
-        .qb-xcl { display:inline-flex; align-items:center; justify-content:center; width:29px; height:29px; border-radius:6px; border:1.5px solid var(--qb-border); background:transparent; color:var(--qb-muted); cursor:pointer; transition:all .13s; flex-shrink:0; }
+        .qb-xcl { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:8px; border:1.5px solid var(--qb-border); background:transparent; color:var(--qb-muted); cursor:pointer; transition:all .13s; flex-shrink:0; }
         .qb-xcl:hover { border-color:var(--qb-red); color:var(--qb-red); background:var(--qb-red-bg); }
         .qb-meta { display:flex; flex-direction:column; gap:2px; }
         .qb-meta-main { font-size:.82rem; color:var(--qb-text); white-space:nowrap; }
         .qb-meta-sub  { font-size:.73rem; color:var(--qb-muted); white-space:nowrap; }
-        @media (max-width:768px) {
-          .qb { padding:14px 10px 40px; }
-          .qb-hd h1 { font-size:1.15rem; }
-          .qb-table th, .qb-table td { padding:9px 8px; }
-          .qb-q-cell { max-width:220px; }
-          .qb-md { max-height:96vh; }
-          .qb-mbd { padding:16px; }
+        .qb-diagram-thumb { max-width:60px; max-height:40px; border-radius:5px; cursor:pointer; border:1px solid var(--qb-border); margin-top:6px; display:block; }
+
+        /* ── Mobile filter drawer ── */
+        .qb-filter-drawer-overlay {
+          display:none; position:fixed; inset:0; background:rgba(13,18,38,.45);
+          backdrop-filter:blur(2px); z-index:1150;
+        }
+        .qb-filter-drawer {
+          position:fixed; right:0; top:0; bottom:0; width:min(86vw,360px);
+          background:var(--qb-surface); z-index:1160; display:flex; flex-direction:column;
+          transform:translateX(100%); transition:transform .25s ease;
+          box-shadow:-12px 0 40px rgba(13,18,38,.25);
+        }
+        .qb-filter-drawer.is-open { transform:translateX(0); }
+        .qb-filter-drawer-hd { display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1.5px solid var(--qb-border); flex-shrink:0; }
+        .qb-filter-drawer-hd h4 { font-size:.95rem; font-weight:700; color:var(--qb-navy); margin:0; }
+        .qb-filter-drawer-body { flex:1; overflow-y:auto; padding:16px 18px; display:flex; flex-direction:column; gap:12px; }
+        .qb-filter-drawer-body .qb-sel { width:100%; flex:none; min-width:0; }
+        .qb-filter-drawer-foot { padding:14px 18px; border-top:1.5px solid var(--qb-border); display:flex; gap:10px; flex-shrink:0; }
+        .qb-filter-drawer-foot .qb-btn { flex:1; justify-content:center; }
+
+        @media (max-width:991px) {
+          .qb { padding:18px 16px 50px; }
+        }
+
+        /* ── Switch to filter-drawer trigger + hide inline filter bar ── */
+        @media (max-width:860px) {
+          .qb-fc { display:none; }
+          .qb-filter-trigger { display:inline-flex; }
+          .qb-filter-drawer-overlay { display:block; }
+        }
+        @media (min-width:861px) {
+          .qb-filter-drawer, .qb-filter-drawer-overlay { display:none; }
+        }
+
+        /* ── Switch table -> cards ── */
+        @media (max-width:860px) {
+          .qb-card { display:none; }
+          .qb-cards { display:block; }
+        }
+
+        @media (max-width:560px) {
+          .qb-hd h1 { font-size:1.25rem; }
+          .qb-actions { width:100%; }
+          .qb-actions .qb-btn { flex:1; justify-content:center; }
+          .qb-actions label.qb-btn { flex:1; }
+          .qb-sb { flex-direction:column; align-items:flex-start; }
         }
       `}</style>
 
@@ -732,27 +956,28 @@ export default function QuestionBank() {
         {/* ── Header ── */}
         <div className="qb-hd">
           <div>
-            <h1>Question Bank</h1>
-            <p>{totalQ.toLocaleString()} total questions</p>
+            <div className="qb-hd-eyebrow"><span className="qb-hd-eyebrow-dot" />Question Bank</div>
+            <h1>Manage Questions</h1>
+            <p>{totalQ.toLocaleString()} total questions across every class and subject</p>
           </div>
           <div className="qb-actions">
             <label
               className={`qb-btn qb-btn-ghost${isImporting ? ' is-disabled' : ''}`}
               style={{ cursor: isImporting ? 'not-allowed' : 'pointer' }}
             >
-              <FiUpload size={13} />
+              <FiUpload size={14} />
               {isImporting ? 'Importing…' : 'Import'}
               <input type="file" style={{ display: 'none' }} onChange={handleImport}
                 accept=".xlsx,.xls" disabled={isImporting} />
             </label>
             <button className="qb-btn qb-btn-ghost" onClick={handleExport}
               disabled={isExporting || totalQ === 0}>
-              <FiDownload size={13} />
+              <FiDownload size={14} />
               {isExporting ? 'Exporting…' : 'Export'}
             </button>
             <button className="qb-btn qb-btn-primary"
               onClick={() => { setSelQ(null); setShowModal(true); }}>
-              <FiPlus size={13} /> Add Question
+              <FiPlus size={14} /> Add Question
             </button>
           </div>
         </div>
@@ -767,10 +992,10 @@ export default function QuestionBank() {
           ))}
         </div>
 
-        {/* ── Filters ── */}
-        <div className="qb-fc">
-          <div className="qb-fr">
-            <div className="qb-si">
+        {/* ── Filters: search + drawer trigger (always visible) ── */}
+        <div className="qb-fc" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="qb-fc-row1">
+            <div className="qb-si" style={{ flex: 1 }}>
               <FiSearch size={13} />
               <input
                 type="text"
@@ -786,65 +1011,61 @@ export default function QuestionBank() {
                 }}
               />
             </div>
-            <select className="qb-sel" value={filters.class || ''}
-              onChange={e => handleFilterChange('class', e.target.value)}>
-              <option value="">All Classes</option>
-              {sortedClasses().map(c =>
-                <option key={c.id} value={c.id}>{c.name}{c.description ? ` – ${c.description}` : ''}</option>
-              )}
-            </select>
-            <select className="qb-sel" value={filters.subject || ''}
-              onChange={e => handleFilterChange('subject', e.target.value)} disabled={!filters.class}>
-              <option value="">All Subjects</option>
-              {filteredSubjects().map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            <select className="qb-sel" value={filters.chapter || ''}
-              onChange={e => handleFilterChange('chapter', e.target.value)}
-              disabled={!filters.class || !filters.subject}>
-              <option value="">All Chapters</option>
-              {filteredChapters().map(c =>
-                <option key={c.id} value={c.id}>{c.chapterNo ? `Ch ${c.chapterNo}: ` : ''}{c.name}</option>
-              )}
-            </select>
-            <select
-              className="qb-sel"
-              value={filters.topic || ''}
-              onChange={e => handleFilterChange('topic', e.target.value)}
-              disabled={!filters.chapter || topicsLoading}
-            >
-              <option value="">
-                {topicsLoading ? 'Loading topics…' : topics.length === 0 && filters.chapter ? 'No topics found' : 'All Topics'}
-              </option>
-              {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+          </div>
+          <div className="qb-fr">
+            {renderFilterFields()}
             <button className="qb-btn qb-btn-ghost qb-btn-icon" onClick={clearFilters}
               title="Clear all filters">
               <FiX size={13} />
               {activeCount > 0 && <span className="qb-fbadge">{activeCount}</span>}
             </button>
           </div>
-          <div className="qb-fr">
-            <select className="qb-sel" style={{ flex: '0 1 140px' }} value={filters.difficulty || ''}
-              onChange={e => handleFilterChange('difficulty', e.target.value)}>
-              <option value="">All Difficulty</option>
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </select>
-            <select className="qb-sel" style={{ flex: '0 1 200px' }} value={filters.question_type || ''}
-              onChange={e => handleFilterChange('question_type', e.target.value)}>
-              <option value="">All Types</option>
-              {QUESTION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-            <select className="qb-sel" style={{ flex: '0 1 155px' }} value={filters.source_type || ''}
-              onChange={e => handleFilterChange('source_type', e.target.value)}>
-              <option value="">All Sources</option>
-              <option value="book">Book</option>
-              <option value="past_paper">Past Paper</option>
-              <option value="model_paper">Model Paper</option>
-              <option value="conceptual">Conceptual</option>
-              <option value="custom">Custom</option>
-            </select>
+        </div>
+
+        {/* ── Mobile-only: search bar + filter trigger button ── */}
+        <div className="qb-filter-trigger" style={{ width: '100%', gap: 8, marginBottom: 16 }}>
+          <div className="qb-si" style={{ flex: 1, background: 'var(--qb-surface)', border: '1.5px solid var(--qb-border)', borderRadius: 'var(--qb-rsm)', boxShadow: 'var(--qb-shadow)' }}>
+            <FiSearch size={13} />
+            <input
+              style={{ border: 'none', boxShadow: 'none' }}
+              type="text"
+              placeholder="Search questions…"
+              value={searchTerm}
+              onChange={e => {
+                setSearchTerm(e.target.value);
+                clearTimeout(searchTimer.current);
+                searchTimer.current = setTimeout(() => {
+                  setCurrentPage(1);
+                  loadQuestions(1, e.target.value);
+                }, 380);
+              }}
+            />
+          </div>
+          <button className="qb-btn qb-btn-ghost qb-btn-icon" style={{ position: 'relative', background: 'var(--qb-surface)' }} onClick={() => setShowFilterDrawer(true)}>
+            <FiSliders size={15} />
+            {activeCount > 0 && <span className="qb-fbadge">{activeCount}</span>}
+          </button>
+        </div>
+
+        {/* ── Mobile filter drawer ── */}
+        {showFilterDrawer && (
+          <button className="qb-filter-drawer-overlay" aria-label="Close filters" onClick={() => setShowFilterDrawer(false)} />
+        )}
+        <div className={`qb-filter-drawer ${showFilterDrawer ? 'is-open' : ''}`}>
+          <div className="qb-filter-drawer-hd">
+            <h4>Filter questions</h4>
+            <button className="qb-xcl" onClick={() => setShowFilterDrawer(false)}><FiX size={14} /></button>
+          </div>
+          <div className="qb-filter-drawer-body">
+            {renderFilterFields()}
+          </div>
+          <div className="qb-filter-drawer-foot">
+            <button className="qb-btn qb-btn-ghost" onClick={() => { clearFilters(); }}>
+              <FiX size={13} /> Clear all
+            </button>
+            <button className="qb-btn qb-btn-primary" onClick={() => setShowFilterDrawer(false)}>
+              Show results
+            </button>
           </div>
         </div>
 
@@ -855,7 +1076,7 @@ export default function QuestionBank() {
             <span>{selectedIds.size} question(s) selected</span>
             <button className="qb-btn qb-btn-danger" onClick={handleBulkDelete}
               disabled={isBulkDeleting}
-              style={{ marginLeft: 'auto', fontSize: '.78rem', padding: '6px 12px' }}>
+              style={{ marginLeft: 'auto', fontSize: '.78rem', padding: '7px 13px' }}>
               <FiTrash2 size={13} />
               {isBulkDeleting ? 'Deleting…' : `Delete Selected (${selectedIds.size})`}
             </button>
@@ -877,11 +1098,12 @@ export default function QuestionBank() {
           </div>
         </div>
 
-        {/* ── Table ── */}
+        {/* ── Table / cards ── */}
         {loading ? (
           <div className="qb-loader"><div className="qb-spin" /></div>
         ) : (
           <>
+            {/* Desktop table */}
             <div className="qb-card">
               <div className="qb-tw">
                 <table className="qb-table">
@@ -904,9 +1126,10 @@ export default function QuestionBank() {
                       <th>Chapter</th>
                       <th>Topic</th>
                       <th>Type</th>
+                      <th>Category</th>
                       <th>Diff.</th>
                       <th>Source</th>
-                      <th style={{ width: 72 }}>Actions</th>
+                      <th style={{ width: 76 }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -920,7 +1143,18 @@ export default function QuestionBank() {
                               onChange={() => toggleSelect(q.id)} />
                           </td>
                           <td><span className="qb-serial">{startIdx + i + 1}</span></td>
-                          <td><QuestionCell en={q?.question_text} ur={q?.question_text_ur} /></td>
+                          <td>
+                            <QuestionCell en={q?.question_text} ur={q?.question_text_ur} />
+                            {q?.diagram && (
+                              <img
+                                src={q.diagram}
+                                alt="Question diagram"
+                                className="qb-diagram-thumb"
+                                onClick={() => window.open(q.diagram!, '_blank')}
+                                title="Click to view full diagram"
+                              />
+                            )}
+                          </td>
                           <td>
                             <div className="qb-meta">
                               <span className="qb-meta-main">{(q as any)?._class || '—'}</span>
@@ -942,6 +1176,13 @@ export default function QuestionBank() {
                             </span>
                           </td>
                           <td><span className="qb-badge qb-b-type">{getTypeLabel(q?.question_type)}</span></td>
+                          <td>
+                            {q?.question_category_rel ? (
+                              <span className="qb-badge qb-b-category">{q.question_category_rel.label_en}</span>
+                            ) : (
+                              <span className="qb-meta-main" style={{ color: 'var(--qb-muted)' }}>—</span>
+                            )}
+                          </td>
                           <td><span className={`qb-badge ${diff.cls}`}>{diff.label}</span></td>
                           <td>
                             <div className="qb-meta">
@@ -965,7 +1206,7 @@ export default function QuestionBank() {
                       );
                     }) : (
                       <tr>
-                        <td colSpan={11}>
+                        <td colSpan={12}>
                           <div className="qb-empty">
                             <div className="qb-empty-ico">📭</div>
                             <h3>No questions found</h3>
@@ -977,6 +1218,64 @@ export default function QuestionBank() {
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            {/* Mobile card list */}
+            <div className="qb-cards">
+              {displayedQs.length > 0 ? displayedQs.map((q, i) => {
+                const diff = DIFF[q?.difficulty] || { cls: 'qb-b-source', label: q?.difficulty };
+                const isSelected = selectedIds.has(q.id);
+                return (
+                  <div key={q?.id} className={`qb-rowcard ${isSelected ? 'selected' : ''}`}>
+                    <div className="qb-rowcard-top">
+                      <input type="checkbox" className="qb-cb" checked={isSelected}
+                        onChange={() => toggleSelect(q.id)} style={{ marginTop: 3 }} />
+                      <span className="qb-rowcard-serial">#{startIdx + i + 1}</span>
+                      <div className="qb-rowcard-actions">
+                        <button className="qb-ab edit" title="Edit" onClick={() => { setSelQ(q); setShowModal(true); }}>
+                          <FiEdit size={12} />
+                        </button>
+                        <button className="qb-ab delete" title="Delete" onClick={() => handleDelete(q?.id)}>
+                          <FiTrash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <QuestionCell en={q?.question_text} ur={q?.question_text_ur} />
+                    {q?.diagram && (
+                      <img
+                        src={q.diagram}
+                        alt="Question diagram"
+                        className="qb-diagram-thumb"
+                        onClick={() => window.open(q.diagram!, '_blank')}
+                        title="Click to view full diagram"
+                      />
+                    )}
+
+                    <div className="qb-rowcard-meta">
+                      <span className="qb-badge qb-b-type">{getTypeLabel(q?.question_type)}</span>
+                      <span className={`qb-badge ${diff.cls}`}>{diff.label}</span>
+                      {q?.question_category_rel && (
+                        <span className="qb-badge qb-b-category">{q.question_category_rel.label_en}</span>
+                      )}
+                      <span className="qb-badge qb-b-source">{q?.source_type?.replace(/_/g, ' ')}{q?.source_year ? ` · ${q.source_year}` : ''}</span>
+                    </div>
+
+                    <div className="qb-rowcard-metarow">
+                      <span><b>{(q as any)?._class || '—'}</b></span>
+                      <span><b>{(q as any)?._subject || '—'}</b></span>
+                      <span>{q?.topic?.chapter?.chapterNo ? `Ch ${q.topic.chapter.chapterNo} · ` : ''}{q?.topic?.chapter?.name || '—'}</span>
+                      <span>{q?.topic?.name || '—'}</span>
+                    </div>
+                  </div>
+                );
+              }) : (
+                <div className="qb-empty" style={{ background: 'var(--qb-surface)', borderRadius: 'var(--qb-radius)', border: '1.5px solid var(--qb-border)' }}>
+                  <div className="qb-empty-ico">📭</div>
+                  <h3>No questions found</h3>
+                  <p>Try adjusting your filters or search term</p>
+                </div>
+              )}
             </div>
 
             {/* ── Pagination ── */}
@@ -1006,7 +1305,7 @@ export default function QuestionBank() {
           <div className="qb-md" onClick={e => e.stopPropagation()}>
             <div className="qb-mhd">
               <h5>{selQ ? '✏️ Edit Question' : '➕ Add New Question'}</h5>
-              <button className="qb-xcl" onClick={() => setShowModal(false)}><FiX size={13} /></button>
+              <button className="qb-xcl" onClick={() => setShowModal(false)}><FiX size={14} /></button>
             </div>
             <div className="qb-mbd">
               <QuestionForm
@@ -1016,6 +1315,7 @@ export default function QuestionBank() {
                 classSubjects={classSubjects}
                 chapters={chapters}
                 topics={modalTopics}
+                questionCategories={questionCategories}
                 onClose={() => { setShowModal(false); loadQuestions(currentPage, undefined, false); }}
               />
             </div>

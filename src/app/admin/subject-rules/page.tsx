@@ -1,3 +1,4 @@
+//admin/subject-rules/page.tsx
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '@/components/AdminLayout';
@@ -29,7 +30,9 @@ import {
   Target,
   Grid,
    FileText,
-  List
+  List,
+  Link2,
+  ArrowUpDown
 } from 'lucide-react';
 import './subject-rules.css';
 
@@ -43,22 +46,101 @@ interface QuestionTypeConfig {
   defaultMax?: number;
 }
 
+interface QuestionCategory {
+  id: string;
+  question_type: string;
+  category_value: string;
+  label_en: string;
+  label_ur?: string | null;
+  subject_hint?: string | null;
+  class_hint?: string | null;
+  default_marks?: number | null;
+  sort_order: number;
+  is_active: boolean;
+}
+
 interface ChapterRangeForm {
   id?: string;
   chapter_start: string;
   chapter_end: string;
   question_type: string;
+  question_category_id: string;
   rule_mode: 'total' | 'per_chapter';
   min_questions: string;
   max_questions: string;
-  class_id?: string; 
+  class_id?: string;
+  // ── Ordering / grouping fields ──
+  sort_order: string;       // exact paper position; empty -> defaults to 0 server-side
+  q_label: string;      
+  q_label_ur: string;    // sub-part display label, e.g. 'A' / 'B' / 'C'
+  attempt_count: string;    // how many of min_questions must be attempted; empty -> attempt all
+  group_key: string;        // ties multiple rules into ONE Q.No when shared
+  is_paired: boolean;       // pair this rule's own fetched questions into a/b sub-parts
+  is_alternative: boolean;  // OR-choice within a group_key (only first by sort_order is used)
 }
+
+const EMPTY_FORM: ChapterRangeForm = {
+  chapter_start: '',
+  chapter_end: '',
+  question_type: 'mcq',
+  question_category_id: '',
+  rule_mode: 'total',
+  min_questions: '',
+  max_questions: '',
+  class_id: '',
+  sort_order: '',
+  q_label: '',
+  q_label_ur: '',
+  attempt_count: '',
+  group_key: '',
+  is_paired: false,
+  is_alternative: false,
+};
+
+// Full type list, matching questions.question_type / chapter_question_rules.question_type's
+// DB CHECK constraint exactly (same casing) — kept here as a single shared
+// source so this page never drifts out of sync with the database again.
+// Subject-specific filtering still happens in getQuestionTypes() below;
+// this is just the universe of possible values.
+const ALL_QUESTION_TYPES: QuestionTypeConfig[] = [
+  { id: 'mcq', label: 'MCQ', key: 'mcq', defaultMin: 3, defaultMax: 5 },
+  { id: 'short', label: 'Short Answer', key: 'short', defaultMin: 2, defaultMax: 4 },
+  { id: 'long', label: 'Long Answer', key: 'long', defaultMin: 1, defaultMax: 2 },
+  { id: 'translate_urdu', label: 'Translate Urdu', key: 'translate_urdu' },
+  { id: 'translate_english', label: 'Translate English', key: 'translate_english' },
+  { id: 'idiom_phrases', label: 'Idiom/Phrases', key: 'idiom_phrases' },
+  { id: 'passage', label: 'Passage', key: 'passage' },
+  { id: 'poetry_explanation', label: 'Poetry Explanation', key: 'poetry_explanation' },
+  { id: 'stanza_explanation', label: 'Stanza Explanation', key: 'stanza_explanation' },
+  { id: 'prose_explanation', label: 'Prose Explanation', key: 'prose_explanation' },
+  { id: 'sentence_correction', label: 'Sentence Correction', key: 'sentence_correction' },
+  { id: 'sentence_completion', label: 'Sentence Completion', key: 'sentence_completion' },
+  { id: 'punctuation', label: 'Punctuation', key: 'punctuation' },
+  // NOTE casing matches the DB constraint exactly — fixed from the old
+  // lowercase 'directindirect'/'activepassive', which the database no
+  // longer accepts (constraint now requires 'directInDirect'/'activePassive').
+  { id: 'directInDirect', label: 'Direct/Indirect', key: 'directInDirect' },
+  { id: 'activePassive', label: 'Active/Passive', key: 'activePassive' },
+  { id: 'darkhwast_khat', label: 'Darkhwast Khat', key: 'darkhwast_khat' },
+  { id: 'kahani_makalma', label: 'Kahani Makalma', key: 'kahani_makalma' },
+  { id: 'mokalma', label: 'Mokalma', key: 'mokalma' },
+  { id: 'Nasarkhulasa', label: 'Nasar Khulasa', key: 'Nasarkhulasa' },
+  { id: 'markziKhyal', label: 'Markzi Khyal', key: 'markziKhyal' },
+  { id: 'gazal', label: 'Ghazal', key: 'gazal' },
+  { id: 'summary', label: 'Summary', key: 'summary' },
+  { id: 'application', label: 'Application', key: 'application' },
+  { id: 'letter', label: 'Letter', key: 'letter' },
+  { id: 'pair_of_words', label: 'Pair of Words', key: 'pair_of_words' },
+  { id: 'essay', label: 'Essay', key: 'essay' },
+  { id: 'story', label: 'Story Writing', key: 'story' },
+];
 
 export default function SubjectRulesPage() {
   const [classes, setClasses] = useState<Class[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [rules, setRules] = useState<ChapterRangeRule[]>([]);
+  const [questionCategories, setQuestionCategories] = useState<QuestionCategory[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -69,30 +151,27 @@ export default function SubjectRulesPage() {
   // State for new rule form
   const [showNewRuleForm, setShowNewRuleForm] = useState(false);
   const [newRule, setNewRule] = useState<ChapterRangeForm>({
-    chapter_start: '',
-    chapter_end: '',
-    question_type: 'mcq',
-    rule_mode: 'total',
-    min_questions: '',
-    max_questions: '',
-    class_id: selectedClass || '' 
+    ...EMPTY_FORM,
+    class_id: selectedClass || '',
   });
   
   // State for editing existing rule
   const [editingRule, setEditingRule] = useState<ChapterRangeRule | null>(null);
   const [editForm, setEditForm] = useState<ChapterRangeForm>({
-    chapter_start: '',
-    chapter_end: '',
-    question_type: 'mcq',
-    rule_mode: 'total',
-    min_questions: '',
-    max_questions: '',
-    class_id: selectedClass || ''
+    ...EMPTY_FORM,
+    class_id: selectedClass || '',
   });
 
   // Fetch classes
   useEffect(() => {
     fetchClasses();
+  }, []);
+
+  // Fetch question categories once on mount — small table, doesn't need
+  // to be refetched per subject/class change. Filtered client-side by
+  // question_type (and optionally subject_hint/class_hint) wherever used.
+  useEffect(() => {
+    fetchQuestionCategories();
   }, []);
 
   // Fetch subjects when class changes
@@ -128,6 +207,19 @@ export default function SubjectRulesPage() {
     } catch (error: any) {
       console.error('Error fetching classes:', error);
       toast.error(`Failed to load classes: ${error.message}`);
+    }
+  };
+
+  const fetchQuestionCategories = async () => {
+    try {
+      const response = await fetch('/api/admin/lookups');
+      if (!response.ok) throw new Error('Failed to fetch question categories');
+      const data = await response.json();
+      setQuestionCategories(data.questionCategories || []);
+    } catch (error: any) {
+      console.error('Error fetching question categories:', error);
+      // Non-fatal — the category dropdown just shows "no categories"
+      // for every type if this fails, rest of the page still works.
     }
   };
 
@@ -220,6 +312,15 @@ export default function SubjectRulesPage() {
     }
   };
 
+  const isEnglishOrUrdu = useCallback((): 'english' | 'urdu' | null => {
+    const subject = subjects.find(s => s.id === selectedSubject);
+    if (!subject) return null;
+    const n = subject.name.toLowerCase();
+    if (n === 'english') return 'english';
+    if (n === 'urdu') return 'urdu';
+    return null;
+  }, [subjects, selectedSubject]);
+
   const getQuestionTypes = (): QuestionTypeConfig[] => {
     const subject = subjects.find(s => s.id === selectedSubject);
     if (!subject) return [];
@@ -227,36 +328,61 @@ export default function SubjectRulesPage() {
     const subjectName = subject.name.toLowerCase();
     
     const baseTypes: QuestionTypeConfig[] = [
-      { id: 'mcq', label: 'MCQ', key: 'mcq', defaultMin: 3, defaultMax: 5 },
-      { id: 'short', label: 'Short Answer', key: 'short', defaultMin: 2, defaultMax: 4 },
-      { id: 'long', label: 'Long Answer', key: 'long', defaultMin: 1, defaultMax: 2 },
+      ALL_QUESTION_TYPES.find(t => t.key === 'mcq')!,
+      ALL_QUESTION_TYPES.find(t => t.key === 'short')!,
+      ALL_QUESTION_TYPES.find(t => t.key === 'long')!,
     ];
 
     if (subjectName === 'english') {
       return [
         ...baseTypes,
-        { id: 'translate_urdu', label: 'Translate Urdu', key: 'translate_urdu' },
-        { id: 'translate_english', label: 'Translate English', key: 'translate_english' },
-        { id: 'idiom_phrases', label: 'Idiom/Phrases', key: 'idiom_phrases' },
-        { id: 'passage', label: 'Passage', key: 'passage' },
-        { id: 'directindirect', label: 'Direct/Indirect', key: 'directindirect' },
-        { id: 'activepassive', label: 'Active/Passive', key: 'activepassive' }
+        ...['translate_urdu', 'translate_english', 'idiom_phrases', 'passage',
+            'directInDirect', 'activePassive', 'summary', 'application',
+            'letter', 'punctuation', 'pair_of_words', 'essay', 'stanza_explanation','story']
+          .map(key => ALL_QUESTION_TYPES.find(t => t.key === key)!)
+          .filter(Boolean),
       ];
     } else if (subjectName === 'urdu') {
       return [
         ...baseTypes,
-        { id: 'poetry_explanation', label: 'Poetry Explanation', key: 'poetry_explanation' },
-        { id: 'prose_explanation', label: 'Prose Explanation', key: 'prose_explanation' },
-        { id: 'sentence_correction', label: 'Sentence Correction', key: 'sentence_correction' },
-        { id: 'sentence_completion', label: 'Sentence Completion', key: 'sentence_completion' },
-        { id: 'darkhwast_khat', label: 'Darkhwast Khat', key: 'darkhwast_khat' },
-        { id: 'kahani_makalma', label: 'Kahani Makalma', key: 'kahani_makalma' },
-        { id: 'nasarkhulasa_markzikhyal', label: 'Nasri Khulasa', key: 'nasarkhulasa_markzikhyal' }
+        ...['poetry_explanation', 'stanza_explanation', 'prose_explanation',
+            'sentence_correction', 'sentence_completion', 'punctuation',
+            'darkhwast_khat', 'kahani_makalma', 'mokalma', 'Nasarkhulasa',
+            'markziKhyal', 'gazal', 'application', 'letter', 'essay', 'passage','story']
+          .map(key => ALL_QUESTION_TYPES.find(t => t.key === key)!)
+          .filter(Boolean),
       ];
     }
     
     return baseTypes;
   };
+
+  // Categories matching the currently-selected question_type, narrowed by
+  // subject (english/urdu) when the category row carries a subject_hint.
+  // Mirrors the exact filtering logic QuestionForm.tsx already uses, so
+  // rule-creation and question-creation show the same category options
+  // for a given type+subject combination.
+  const getCategoriesForType = useCallback((questionType: string): QuestionCategory[] => {
+    const subjectKey = isEnglishOrUrdu();
+    return questionCategories
+      .filter(qc => qc.question_type === questionType && qc.is_active)
+      .filter(qc => !qc.subject_hint || qc.subject_hint === subjectKey)
+      .sort((a, b) => a.sort_order - b.sort_order);
+  }, [questionCategories, isEnglishOrUrdu]);
+
+  // Distinct group_key values already in use for this subject+class, so
+  // the admin can pick an EXISTING key from a dropdown instead of having
+  // to retype it character-for-character on every sibling rule (which is
+  // exactly the kind of mismatch that silently breaks grouping — a typo
+  // like 'q1_mcq ' vs 'q1_mcq' means the rules never merge).
+  const getExistingGroupKeys = useCallback((): string[] => {
+    const keys = new Set<string>();
+    rules.forEach(r => {
+      const key = (r as any).group_key;
+      if (key) keys.add(key);
+    });
+    return Array.from(keys).sort();
+  }, [rules]);
 
   const handleCreateRule = async () => {
     if (!selectedSubject) {
@@ -279,6 +405,8 @@ export default function SubjectRulesPage() {
     const end = parseInt(newRule.chapter_end);
     const min = parseInt(newRule.min_questions);
     const max = newRule.max_questions ? parseInt(newRule.max_questions) : null;
+    const attemptCount = newRule.attempt_count ? parseInt(newRule.attempt_count) : null;
+    const sortOrder = newRule.sort_order ? parseInt(newRule.sort_order) : 0;
 
     if (start > end) {
       toast.error('Start chapter must be less than or equal to end chapter');
@@ -287,6 +415,11 @@ export default function SubjectRulesPage() {
 
     if (max !== null && max < min) {
       toast.error('Maximum questions must be greater than or equal to minimum');
+      return;
+    }
+
+    if (attemptCount !== null && attemptCount > min) {
+      toast.error('Attempt count cannot exceed minimum questions');
       return;
     }
 
@@ -302,10 +435,17 @@ export default function SubjectRulesPage() {
           chapter_start: start,
           chapter_end: end,
           question_type: newRule.question_type,
+          question_category_id: newRule.question_category_id || null,
           rule_mode: newRule.rule_mode,
           min_questions: min,
           max_questions: max,
-         
+          sort_order: sortOrder,
+          q_label: newRule.q_label || null,
+          q_label_ur: newRule.q_label_ur || null, 
+          attempt_count: attemptCount,
+          group_key: newRule.group_key || null,
+          is_paired: newRule.is_paired,
+          is_alternative: newRule.is_alternative,
         })
       });
 
@@ -314,15 +454,7 @@ export default function SubjectRulesPage() {
       if (response.ok) {
         toast.success('Rule created successfully!');
         setShowNewRuleForm(false);
-        setNewRule({
-          chapter_start: '',
-          chapter_end: '',
-          question_type: 'mcq',
-          rule_mode: 'total',
-          min_questions: '',
-          max_questions: '',
-          class_id: selectedClass
-        });
+        setNewRule({ ...EMPTY_FORM, class_id: selectedClass });
         await fetchRules(selectedSubject);
       } else {
         throw new Error(result.error || 'Failed to create rule');
@@ -353,6 +485,8 @@ export default function SubjectRulesPage() {
     const end = parseInt(editForm.chapter_end);
     const min = parseInt(editForm.min_questions);
     const max = editForm.max_questions ? parseInt(editForm.max_questions) : null;
+    const attemptCount = editForm.attempt_count ? parseInt(editForm.attempt_count) : null;
+    const sortOrder = editForm.sort_order ? parseInt(editForm.sort_order) : 0;
 
     if (start > end) {
       toast.error('Start chapter must be less than or equal to end chapter');
@@ -361,6 +495,11 @@ export default function SubjectRulesPage() {
 
     if (max !== null && max < min) {
       toast.error('Maximum questions must be greater than or equal to minimum');
+      return;
+    }
+
+    if (attemptCount !== null && attemptCount > min) {
+      toast.error('Attempt count cannot exceed minimum questions');
       return;
     }
 
@@ -376,9 +515,17 @@ export default function SubjectRulesPage() {
           chapter_start: start,
           chapter_end: end,
           question_type: editForm.question_type,
+          question_category_id: editForm.question_category_id || null,
           rule_mode: editForm.rule_mode,
           min_questions: min,
-          max_questions: max
+          max_questions: max,
+          sort_order: sortOrder,
+          q_label: editForm.q_label || null,
+          q_label_ur: editForm.q_label_ur || null,
+          attempt_count: attemptCount,
+          group_key: editForm.group_key || null,
+          is_paired: editForm.is_paired,
+          is_alternative: editForm.is_alternative,
         })
       });
 
@@ -387,15 +534,7 @@ export default function SubjectRulesPage() {
       if (response.ok) {
         toast.success('Rule updated successfully!');
         setEditingRule(null);
-        setEditForm({
-          chapter_start: '',
-          chapter_end: '',
-          question_type: 'mcq',
-          rule_mode: 'total',
-          min_questions: '',
-          max_questions: '',
-          class_id: selectedClass
-        });
+        setEditForm({ ...EMPTY_FORM, class_id: selectedClass });
         await fetchRules(selectedSubject);
       } else {
         throw new Error(result.error || 'Failed to update rule');
@@ -439,12 +578,30 @@ export default function SubjectRulesPage() {
       chapter_start: rule.chapter_start.toString(),
       chapter_end: rule.chapter_end.toString(),
       question_type: rule.question_type,
+      question_category_id: (rule as any).question_category_id || '',
       rule_mode: rule.rule_mode,
       min_questions: rule.min_questions.toString(),
       max_questions: rule.max_questions?.toString() || '',
-       class_id: rule.class_id || selectedClass
+       class_id: rule.class_id || selectedClass,
+      sort_order: (rule as any).sort_order != null ? String((rule as any).sort_order) : '',
+      q_label: (rule as any).q_label || '',
+       q_label_ur: (rule as any).q_label_ur || '', 
+      attempt_count: (rule as any).attempt_count != null ? String((rule as any).attempt_count) : '',
+      group_key: (rule as any).group_key || '',
+      is_paired: Boolean((rule as any).is_paired),
+      is_alternative: Boolean((rule as any).is_alternative),
     });
   };
+
+  // Look up a rule's category label for display — rules fetched from
+  // /api/chapter-range-rules carry question_category_id (uuid) only, not
+  // a joined label, so we resolve it client-side against the
+  // questionCategories list already loaded on mount.
+  const getCategoryLabel = useCallback((categoryId?: string | null): string | null => {
+    if (!categoryId) return null;
+    const cat = questionCategories.find(qc => qc.id === categoryId);
+    return cat?.label_en || null;
+  }, [questionCategories]);
 
   const getFilteredRules = () => {
     let filtered = [...rules];
@@ -454,16 +611,25 @@ export default function SubjectRulesPage() {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(rule => {
         const questionType = getQuestionTypes().find(t => t.key === rule.question_type);
+        const categoryLabel = getCategoryLabel((rule as any).question_category_id) || '';
+        const groupKey = (rule as any).group_key || '';
         return (
           `chapters ${rule.chapter_start}-${rule.chapter_end}`.toLowerCase().includes(query) ||
           (questionType?.label.toLowerCase().includes(query)) ||
-          rule.question_type.toLowerCase().includes(query)
+          rule.question_type.toLowerCase().includes(query) ||
+          categoryLabel.toLowerCase().includes(query) ||
+          groupKey.toLowerCase().includes(query)
         );
       });
     }
     
-    // Sort by chapter range
+    // Sort by sort_order (this is now the actual paper-order field), then
+    // chapter range as a tiebreaker for rules that share sort_order=0
+    // (i.e. haven't been explicitly ordered yet).
     filtered.sort((a, b) => {
+      const aSort = (a as any).sort_order ?? 0;
+      const bSort = (b as any).sort_order ?? 0;
+      if (aSort !== bSort) return aSort - bSort;
       if (a.chapter_start !== b.chapter_start) {
         return a.chapter_start - b.chapter_start;
       }
@@ -505,8 +671,10 @@ export default function SubjectRulesPage() {
       
       const questionTypes = rulesInRange.map(rule => {
         const typeConfig = getQuestionTypes().find(t => t.key === rule.question_type);
+        const categoryLabel = getCategoryLabel((rule as any).question_category_id);
         return {
           type: typeConfig?.label || rule.question_type,
+          category: categoryLabel,
           min: rule.min_questions,
           max: rule.max_questions,
           mode: rule.rule_mode
@@ -523,6 +691,170 @@ export default function SubjectRulesPage() {
     });
     
     return summary.sort((a, b) => a.start - b.start);
+  };
+
+  // Shared form-fields block (chapter range / type / category / mode /
+  // questions) used by both modals. Pulled into a render function instead
+  // of a separate component so it can keep using the same closures
+  // (getQuestionTypes, getCategoriesForType, getExistingGroupKeys, etc.)
+  // without prop-drilling everything through.
+  const renderOrderingFields = (
+    form: ChapterRangeForm,
+    setForm: React.Dispatch<React.SetStateAction<ChapterRangeForm>>
+  ) => {
+    const existingGroupKeys = getExistingGroupKeys();
+    return (
+      <>
+        <div className="col-12">
+          <hr className="my-2" />
+          <div className="d-flex align-items-center mb-2">
+            <ArrowUpDown size={16} className="me-2 text-muted" />
+            <span className="fw-medium text-muted small text-uppercase">Paper Ordering & Grouping</span>
+          </div>
+        </div>
+
+        <div className="col-md-3">
+          <label className="form-label">
+            Sort Order <span className="text-muted small">(paper position)</span>
+          </label>
+          <input
+            type="number"
+            className="form-control"
+            value={form.sort_order}
+            onChange={(e) => setForm({ ...form, sort_order: e.target.value })}
+            disabled={loading}
+            placeholder="0"
+          />
+        </div>
+
+        <div className="col-md-9">
+          <label className="form-label">
+            {form.is_paired ? (
+              <>Attempt Note <span className="text-muted small">(shown once above the paired questions, e.g. "Note: Attempt any 2 questions in detail")</span></>
+            ) : (
+              <>Sub-Part Label <span className="text-muted small">(full instruction text shown on the paper, e.g. "Choose the correct Synonym from the options below")</span></>
+            )}
+          </label>
+          <textarea
+            className="form-control"
+            rows={2}
+            value={form.q_label}
+            onChange={(e) => setForm({ ...form, q_label: e.target.value })}
+            disabled={loading}
+            placeholder={form.is_paired ? 'e.g. Note: Attempt any 2 questions in detail' : 'e.g. Choose the correct Synonym from the options below'}
+          />
+        </div>
+
+        <div className="col-md-9 offset-md-3">  {/* aligns with the previous textarea */}
+          <label className="form-label">
+            Urdu Label <span className="text-muted small">(q_label_ur)</span>
+          </label>
+          <textarea
+            className="form-control"
+            rows={2}
+            value={form.q_label_ur}
+            onChange={(e) => setForm({ ...form, q_label_ur: e.target.value })}
+            disabled={loading}
+            placeholder="Urdu translation of the sub‑part / attempt note"
+          />
+        </div>
+
+        <div className="col-md-4">
+          <label className="form-label">
+            Attempt Count <span className="text-muted small">(optional)</span>
+          </label>
+          <input
+            type="number"
+            className="form-control"
+            min="0"
+            max={form.min_questions || undefined}
+            value={form.attempt_count}
+            onChange={(e) => setForm({ ...form, attempt_count: e.target.value })}
+            disabled={loading}
+            placeholder="Defaults to Minimum Questions"
+          />
+        </div>
+
+        <div className="col-md-8">
+          <label className="form-label d-flex align-items-center">
+            <Link2 size={14} className="me-1" />
+            Group Key <span className="text-muted small ms-1">(rules sharing this = ONE Q.No)</span>
+          </label>
+          <input
+            type="text"
+            className="form-control"
+            list="existing-group-keys"
+            value={form.group_key}
+            onChange={(e) => setForm({ ...form, group_key: e.target.value })}
+            disabled={loading}
+            placeholder="e.g. q1_mcq — pick an existing key or type a new one"
+          />
+          <datalist id="existing-group-keys">
+            {existingGroupKeys.map(key => <option key={key} value={key} />)}
+          </datalist>
+          {existingGroupKeys.length > 0 && (
+            <div className="form-text">
+              Existing keys for this subject/class: {existingGroupKeys.join(', ')}
+            </div>
+          )}
+        </div>
+
+        <div className="col-md-4 d-flex flex-column gap-2 justify-content-end">
+          <div className="form-check">
+            <input
+              type="checkbox"
+              className="form-check-input"
+              id={`is_paired-${form === newRule ? 'new' : 'edit'}`}
+              checked={form.is_paired}
+              onChange={(e) => setForm({ ...form, is_paired: e.target.checked })}
+              disabled={loading}
+            />
+            <label className="form-check-label small" htmlFor={`is_paired-${form === newRule ? 'new' : 'edit'}`}>
+              Pair into a/b sub-parts (long Qs)
+            </label>
+          </div>
+          <div className="form-check">
+            <input
+              type="checkbox"
+              className="form-check-input"
+              id={`is_alternative-${form === newRule ? 'new' : 'edit'}`}
+              checked={form.is_alternative}
+              onChange={(e) => setForm({ ...form, is_alternative: e.target.checked })}
+              disabled={loading}
+            />
+            <label className="form-check-label small" htmlFor={`is_alternative-${form === newRule ? 'new' : 'edit'}`}>
+              OR-choice within group (e.g. Summary OR Stanza)
+            </label>
+          </div>
+        </div>
+
+        {form.is_paired && (
+          <div className="col-12">
+            <div className="alert alert-secondary small mb-0">
+              <strong>Paired long questions:</strong> Minimum Questions ({form.min_questions || 'N'}) raw questions
+              will be fetched and split into pairs of 2, each becoming its OWN sequential Q.No with sub-parts (a)
+              and (b) — e.g. 6 questions → Q.5, Q.6, Q.7. Attempt Count ({form.attempt_count || 'all'}) is how many
+              of those Q.Nos the student must attempt (both (a) and (b) compulsory within whichever ones they
+              choose) — e.g. "attempt any 2 of these 3". {form.q_label && (
+                <>The note shown above the first pair will read: "<strong>{form.q_label}</strong>".</>
+              )}
+            </div>
+          </div>
+        )}
+
+        {form.group_key && (
+          <div className="col-12">
+            <div className="alert alert-secondary small mb-0">
+              {form.is_alternative ? (
+                <>This rule is an <strong>alternative option</strong> within group "<strong>{form.group_key}</strong>" — only the option with the lowest Sort Order in this group will actually appear on the paper.</>
+              ) : (
+                <>This rule will render as <strong>one sub-part{form.q_label ? ` labeled "${form.q_label}"` : ''}</strong> under a single Q.No, alongside every other rule sharing group key "<strong>{form.group_key}</strong>".</>
+              )}
+            </div>
+          </div>
+        )}
+      </>
+    );
   };
 
   return (
@@ -635,7 +967,7 @@ export default function SubjectRulesPage() {
                       <input
                         type="text"
                         className="form-control border-start-0"
-                        placeholder="Search by chapter range or question type..."
+                        placeholder="Search by chapter range, question type, category, or group key..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         disabled={loading}
@@ -737,13 +1069,31 @@ export default function SubjectRulesPage() {
                       <select
                         className="form-select"
                         value={newRule.question_type}
-                        onChange={(e) => setNewRule({...newRule, question_type: e.target.value})}
+                        onChange={(e) => setNewRule({...newRule, question_type: e.target.value, question_category_id: ''})}
                         disabled={loading}
                       >
                         {getQuestionTypes().map(type => (
                           <option key={type.id} value={type.key}>
                             {type.label}
                           </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label">
+                        Category <span className="text-muted small">(optional)</span>
+                      </label>
+                      <select
+                        className="form-select"
+                        value={newRule.question_category_id}
+                        onChange={(e) => setNewRule({...newRule, question_category_id: e.target.value})}
+                        disabled={loading || getCategoriesForType(newRule.question_type).length === 0}
+                      >
+                        <option value="">
+                          {getCategoriesForType(newRule.question_type).length === 0 ? 'No categories for this type' : 'Whole type (no category)'}
+                        </option>
+                        {getCategoriesForType(newRule.question_type).map(cat => (
+                          <option key={cat.id} value={cat.id}>{cat.label_en}</option>
                         ))}
                       </select>
                     </div>
@@ -788,8 +1138,15 @@ export default function SubjectRulesPage() {
                         {newRule.rule_mode === 'total' ? 
                           'Total Questions for Range: Select X questions from any chapters in the range' :
                           'Questions Per Chapter: Select X questions from EACH chapter in the range'}
+                        {newRule.question_category_id && (
+                          <div className="mt-1">
+                            This rule targets ONLY the <strong>{getCategoriesForType(newRule.question_type).find(c => c.id === newRule.question_category_id)?.label_en}</strong> subpart of {getQuestionTypes().find(t => t.key === newRule.question_type)?.label} — other categories of this type are unaffected.
+                          </div>
+                        )}
                       </div>
                     </div>
+
+                    {renderOrderingFields(newRule, setNewRule)}
                   </div>
                 </div>
                 <div className="modal-footer">
@@ -863,13 +1220,31 @@ export default function SubjectRulesPage() {
                       <select
                         className="form-select"
                         value={editForm.question_type}
-                        onChange={(e) => setEditForm({...editForm, question_type: e.target.value})}
+                        onChange={(e) => setEditForm({...editForm, question_type: e.target.value, question_category_id: ''})}
                         disabled={loading}
                       >
                         {getQuestionTypes().map(type => (
                           <option key={type.id} value={type.key}>
                             {type.label}
                           </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label">
+                        Category <span className="text-muted small">(optional)</span>
+                      </label>
+                      <select
+                        className="form-select"
+                        value={editForm.question_category_id}
+                        onChange={(e) => setEditForm({...editForm, question_category_id: e.target.value})}
+                        disabled={loading || getCategoriesForType(editForm.question_type).length === 0}
+                      >
+                        <option value="">
+                          {getCategoriesForType(editForm.question_type).length === 0 ? 'No categories for this type' : 'Whole type (no category)'}
+                        </option>
+                        {getCategoriesForType(editForm.question_type).map(cat => (
+                          <option key={cat.id} value={cat.id}>{cat.label_en}</option>
                         ))}
                       </select>
                     </div>
@@ -914,8 +1289,15 @@ export default function SubjectRulesPage() {
                         {editForm.rule_mode === 'total' ? 
                           'Total Questions for Range: Select X questions from any chapters in the range' :
                           'Questions Per Chapter: Select X questions from EACH chapter in the range'}
+                        {editForm.question_category_id && (
+                          <div className="mt-1">
+                            This rule targets ONLY the <strong>{getCategoriesForType(editForm.question_type).find(c => c.id === editForm.question_category_id)?.label_en}</strong> subpart of {getQuestionTypes().find(t => t.key === editForm.question_type)?.label} — other categories of this type are unaffected.
+                          </div>
+                        )}
                       </div>
                     </div>
+
+                    {renderOrderingFields(editForm, setEditForm)}
                   </div>
                 </div>
                 <div className="modal-footer">
@@ -977,6 +1359,11 @@ export default function SubjectRulesPage() {
                                 Default: {type.defaultMin}-{type.defaultMax || '∞'}
                               </span>
                             )}
+                            {getCategoriesForType(type.key).length > 0 && (
+                              <span className="badge bg-info-subtle text-info">
+                                {getCategoriesForType(type.key).length} categories
+                              </span>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -994,26 +1381,38 @@ export default function SubjectRulesPage() {
                         <table className="table table-hover mb-0">
                           <thead className="table-light">
                             <tr>
-                              <th className="ps-4" style={{ width: '150px' }}>
+                              <th className="text-center" style={{ width: '70px' }}>
+                                <div className="d-flex align-items-center justify-content-center">
+                                  <ArrowUpDown size={14} className="me-1" />
+                                  Order
+                                </div>
+                              </th>
+                              <th className="ps-4" style={{ width: '140px' }}>
                                 <div className="d-flex align-items-center">
                                   <Layers size={16} className="me-2" />
                                   Chapter Range
                                 </div>
                               </th>
-                              <th className="text-center" style={{ width: '150px' }}>
+                              <th className="text-center" style={{ width: '130px' }}>
                                 <div className="d-flex align-items-center justify-content-center">
                                   <Target size={16} className="me-2" />
                                   Question Type
                                 </div>
                               </th>
-                              <th className="text-center" style={{ width: '120px' }}>
-                                Rule Mode
+                              <th className="text-center" style={{ width: '150px' }}>
+                                Category
                               </th>
                               <th className="text-center" style={{ width: '150px' }}>
-                                Questions
+                                <div className="d-flex align-items-center justify-content-center">
+                                  <Link2 size={14} className="me-1" />
+                                  Group / Label
+                                </div>
                               </th>
-                              <th className="text-center" style={{ width: '200px' }}>
-                                Description
+                              <th className="text-center" style={{ width: '110px' }}>
+                                Rule Mode
+                              </th>
+                              <th className="text-center" style={{ width: '130px' }}>
+                                Questions
                               </th>
                               <th className="text-center pe-4" style={{ width: '150px' }}>
                                 Actions
@@ -1023,11 +1422,19 @@ export default function SubjectRulesPage() {
                           <tbody>
                             {getFilteredRules().map(rule => {
                               const typeConfig = getQuestionTypes().find(t => t.key === rule.question_type);
+                              const categoryLabel = getCategoryLabel((rule as any).question_category_id);
                               const isTotalMode = rule.rule_mode === 'total';
-                              const chapterCount = rule.chapter_end - rule.chapter_start + 1;
+                              const groupKey = (rule as any).group_key;
+                              const qLabel = (rule as any).q_label;
+                              const isPaired = (rule as any).is_paired;
+                              const isAlternative = (rule as any).is_alternative;
+                              const sortOrder = (rule as any).sort_order ?? 0;
                               
                               return (
                                 <tr key={rule.id}>
+                                  <td className="text-center align-middle">
+                                    <span className="badge bg-light text-dark border">{sortOrder}</span>
+                                  </td>
                                   <td className="ps-4 align-middle">
                                     <div className="d-flex align-items-center">
                                       <span className="badge bg-primary rounded-pill px-3 py-2">
@@ -1039,23 +1446,47 @@ export default function SubjectRulesPage() {
                                     <div className="fw-medium">{typeConfig?.label || rule.question_type}</div>
                                   </td>
                                   <td className="text-center align-middle">
+                                    {categoryLabel ? (
+                                      <span className="badge bg-info-subtle text-info">{categoryLabel}</span>
+                                    ) : (
+                                      <span className="text-muted small">—</span>
+                                    )}
+                                  </td>
+                                  <td className="text-center align-middle">
+                                    {groupKey ? (
+                                      <div className="d-flex flex-column align-items-center gap-1">
+                                        <span className="badge bg-secondary">
+                                          {qLabel ? `(${qLabel}) ` : ''}{groupKey}
+                                        </span>
+                                         {qLabel && (rule as any).q_label_ur && (
+                                          <small className="text-muted">({(rule as any).q_label_ur})</small>
+                                        )}
+                                        {isAlternative && (
+                                          <span className="badge bg-warning-subtle text-warning small">OR-choice</span>
+                                        )}
+                                      </div>
+
+                                    ) : isPaired ? (
+                                      <span className="badge bg-purple-subtle text-purple small" style={{ backgroundColor: '#f3e8ff', color: '#7e22ce' }}>
+                                        Paired a/b
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted small">— standalone —</span>
+                                    )}
+                                  </td>
+                                  <td className="text-center align-middle">
                                     <span className={`badge ${isTotalMode ? 'bg-info' : 'bg-warning'}`}>
-                                      {isTotalMode ? 'Total for Range' : 'Per Chapter'}
+                                      {isTotalMode ? 'Total' : 'Per Ch.'}
                                     </span>
                                   </td>
                                   <td className="text-center align-middle">
                                     <div className="fw-bold">
                                       {rule.min_questions}
-                                      {rule.max_questions ? ` - ${rule.max_questions}` : ' +'}
+                                      {rule.max_questions ? ` - ${rule.max_questions}` : ''}
                                     </div>
-                                  </td>
-                                  <td className="text-center align-middle">
-                                    <div className="text-muted small">
-                                      {isTotalMode ? 
-                                        `Select ${rule.min_questions}${rule.max_questions ? `-${rule.max_questions}` : ''} questions from ${chapterCount} chapters` :
-                                        `Select ${rule.min_questions}${rule.max_questions ? `-${rule.max_questions}` : ''} questions from EACH of ${chapterCount} chapters`
-                                      }
-                                    </div>
+                                    {(rule as any).attempt_count != null && (
+                                      <div className="text-muted small">attempt {(rule as any).attempt_count}</div>
+                                    )}
                                   </td>
                                   <td className="pe-4 align-middle">
                                     <div className="d-flex justify-content-center gap-2">
@@ -1140,7 +1571,12 @@ export default function SubjectRulesPage() {
                                     {summary.questionTypes.map((type, index) => (
                                       <div key={index} className="list-group-item px-0 py-2">
                                         <div className="d-flex justify-content-between align-items-center">
-                                          <span className="fw-medium">{type.type}</span>
+                                          <span className="fw-medium">
+                                            {type.type}
+                                            {type.category && (
+                                              <span className="badge bg-info-subtle text-info ms-2">{type.category}</span>
+                                            )}
+                                          </span>
                                           <div className="text-end">
                                             <div className="fw-bold">
                                               {type.min}
@@ -1206,6 +1642,18 @@ export default function SubjectRulesPage() {
                             {rules.filter(r => r.rule_mode === 'per_chapter').length}
                           </div>
                         </div>
+                        <div className="list-group-item border-0 px-0 py-2 d-flex justify-content-between align-items-center">
+                          <span className="fw-medium">Category-Targeted</span>
+                          <div className="fw-bold">
+                            {rules.filter(r => (r as any).question_category_id).length}
+                          </div>
+                        </div>
+                        <div className="list-group-item border-0 px-0 py-2 d-flex justify-content-between align-items-center">
+                          <span className="fw-medium">Grouped (shared Q.No)</span>
+                          <div className="fw-bold">
+                            {rules.filter(r => (r as any).group_key).length}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1226,6 +1674,14 @@ export default function SubjectRulesPage() {
                         <li className="mb-3 d-flex">
                           <Check size={16} className="text-success me-2 mt-1 flex-shrink-0" />
                           <span><strong>Per Chapter Mode:</strong> Select questions from EACH chapter in the range</span>
+                        </li>
+                        <li className="mb-3 d-flex">
+                          <Check size={16} className="text-success me-2 mt-1 flex-shrink-0" />
+                          <span><strong>Category:</strong> Leave as "Whole type" unless you need a sub-part rule, like "10 Synonyms" within MCQs</span>
+                        </li>
+                        <li className="mb-3 d-flex">
+                          <Check size={16} className="text-success me-2 mt-1 flex-shrink-0" />
+                          <span><strong>Group Key:</strong> Give 2+ rules the SAME group key to merge them under one Q.No with separate sub-labels (A/B/C) — e.g. 3 MCQ rules sharing "q1_mcq"</span>
                         </li>
                         <li className="d-flex">
                           <Check size={16} className="text-success me-2 mt-1 flex-shrink-0" />

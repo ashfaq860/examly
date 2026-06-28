@@ -1,14 +1,57 @@
 // services/boardPatternService.ts
 import { BoardPatternDetails, AdditionalQuestionType } from '@/types/paper-builder';
+import { Question } from '@/types/types';
+
+/**
+ * A "long question pair" — two plain `long` questions grouped together as
+ * ONE attemptable unit with sub-labels a/b. No schema changes needed on
+ * `questions`: pairing is purely structural, done here in JS after fetch.
+ *
+ * Example: Physics Q.1 long pattern = "3 long questions, each split into
+ * sub-parts (a) and (b), attempt 2 of the 3, each sub-part worth 4 marks."
+ * Fetch 6 plain long questions -> pairLongQuestions() turns them into 3
+ * groups of 2 (sub-labeled a/b) -> paper attempts 2 of those 3 groups.
+ */
+export interface LongQuestionGroup {
+  groupIndex: number; // 0-based position among the long-question groups
+  marksEach: number;  // marks per sub-part (a or b individually)
+  parts: { label: string; question: Question }[]; // [{label:'a',...},{label:'b',...}]
+}
 
 export class BoardPatternService {
-static getQuestionDetails(subjectName: string, className: string, currentSubject: any): BoardPatternDetails {
+  /**
+   * Pairs a flat list of `long` questions into groups of `partsPerGroup`
+   * (default 2, for a/b). Any remainder that doesn't fill a full group is
+   * dropped — a partial pair (just "a", no "b") isn't a valid attemptable
+   * unit and would confuse students more than help them.
+   */
+  static pairLongQuestions(
+    questions: Question[],
+    partsPerGroup: number = 2,
+    marksPerPart: number = 4
+  ): LongQuestionGroup[] {
+    const labels = ['a', 'b', 'c', 'd', 'e']; // supports >2 parts if ever needed
+    const groups: LongQuestionGroup[] = [];
+
+    for (let i = 0; i + partsPerGroup <= questions.length; i += partsPerGroup) {
+      const slice = questions.slice(i, i + partsPerGroup);
+      groups.push({
+        groupIndex: groups.length,
+        marksEach: marksPerPart,
+        parts: slice.map((q, idx) => ({ label: labels[idx] || String(idx + 1), question: q })),
+      });
+    }
+
+    return groups;
+  }
+
+  static getQuestionDetails(subjectName: string, className: string, currentSubject: any): BoardPatternDetails {
     const name = subjectName.toLowerCase();
-    
+
     const baseDetails: BoardPatternDetails = {
         mcq: {
-            count: name === 'english' ? 19 : name === 'urdu' ? 15 : name.toLowerCase().includes('computer') ? 10 : 12,
-            attempt: name === 'english' ? 19 : name === 'urdu' ? 15 : name.toLowerCase().includes('computer') ? 10 : 12,
+            count: name === 'english' ? className === '11' ? 20 : 19 : name === 'urdu' ? 15 : name.toLowerCase().includes('computer') ? 10 : 12,
+            attempt: name === 'english' ? className === '11' ? 20 : 19 : name === 'urdu' ? 15 : name.toLowerCase().includes('computer') ? 10 : 12,
             marks: 1,
             total: 0 // Calculated below
         },
@@ -43,7 +86,7 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
     this.addSubjectSpecificTypes(baseDetails, name, className, currentSubject);
 
     return baseDetails;
-}
+  }
 
   private static addSubjectSpecificTypes(
     details: BoardPatternDetails,
@@ -56,7 +99,7 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
     } else if (subjectName === 'english') {
       this.addEnglishTypes(details, className);
     }
-    
+
     // Add subject-specific rules from currentSubject if available
     if (currentSubject?.board_rules) {
       this.applyBoardRules(details, currentSubject.board_rules);
@@ -171,7 +214,7 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
       marks: 2,
       total: 10
     });
-    
+
     // 2. translate_urdu
     if (className !== '10') {
       details.additionalTypes.push({
@@ -192,7 +235,7 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
         total: 8
       });
     }
-    
+
     // 3. summary
     details.additionalTypes.push({
       name: 'summary',
@@ -202,7 +245,7 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
       marks: 5,
       total: 5
     });
-    
+
     // 4. idiom_phrases
     details.additionalTypes.push({
       name: 'idiom_phrases',
@@ -212,17 +255,17 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
       marks: 1,
       total: 5
     });
-    
+
     // 5. long
     details.additionalTypes.push({
       name: 'long',
       label: 'Long Questions',
       count: 2,
       attempt: 1,
-      marks: 8,
-      total: 8
+      marks: 9,
+      total: 9
     });
-    
+
     // 6. passage (class 9 only)
     if (className === '9') {
       details.additionalTypes.push({
@@ -234,7 +277,7 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
         total: 10
       });
     }
-    
+
     // 7. translate_english
     if (className === '9') {
       details.additionalTypes.push({
@@ -255,7 +298,7 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
         total: 5
       });
     }
-    
+
     // 8. activePassive or directInDirect
     if (className === '9') {
       details.additionalTypes.push({
@@ -278,13 +321,13 @@ static getQuestionDetails(subjectName: string, className: string, currentSubject
     }
   }
 
-private static applyBoardRules(details: BoardPatternDetails, rules: any[]) {
+  private static applyBoardRules(details: BoardPatternDetails, rules: any[]) {
     // Reset base counts to 0 before summing rules from database
     const typeTotals: Record<string, number> = { mcq: 0, short: 0, long: 0 };
 
     rules.forEach(rule => {
         const typeKey = rule.question_type.toLowerCase();
-        
+
         // Sum up counts for standard types
         if (typeTotals.hasOwnProperty(typeKey)) {
             // Use min_questions or max_questions depending on your logic preference
@@ -307,7 +350,7 @@ private static applyBoardRules(details: BoardPatternDetails, rules: any[]) {
     if (typeTotals.short > 0) {
         details.short.count = typeTotals.short;
         // This is crucial: Short questions in Science/Computer are 2 marks each
-        details.short.total = details.short.count * 2; 
+        details.short.total = details.short.count * 2;
     }
     if (typeTotals.long > 0) {
         details.long.count = typeTotals.long;
@@ -317,7 +360,7 @@ private static applyBoardRules(details: BoardPatternDetails, rules: any[]) {
     // Final global total calculation
     details.totalMarks = details.mcq.total + details.short.total + details.long.total +
         details.additionalTypes.reduce((sum, type) => sum + type.total, 0);
-}
+  }
 
   static async fetchBoardRules(subjectId: string, classId: string) {
     try {

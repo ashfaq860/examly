@@ -1,3 +1,4 @@
+// dashboard/generate-paper/components/SectionHeader.tsx
 'use client';
 
 import React from 'react';
@@ -15,6 +16,9 @@ interface SectionHeaderProps {
   paperLanguage: 'english' | 'urdu' | 'bilingual';
   customEnHeader?: string;
   customUrHeader?: string;
+  // When true: show plain totalMarks only (e.g. "15"), not "(1 x 15 = 15)".
+  // Used for single-paragraph translate sections and any other 1-item section.
+  singleItemMarksOnly?: boolean;
   onHeaderChange: (sectionId: string, field: 'en' | 'ur', value: string) => void;
   isEditMode: boolean;
 }
@@ -33,30 +37,26 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
   paperLanguage,
   customEnHeader,
   customUrHeader,
+  singleItemMarksOnly = false,
   onHeaderChange,
   isEditMode,
 }) => {
   const isPartial = attemptCount < totalQuestions;
   const qNo = sectionIndex + 1;
   const marksPerQuestion = totalMarks / (attemptCount || 1);
-  
 
-  // Determine if the question number prefix (e.g., "5.") should be hidden
-  // This satisfies the requirement: long question section shouldn't have question number
- // const showQuestionNumber = sectionType !== 'long';
-// 1. Logic to hide Question Number
-// Only show if sectionIndex is NOT -1
-const showQuestionNumber = sectionIndex >= 0 && sectionType !== 'long';
+  const showQuestionNumber = sectionIndex >= 0 && sectionType !== 'long';
+  const showMarks = totalMarks > 0;
 
-// 2. Logic to hide Marks box
-// Only show if totalMarks is greater than 0
-const showMarks = totalMarks > 0;
-  // Helper to convert numbers to Urdu/Arabic digits if needed (placeholder for logic)
   const toUrduDigits = (num: number | string) => num;
 
-  /**
-   * Default Instructions mapped to DB schema question_type constraints
-   */
+  // ── Marks display string ──
+  // singleItemMarksOnly → plain number, e.g. "15"
+  // otherwise          → calculation, e.g. "(1 x 15 = 15)"
+  const marksDisplay = singleItemMarksOnly
+    ? `${totalMarks}`
+    : `(${attemptCount} x ${marksPerQuestion} = ${totalMarks})`;
+
   const defaultInstructions: Record<string, { en: string; ur: string }> = {
     mcq: {
       en: `Choose the correct option ${isPartial ? attemptCount : ''}.`,
@@ -96,7 +96,7 @@ const showMarks = totalMarks > 0;
     },
     prose_explanation: {
       en: `Explain ${isPartial ? 'any ' + attemptCount : 'the following'} passage with reference to context.`,
-      ur: ` ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} نثری پاروں کی تشریح کیجئے۔سبق کا عنوان،مصنف کا نام اور خط کشیدہ الفاظ کے معانی بھی لکھیئے۔`,
+      ur: `${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} نثری پاروں کی تشریح کیجئے۔سبق کا عنوان،مصنف کا نام اور خط کشیدہ الفاظ کے معانی بھی لکھیئے۔`,
     },
     gazal: {
       en: `Explain ${isPartial ? attemptCount + ' verses' : 'the following verses'} of the gazal with reference to context.`,
@@ -108,23 +108,23 @@ const showMarks = totalMarks > 0;
     },
     sentence_correction: {
       en: `Correct ${isPartial ? attemptCount : 'the following'} sentences.`,
-      ur: ` ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} جملوں کی درستگی کریں۔`,
+      ur: `${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} جملوں کی درستگی کریں۔`,
     },
     sentence_completion: {
       en: `Complete ${isPartial ? attemptCount : 'the following'} sentences.`,
-      ur: ` ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} جملوں کی تکمیل کریں۔`,
+      ur: `${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} جملوں کی تکمیل کریں۔`,
     },
     darkhwast_khat: {
       en: `Write ${isPartial ? 'either ' + attemptCount : 'the following'} Application or Letter.`,
-      ur: `  ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} درخواست یا خط تحریر کریں۔`,
+      ur: `${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} درخواست یا خط تحریر کریں۔`,
     },
     kahani_makalma: {
       en: `Write ${isPartial ? 'any ' + attemptCount : 'the following'} Story or Dialogue.`,
-      ur: ` ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} کہانی یا مکالمہ تحریر کریں۔`,
+      ur: `${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} کہانی یا مکالمہ تحریر کریں۔`,
     },
     Nasarkhulasa_markziKhyal: {
       en: `Write the Summary or Central Idea of ${isPartial ? attemptCount : 'the'} lesson.`,
-      ur: ` ${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} سبق کا خلاصہ یا مرکزی خیال تحریر کریں۔`,
+      ur: `${isPartial ? 'کوئی سے ' + toUrduDigits(attemptCount) : 'درج ذیل'} سبق کا خلاصہ یا مرکزی خیال تحریر کریں۔`,
     },
   };
 
@@ -136,9 +136,9 @@ const showMarks = totalMarks > 0;
   const currentEn = customEnHeader !== undefined ? customEnHeader : defaults.en;
   const currentUr = customUrHeader !== undefined ? customUrHeader : defaults.ur;
 
-  const isUrduOnly = paperLanguage === 'urdu';
+  const isUrduOnly    = paperLanguage === 'urdu';
   const isEnglishOnly = paperLanguage === 'english';
-  const isBilingual = paperLanguage === 'bilingual';
+  const isBilingual   = paperLanguage === 'bilingual';
 
   return (
     <div
@@ -162,7 +162,7 @@ const showMarks = totalMarks > 0;
                 className="fw-bold text-nowrap"
                 style={{ fontSize: `${headingFontSize}px`, fontFamily: headingFontFamily }}
               >
-               Q.{qNo}.
+                Q.{qNo}.
               </span>
             )}
             <div className="d-flex align-items-baseline gap-2" style={{ flex: 1 }}>
@@ -182,13 +182,13 @@ const showMarks = totalMarks > 0;
                 </span>
               )}
 
-              {/* Marks for English Only */}
+              {/* Marks — English only */}
               {isEnglishOnly && showMarks && (
                 <span
                   className="fw-bold text-nowrap ms-2"
                   style={{ fontSize: `${Math.max(headingFontSize - 2, 10)}px` }}
                 >
-                  ({attemptCount} x {marksPerQuestion} = {totalMarks})
+                  {marksDisplay}
                 </span>
               )}
             </div>
@@ -196,7 +196,7 @@ const showMarks = totalMarks > 0;
         </div>
       )}
 
-      {/* 2. Marks Column (Bilingual Only) */}
+      {/* 2. Marks Column — Bilingual centre */}
       {isBilingual && showMarks && (
         <div
           className="px-2 fw-bold text-nowrap text-center"
@@ -205,7 +205,7 @@ const showMarks = totalMarks > 0;
             minWidth: '120px',
           }}
         >
-          ({attemptCount} x {marksPerQuestion} = {totalMarks})
+          {marksDisplay}
         </div>
       )}
 
@@ -220,11 +220,19 @@ const showMarks = totalMarks > 0;
             textAlign: 'right',
           }}
         >
-          <div className="d-flex align-items-baseline gap-2 justify-content-start">
+          <div
+            className="d-flex align-items-baseline gap-2"
+            style={{ direction: 'rtl', justifyContent: 'flex-start' }}
+          >
             {showQuestionNumber && (
               <span
                 className="fw-bold text-nowrap"
-                style={{ fontSize: `${headingFontSize + 2}px`, fontFamily: URDU_FONT }}
+                style={{
+                  fontSize: `${headingFontSize + 2}px`,
+                  fontFamily: URDU_FONT,
+                  direction: 'ltr',
+                  unicodeBidi: 'embed',
+                }}
               >
                 {qNo}.Q
               </span>
@@ -239,6 +247,8 @@ const showMarks = totalMarks > 0;
                     fontSize: `${headingFontSize + 4}px`,
                     fontFamily: URDU_FONT,
                     lineHeight: '1.2',
+                    direction: 'rtl',
+                    unicodeBidi: 'embed',
                   }}
                 />
               ) : (
@@ -248,13 +258,16 @@ const showMarks = totalMarks > 0;
                     fontSize: `${headingFontSize + 4}px`,
                     fontFamily: URDU_FONT,
                     lineHeight: '1.2',
+                    direction: 'rtl',
+                    unicodeBidi: 'embed',
+                    display: 'block',
                   }}
                 >
                   {currentUr}
                 </span>
               )}
 
-              {/* Marks for Urdu Only */}
+              {/* Marks — Urdu only */}
               {isUrduOnly && showMarks && (
                 <span
                   className="fw-bold text-nowrap me-2"
@@ -262,9 +275,10 @@ const showMarks = totalMarks > 0;
                     fontSize: `${Math.max(headingFontSize - 2, 10)}px`,
                     fontFamily: 'sans-serif',
                     direction: 'ltr',
+                    unicodeBidi: 'embed',
                   }}
                 >
-                  ({attemptCount} x {marksPerQuestion} = {totalMarks})
+                  {marksDisplay}
                 </span>
               )}
             </div>

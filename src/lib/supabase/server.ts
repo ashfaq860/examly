@@ -1,11 +1,11 @@
 // src/lib/supabase/server.ts
 import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
 /**
  * Server-side Supabase client using @supabase/ssr.
- * Use in Server Components and Route Handlers.
- * Cookie format matches createBrowserClient — fixes PKCE verifier issues.
+ * Standard user client that honors RLS constraints via cookie forwarding.
  */
 export const createSupabaseServerClient = async () => {
   const cookieStore = await cookies();
@@ -27,6 +27,23 @@ export const createSupabaseServerClient = async () => {
             // Called from a Server Component — cookies are read-only, ignore
           }
         },
+      },
+    }
+  );
+};
+
+/**
+ * Admin-level Supabase client using the Service Role Key.
+ * Bypasses Row-Level Security entirely. Use ONLY on secure server contexts.
+ */
+export const createSupabaseAdminClient = async () => {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!, // Ensure this is defined in your .env.local file
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
       },
     }
   );

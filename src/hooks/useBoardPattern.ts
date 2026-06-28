@@ -1,3 +1,4 @@
+//src/hooks/useBoardPattern.ts
 'use client';
 import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
