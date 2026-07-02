@@ -5,68 +5,47 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
-  LayoutDashboard,
-  FilePlus,
-  Archive,
-  Gem,
-  UserCircle,
-  Settings,
-  Sun,
-  Moon,
-  GraduationCap,
-  Zap,
-  X,
-  LogOut,
-  ChevronRight,
+  LayoutDashboard, FilePlus, Archive, Gem, UserCircle,
+  Settings, Sun, Moon, GraduationCap, Zap, X, LogOut, ChevronRight,
 } from "lucide-react";
 import Header from "@/components/academy/Header";
 import { useUser } from "@/app/context/userContext";
 import Footer from "@/components/Footer";
 import ReferralSection from "@/components/ReferralSection";
+import BreadcrumbAuto from "@/components/BreadcrumbAuto";
 
-// ✅ Supabase client created ONCE at module level — never recreated
 const supabase = createSupabaseBrowserClient();
-
-// ✅ User session cached at module level — persists across remounts
 let cachedUser: any = null;
 
 export default function AcademyLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // ✅ Initialize from cache — no flash of empty username
   const [user, setUser] = useState<any>(cachedUser);
   const { trialStatus, isLoading } = useUser();
-
-  // ✅ Only fetch session once — if we already have it, skip entirely
   const hasFetchedUser = useRef(false);
 
   useEffect(() => {
-    if (cachedUser || hasFetchedUser.current) return; // already have user, skip
+    if (cachedUser || hasFetchedUser.current) return;
     hasFetchedUser.current = true;
-
     const loadUser = async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session?.user) {
-        cachedUser = data.session.user; // store in module-level cache
+        cachedUser = data.session.user;
         setUser(data.session.user);
       }
     };
     loadUser();
-
-    // ✅ Listen for auth changes (logout/login) — update cache accordingly
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       cachedUser = session?.user ?? null;
       setUser(cachedUser);
     });
-
     return () => subscription.unsubscribe();
-  }, []); // ← empty deps: runs once ever, not on every navigation
+  }, []);
 
   const handleLogout = async () => {
-    cachedUser = null; // clear cache on logout
+    cachedUser = null;
     hasFetchedUser.current = false;
     await supabase.auth.signOut();
     router.push("/auth/login");
@@ -84,7 +63,6 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
   const isActive = (path: string) =>
     path === "/dashboard" ? pathname === "/dashboard" : pathname?.startsWith(path);
 
-  // ✅ Read theme from localStorage once on mount only
   useEffect(() => {
     const saved = localStorage.getItem("theme");
     if (saved === "dark") setDarkMode(true);
@@ -95,31 +73,52 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
     localStorage.setItem("theme", darkMode ? "dark" : "light");
   }, [darkMode]);
 
-  // Close sidebar on route change (mobile)
-  useEffect(() => {
-    setSidebarOpen(false);
-  }, [pathname]);
+  useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
-  const renderTrialStatus = () => {
-    if (isLoading) return <div className="spinner-border spinner-border-sm text-primary" />;
+  const PlanStatus = () => {
+    if (isLoading) return (
+      <div className="p-3 mb-3" style={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="spinner-border spinner-border-sm text-primary" />
+      </div>
+    );
+
     return (
-      <div className={`p-3 rounded-xl border transition-all duration-300 mb-3 ${
-        darkMode ? "bg-slate-900/50 border-slate-800" : "bg-blue-50/50 border-blue-100"
-      }`}>
-        <div className="d-flex align-items-center mb-2">
-          <div className="bg-primary rounded-lg p-2 me-3 d-flex align-items-center justify-content-center shadow-sm">
-            <Zap size={14} className="text-white fill-white" />
+      <div
+        className="mb-3 p-3"
+        style={{
+          background: darkMode ? 'rgba(30,41,59,0.8)' : 'linear-gradient(135deg, #eff6ff 0%, #f0fdfa 100%)',
+          border: `1px solid ${darkMode ? 'rgba(255,255,255,0.07)' : 'var(--border-subtle)'}`,
+          borderRadius: 'var(--radius-lg)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div
+            style={{
+              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+              background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(7,62,140,0.25)',
+            }}
+          >
+            <Zap size={14} color="#fff" fill="#fff" />
           </div>
           <div>
-            <p className="mb-0 fw-bold small" style={{ fontSize: "0.75rem" }}>PLAN STATUS</p>
-            <p className={`mb-0 fw-semibold ${darkMode ? "text-slate-300" : "text-primary"}`} style={{ fontSize: "0.85rem" }}>
+            <p style={{ margin: 0, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: darkMode ? '#94a3b8' : '#64748b' }}>
+              Current Plan
+            </p>
+            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: darkMode ? '#e2e8f0' : 'var(--brand-primary)' }}>
               {trialStatus?.subscriptionName || "Free Trial"}
             </p>
           </div>
         </div>
         <Link
           href="/dashboard/packages"
-          className="btn btn-primary btn-sm w-100 rounded-3 fw-semibold py-2 transition-all hover-scale"
+          style={{
+            display: 'block', textAlign: 'center', padding: '0.45rem 0.75rem',
+            background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+            color: '#fff', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '0.8rem',
+            textDecoration: 'none', transition: 'opacity 0.2s, transform 0.2s',
+          }}
         >
           Upgrade Plan
         </Link>
@@ -127,58 +126,179 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
     );
   };
 
-  const UserProfileSection = () => (
-    <div className={`mt-2 pt-3 border-top ${darkMode ? "border-slate-800" : "border-gray-100"}`}>
-      <div className={`group d-flex align-items-center p-2 rounded-4 mb-2 transition-all cursor-pointer ${
-        darkMode ? "hover:bg-slate-900" : "hover:bg-gray-50"
-      }`}>
-        <div className="position-relative">
-          <div className="rounded-circle p-1 border-2 border-primary border-opacity-25">
-            <div className="bg-primary bg-opacity-10 rounded-circle p-2">
-              <UserCircle size={22} className="text-primary" />
-            </div>
-          </div>
-          <span className="position-absolute bottom-0 end-0 p-1 bg-success border border-light rounded-circle" />
+  const UserProfile = () => (
+    <div style={{ borderTop: `1px solid ${darkMode ? 'rgba(255,255,255,0.07)' : 'var(--border-subtle)'}`, paddingTop: '0.75rem', marginTop: '0.25rem' }}>
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '0.5rem 0.6rem',
+          borderRadius: 'var(--radius-md)', marginBottom: 4,
+          background: darkMode ? 'rgba(255,255,255,0.03)' : 'transparent',
+        }}
+      >
+        <div
+          style={{
+            width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+            background: 'linear-gradient(135deg, var(--brand-primary-50) 0%, var(--brand-accent-50) 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: '2px solid var(--border-subtle)',
+          }}
+        >
+          <UserCircle size={18} style={{ color: 'var(--brand-primary)' }} />
         </div>
-        <div className="ms-3 overflow-hidden flex-grow-1">
-          <p className="mb-0 fw-bold small text-truncate leading-tight">
+        <div style={{ overflow: 'hidden', flex: 1 }}>
+          <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: darkMode ? '#e2e8f0' : 'var(--text-main)' }}>
             {user?.user_metadata?.full_name || "User Account"}
           </p>
-          <p className="mb-0 text-muted extra-small text-truncate">
+          <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {user?.email || "Guest"}
           </p>
         </div>
-        <ChevronRight size={14} className="text-muted opacity-0 group-hover:opacity-100 transition-all" />
       </div>
 
       <button
         onClick={handleLogout}
-        className={`btn btn-link text-decoration-none w-100 d-flex align-items-center gap-3 px-3 py-2 rounded-3 text-danger transition-all border-0 ${
-          darkMode ? "hover:bg-red-950/30" : "hover:bg-danger-soft"
-        }`}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+          padding: '0.5rem 0.75rem', border: 'none', borderRadius: 'var(--radius-md)',
+          background: 'transparent', color: '#ef4444', cursor: 'pointer', fontWeight: 600,
+          fontSize: '0.82rem', transition: 'background 0.15s ease',
+          fontFamily: 'inherit',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.08)')}
+        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
       >
-        <LogOut size={18} />
-        <span className="small fw-bold">Sign Out</span>
+        <LogOut size={15} />
+        <span>Sign Out</span>
       </button>
     </div>
   );
 
+  const SidebarNav = () => (
+    <nav style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {sidebarLinks.map((item) => {
+        const Icon = item.icon;
+        const active = isActive(item.path);
+        return (
+          <Link
+            key={item.path}
+            href={item.path}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '0.6rem 0.85rem',
+              borderRadius: 'var(--radius-md)',
+              textDecoration: 'none',
+              fontSize: '0.87rem', fontWeight: active ? 600 : 500,
+              transition: 'all 0.15s ease',
+              background: active
+                ? 'linear-gradient(135deg, var(--brand-primary) 0%, #0a51b5 100%)'
+                : 'transparent',
+              color: active ? '#fff' : darkMode ? 'rgba(226,232,240,0.7)' : 'var(--text-muted)',
+              boxShadow: active ? '0 2px 8px rgba(7,62,140,0.25)' : 'none',
+            }}
+            onMouseEnter={e => {
+              if (!active) {
+                e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'var(--brand-primary-50)';
+                e.currentTarget.style.color = darkMode ? '#e2e8f0' : 'var(--brand-primary)';
+              }
+            }}
+            onMouseLeave={e => {
+              if (!active) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = darkMode ? 'rgba(226,232,240,0.7)' : 'var(--text-muted)';
+              }
+            }}
+          >
+            <Icon size={17} style={{ opacity: active ? 1 : 0.7, flexShrink: 0 }} />
+            <span>{item.label}</span>
+            {active && (
+              <ChevronRight size={13} style={{ marginLeft: 'auto', opacity: 0.6 }} />
+            )}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+
+  const darkThemeToggle = (
+    <button
+      onClick={() => setDarkMode(!darkMode)}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+        width: '100%', padding: '0.5rem', marginBottom: 8,
+        border: `1px solid ${darkMode ? 'rgba(255,255,255,0.08)' : 'var(--border-subtle)'}`,
+        borderRadius: 'var(--radius-md)', background: 'transparent',
+        color: darkMode ? '#94a3b8' : 'var(--text-muted)', cursor: 'pointer',
+        fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.15s ease',
+        fontFamily: 'inherit',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'var(--surface-soft)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+    >
+      {darkMode ? <Sun size={14} /> : <Moon size={14} />}
+      <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
+    </button>
+  );
+
   return (
-    <div className={`min-vh-100 d-flex flex-column no-select transition-colors duration-300 ${
-      darkMode ? "bg-dark text-light" : "bg-light text-dark"
-    }`}>
+    <div
+      style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+        background: darkMode ? '#0f172a' : 'var(--surface-muted)',
+        color: darkMode ? '#e2e8f0' : 'var(--text-main)',
+        userSelect: 'none',
+      }}
+    >
       <ReferralSection referralCode={trialStatus?.referral_code || ""} />
 
       <style jsx global>{`
-        .sidebar-transition { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
-        .hover-scale:hover { transform: translateY(-1px); }
-        .extra-small { font-size: 0.7rem; }
-        .hover-bg-danger-soft:hover { background-color: rgba(220, 53, 69, 0.1); }
-        .no-select { user-select: none; }
+        .sidebar-slide { transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        /* Hide sidebar scrollbar while keeping it scrollable */
+        .al-sidebar-desktop::-webkit-scrollbar { display: none; }
+        .al-sidebar-desktop { scrollbar-width: none; -ms-overflow-style: none; }
+
+        /* ── Print: hide all dashboard chrome, let the paper fill the page ── */
+        @media print {
+          .al-sidebar-desktop,
+          .al-sidebar-mobile,
+          .al-mobile-topbar,
+          .al-footer-wrap { display: none !important; }
+
+          /* The outer flex row becomes block so hidden sidebar takes no space */
+          .al-body-row { display: block !important; }
+
+          /* Main content: remove clip + padding that restrict the paper */
+          .al-main {
+            overflow: visible !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            display: block !important;
+          }
+          .al-content-pad {
+            padding: 0 !important;
+            flex: none !important;
+            display: block !important;
+          }
+          .al-content-inner {
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+        }
       `}</style>
 
       {/* Mobile top bar */}
-      <div className="d-lg-none border-bottom sticky-top bg-white z-40">
+      <div
+        className="al-mobile-topbar d-lg-none"
+        style={{
+          position: 'sticky', top: 0, zIndex: 1040,
+          background: darkMode ? 'rgba(15,23,42,0.97)' : 'rgba(255,255,255,0.97)',
+          borderBottom: `1px solid ${darkMode ? 'rgba(255,255,255,0.07)' : 'var(--border-subtle)'}`,
+          backdropFilter: 'blur(12px)',
+        }}
+      >
         <Header
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
@@ -187,125 +307,130 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
         />
       </div>
 
-      <div className="d-flex flex-grow-1">
+      <div className="al-body-row" style={{ display: 'flex', flex: 1 }}>
 
-        {/* DESKTOP SIDEBAR */}
+        {/* Desktop sidebar */}
         <aside
-          className={`d-none d-lg-flex flex-column flex-shrink-0 p-4 border-end sticky-top vh-100 ${
-            darkMode ? "bg-slate-950 border-slate-800" : "bg-white border-gray-200"
-          }`}
-          style={{ width: "280px" }}
+          className="al-sidebar-desktop d-none d-lg-flex flex-column flex-shrink-0"
+          style={{
+            width: 256, position: 'sticky', top: 0, height: '100vh',
+            padding: '1.25rem 1rem',
+            background: darkMode ? '#111827' : '#ffffff',
+            borderRight: `1px solid ${darkMode ? 'rgba(255,255,255,0.06)' : 'var(--border-subtle)'}`,
+            boxShadow: darkMode ? 'none' : '1px 0 0 rgba(15,23,42,0.04)',
+            overflowY: 'auto',
+          }}
         >
-          <div className="d-flex align-items-center mb-2 ps-2">
-            <div className="bg-primary p-2 rounded-3 me-3 shadow-sm">
-              <GraduationCap size={22} className="text-white" />
+          {/* Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '1.5rem', padding: '0 0.25rem' }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+              background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(7,62,140,0.3)',
+            }}>
+              <GraduationCap size={18} color="#fff" />
             </div>
-            <span className="fs-5 fw-bold tracking-tight">
-              Examly<span className="text-primary">.pk</span>
+            <span style={{ fontWeight: 800, fontSize: '1.05rem', letterSpacing: '-0.02em', color: darkMode ? '#e2e8f0' : 'var(--text-main)' }}>
+              Examly<span style={{ color: 'var(--brand-primary)', fontWeight: 700 }}>.pk</span>
             </span>
           </div>
 
-          <nav className="nav nav-pills flex-column mb-auto gap-2">
-            {sidebarLinks.map((item) => {
-              const Icon = item.icon;
-              const active = isActive(item.path);
-              return (
-                <Link
-                  key={item.path}
-                  href={item.path}
-                  className={`nav-link d-flex align-items-center px-3 py-2 rounded-3 transition-all ${
-                    active
-                      ? "bg-primary text-white shadow-sm"
-                      : darkMode
-                      ? "text-slate-400 hover:bg-slate-900 hover:text-white"
-                      : "text-secondary hover:bg-light"
-                  }`}
-                >
-                  <Icon size={19} className={`me-3 ${active ? "text-white" : "opacity-70"}`} />
-                  <span className="fw-medium small">{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+          {/* Nav section label */}
+          <p style={{ fontSize: '0.66rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-faint)', margin: '0 0.25rem 0.5rem', padding: '0 0.5rem' }}>
+            Navigation
+          </p>
 
-          <div className="mt-auto">
-            {renderTrialStatus()}
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className={`btn btn-link text-decoration-none w-100 d-flex align-items-center justify-content-center gap-2 p-2 rounded-3 border transition-all mb-2 ${
-                darkMode
-                  ? "text-slate-300 border-slate-800 hover:bg-slate-900"
-                  : "text-muted border-gray-100 hover:bg-light"
-              }`}
-            >
-              {darkMode ? <Sun size={16} /> : <Moon size={16} />}
-              <span className="small fw-semibold">{darkMode ? "Light Mode" : "Dark Mode"}</span>
-            </button>
-            <UserProfileSection />
+          <div style={{ flex: 1 }}>
+            <SidebarNav />
+          </div>
+
+          <div style={{ marginTop: 'auto', paddingTop: '1rem' }}>
+            <PlanStatus />
+            {darkThemeToggle}
+            <UserProfile />
           </div>
         </aside>
 
-        {/* MAIN CONTENT */}
-        <main className="flex-grow-1 d-flex flex-column min-vh-100 overflow-hidden">
-          <div className="p-0 p-lg-0 flex-grow-1 my-3">
-            <div className="container-fluid max-w-7xl">
+        {/* Main content */}
+        <main className="al-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+          <div className="al-content-pad" style={{ flex: 1, padding: '1.5rem 1.25rem 1.25rem' }}>
+            <div className="al-content-inner" style={{ maxWidth: '82rem', margin: '0 auto' }}>
+              <BreadcrumbAuto />
               {children}
             </div>
           </div>
-          <Footer darkMode={darkMode} />
+          <div className="al-footer-wrap">
+            <Footer darkMode={darkMode} />
+          </div>
         </main>
       </div>
 
-      {/* MOBILE DRAWER */}
-      <div
-        className={`fixed-top vh-100 w-100 z-50 transition-all duration-500 ${
-          sidebarOpen ? "visible opacity-100" : "invisible opacity-0"
-        }`}
-        style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
-        onClick={() => setSidebarOpen(false)}
-      >
+      {/* Mobile drawer overlay */}
+      {sidebarOpen && (
         <div
-          className={`sidebar-transition h-100 position-absolute start-0 shadow-lg ${
-            darkMode ? "bg-dark text-light" : "bg-white"
-          }`}
-          style={{ width: "280px", transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="d-flex align-items-center justify-content-between p-4 border-bottom">
-            <div className="d-flex align-items-center">
-              <GraduationCap size={24} className="text-primary me-2" />
-              <h5 className="mb-0 fw-bold">Examly</h5>
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1050,
+            background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
+          }}
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Mobile drawer */}
+      <aside
+        className="sidebar-slide al-sidebar-mobile d-lg-none"
+        style={{
+          position: 'fixed', top: 0, left: 0, bottom: 0, width: 272, zIndex: 1060,
+          background: darkMode ? '#111827' : '#ffffff',
+          boxShadow: 'var(--shadow-xl)',
+          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+          display: 'flex', flexDirection: 'column',
+          overflowY: 'auto',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Drawer header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '1rem 1rem 0.75rem',
+          borderBottom: `1px solid ${darkMode ? 'rgba(255,255,255,0.07)' : 'var(--border-subtle)'}`,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 30, height: 30, borderRadius: 8,
+              background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <GraduationCap size={15} color="#fff" />
             </div>
-            <button className="btn p-2 rounded-circle hover:bg-light" onClick={() => setSidebarOpen(false)}>
-              <X size={20} />
-            </button>
+            <span style={{ fontWeight: 800, fontSize: '0.95rem', color: darkMode ? '#e2e8f0' : 'var(--text-main)' }}>
+              Examly<span style={{ color: 'var(--brand-primary)' }}>.pk</span>
+            </span>
           </div>
-          <div className="p-3 d-flex flex-column h-100">
-            <nav className="nav nav-pills flex-column gap-2 mb-auto">
-              {sidebarLinks.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.path);
-                return (
-                  <Link
-                    key={item.path}
-                    href={item.path}
-                    className={`nav-link d-flex align-items-center py-3 px-3 rounded-3 transition-all ${
-                      active ? "bg-primary text-white shadow-sm" : darkMode ? "text-slate-300" : "text-dark"
-                    }`}
-                  >
-                    <Icon size={20} className="me-3" />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-            <div className="mt-4 pb-5">
-              {renderTrialStatus()}
-              <UserProfileSection />
-            </div>
-          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            style={{
+              width: 30, height: 30, border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)', background: 'transparent',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--text-muted)',
+            }}
+          >
+            <X size={16} />
+          </button>
         </div>
-      </div>
+
+        <div style={{ flex: 1, padding: '1rem' }}>
+          <SidebarNav />
+        </div>
+
+        <div style={{ padding: '1rem', borderTop: `1px solid ${darkMode ? 'rgba(255,255,255,0.07)' : 'var(--border-subtle)'}` }}>
+          <PlanStatus />
+          {darkThemeToggle}
+          <UserProfile />
+        </div>
+      </aside>
     </div>
   );
 }

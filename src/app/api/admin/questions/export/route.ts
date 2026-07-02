@@ -1,6 +1,7 @@
 // app/api/admin/questions/export/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireRole } from '@/lib/api-auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,6 +9,9 @@ const supabase = createClient(
 );
 
 export async function GET(req: NextRequest) {
+  const auth = await requireRole(['admin', 'super_admin']);
+  if (auth.error) return auth.error;
+
   try {
     const sp                   = req.nextUrl.searchParams;
     const difficulty            = sp.get('difficulty')           || '';

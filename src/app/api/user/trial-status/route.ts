@@ -1,14 +1,30 @@
 //api/user/trial-status/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getSessionFromRequest } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await getSessionFromRequest();
+    if (auth.error) return auth.error;
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 
     if (!userId) {
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
+    }
+
+    if (userId !== auth.user.id) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('role')
+        .eq('id', auth.user.id)
+        .maybeSingle();
+
+      if (!profile || (profile.role !== 'admin' && profile.role !== 'super_admin')) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     // Fetch profile with cellno check
@@ -32,8 +48,9 @@ export async function GET(request: NextRequest) {
     const isTrial = hasCellno && trialEndsAt && trialEndsAt > now && profile.trial_given;
     const daysRemaining = isTrial ? Math.max(0, Math.ceil((trialEndsAt!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
 
-    // Fetch active subscriptions/paper packs
-    const { data: userPackage, error: packageError } = await supabaseAdmin
+    // Fetch all active packages — user may have multiple is_active=true rows
+    // (e.g. an expired plan that was never deactivated + a new active plan)
+    const { data: activePackages, error: packageError } = await supabaseAdmin
       .from('user_packages')
       .select(
         `
@@ -48,26 +65,33 @@ export async function GET(request: NextRequest) {
       )
       .eq('user_id', userId)
       .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .maybeSingle();
+      .order('created_at', { ascending: false });
 
-    if (packageError && packageError.code !== 'PGRST116') {
+    if (packageError) {
       console.error('Package fetch error:', packageError);
       return NextResponse.json({ error: 'Failed to fetch package' }, { status: 500 });
     }
+
+    // Prefer the first non-expired package; fall back to the most recent one
+    const userPackage = activePackages?.find(
+      (pkg) => !pkg.expires_at || new Date(pkg.expires_at) > now
+    ) ?? activePackages?.[0] ?? null;
 
     let hasActiveSubscription = false;
     let papersRemaining: number | 'unlimited' = 0;
 
     if (userPackage) {
-      hasActiveSubscription = true;
       const isNotExpired = userPackage.expires_at
         ? new Date(userPackage.expires_at) > now
         : true;
 
+      hasActiveSubscription = isNotExpired;
+
       if (isNotExpired) {
         if (userPackage.package?.type === 'paper_pack') {
           papersRemaining = userPackage.papers_remaining ?? 0;
+          // no papers left = effectively inactive
+          if (papersRemaining === 0) hasActiveSubscription = false;
         } else {
           papersRemaining = 'unlimited';
         }

@@ -234,7 +234,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
                   unicodeBidi: 'embed',
                 }}
               >
-                {qNo}.Q
+                Q.{qNo}
               </span>
             )}
             <div className="d-flex align-items-baseline gap-2" style={{ flex: 1 }}>

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import Breadcrumb from '@/components/Breadcrumb';
 import { useRouter } from 'next/navigation';
 
 const classes = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -12,8 +13,9 @@ export default function Classes1to8Page() {
   return (
     <>
       <Header />
-      <main className="container py-5">
-             <button
+      <main className="container py-5 pt-header">
+        <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Classes', href: '/classes' }, { label: '1st to 8th' }]} />
+        <button
           type="button"
           className="btn btn-link mb-4"
           onClick={() => router.back()}

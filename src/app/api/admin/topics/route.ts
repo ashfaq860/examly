@@ -1,8 +1,12 @@
 // app/api/topics/route.ts
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { requireRole } from '@/lib/api-auth';
 
 export async function GET(request: Request) {
+  const auth = await requireRole(['admin', 'super_admin']);
+  if (auth.error) return auth.error;
+
   const { searchParams } = new URL(request.url);
   const classId = searchParams.get('classId');
   const subjectId = searchParams.get('subjectId');

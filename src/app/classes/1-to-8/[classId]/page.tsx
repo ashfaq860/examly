@@ -4,6 +4,7 @@ import { useParams,useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import Breadcrumb from '@/components/Breadcrumb';
 const subjectsByClass: Record<string, string[]> = {
   '1': ['Mathematics', 'English', 'Science', 'Urdu'],
   '2': ['Mathematics', 'English', 'Science', 'Urdu'],
@@ -22,7 +23,7 @@ const router= useRouter();
   return (
     <>
       <Header />
-      <main className="container py-5">
+      <main className="container py-5 pt-header">
          <button
           type="button"
           className="btn btn-link mb-4"
@@ -31,6 +32,7 @@ const router= useRouter();
         >
           &larr; Back
         </button>
+        <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Classes', href: '/classes' }, { label: '1st to 8th', href: '/classes/1-to-8' }, { label: `Class ${classId}` }]} />
         <h2 className="mb-4">Class {classId} - Subjects</h2>
         <div className="row g-4">
           {subjects.map((subject) => (

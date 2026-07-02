@@ -79,15 +79,26 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
     );
   };
 
-  const currentLabel = (() => {
+  // Full crumb trail for the header bar: Dashboard > [Group] > Current page.
+  // Groups (e.g. "System Setup") have no page of their own, so they render
+  // as plain text rather than a link.
+  const crumbTrail = (() => {
+    const trail: { label: string; href?: string }[] = [{ label: 'Dashboard', href: '/admin' }];
+
     for (const item of navItems) {
-      if (isItemActive(item.id) && !item.subItems) return item.label;
       if (item.subItems) {
         const sub = item.subItems.find(si => isItemActive(si.id));
-        if (sub) return sub.label;
+        if (sub) {
+          trail.push({ label: item.label });
+          trail.push({ label: sub.label, href: `/admin/${sub.id}` });
+          return trail;
+        }
+      } else if (isItemActive(item.id) && item.id !== '') {
+        trail.push({ label: item.label, href: `/admin/${item.id}` });
+        return trail;
       }
     }
-    return 'Dashboard';
+    return trail;
   })();
 
   return (
@@ -110,7 +121,18 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
             </span>
           </Link>
           <span className="adm-crumb-divider" aria-hidden="true" />
-          <span className="adm-crumb">{currentLabel}</span>
+          <nav aria-label="breadcrumb" className="adm-crumb">
+            {crumbTrail.map((crumb, idx) => (
+              <span key={`${crumb.label}-${idx}`} className="adm-crumb-seg">
+                {idx > 0 && <span className="adm-crumb-sep" aria-hidden="true">/</span>}
+                {crumb.href && idx < crumbTrail.length - 1 ? (
+                  <Link href={crumb.href} className="adm-crumb-link">{crumb.label}</Link>
+                ) : (
+                  <span aria-current={idx === crumbTrail.length - 1 ? 'page' : undefined}>{crumb.label}</span>
+                )}
+              </span>
+            ))}
+          </nav>
         </div>
 
         <div className="adm-header-right">
@@ -281,7 +303,12 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
         .adm-crumb {
           font-size: .82rem; color: var(--adm-muted); font-weight: 500;
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          display: flex; align-items: center;
         }
+        .adm-crumb-seg { display: inline-flex; align-items: center; }
+        .adm-crumb-sep { margin: 0 6px; color: var(--adm-border); }
+        .adm-crumb-link { color: var(--adm-muted); text-decoration: none; transition: color .15s; }
+        .adm-crumb-link:hover { color: var(--adm-accent); }
 
         .adm-status-pill {
           display: inline-flex; align-items: center; gap: 5px;

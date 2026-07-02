@@ -2,9 +2,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getSessionFromRequest } from '@/lib/api-auth';
 const supabase = supabaseAdmin;
 
 export async function POST(request: NextRequest) {
+  const auth = await getSessionFromRequest();
+  if (auth.error) return auth.error;
+
   try {
     const body = await request.json();
     const {

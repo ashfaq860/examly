@@ -1,178 +1,84 @@
-/* Print-specific styles for exam paper generation */
+/* ============================================================
+   PRINT STYLES — exam paper generation
+   Goal: paper looks 100% identical to the screen preview.
 
-/* ===== UNIVERSAL PRINT RESET ===== */
+   Strategy:
+   • Lock every layout decision in inline styles (PaperLayoutRenderer).
+   • Print CSS only strips UI chrome and controls page breaks.
+   • NEVER override flex/grid/height inside the paper-sheet.
+   ============================================================ */
+
 @media print {
-  /* 1. Page setup - critical for consistent output */
+
+  /* ── 1. Page setup ── */
   @page {
-    size: A4;
+    size: A4 portrait;
     margin: 0mm;
   }
 
-  /* 2. Remove default browser margins and padding */
-  html,
-  body {
+  /* ── 2. Root reset ── */
+  html, body {
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
-    height: 100% !important;
+    height: auto !important;
     overflow: visible !important;
     background: white !important;
   }
 
-  /* 3. Hide all UI elements except the paper */
+  /* ── 3. Hide ALL dashboard chrome ─────────────────────────
+     AcademyLayout adds al-* classes; also catch legacy selectors.
+     ─────────────────────────────────────────────────────────── */
+  .al-sidebar-desktop,
+  .al-sidebar-mobile,
+  .al-mobile-topbar,
+  .al-footer-wrap,
   nav,
+  aside,
   header:not(.paper-header),
   footer,
-  .sidebar,
   .navbar,
   .header-nav,
   .scroll-progress-bar,
   #nprogress,
   .d-print-none,
-  [class*="btn"],
   [class*="modal"],
   [class*="dropdown"],
   .floating-action,
   .settings-panel,
   .question-selector,
-  .fixed-back-btn {
-    display: none !important;
+  .fixed-back-btn,
+  .no-print { display: none !important; }
+
+  /* Buttons inside non-paper areas */
+  .al-content-inner [class*="btn"]:not(.paper-btn) { display: none !important; }
+
+  /* ── 4. AcademyLayout chrome containers ── */
+  .al-body-row {
+    display: block !important;
   }
 
-  /* 4. Reset main container */
+  .al-main,
   main,
-  [role="main"],
-  .main-content {
+  [role="main"] {
     display: block !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-    height: auto !important;
-    background: white !important;
     overflow: visible !important;
-  }
-
-  /* 5. Hide flex/grid layout artifacts */
-  .d-flex,
-  .flex-grow-1,
-  .min-vh-100,
-  [class*="justify-content"],
-  [class*="align-items"] {
-    display: block !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
     height: auto !important;
-    min-height: 0 !important;
-  }
-
-  /* 6. Printable paper container - CRITICAL */
-  #printable-paper {
-    position: relative !important;
-    display: block !important;
-    margin: 0 auto !important;
-    padding: 0 !important;
-    width: 210mm !important;
-    min-width: 210mm !important;
-    height: auto !important;
-    min-height: 0 !important;
-    background: white !important;
-    border: none !important;
-    box-shadow: none !important;
-    filter: none !important;
-    page-break-after: auto !important;
-  }
-
-  #printable-paper * {
-    filter: none !important;
-    transform: none !important;
-    perspective: none !important;
-  }
-
-  /* 7. Paper sheets - page break control */
-  .paper-sheet {
-    display: block !important;
-    margin: 0 !important;
-    padding: 1mm !important;
-    width: auto !important;
-    min-width: auto !important;
-    height: auto !important;
-    min-height: 0 !important;
-    background: white !important;
-    border: none !important;
-    box-shadow: none !important;
-    page-break-after: always !important;
-    break-after: page !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-    color-adjust: exact;
-  }
-
-  /* 8. Content within paper sheet */
-  .paper-sheet > * {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  /* 9. Paper header and sections */
-  .paper-header,
-  .section-block,
-  .questions-list {
-    display: block !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  /* 10. Questions - keep them together when possible */
-  .question-item,
-  .question-renderer {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  /* 11. Dashed lines for cutting */
-  .dashed-line,
-  [class*="cut-line"] {
-    display: block !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  /* 12. Remove animations and transitions */
-  * {
-    animation: none !important;
-    transition: none !important;
-    animation-duration: 0s !important;
-    animation-delay: 0s !important;
-  }
-
-  /* 13. Ensure proper text rendering */
-  body,
-  html {
-    font-family: Arial, sans-serif !important;
-    color: #000 !important;
-  }
-
-  /* 14. Fix any remaining container issues */
-  .container,
-  .container-fluid {
-    display: block !important;
-    width: auto !important;
-    max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
   }
 
-  /* 15. Remove background colors and gradients (unless print-color-adjust is set) */
-  [class*="bg-"] {
-    background: white !important;
-    background-image: none !important;
+  .al-content-pad,
+  .al-content-inner {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
   }
 
-  /* 16. Paper renderer background */
+  /* ── 5. Outer wrapper ── */
   .paper-builder-renderer {
     display: block !important;
     margin: 0 !important;
@@ -180,26 +86,68 @@
     background: white !important;
   }
 
-  /* 17. Print break helper class */
-  .print-break {
+  /* ── 6. Paper sheet — one A4 page per sheet ── */
+  .paper-sheet {
+    /* Switch flex → block so overflow:hidden clips at the padding edge.
+       flex-column and block are visually identical for stacked children. */
+    display: block !important;
+    /* Strip visual decorations */
+    margin: 0 !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+    /* Page break after every sheet */
     page-break-after: always !important;
     break-after: page !important;
+    /* Prevent the sheet itself from splitting across pages */
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    /* overflow:hidden clips content to the box boundary (padding edge = 297mm).
+       With display:block this works correctly in print, unlike flex. */
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
+
+  /* Last sheet doesn't need a page-break-after */
+  .print-container > .paper-sheet:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* ── 7. Internal paper containers — keep their layout as-is ── */
+  /* Do NOT change display, flex, height, overflow for anything
+     inside .paper-sheet — those are owned by inline styles.     */
+  .paper-sheet * {
+    filter: none !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* ── 8. Section / question break helpers ── */
+  .section-block { page-break-inside: avoid !important; break-inside: avoid !important; }
+
+  /* ── 9. Dashed cut lines ── */
+  .dashed-line,
+  [class*="cut-line"] {
+    display: block !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* ── 10. min-vh-100 helper — doesn't make sense in print ── */
+  .min-vh-100 { height: auto !important; min-height: 0 !important; }
 }
 
-/* ===== NON-PRINT STYLES ===== */
-
-/* Hide print-specific elements when not printing */
-.print-only {
-  display: none !important;
-}
+/* ── Non-print: hide print-only elements ── */
+.print-only { display: none !important; }
 
 @media print {
-  .print-only {
-    display: block !important;
-  }
-
-  .no-print {
-    display: none !important;
-  }
+  .print-only { display: block !important; }
+  .no-print   { display: none  !important; }
 }

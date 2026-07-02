@@ -44,7 +44,9 @@ export interface PaperHeaderProps {
   currentLayout: string;
   onTextChange?: (field: string, value: string) => void;
   currentClass?: string | { id: string; name: string; [key: string]: any };
-    profile:any[];
+  profile: any[];
+  paperPart?: 'mcq' | 'subjective' | 'combined';
+  subjectUrduName?: string;
 }
 
 // Main Component - Ensuring it is exported as a default export

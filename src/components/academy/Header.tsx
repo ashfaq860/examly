@@ -4,19 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Menu } from "lucide-react";
-import { useUser } from '@/app/context/userContext';
-import ReferralSection from '@/components/ReferralSection'; 
+
 const Header = ({ sidebarOpen, setSidebarOpen }: any) => {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [role, setRole] = useState<string>("user");
   const supabase = createSupabaseBrowserClient();
- const { trialStatus, isLoading: trialLoading } = useUser();
- const subscriptionInfo = trialStatus
-    ? {
-        referralCode: trialStatus.referral_code || '',
-      }
-    : null;
+
   useEffect(() => {
     const load = async () => {
       const { data } = await supabase.auth.getSession();
@@ -64,11 +58,8 @@ const Header = ({ sidebarOpen, setSidebarOpen }: any) => {
           <i className="bi bi-box-arrow-right me-1"></i> Logout
         </button>
       </div>
-<ReferralSection referralCode={subscriptionInfo?.referralCode || ''} />
-
     </nav>
-
-);
+  );
 };
 
 export default Header;

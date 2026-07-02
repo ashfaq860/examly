@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# contact form submissions contain user PII — never commit these
+/contact-submissions/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

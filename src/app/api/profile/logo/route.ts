@@ -15,15 +15,36 @@ export async function POST(request: Request) {
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    
+
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
+
+    // Only allow real raster image types — reject SVG (can carry embedded
+    // <script>/onload payloads) and any non-image upload.
+    const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return NextResponse.json({ error: 'Only PNG, JPEG, WEBP or GIF images are allowed' }, { status: 400 });
+    }
+
+    const MAX_SIZE = 2 * 1024 * 1024; // 2MB
+    if (file.size > MAX_SIZE) {
+      return NextResponse.json({ error: 'Logo must be smaller than 2MB' }, { status: 400 });
     }
 
     // Use your existing bucket name
     const bucketName = 'profile_logo';
 
-    const fileExt = file.name.split('.').pop();
+    // Derive the extension from the validated MIME type — never trust the
+    // client-supplied filename (it could contain "/" and land the object
+    // in an unexpected storage path).
+    const EXT_BY_TYPE: Record<string, string> = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    };
+    const fileExt = EXT_BY_TYPE[file.type];
     const fileName = `${session.user.id}-${Date.now()}.${fileExt}`;
     const filePath = fileName;
 

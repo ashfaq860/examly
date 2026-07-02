@@ -18,6 +18,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { requireRole } from '@/lib/api-auth';
 
 interface CategoryPair {
   type: string;     // question_type, e.g. "mcq"
@@ -25,6 +26,9 @@ interface CategoryPair {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireRole(['admin', 'super_admin']);
+  if (auth.error) return auth.error;
+
   try {
     const pairs: CategoryPair[] = await request.json();
 

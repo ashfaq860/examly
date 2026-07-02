@@ -2,8 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import Loading from '@/app/dashboard/generate-paper/loading'; 
+import Loading from '@/app/dashboard/generate-paper/loading';
+import toast from 'react-hot-toast';
+import {
+  Gem, CheckCircle2, Clock, FileText, Sparkles, Droplet, Zap, Rocket, BadgeCheck, Hourglass,
+} from 'lucide-react';
+
 const supabase = createSupabaseBrowserClient();
+
 interface Package {
   id: string;
   name: string;
@@ -24,19 +30,25 @@ interface UserPackage {
   packages: Package;
 }
 
+const BENEFITS = [
+  { icon: Sparkles, title: "Unlimited Papers", desc: "Create and access unlimited question papers with complete control. Generate, edit, and manage papers freely without any restrictions." },
+  { icon: Droplet, title: "Watermark Control", desc: "Use your own custom watermark or remove it completely. Print professional-looking papers exactly the way you want." },
+  { icon: Zap, title: "Priority Support", desc: "Premium users get fast and dedicated support. Our team is always available to assist you whenever you need help." },
+  { icon: Rocket, title: "Advanced Features", desc: "Unlock full access to advanced paper-generation tools, complete customization options, and powerful controls for professionals." },
+];
+
 export default function SubscriptionPage() {
   const [packages, setPackages] = useState<Package[]>([]);
   const [activeSubscriptions, setActiveSubscriptions] = useState<UserPackage[]>([]);
   const [inactiveSubscriptions, setInactiveSubscriptions] = useState<UserPackage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
+  const [subscribingId, setSubscribingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPackages();
     fetchUserSubscriptions();
   }, []);
 
-  // 🔹 Fetch packages
   const fetchPackages = async () => {
     try {
       const res = await fetch("/api/subscriptions");
@@ -48,7 +60,6 @@ export default function SubscriptionPage() {
     }
   };
 
-  // 🔹 Fetch user subscriptions
   const fetchUserSubscriptions = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -58,13 +69,13 @@ export default function SubscriptionPage() {
       if (!res.ok) throw new Error("Failed to fetch user subscriptions");
       const data = await res.json();
 
+      const now = new Date();
       const activeSubs = (data || []).filter(
         (sub: UserPackage) =>
-          sub.is_active && (!sub.expires_at || new Date(sub.expires_at) > new Date())
+          sub.is_active && (!sub.expires_at || new Date(sub.expires_at) > now)
       );
       const inactiveSubs = (data || []).filter(
-        (sub: UserPackage) =>
-          !sub.is_active || (sub.expires_at && new Date(sub.expires_at) <= new Date())
+        (sub: UserPackage) => !sub.is_active && !sub.expires_at
       );
 
       setActiveSubscriptions(activeSubs);
@@ -76,15 +87,15 @@ export default function SubscriptionPage() {
     }
   };
 
-  // 🔹 Subscribe to a package
   const handleSubscribe = async (packageId: string) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        setMessage({ type: "danger", text: "You must be logged in to subscribe" });
+        toast.error("You must be logged in to subscribe");
         return;
       }
 
+      setSubscribingId(packageId);
       const res = await fetch("/api/subscriptions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -94,158 +105,201 @@ export default function SubscriptionPage() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to submit subscription request");
 
-      // add to pending list
       setInactiveSubscriptions((prev) => [...prev, result]);
-      setMessage({
-        type: "success",
-        text: "Subscription request submitted! Pending admin approval.",
-      });
+      toast.success("Subscription request submitted! Pending admin approval.");
     } catch (err: any) {
       console.error(err);
-      setMessage({ type: "danger", text: err.message || "Failed to submit subscription request." });
+      toast.error(err.message || "Failed to submit subscription request.");
+    } finally {
+      setSubscribingId(null);
     }
   };
 
-  // 🔹 Loading spinner
   if (loading) {
     return (
-        <div className="container text-center py-5">
-         {<Loading />}
-        </div>
+      <div className="container text-center py-5">
+        <Loading />
+      </div>
     );
   }
 
   return (
-    <>
-      {/* Hero Section */}
-      <section className="bg-primary text-white text-center py-5 mb-5 rounded-3 shadow">
-        <div className="container">
-          <h1 className="display-4 fw-bold">Choose Your Plan</h1>
-          <p className="lead">
-            Unlock unlimited paper generation for All Board Classes 5th to 12th with flexible subscription packages
-          </p>
-          <a href="#plans" className="btn btn-light btn-lg mt-3 px-4 me-2">View Plans</a>
-          <a href="#benefits" className="btn btn-outline-light btn-lg mt-3 px-4">Why Subscribe?</a>
-        </div>
-      </section>
-
-      <div className="container py-2">
-        {/* Message Alert */}
-        {message && (
-          <div className={`alert alert-${message.type} alert-dismissible fade show`} role="alert">
-            {message.text}
-            <button type="button" className="btn-close" onClick={() => setMessage(null)}></button>
+    <div>
+      {/* Hero */}
+      <div style={{
+        position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius-xl)',
+        background: 'linear-gradient(135deg, #073e8c 0%, #0b63d4 55%, #1ba699 100%)',
+        padding: '2.75rem 1.5rem', textAlign: 'center', color: '#fff', marginBottom: '2rem',
+        boxShadow: '0 12px 32px rgba(7,62,140,0.25)',
+      }}>
+        <div style={{ position: 'absolute', top: -40, right: -40, width: 180, height: 180, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+        <div style={{ position: 'absolute', bottom: -60, left: -30, width: 220, height: 220, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
+        <div style={{ position: 'relative', maxWidth: 640, margin: '0 auto' }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0.3rem 0.85rem',
+            background: 'rgba(255,255,255,0.15)', borderRadius: 99, fontSize: '0.78rem', fontWeight: 700,
+            marginBottom: '1rem',
+          }}>
+            <Gem size={14} /> Premium Plans
           </div>
-        )}
+          <h1 style={{ fontSize: '2rem', fontWeight: 800, margin: '0 0 0.6rem' }}>Choose Your Plan</h1>
+          <p style={{ fontSize: '0.95rem', opacity: 0.9, margin: '0 0 1.5rem' }}>
+            Unlock unlimited paper generation for all board classes 5th–12th with flexible subscription packages.
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a href="#plans" style={heroBtnPrimary}>View Plans</a>
+            <a href="#benefits" style={heroBtnOutline}>Why Subscribe?</a>
+          </div>
+        </div>
+      </div>
 
-        {/* Active Subscriptions */}
-        {activeSubscriptions.length > 0 && (
-          <div className="alert alert-success mb-5 shadow-sm">
-            <h4 className="alert-heading">🎉 Active Subscriptions</h4>
-            {activeSubscriptions.map((sub) => (
-              <div key={sub.id} className="mb-3">
-                <p className="mb-1"><strong>{sub.packages.name}</strong></p>
-                <p className="mb-1">
-                  Expires on: {sub.expires_at ? new Date(sub.expires_at).toLocaleDateString() : "N/A"}
-                </p>
-                {sub.packages.type === "paper_pack" && (
-                  <p className="mb-0">Papers remaining: {sub.papers_remaining}</p>
+      {/* Active subscriptions */}
+      {activeSubscriptions.length > 0 && (
+        <div style={{ ...bannerStyle, background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', borderColor: '#a7f3d0', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <BadgeCheck size={18} style={{ color: '#065f46' }} />
+            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#065f46' }}>Active Subscriptions</h4>
+          </div>
+          {activeSubscriptions.map((sub) => (
+            <div key={sub.id} style={{ fontSize: '0.85rem', color: '#065f46', marginBottom: 6 }}>
+              <strong>{sub.packages.name}</strong> — Expires on{' '}
+              {sub.expires_at ? new Date(sub.expires_at).toLocaleDateString() : "N/A"}
+              {sub.packages.type === "paper_pack" && <> · Papers remaining: {sub.papers_remaining}</>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pending subscriptions */}
+      {inactiveSubscriptions.length > 0 && (
+        <div style={{ ...bannerStyle, background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderColor: '#bfdbfe', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <Hourglass size={18} style={{ color: 'var(--brand-primary)' }} />
+            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--brand-primary)' }}>Pending Subscriptions</h4>
+          </div>
+          {inactiveSubscriptions.map((sub) => (
+            <div key={sub.id} style={{ fontSize: '0.85rem', color: 'var(--brand-primary)', marginBottom: 4 }}>
+              <strong>{sub.packages?.name || "Unknown Package"}</strong> — Waiting for admin approval
+              <div style={{ fontSize: '0.76rem', opacity: 0.75 }}>Requested on {new Date(sub.created_at).toLocaleDateString()}</div>
+            </div>
+          ))}
+          <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--brand-primary)', opacity: 0.85 }}>
+            You will be contacted soon to complete your subscription activation.
+          </p>
+        </div>
+      )}
+
+      {/* Plans */}
+      <h2 id="plans" style={{ textAlign: 'center', fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '1.5rem' }}>
+        Our Subscription Plans
+      </h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
+        {packages.map((pkg) => {
+          const isActive = activeSubscriptions.some((sub) => sub.package_id === pkg.id);
+          const isPending = inactiveSubscriptions.some((sub) => sub.package_id === pkg.id);
+          const isSubscribing = subscribingId === pkg.id;
+
+          return (
+            <div
+              key={pkg.id}
+              style={{
+                display: 'flex', flexDirection: 'column', background: '#fff',
+                borderRadius: 'var(--radius-xl)', border: isActive ? '2px solid #16a34a' : '1px solid var(--border-subtle)',
+                boxShadow: 'var(--shadow-sm)', overflow: 'hidden', transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              }}
+            >
+              <div style={{ padding: '1.5rem 1.25rem', textAlign: 'center', flex: 1 }}>
+                <h3 style={{ margin: '0 0 0.4rem', fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)' }}>{pkg.name}</h3>
+                <div style={{
+                  fontSize: '1.7rem', fontWeight: 800, margin: '0 0 0.6rem',
+                  background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                }}>
+                  PKR {pkg.price}
+                </div>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0 0 0.9rem' }}>{pkg.description}</p>
+                {pkg.type === "paper_pack" && pkg.paper_quantity && (
+                  <span style={pillStyle('rgba(27,166,153,0.1)', 'var(--brand-accent)')}>
+                    <FileText size={12} /> {pkg.paper_quantity} Papers
+                  </span>
+                )}
+                {pkg.type === "subscription" && pkg.duration_days && (
+                  <span style={pillStyle('rgba(22,163,74,0.1)', '#16a34a')}>
+                    <Clock size={12} /> {pkg.duration_days} Days Access
+                  </span>
                 )}
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* Pending Subscriptions */}
-        {inactiveSubscriptions.length > 0 && (
-          <div className="alert alert-info mb-5 shadow-sm">
-            <h4 className="alert-heading">⏳ Pending Subscriptions</h4>
-            {inactiveSubscriptions.map((sub) => (
-              <div key={sub.id} className="mb-2">
-                <p className="mb-1">
-                  <strong>{sub.packages?.name || "Unknown Package"}</strong> - Waiting for admin approval
-                </p>
-                <small>Requested on: {new Date(sub.created_at).toLocaleDateString()}</small>
+              <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid var(--border-subtle)' }}>
+                <button
+                  onClick={() => handleSubscribe(pkg.id)}
+                  disabled={isActive || isPending || isSubscribing}
+                  style={{
+                    width: '100%', padding: '0.6rem', border: 'none', borderRadius: 'var(--radius-md)',
+                    fontWeight: 700, fontSize: '0.85rem', color: '#fff', fontFamily: 'inherit',
+                    cursor: (isActive || isPending || isSubscribing) ? 'not-allowed' : 'pointer',
+                    opacity: (isActive || isPending) ? 0.85 : 1,
+                    background: isActive
+                      ? '#16a34a'
+                      : isPending
+                        ? '#94a3b8'
+                        : 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+                  }}
+                >
+                  {isActive ? "✓ Active" : isPending ? "Pending Approval" : isSubscribing ? "Submitting..." : "Subscribe Now"}
+                </button>
               </div>
-            ))}
-            <p className="mb-0 mt-2">
-              You will be contacted soon to complete your subscription activation.
-            </p>
-          </div>
-        )}
+            </div>
+          );
+        })}
+      </div>
 
-        {/* Plans */}
-        <h2 id="plans" className="text-center mb-4 fw-bold">Our Subscription Plans</h2>
-        <div className="row row-cols-1 row-cols-md-3 g-4">
-          {packages.map((pkg) => {
-            const isActive = activeSubscriptions.some((sub) => sub.package_id === pkg.id);
-            const isPending = inactiveSubscriptions.some((sub) => sub.package_id === pkg.id);
-
-            return (
-              <div key={pkg.id} className="col">
-                <div className="card h-100 shadow border-0 hover-shadow transition">
-                  <div className="card-body text-center">
-                    <h3 className="card-title fw-bold">{pkg.name}</h3>
-                    <h4 className="text-primary fw-bold mb-3">PKR {pkg.price}</h4>
-                    <p className="text-muted">{pkg.description}</p>
-                    {pkg.type === "paper_pack" && pkg.paper_quantity && (
-                      <p><span className="badge bg-info">{pkg.paper_quantity} Papers</span></p>
-                    )}
-                    {pkg.type === "subscription" && pkg.duration_days && (
-                      <p><span className="badge bg-success">{pkg.duration_days} Days Access</span></p>
-                    )}
-                  </div>
-                  <div className="card-footer bg-white border-0">
-                    <button
-                      className={`btn w-100 ${isActive ? "btn-success" : isPending ? "btn-secondary" : "btn-primary"}`}
-                      onClick={() => handleSubscribe(pkg.id)}
-                      disabled={isActive || isPending}
-                    >
-                      {isActive ? "✅ Active" : isPending ? "⏳ Pending Approval" : "Subscribe Now"}
-                    </button>
-                  </div>
-                </div>
+      {/* Benefits */}
+      <div id="benefits" style={{
+        background: 'var(--surface-soft)', borderRadius: 'var(--radius-xl)', padding: '2.25rem 1.5rem',
+      }}>
+        <h3 style={{ textAlign: 'center', fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '1.5rem' }}>
+          Why Subscribe?
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+          {BENEFITS.map((item, i) => (
+            <div key={i} style={{
+              background: '#fff', borderRadius: 'var(--radius-lg)', padding: '1.1rem',
+              border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-xs)',
+            }}>
+              <div style={{
+                width: 38, height: 38, borderRadius: 10, marginBottom: 10,
+                background: 'linear-gradient(135deg, var(--brand-primary-50) 0%, rgba(27,166,153,0.1) 100%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <item.icon size={18} style={{ color: 'var(--brand-primary)' }} />
               </div>
-            );
-          })}
-        </div>
-
-        {/* Benefits Section */}
-        <div id="benefits" className="mt-5 py-5 bg-light rounded-3 shadow-sm">
-         <div className="container text-center">
-  <h3 className="fw-bold mb-4">Why Subscribe?</h3>
-
-  <div className="row row-cols-1 row-cols-md-4 g-4">
-    {[
-      {
-        title: "📚 Unlimited Papers",
-        desc: "Create and access unlimited question papers with complete control. Generate, edit, and manage papers freely without any restrictions."
-      },
-      {
-        title: "💧 Watermark Control",
-        desc: "Use your own custom watermark or remove it completely. Print professional-looking papers exactly the way you want."
-      },
-      {
-        title: "⚡ Priority Support",
-        desc: "Premium users get fast and dedicated support. Our team is always available to assist you whenever you need help."
-      },
-      {
-        title: "🚀 Advanced Features",
-        desc: "Unlock full access to advanced paper-generation tools, complete customization options, and powerful controls for professionals."
-      }
-    ].map((item, i) => (
-      <div key={i} className="col">
-        <div className="p-3 border rounded h-100 bg-white shadow-sm">
-          <h4 className="fw-semibold">{item.title}</h4>
-          <p className="text-muted mb-0">{item.desc}</p>
+              <h4 style={{ margin: '0 0 6px', fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>{item.title}</h4>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>{item.desc}</p>
+            </div>
+          ))}
         </div>
       </div>
-    ))}
-  </div>
-</div>
-
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
+
+const bannerStyle: React.CSSProperties = {
+  borderRadius: 'var(--radius-xl)', border: '1px solid', padding: '1.1rem 1.25rem',
+};
+
+const heroBtnPrimary: React.CSSProperties = {
+  padding: '0.6rem 1.4rem', background: '#fff', color: 'var(--brand-primary)',
+  borderRadius: 'var(--radius-md)', fontWeight: 700, fontSize: '0.85rem',
+  textDecoration: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+};
+
+const heroBtnOutline: React.CSSProperties = {
+  padding: '0.6rem 1.4rem', background: 'transparent', color: '#fff',
+  border: '1.5px solid rgba(255,255,255,0.6)', borderRadius: 'var(--radius-md)',
+  fontWeight: 700, fontSize: '0.85rem', textDecoration: 'none',
+};
+
+const pillStyle = (bg: string, color: string): React.CSSProperties => ({
+  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px',
+  borderRadius: 99, fontSize: '0.74rem', fontWeight: 700, background: bg, color,
+});

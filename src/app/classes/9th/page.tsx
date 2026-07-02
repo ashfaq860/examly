@@ -21,7 +21,8 @@ export default function Class9thPage() {
   return (
     <>
       <Header />
-      <main className="container py-5">
+      <main className="container py-5 pt-header">
+        <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Classes', href: '/classes' }, { label: '9th Class' }]} />
         <button
           type="button"
           className="btn btn-link mb-4"

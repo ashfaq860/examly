@@ -1,10 +1,11 @@
 // dashboard/generate-paper/components/QuestionRenderer.tsx
 'use client';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect } from 'react';
 import { LanguageConfig } from '@/types/paperBuilderTypes';
 import { EditableText } from './EditableText';
+// @ts-ignore — CSS handled by Next.js bundler
 import 'katex/dist/katex.min.css';
-import { InlineMath, BlockMath } from 'react-katex';
+import { renderHtmlWithMath } from '@/lib/renderHtmlWithMath';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,7 +21,7 @@ interface QuestionRendererProps {
   config: LanguageConfig;
   fontSize: number;
   mcqFontSize: number;
-  lineHeight: number;
+  lineHeight?: number;
   mcqLineHeight: number;
   metaFontSize: number;
   questionFontFamily: string;
@@ -30,8 +31,10 @@ interface QuestionRendererProps {
   marks?: number;
   isUrduSubject?: boolean;
   isLast?: boolean;
+  headingFontSize?: number;
+  suppressNumbering?: boolean;
   shouldShowOr?: boolean;
-  hasSubGroups?:boolean;
+  hasSubGroups?: boolean;
   // ── Paired long-question sub-part label (NEW, optional, additive) ──
   // When provided, renders as a small element directly between the
   // "Q.{index}" number and the question text, on the SAME line/row that
@@ -60,6 +63,12 @@ interface BilingualProps {
   questionFontFamily: string;
   urduNumberLabel?: string;
   question?: any;
+  // Extended props used by SubjectiveRenderer / long-question paths
+  headingFontSize?: number;
+  isUrduSubject?: boolean;
+  hasSubGroups?: boolean;
+  sectionType?: string;
+  fontWeight?: string;
   onTextChange: (sid: string, qid: string, field: string, val: string) => void;
 }
 
@@ -70,49 +79,22 @@ const URDU_FONT      = "'JameelNoori', 'Noto Nastaliq Urdu', serif";
 const PRINT_STYLE_ID = 'qr-print-styles';
 
 // ---------------------------------------------------------------------------
-// Pure React Safe LaTeX Tokenizer / Parser
+// Inline HTML+Math renderer — replaces old MathRenderer + stripHtml pattern.
+// Uses static KaTeX renderToString so math works reliably in print.
 // ---------------------------------------------------------------------------
-interface MathRendererProps {
-  text: string;
+interface RichTextProps {
+  html: string | null | undefined;
+  /** Extra inline styles applied to the wrapper span */
+  style?: React.CSSProperties;
 }
 
-const MathRenderer: React.FC<MathRendererProps> = ({ text }) => {
-  if (!text) return null;
-
-  // Split content by matching LaTeX blocks: $...$, $...$, \(...\), or \[...\]
-  const tokens = useMemo(() => {
-    const regex = /(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$|\\\(.*?\\\)|\\\[.*?\\\])/g;
-    return text.split(regex);
-  }, [text]);
-
+const RichText: React.FC<RichTextProps> = ({ html, style }) => {
+  if (!html) return null;
   return (
-    <>
-      {tokens.map((token, index) => {
-        // 1. Double Dollar Display Math Block
-        if (token.startsWith('$$') && token.endsWith('$$')) {
-          const formula = token.slice(2, -2).trim();
-          return <BlockMath key={index} math={formula} />;
-        }
-        // 2. Bracket Display Math Block
-        if (token.startsWith('\\[') && token.endsWith('\\]')) {
-          const formula = token.slice(2, -2).trim();
-          return <BlockMath key={index} math={formula} />;
-        }
-        // 3. Single Dollar Inline Math Block
-        if (token.startsWith('$') && token.endsWith('$')) {
-          const formula = token.slice(1, -1).trim();
-          return <InlineMath key={index} math={formula} />;
-        }
-        // 4. Parentheses Inline Math Block
-        if (token.startsWith('\\(') && token.endsWith('\\)')) {
-          const formula = token.slice(2, -2).trim();
-          return <InlineMath key={index} math={formula} />;
-        }
-        
-        // 5. Plain Normal Text String Segment
-        return <span key={index}>{token}</span>;
-      })}
-    </>
+    <span
+      style={style}
+      dangerouslySetInnerHTML={{ __html: renderHtmlWithMath(html) }}
+    />
   );
 };
 
@@ -171,6 +153,21 @@ const PRINT_CSS = `
     .mcq-item .d-flex { display: flex !important; align-items: baseline !important; margin: 0 !important; padding: 0 !important; }
     .mcq-item span.fw-bold { align-self: baseline !important; }
 
+    /* Re-enable flex inside question containers (print.css kills it globally) */
+    .question-wrapper .d-flex,
+    .question-lh-scope .d-flex,
+    .english-text .d-flex,
+    .urdu-text .d-flex {
+      display: flex !important;
+    }
+
+    /* Math display blocks — center on their own line, avoid page splits */
+    .paper-math-display {
+      display: block !important;
+      text-align: center !important;
+      margin: 0.25em 0 !important;
+      page-break-inside: avoid !important;
+    }
     .katex-display { margin: 0.2em 0 !important; display: inline-block !important; width: auto !important; }
     .katex { font-size: 1.05em !important; text-rendering: auto !important; }
   }
@@ -197,28 +194,6 @@ const toRoman = (n: number): string => {
   return r;
 };
 
-/** ADVANCED HTML STRIPPER THAT PROTECTS LATEX MACROS AND DELIMITERS */
-const stripHtml = (text: string, stripNum = false): string => {
-  if (!text) return '';
-
-  // 1. Remove database markup tags (e.g., <p>, <span class="math-tex">, </p>) safely
-  let s = text.replace(/<\/?[^>]+(>|$)/g, ' ').trim();
-
-  // 2. Normalize common layout spacing codes down to standardized spacing strings
-  s = s.replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
-
-  // 3. Fix double-escaped math block markers introduced by content sanitization string pipes
-  s = s.replace(/\\\\\(/g, '\\(').replace(/\\\\\)/g, '\\)');
-  s = s.replace(/\\\\\s*\(/g, '\\(').replace(/\\\\\s*\)/g, '\\)');
-
-  if (stripNum) {
-    s = s
-      .replace(/^(?:\(?\d+\)?[.)]?|\(?[ivxIVX]+\)?[.)]?)(\s+|\u00A0)*/, '')
-      .replace(/(\s+|\u00A0)*(?:\(?\d+\)?[.)]?|\(?[ivxIVX]+\)?[.)]?)$/, '')
-      .trim();
-  }
-  return s;
-};
 
 const resolveLH = (val: number | undefined, fallback: number): number =>
   typeof val === 'number' && val > 0 ? val : fallback;
@@ -248,7 +223,7 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
   question,
   headingFontSize,
   isUrduSubject,
-  hasSubgroups,
+  hasSubGroups,
   sectionType,
   fontWeight = 'normal',
   onTextChange,
@@ -280,7 +255,7 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
               onChange={(v: string) => onTextChange(sectionId, questionId, engField, v)}
             />
           ) : (
-            <MathRenderer text={stripHtml(engValue)} />
+            <RichText html={engValue} />
           )}
         </div>
 
@@ -308,7 +283,7 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
               onChange={(v: string) => onTextChange(sectionId, questionId, urField, v)}
             />
           ) : (
-            <MathRenderer text={stripHtml(urValue || '', isTranslate)} />
+            <RichText html={urValue || ''} />
           )}
         </div>
       </div>
@@ -360,7 +335,7 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
               unicodeBidi: 'embed',
               fontFamily: URDU_FONT,
             }}>
-              <MathRenderer text={stripHtml(urValue || '', isTranslate)} />
+              <RichText html={urValue || ''} />
             </span>
             </span>
           )}
@@ -388,7 +363,7 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
               onChange={(v: string) => onTextChange(sectionId, questionId, engField, v)}
             />
           ) : (
-            <MathRenderer text={stripHtml(engValue)} />
+            <RichText html={engValue} />
           )}
         </div>
       )}
@@ -454,7 +429,7 @@ const showNumber = !isSecondPartOfOr && !suppressNumbering && index !== -1;
 
   let indexDisplay = '';
   if (showNumber) {
-    if (isLong)     indexDisplay = paperLanguage === 'urdu' ? `${index}.Q` : `Q.${index}`;
+    if (isLong)     indexDisplay = `Q.${index}`;
     else if (isMCQ) indexDisplay = `${index + 1}.`;
     else             indexDisplay = `(${toRoman(index + 1)})`;
   }
@@ -477,16 +452,16 @@ const showNumber = !isSecondPartOfOr && !suppressNumbering && index !== -1;
           <div className="d-flex align-items-start">
             {showEnglishNumber && (
               <span
-                className="fw-bold text-nowrap"
-                style={{ minWidth: isLong ? '22px' : '18px', fontSize: isLong && isUrduSubject ? `${headingFontSize}px` : `${numberFontSize}px`, lineHeight: currentLH, fontFamily: questionFontFamily, textAlign: 'left' }}
+                className={`text-nowrap${isLong ? ' fw-bold' : ''}`}
+                style={{ fontWeight: isLong ? 'bold' : 'normal', minWidth: isLong ? '22px' : '18px', fontSize: isLong && isUrduSubject ? `${headingFontSize}px` : `${numberFontSize}px`, lineHeight: currentLH, fontFamily: questionFontFamily, textAlign: 'left' }}
               >
                 {indexDisplay}
               </span>
             )}
             {showUrduNumber && (
               <span
-                className="fw-bold text-nowrap"
-                style={{ fontWeight:`${isLong && isUrduSubject ? 'bold' : 'normal'}`,marginRight: `${isLong && isUrduSubject ? `-5px` : ``}`,marginTop: `${isLong && isUrduSubject ? `-4px` : ``}`, minWidth: isLong ? '25px' : '18px', fontSize: `${isLong && isUrduSubject ? `${headingFontSize+2}px` : `${numberFontSize}px`}`, lineHeight: currentLH, fontFamily: URDU_FONT, textAlign: 'right', direction: 'rtl' }}
+                className={`text-nowrap${isLong ? ' fw-bold' : ''}`}
+                style={{ fontWeight:`${isLong ? 'bold' : 'normal'}`,marginRight: `${isLong && isUrduSubject ? `-5px` : ``}`,marginTop: `${isLong && isUrduSubject ? `-4px` : ``}`, minWidth: isLong ? '25px' : '18px', fontSize: `${isLong && isUrduSubject ? `${(headingFontSize ?? 18)+2}px` : `${numberFontSize}px`}`, lineHeight: currentLH, fontFamily: URDU_FONT, textAlign: 'right', direction: 'ltr', unicodeBidi: 'embed' }}
               >
                 {indexDisplay}
               </span>
@@ -539,7 +514,7 @@ const showNumber = !isSecondPartOfOr && !suppressNumbering && index !== -1;
               isUrduSubject={isUrduSubject}
               hasSubGroups={hasSubGroups}
               sectionType={sectionType}
-              headingFontSize={headingFontSize}
+              headingFontSize={headingFontSize ?? 18}
             />
           )}
         </div>

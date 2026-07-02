@@ -18,6 +18,15 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireRole } from '@/lib/api-auth';
+import { sanitizeRichTextFields } from '@/lib/sanitizeHtml';
+
+const RICH_TEXT_FIELDS = [
+  'question_text', 'question_text_ur',
+  'option_a', 'option_b', 'option_c', 'option_d',
+  'option_a_ur', 'option_b_ur', 'option_c_ur', 'option_d_ur',
+  'answer_text', 'answer_text_ur',
+] as const;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,6 +38,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireRole(['admin', 'super_admin']);
+  if (auth.error) return auth.error;
+
   try {
     const { id } = await params;
     const { data, error } = await supabase
@@ -65,6 +77,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireRole(['admin', 'super_admin']);
+  if (auth.error) return auth.error;
+
   try {
     const { id } = await params;
     const { error } = await supabase.from('questions').delete().eq('id', id);
@@ -81,9 +96,12 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireRole(['admin', 'super_admin']);
+  if (auth.error) return auth.error;
+
   try {
     const { id } = await params;
-    const body = await req.json();
+    const body = sanitizeRichTextFields(await req.json(), RICH_TEXT_FIELDS);
     const { error, data } = await supabase
       .from('questions')
       .update(body)

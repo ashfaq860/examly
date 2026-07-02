@@ -1,36 +1,29 @@
-// components/BreadcrumbAuto.tsx
-import Link from 'next/link';
+'use client';
+
 import { usePathname } from 'next/navigation';
+import Breadcrumb, { type BreadcrumbItem } from './Breadcrumb';
 
-const BreadcrumbAuto = () => {
-  const pathname = usePathname(); // e.g., /courses/123
-  const pathSegments = pathname.split('/').filter(Boolean);
+interface BreadcrumbAutoProps {
+  /** Override the auto-derived label for a specific raw URL segment, e.g. { [classId]: 'Class 9' } */
+  labels?: Record<string, string>;
+}
 
-  return (
-    <nav aria-label="breadcrumb">
-      <ol className="breadcrumb">
-        <li className="breadcrumb-item">
-          <Link href="/">Home</Link>
-        </li>
-        {pathSegments.map((segment, idx) => {
-          const href = '/' + pathSegments.slice(0, idx + 1).join('/');
-          const isLast = idx === pathSegments.length - 1;
-          // Capitalize
-          const label = segment.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+const toLabel = (segment: string) =>
+  segment.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-          return (
-            <li
-              key={idx}
-              className={`breadcrumb-item ${isLast ? 'active' : ''}`}
-              aria-current={isLast ? 'page' : undefined}
-            >
-              {isLast ? label : <Link href={href}>{label}</Link>}
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
-  );
-};
+export default function BreadcrumbAuto({ labels = {} }: BreadcrumbAutoProps) {
+  const pathname = usePathname();
+  const segments = pathname.split('/').filter(Boolean);
 
-export default BreadcrumbAuto;
+  if (segments.length === 0) return null; // no breadcrumb on the home page itself
+
+  const items: BreadcrumbItem[] = [
+    { label: 'Home', href: '/' },
+    ...segments.map((segment, idx) => ({
+      label: labels[segment] ?? toLabel(segment),
+      href: '/' + segments.slice(0, idx + 1).join('/'),
+    })),
+  ];
+
+  return <Breadcrumb items={items} />;
+}

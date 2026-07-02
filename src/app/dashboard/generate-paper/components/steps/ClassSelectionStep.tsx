@@ -31,10 +31,10 @@ export const ClassSelectionStep: React.FC<ClassSelectionStepProps> = ({
 
   return (
     <div className="container py-4">
-      <div className="text-center mb-5 animate-slide-down">
+      <div className="text-center mb-3 mb-md-5 animate-slide-down">
         <h2 className="fw-black text-dark mb-1 tracking-tight">Select Your Class</h2>
         <div className="mx-auto bg-primary rounded-pill mb-3" style={{ width: '40px', height: '4px' }}></div>
-        <p className="text-secondary opacity-75">Choose the target grade level to begin generating your paper</p>
+        <p className="text-secondary opacity-75 d-none d-md-block">Choose the target grade level to begin generating your paper</p>
       </div>
       
       {sortedClasses.length === 0 ? (

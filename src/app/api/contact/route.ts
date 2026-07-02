@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { isRateLimited, getClientIp } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIp(request);
+    if (isRateLimited(`contact:${ip}`, 5, 10 * 60 * 1000)) {
+      return NextResponse.json(
+        { message: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
     const formData = await request.json();
     const { name, email, phone, subject, message, userType } = formData;
 
@@ -60,8 +69,11 @@ export async function POST(request: NextRequest) {
         console.log('📁 Created contact-submissions directory');
       }
       
-      // Create filename with timestamp
-      const filename = `contact-${Date.now()}-${name.replace(/\s+/g, '-')}.json`;
+      // Create filename with timestamp — strip anything but alphanumerics/
+      // dashes from the user-supplied name so it can't escape submissionsDir
+      // via path traversal sequences (e.g. "../../").
+      const safeName = name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'unknown';
+      const filename = `contact-${Date.now()}-${safeName}.json`;
       const filepath = join(submissionsDir, filename);
       
       const submissionData = {

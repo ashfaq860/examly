@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import Breadcrumb from '@/components/Breadcrumb';
 import { useRouter } from 'next/navigation';
 const jobTestSubjects = [
   'General Knowledge',
@@ -19,7 +20,8 @@ export default function JobPrepPage() {
   return (
     <>
       <Header />
-      <main className="container py-5">
+      <main className="container py-5 pt-header">
+        <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Classes', href: '/classes' }, { label: 'Job Preparation' }]} />
         <button
           type="button"
           className="btn btn-link mb-4"

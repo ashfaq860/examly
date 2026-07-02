@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import nodemailer from 'nodemailer';
+import { isRateLimited, getClientIp } from '@/lib/rateLimit';
 
 /* -------------------- helpers -------------------- */
 
@@ -18,6 +19,11 @@ const generateReferralCode = () => {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    if (isRateLimited(`signup:${ip}`, 5, 10 * 60 * 1000)) {
+      return NextResponse.json({ error: 'Too many signup attempts. Please try again later.' }, { status: 429 });
+    }
+
     const { name, email, password,referralCode } = await req.json();
 
     if (!name || !email || !password || password.length < 6) {

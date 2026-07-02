@@ -1,16 +1,19 @@
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import BreadcrumbAuto from '@/components/BreadcrumbAuto';
 
 export const metadata = {
   title: "Terms & Conditions | Examly.pk",
   description:
     "Terms and Conditions for using Examly.pk – Teacher paper generation and assessment platform",
+  alternates: { canonical: '/terms-and-conditions' },
 };
 
 export default function TermsAndConditions() {
   return (
     <>
       <Header />
+      <div className="container pt-header pb-2"><BreadcrumbAuto /></div>
 
       <main className="terms-page">
 

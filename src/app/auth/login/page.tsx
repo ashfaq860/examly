@@ -167,7 +167,7 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthLayout title="Welcome back" subtitle="">
+    <AuthLayout title="Welcome back" subtitle="" mode="login">
       <form onSubmit={submit}>
         {err && <div className="alert alert-danger">{err}</div>}
 
@@ -187,9 +187,9 @@ export default function LoginPage() {
           {loading ? 'Signing in...' : 'Sign In'}
         </button>
 
-        <div className="mt-3 d-flex justify-content-between small">
+        <div className="mt-3 d-flex justify-content-between" style={{ fontSize: '0.8rem' }}>
           <Link href="/auth/forgot-password">Forgot password?</Link>
-          <Link href="/auth/signup">Create account</Link>
+          <Link href="/auth/signup">Create account →</Link>
         </div>
 
         <div className="text-center my-3 text-muted">OR</div>

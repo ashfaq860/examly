@@ -39,7 +39,11 @@ export async function GET(request: Request) {
       ?.map((item: any) => item.subject)
       .filter(Boolean) || [];
 
-    return NextResponse.json(formattedSubjects);
+    return NextResponse.json(formattedSubjects, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=1800',
+      },
+    });
   } catch (error: any) {
     console.error('Error fetching subjects via join:', error.message);
     return NextResponse.json(

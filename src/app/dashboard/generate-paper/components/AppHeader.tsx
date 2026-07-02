@@ -10,7 +10,7 @@ interface AppHeaderProps {
   onConfigurePaper: () => void;
   isEditMode: boolean;
   onToggleEditMode: () => void;
-  onSavePaper: () => void;
+  onSavePaper?: () => void | Promise<void>;
   isSaveDisabled?: boolean;
   onPrint: () => void;
   onCancelPaper: () => void;

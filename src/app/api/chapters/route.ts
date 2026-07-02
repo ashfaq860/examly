@@ -41,7 +41,11 @@ export async function GET(request: Request) {
       .order('chapterNo', { ascending: true });
 
     if (error) throw error;
-    return NextResponse.json(data);
+    return NextResponse.json(data, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=1800',
+      },
+    });
   } catch (error: any) {
     console.error('Chapters Fetch Error:', error.message);
     return NextResponse.json(

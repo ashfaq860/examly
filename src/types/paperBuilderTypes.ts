@@ -1,6 +1,7 @@
 export interface PaperSection {
   id: string;
   type: string;
+  instructions?: string;
   questions: any[];
   totalQuestions: number;
   attemptCount: number;
@@ -15,10 +16,21 @@ export interface PaperSection {
 export interface PaperSettings {
   fontFamily: string;
   fontSize: number;
+  lineHeight?: number;
+  titleFontFamily?: string;
   titleFontSize: number;
   headingFontFamily: string;
   headingFontSize: number;
   metaFontSize: number;
+  headerLayout?: string;
+  mcqFontSize?: number;
+  mcqLineHeight?: number;
+  logoWidth?: number;
+  logoHeight?: number;
+  showWatermark?: boolean;
+  watermarkWidth?: number;
+  watermarkHeight?: number;
+  watermarkOpacity?: number;
 }
 
 export interface LanguageConfig {

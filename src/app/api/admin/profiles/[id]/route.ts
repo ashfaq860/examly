@@ -1,11 +1,15 @@
 // src/app/api/admin/profiles/[id]/route.ts
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireRole } from "@/lib/api-auth";
 
 // ✅ GET single profile
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireRole(["admin", "super_admin"]);
+  if (auth.error) return auth.error;
+
   const { id } = await params; // 👈 fix
   const { data, error } = await supabaseAdmin
     .from("profiles")
@@ -22,12 +26,18 @@ export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireRole(["admin", "super_admin"]);
+  if (auth.error) return auth.error;
+
   const { id } = await params; // 👈 fix
   const body = await req.json();
 
+  // Allowlist fields — never let the request body set arbitrary columns
+  const { full_name, role, institution, subscription_status, trial_ends_at, cellno, logo, subjects } = body;
+
   const { data, error } = await supabaseAdmin
     .from("profiles")
-    .update(body)
+    .update({ full_name, role, institution, subscription_status, trial_ends_at, cellno, logo, subjects })
     .eq("id", id)
     .select()
     .single();
@@ -42,6 +52,9 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireRole(["admin", "super_admin"]);
+  if (auth.error) return auth.error;
+
   const { id } = await params;
 
   try {

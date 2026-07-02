@@ -18,7 +18,7 @@ const paperSchema = z.object({
   source_type: z.enum(['all', 'model_paper', 'past_paper', 'book']),
   classId: z.string().min(1, 'Class is required'),
   subjectId: z.string().min(1, 'Subject is required'),
-  chapterOption: z.enum(['full_book', 'half_book', 'single_chapter', 'custom']),
+  chapterOption: z.enum(['full_book', 'half_book', 'single_chapter', 'custom']).optional(),
   selectedChapters: z.array(z.string()).optional(),
   selectionMethod: z.enum(['auto', 'manual']),
   mcqCount: z.number().min(0),
@@ -62,6 +62,7 @@ export const useGeneratePaper = () => {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<Record<string, string[]>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubjectsLoading, setIsSubjectsLoading] = useState(false);
   const [isDownloadingKey, setIsDownloadingKey] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [isManualNavigation, setIsManualNavigation] = useState(false);
@@ -107,7 +108,6 @@ export const useGeneratePaper = () => {
     resolver: zodResolver(paperSchema),
     defaultValues: {
       paperType: 'model',
-      chapterOption: 'full_book',
       selectionMethod: 'auto',
       mcqCount: 10,
       mcqDifficulty: 'any',
@@ -298,11 +298,14 @@ export const useGeneratePaper = () => {
         setSubjects([]);
         return;
       }
+      setIsSubjectsLoading(true);
       try {
         const data = await cachedGet(`/api/subjects?classId=${watchedClassId}`);
         setSubjects(data);
       } catch (error) {
         console.error('Error fetching subjects:', error);
+      } finally {
+        setIsSubjectsLoading(false);
       }
     };
     fetchSubjects();
@@ -896,7 +899,7 @@ export const useGeneratePaper = () => {
     } else if (step === 3) {
       setIsManualNavigation(true);
       setValue('subjectId', '');
-      setValue('chapterOption', 'full_book');
+      setValue('chapterOption', undefined);
       setValue('selectedChapters', []);
       setStep(2);
       setTimeout(() => setIsManualNavigation(false), 1000);
@@ -934,6 +937,7 @@ export const useGeneratePaper = () => {
     setSelectedQuestions,
     setPreviewQuestions,
     isLoading,
+    isSubjectsLoading,
     isLoadingPreview,
     isDownloadingKey,
     previewQuestions,

@@ -76,13 +76,13 @@ export const SubjectSelectionStep: React.FC<SubjectSelectionStepProps> = ({
   return (
     <div className="container py-4">
       {/* ─── Header ─────────────────────────────────────── */}
-      <div className="text-center mb-5 animate-premium-fade">
+      <div className="text-center mb-3 mb-md-5 animate-premium-fade">
         <h2 className="fw-black text-dark mb-1 tracking-tight">Select Subject</h2>
         <div
           className="mx-auto bg-primary rounded-pill mb-3"
           style={{ width: 40, height: 4 }}
         />
-        <p className="text-secondary opacity-75">
+        <p className="text-secondary opacity-75 d-none d-md-block">
           {showLoading
             ? 'Fetching curriculum…'
             : `Available subjects for Class ${selectedClassName ?? 'Selected'}`}

@@ -138,10 +138,20 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // First load requires a true loading state
     fetchTrialStatus(false);
 
+    // onAuthStateChange fires once immediately on subscribe with
+    // INITIAL_SESSION — skip that one since the call above already
+    // covers it; otherwise every dashboard page mount fires this fetch
+    // (2 DB queries) twice.
+    let sawInitialSession = false;
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, _session) => {
-      // ✅ Optimization: Silently update the session in the background on route changes 
+      if (event === 'INITIAL_SESSION' && !sawInitialSession) {
+        sawInitialSession = true;
+        return;
+      }
+      // ✅ Optimization: Silently update the session in the background on route changes
       // without setting isLoading = true if we already have active state.
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
         fetchTrialStatus(true);

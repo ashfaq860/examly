@@ -7,7 +7,7 @@ export const paperSchema = z.object({
   source_type: z.enum(['all', 'model_paper', 'past_paper', 'book']),
   classId: z.string().min(1, 'Class is required'),
   subjectId: z.string().min(1, 'Subject is required'),
-  chapterOption: z.enum(['full_book', 'half_book', 'single_chapter', 'custom']),
+  chapterOption: z.enum(['full_book', 'half_book', 'single_chapter', 'custom']).optional(),
   selectedChapters: z.array(z.string()).optional(),
   selectionMethod: z.enum(['auto', 'manual']),
   mcqCount: z.number().min(0),
@@ -46,7 +46,6 @@ export type PaperFormData = z.infer<typeof paperSchema>;
 
 export const defaultFormValues: Partial<PaperFormData> = {
   paperType: 'model',
-  chapterOption: 'full_book',
   selectionMethod: 'auto',
   mcqCount: 10,
   mcqDifficulty: 'any',

@@ -7,16 +7,14 @@ import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 
-/* Dynamically load CubeSlider only on client */
 const CubeSlider = dynamic(() => import('@/components/CubeSlider'), {
   ssr: false,
-  loading: () => <div style={{ height: 300 }} />,
+  loading: () => <div style={{ height: 340 }} />,
 });
 
 export default function HomeClientWrapper() {
   const [scrollProgress, setScrollProgress] = useState(0);
 
-  /* -------------------- SCROLL PROGRESS WITH DEBOUNCE -------------------- */
   useEffect(() => {
     let ticking = false;
     const onScroll = () => {
@@ -29,157 +27,143 @@ export default function HomeClientWrapper() {
         ticking = true;
       }
     };
-
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  /* -------------------- SCROLL ANIMATIONS WITH OPTIMIZED OBSERVER -------------------- */
   useEffect(() => {
-    // Use a single observer for better performance
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             entry.target.classList.add('in-view');
-            // Unobserve after animation to free memory
             observer.unobserve(entry.target);
           }
         });
       },
-      { 
-        threshold: 0.1,  // Reduced from 0.15 for earlier trigger
-        rootMargin: '50px' // Prepare elements before they're visible
-      }
+      { threshold: 0.08, rootMargin: '60px' }
     );
-
     const elements = document.querySelectorAll('[data-animate]');
     elements.forEach((el) => observer.observe(el));
-    
-    return () => {
-      elements.forEach((el) => observer.unobserve(el));
-      observer.disconnect();
-    };
+    return () => { elements.forEach((el) => observer.unobserve(el)); observer.disconnect(); };
   }, []);
 
   return (
     <>
       {/* Scroll Progress */}
       <div className="scroll-progress-bar">
-        <div
-          className="scroll-progress-fill"
-          style={{ width: `${scrollProgress}%` }}
-        />
+        <div className="scroll-progress-fill" style={{ width: `${scrollProgress}%` }} />
       </div>
 
-      {/* Cube Slider */}
       <CubeSlider />
 
       <main>
-        {/* ================= PAPER MAKER ================= */}
-        <section
-          data-animate
-          className="scroll-animate fade-up py-5 bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-800"
-        >
+        {/* ═══ PAPER MAKER SECTION ═══ */}
+        <section data-animate className="scroll-animate" style={{ padding: '2rem 0', background: 'var(--surface)' }}>
           <div className="container">
-            <div className="text-center mb-3">
-              <h1 className="display-5 fw-bold text-success">
-                Advanced <span className="text-primary">Test Maker</span> &{' '}
-                <span className="text-primary">Question Paper Generator</span>
+            <div style={{ textAlign: 'center', marginBottom: '3rem' }} data-animate>
+              <span className="section-eyebrow">AI-Powered Assessment</span>
+              <h1
+                className="section-title"
+                style={{ marginTop: '0.6rem', marginBottom: '1rem' }}
+              >
+                Advanced{' '}
+                <span style={{ color: 'var(--brand-primary)' }}>Test Maker</span>{' '}
+                &amp;{' '}
+                <span style={{ color: 'var(--brand-accent)' }}>Question Paper Generator</span>
               </h1>
-              <p className="lead text-muted">
-                Create <strong>BISE-standard</strong> exams for{' '}
-                <strong>classes 5th to 12th</strong> using{' '}
-                <span className="text-success">full book</span>,{' '}
-                <span className="text-success">half book</span>, or{' '}
-                <span className="text-success">custom chapters</span>. Smart question selection, balanced difficulty, and instant downloads - all in one platform.
+              <p className="section-subtitle">
+                Create <strong>BISE-standard</strong> exams for <strong>classes 5th to 12th</strong> using full book,
+                half book, or custom chapters — with smart question selection and instant downloads.
               </p>
             </div>
 
-            <div className="row g-4" data-animate>
+            <div className="row g-4">
               <FeatureCard
                 img="/createProfessionalTest.jpg"
-                title="Make Professional Tests"
+                eyebrow="For Teachers"
+                title="Professional Tests"
                 subtitle="Classes 5th to 12th"
                 list={[
-                  'Generate full, half-book, single chapter, and custom chapter papers quickly',
-                  'Auto & manual question selection for complete control',
-                  'Set difficulty levels to create balanced assessments',
-                  'Perfect for schools, colleges, and academies'
+                  'Generate full, half-book, or chapter-specific papers',
+                  'Auto & manual question selection for full control',
+                  'Set difficulty for balanced assessments',
+                  'Perfect for schools, colleges & academies',
                 ]}
                 href="/auth/login"
+                ctaLabel="Start Creating"
                 delay={0}
               />
-
               <FeatureCard
                 img="/1monthfree.jpg"
-                title="100% Free Offer"
-                subtitle="Unlimited Paper Generation"
+                eyebrow="🎁 Limited Offer"
+                title="100% Free Trial"
+                subtitle="3 Months Unlimited Access"
                 list={[
-                  'Free signup with 3 months of unlimited access',
-                  'Referral bonus: Invite friends and earn 1 month free',
-                  'Access question banks for all classes',
-                  'Create online tests and printable exam papers at no cost'
+                  'Signup and get 3 months of unlimited access',
+                  'Refer friends for extra free months',
+                  'Access full question banks for all classes',
+                  'No credit card required',
                 ]}
                 href="/auth/signup"
+                ctaLabel="Claim Free Access"
                 delay={150}
                 highlight
               />
-
               <FeatureCard
                 img="/boardPattern.jpg"
-                title="Board Pattern Papers"
-                subtitle="BISE Format Supported"
+                eyebrow="Board Exams"
+                title="BISE Pattern Papers"
+                subtitle="Official Format Supported"
                 list={[
-                  'Generate papers exactly in BISE board format',
-                  'Automatic generation based on syllabus, chapters, and question types',
+                  'Papers exactly in official BISE board format',
+                  'Auto generation by syllabus and chapters',
                   'Manual customization available',
-                  'Instant download and print-ready papers'
+                  'Instant download — print-ready A4 format',
                 ]}
                 href="/auth/login"
+                ctaLabel="Try Board Pattern"
                 delay={300}
               />
             </div>
           </div>
         </section>
 
-        {/* ================= PAPER LAYOUTS ================= */}
-        <section
-          data-animate
-          className="scroll-animate fade-up py-5 bg-light dark:bg-gray-900"
-        >
+        {/* ═══ PAPER LAYOUTS SECTION ═══ */}
+        <section data-animate className="scroll-animate" style={{ padding: '5rem 0', background: 'var(--surface-muted)' }}>
           <div className="container">
-            <div className="text-center mb-5" data-animate>
-              <h2 className="display-5 fw-bold text-success">
-                Paper Layouts & Demo Videos
+            <div style={{ textAlign: 'center', marginBottom: '3rem' }} data-animate>
+              <span className="section-eyebrow">Paper Layouts</span>
+              <h2 className="section-title" style={{ marginTop: '0.6rem', marginBottom: '1rem' }}>
+                Multiple Formats &amp; Demo Videos
               </h2>
-              <p className="lead text-muted dark:text-gray-300">
-                Explore different paper formats for exams with MCQs, subjective questions, or combined layouts. Watch YouTube demos to see how each layout works.
+              <p className="section-subtitle">
+                Choose from MCQ-only, subjective-only, or combined layouts. Watch demos to see exactly how each format works before generating.
               </p>
             </div>
 
             <div className="row g-4">
               <PaperLayoutCard
-                title="Separate Papers: MCQ & Subjective"
-                description="Two separate papers: one for MCQs and one for subjective questions."
+                title="Separate Papers"
+                description="Distinct MCQ sheet and subjective paper — ideal for board-style exams."
                 youtubeId="YOUTUBE_ID_1"
                 delay={0}
               />
               <PaperLayoutCard
-                title="Combined Paper: MCQ + Subjective"
-                description="MCQs and subjective questions on the same page for a streamlined exam format."
+                title="Combined Single Paper"
+                description="MCQs and subjective questions on one sheet for streamlined exams."
                 youtubeId="YOUTUBE_ID_2"
                 delay={150}
               />
               <PaperLayoutCard
-                title="Two Papers on Single Page"
-                description="Front page: MCQs, Back page: Subjective questions for efficient printing."
+                title="Two Per Page"
+                description="Front page MCQs + back page subjective — saves paper, perfect for class tests."
                 youtubeId="YOUTUBE_ID_3"
                 delay={300}
               />
               <PaperLayoutCard
-                title="Three Papers on Single Page"
-                description="Front paper MCQs and back paper subjective questions with three layouts in one page."
+                title="Three Per Page"
+                description="Three mini-papers per page for quick assessments and save on printing."
                 youtubeId="YOUTUBE_ID_4"
                 delay={450}
               />
@@ -187,205 +171,208 @@ export default function HomeClientWrapper() {
           </div>
         </section>
 
-        {/* ================= STUDENT PREP ================= */}
-<section
-  data-animate
-  className="scroll-animate fade-up py-5 bg-light dark:bg-gray-800"
->
-  <div className="container">
-    <div className="text-center mb-5" data-animate>
-      <Image
-        src="/studentSection.jpg"
-        alt="Students"
-        width={400}
-        height={160}
-        className="img-fluid mb-4"
-        loading="lazy"
-        style={{ height: 'auto' }}
-      />
-      <h2 className="display-5 fw-bold text-success">
-        Student Exam Preparation
-      </h2>
-      <p className="lead text-muted dark:text-gray-300">
-        Smart AI-powered practice from 5th to 12th
-      </p>
-    </div>
+        {/* ═══ STUDENT PREP SECTION ═══ */}
+        <section data-animate className="scroll-animate" style={{ padding: '5rem 0', background: 'var(--surface)' }}>
+          <div className="container">
+            <div style={{ textAlign: 'center', marginBottom: '3rem' }} data-animate>
+              <span className="section-eyebrow">For Students</span>
+              <h2 className="section-title" style={{ marginTop: '0.6rem', marginBottom: '1rem' }}>
+                Smart Exam Preparation
+              </h2>
+              <p className="section-subtitle">
+                AI-powered practice from 5th to 12th class — quizzes, mock exams, and performance analytics.
+              </p>
+            </div>
 
-    <div className="row g-4">
-      <StudentCard
-        img="/studentQuizz.jpg"
-        title="Prepare Your MCQ Part"
-        description="Practice chapter-wise MCQs online for 5th to 12th class exams. Improve knowledge, speed, and exam accuracy with interactive quizzes."
-        btn="Start Practice"
-        link="/quiz"
-        delay={0}
-      />
-      <StudentCard
-        img="/mockTest.jpg"
-        title="Career Mock Exams"
-        description="Take full-length mock exams for better exam readiness. Simulate real BISE exams and track performance to boost confidence and scores."
-        btn="Try Mock Test"
-        delay={150}
-      />
-      <StudentCard
-        img="/checkPerformance.jpg"
-        title="Performance Insights"
-        description="Analyze your exam performance with detailed insights. Identify weak areas, track progress, and improve results for better academic outcomes."
-        btn="View Analytics"
-        delay={300}
-      />
-    </div>
-  </div>
-</section>
+            <div className="row g-4">
+              <StudentCard
+                img="/studentQuizz.jpg"
+                eyebrow="MCQ Practice"
+                title="Chapter-wise Quizzes"
+                description="Practice chapter-wise MCQs online. Improve speed, accuracy, and exam confidence with interactive quizzes."
+                btn="Start Practice"
+                link="/quiz"
+                delay={0}
+              />
+              <StudentCard
+                img="/mockTest.jpg"
+                eyebrow="Simulation"
+                title="Career Mock Exams"
+                description="Full-length mock exams to simulate real BISE conditions. Track performance and boost your score."
+                btn="Try Mock Test"
+                delay={150}
+              />
+              <StudentCard
+                img="/checkPerformance.jpg"
+                eyebrow="Analytics"
+                title="Performance Insights"
+                description="Detailed analytics to identify weak areas, track progress, and improve results before the final exam."
+                btn="View Analytics"
+                delay={300}
+              />
+            </div>
+          </div>
+        </section>
       </main>
 
-      {/* ================= STYLES ================= */}
       <style jsx>{`
-        .scroll-progress-bar {
-          position: fixed;
-          top: 70px;
-          width: 100%;
-          height: 3px;
-          z-index: 999;
-          background: rgba(255, 255, 255, 0.1);
-        }
-        .scroll-progress-fill {
-          height: 100%;
-          background: linear-gradient(90deg, #1ba699, #159380);
-        }
-
-        .scroll-animate {
-          opacity: 0;
-          transform: translateY(40px);
-          transition: all 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .scroll-animate.in-view {
-          opacity: 1;
-          transform: translateY(0);
-        }
-
-        .zoom-in {
-          transform: scale(0.9);
-        }
-        .zoom-in.in-view {
-          transform: scale(1);
-        }
-
-        .feature-card {
-          transition: all 0.3s ease-in-out;
-        }
-        .feature-card:hover {
-          transform: translateY(-4px);
-          box-shadow: var(--shadow-md);
-        }
-
-        .feature-card.highlight {
-          border: 1px solid rgba(27, 166, 153, 0.35);
-          background: #f0fdfa;
-        }
-
-        .paper-card {
-          position: relative;
-          overflow: hidden;
-          border: 2px solid transparent;
-          border-radius: var(--radius-md);
+        .feature-card-inner {
           background: #fff;
-          transition: all 0.3s ease-in-out;
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-xl);
+          overflow: hidden;
+          height: 100%;
+          box-shadow: var(--shadow-sm);
+          transition: transform 0.25s var(--ease-out), box-shadow 0.25s ease;
+        }
+        .feature-card-inner:hover {
+          transform: translateY(-6px);
+          box-shadow: var(--shadow-lg);
+        }
+        .feature-card-inner.highlight {
+          border-color: rgba(27,166,153,0.3);
+          box-shadow: 0 0 0 3px rgba(27,166,153,0.08), var(--shadow-sm);
+        }
+        .feature-card-inner.highlight:hover {
+          box-shadow: 0 0 0 3px rgba(27,166,153,0.12), var(--shadow-lg);
         }
 
-        .paper-card:hover {
+        .paper-card-inner {
+          background: #fff;
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-xl);
+          overflow: hidden;
+          height: 100%;
+          box-shadow: var(--shadow-sm);
+          transition: transform 0.25s var(--ease-out), box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+        .paper-card-inner:hover {
           transform: translateY(-4px);
           box-shadow: var(--shadow-md);
-          border-color: #1ba699;
+          border-color: var(--brand-accent);
         }
 
-        .paper-card iframe {
-          border-radius: var(--radius-md) var(--radius-md) 0 0;
-        }
-
-        .watch-demo-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
+        .student-card-inner {
+          background: #fff;
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-xl);
+          overflow: hidden;
           height: 100%;
-          background: rgba(27, 166, 153, 0.5);
-          color: #fff;
-          font-weight: bold;
-          font-size: 1.2rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          opacity: 0;
-          transition: opacity 0.3s ease;
-          border-radius: var(--radius-md) var(--radius-md) 0 0;
-          cursor: pointer;
+          box-shadow: var(--shadow-sm);
+          transition: transform 0.25s var(--ease-out), box-shadow 0.25s ease;
         }
-        .paper-card:hover .watch-demo-overlay {
-          opacity: 1;
+        .student-card-inner:hover {
+          transform: translateY(-4px);
+          box-shadow: var(--shadow-md);
         }
       `}</style>
     </>
   );
 }
 
-/* ================= REUSABLE COMPONENTS (MEMOIZED) ================= */
-const FeatureCard = memo(function FeatureCard({ img, title, subtitle, list, href, delay, highlight }: any) {
+/* ═══ REUSABLE COMPONENTS ═══ */
+
+const FeatureCard = memo(function FeatureCard({
+  img, eyebrow, title, subtitle, list, href, ctaLabel, delay, highlight,
+}: any) {
   return (
     <div className="col-md-4">
       <div
         data-animate
-        style={{ transitionDelay: `${delay}ms` }}
-        className={`scroll-animate zoom-in card feature-card border-0 shadow-sm ${highlight ? 'highlight' : ''}`}
+        style={{ transitionDelay: `${delay}ms`, height: '100%' }}
+        className="scroll-animate zoom-in"
       >
-        <Image 
-          src={img} 
-          alt={title} 
-          width={400} 
-          height={320} 
-          className="card-img-top" 
-          loading="lazy"
-          quality={75}
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-        />
-        <div className="card-body p-4">
-          <h3 className="fw-bold">{title}</h3>
-          <p className="text-primary fw-semibold">{subtitle}</p>
-          <ul className="text-muted">{list.map((i: string) => <li key={i}>{i}</li>)}</ul>
-          <Link href={href} className="btn btn-success w-100">Start Now</Link>
+        <div className={`feature-card-inner ${highlight ? 'highlight' : ''}`}>
+          <div style={{ position: 'relative', overflow: 'hidden', aspectRatio: '1 / 1' }}>
+            <Image
+              src={img}
+              alt={title}
+              width={400}
+              height={400}
+              className="card-img-top"
+              loading="lazy"
+              quality={75}
+              sizes="(max-width: 768px) 100vw, 33vw"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            />
+            {highlight && (
+              <div style={{
+                position: 'absolute', top: 12, right: 12,
+                background: 'linear-gradient(135deg, #1ba699, #0e7a71)',
+                color: '#fff', fontSize: '0.7rem', fontWeight: 700,
+                padding: '3px 10px', borderRadius: 99,
+                letterSpacing: '0.04em',
+              }}>
+                FREE OFFER
+              </div>
+            )}
+          </div>
+          <div style={{ padding: '1.4rem' }}>
+            <span className="section-eyebrow" style={{ display: 'block', marginBottom: 6 }}>{eyebrow}</span>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 4, color: 'var(--text-main)' }}>{title}</h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--brand-primary)', fontWeight: 600, marginBottom: '0.85rem' }}>{subtitle}</p>
+            <ul style={{ paddingLeft: '1.1rem', marginBottom: '1.25rem', color: 'var(--text-muted)' }}>
+              {list.map((i: string) => (
+                <li key={i} style={{ fontSize: '0.83rem', lineHeight: 1.6, marginBottom: 4 }}>{i}</li>
+              ))}
+            </ul>
+            <Link
+              href={href}
+              style={{
+                display: 'block', textAlign: 'center',
+                padding: '0.6rem 1rem', borderRadius: 'var(--radius-md)',
+                fontWeight: 700, fontSize: '0.875rem', textDecoration: 'none',
+                background: highlight
+                  ? 'linear-gradient(135deg, #1ba699, #0e7a71)'
+                  : 'linear-gradient(135deg, var(--brand-primary), #0a51b5)',
+                color: '#fff',
+                transition: 'opacity 0.2s, transform 0.2s',
+                boxShadow: '0 2px 8px rgba(7,62,140,0.2)',
+              }}
+            >
+              {ctaLabel}
+            </Link>
+          </div>
         </div>
       </div>
     </div>
   );
 });
 
-// Lazy load YouTube iframe placeholder
 const LazyYoutubeEmbed = memo(function LazyYoutubeEmbed({ youtubeId, title }: any) {
   const [isLoaded, setIsLoaded] = useState(false);
-
   return (
-    <div className="ratio ratio-16x9 position-relative bg-dark">
+    <div
+      style={{
+        position: 'relative', paddingTop: '56.25%',
+        background: '#0f172a', cursor: 'pointer', overflow: 'hidden',
+      }}
+      onClick={() => setIsLoaded(true)}
+    >
       {!isLoaded ? (
-        <div 
-          onClick={() => setIsLoaded(true)}
-          style={{
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#000',
-            color: '#fff',
-            fontSize: '1.5rem'
-          }}
-        >
-          Click to load video
+        <div style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 10, color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem',
+        }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%',
+            background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: '1px solid rgba(255,255,255,0.2)',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="white">
+              <path d="M3 2l11 6-11 6V2z" />
+            </svg>
+          </div>
+          <span style={{ fontWeight: 500 }}>Click to watch demo</span>
         </div>
       ) : (
         <iframe
-          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=0`}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
           title={title}
-          allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
           loading="lazy"
         />
@@ -399,56 +386,67 @@ const PaperLayoutCard = memo(function PaperLayoutCard({ title, description, yout
     <div className="col-md-6 col-lg-3">
       <div
         data-animate
-        style={{ transitionDelay: `${delay}ms` }}
-        className="scroll-animate zoom-in card paper-card h-100 border-0 shadow-sm"
+        style={{ transitionDelay: `${delay}ms`, height: '100%' }}
+        className="scroll-animate zoom-in"
       >
-        <LazyYoutubeEmbed youtubeId={youtubeId} title={title} />
-        <div className="card-body p-3">
-          <h5 className="fw-bold">{title}</h5>
-          <p className="text-muted small">{description}</p>
+        <div className="paper-card-inner">
+          <LazyYoutubeEmbed youtubeId={youtubeId} title={title} />
+          <div style={{ padding: '1rem 1.1rem 1.25rem' }}>
+            <h5 style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 6, color: 'var(--text-main)' }}>{title}</h5>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>{description}</p>
+          </div>
         </div>
       </div>
     </div>
   );
 });
 
-const StudentCard = memo(function StudentCard({ img, title, description, btn, delay, link = null }: any) {
+const StudentCard = memo(function StudentCard({ img, eyebrow, title, description, btn, delay, link = null }: any) {
   const router = useRouter();
-
   const handleClick = useCallback(() => {
-    if (link) {
-      router.push(link);
-    } else {
-      toast.success('Coming soon!');
-    }
+    if (link) router.push(link);
+    else toast.success('Coming soon!');
   }, [link, router]);
 
   return (
     <div className="col-md-4">
       <div
         data-animate
-        style={{ transitionDelay: `${delay}ms` }}
-        className="scroll-animate fade-up card feature-card h-100 border-0 shadow-sm"
+        style={{ transitionDelay: `${delay}ms`, height: '100%' }}
+        className="scroll-animate fade-up"
       >
-        <Image
-          src={img}
-          alt={title}
-          width={400}
-          height={260}
-          className="card-img-top"
-          loading="lazy"
-          quality={75}
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-        />
-        <div className="card-body p-4">
-          <h3 className="fw-bold">{title}</h3>
-          <p className="text-muted small">{description}</p>
-          <button className="btn btn-success" onClick={handleClick}>
-            {btn}
-          </button>
+        <div className="student-card-inner">
+          <Image
+            src={img}
+            alt={title}
+            width={600}
+            height={400}
+            loading="lazy"
+            quality={75}
+            sizes="(max-width: 768px) 100vw, 33vw"
+            style={{ width: '100%', height: 'auto', display: 'block' }}
+          />
+          <div style={{ padding: '1.4rem' }}>
+            <span className="section-eyebrow" style={{ display: 'block', marginBottom: 6 }}>{eyebrow}</span>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.6rem', color: 'var(--text-main)' }}>{title}</h3>
+            <p style={{ fontSize: '0.83rem', color: 'var(--text-muted)', lineHeight: 1.65, marginBottom: '1.1rem' }}>{description}</p>
+            <button
+              onClick={handleClick}
+              style={{
+                padding: '0.55rem 1.2rem', border: 'none',
+                borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                background: 'linear-gradient(135deg, var(--brand-accent), var(--brand-accent-600))',
+                color: '#fff', fontWeight: 700, fontSize: '0.85rem',
+                fontFamily: 'inherit',
+                transition: 'opacity 0.2s, transform 0.2s',
+                boxShadow: '0 2px 8px rgba(27,166,153,0.25)',
+              }}
+            >
+              {btn}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 });
-

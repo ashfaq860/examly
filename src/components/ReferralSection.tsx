@@ -1,24 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Gift,
-  Share2,
-  Mail,
-  Link as LinkIcon,
-  X,
-} from "lucide-react";
+import { Gift, Share2, Mail, Link as LinkIcon, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface FloatingReferralButtonProps {
   referralCode: string;
 }
 
-export default function FloatingReferralButton({
-  referralCode,
-}: FloatingReferralButtonProps) {
+export default function FloatingReferralButton({ referralCode }: FloatingReferralButtonProps) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  // On generate-paper page a 56px settings FAB sits at bottom:24px right:24px — stack above it
+  const bottomOffset = pathname?.startsWith("/dashboard/generate-paper") ? 92 : 24;
 
   const referralLink =
     typeof window !== "undefined"
@@ -32,83 +28,136 @@ export default function FloatingReferralButton({
 
   return (
     <div
-      className="position-fixed end-0 top-50 translate-middle-y"
-      style={{ zIndex: 1050 }}
+      style={{
+        position: "fixed",
+        bottom: bottomOffset,
+        right: 27,
+        zIndex: 1050,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: 12,
+      }}
     >
-      {/* Floating Main Button */}
-      <motion.button
-        whileTap={{ scale: 0.92 }}
-        onClick={() => setOpen(!open)}
-        className="btn btn-success rounded-circle shadow d-flex align-items-center justify-content-center"
-        style={{
-          width: "56px",
-          height: "56px",
-        }}
-        aria-label="Refer & Earn"
-      >
-        {open ? <X size={22} /> : <Gift size={22} />}
-      </motion.button>
-
-      {/* Slide-out Panel */}
+      {/* Panel slides up above the button */}
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 30 }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
-            className="bg-white shadow-lg rounded-4 p-3 mt-2 me-2 border"
-            style={{ width: "260px" }}
+            initial={{ opacity: 0, y: 12, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.96 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            style={{
+              width: "min(280px, calc(100vw - 32px))",
+              background: "#fff",
+              borderRadius: 16,
+              padding: "1rem 1.1rem",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.13), 0 1px 4px rgba(0,0,0,0.06)",
+              border: "1px solid rgba(0,0,0,0.07)",
+            }}
           >
-            <div className="text-center mb-3">
-              <div className="fw-bold text-success">
+            {/* Header */}
+            <div style={{ textAlign: "center", marginBottom: 14 }}>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: "0.92rem", color: "#1ba699" }}>
                 🎁 Get 1 Month Free
-              </div>
-              <small className="text-muted">
-                Invite friends & earn rewards
-              </small>
+              </p>
+              <p style={{ margin: "3px 0 0", fontSize: "0.75rem", color: "#64748b" }}>
+                Invite friends &amp; earn rewards
+              </p>
             </div>
 
-            <div className="d-grid gap-2">
+            {/* Share buttons */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <a
-                href={`https://wa.me/?text=Join%20using%20my%20referral%20link:%20${encodeURIComponent(
-                  referralLink
-                )}`}
+                href={`https://wa.me/?text=Join%20using%20my%20referral%20link:%20${encodeURIComponent(referralLink)}`}
                 target="_blank"
-                className="btn btn-success btn-sm d-flex align-items-center justify-content-center gap-2 rounded-3"
+                rel="noreferrer"
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  padding: "0.5rem 0.75rem", borderRadius: 10, textDecoration: "none",
+                  background: "#25D366", color: "#fff",
+                  fontWeight: 600, fontSize: "0.82rem",
+                }}
               >
-                <Share2 size={16} /> WhatsApp
+                <Share2 size={15} /> WhatsApp
               </a>
 
               <a
-                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
-                  referralLink
-                )}`}
+                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralLink)}`}
                 target="_blank"
-                className="btn btn-primary btn-sm d-flex align-items-center justify-content-center gap-2 rounded-3"
+                rel="noreferrer"
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  padding: "0.5rem 0.75rem", borderRadius: 10, textDecoration: "none",
+                  background: "#1877F2", color: "#fff",
+                  fontWeight: 600, fontSize: "0.82rem",
+                }}
               >
-                <Share2 size={16} /> Facebook
+                <Share2 size={15} /> Facebook
               </a>
 
               <a
-                href={`mailto:?subject=Get 1 Month Free&body=Join using my referral link: ${encodeURIComponent(
-                  referralLink
-                )}`}
-                className="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center gap-2 rounded-3"
+                href={`mailto:?subject=Get 1 Month Free&body=Join using my referral link: ${encodeURIComponent(referralLink)}`}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  padding: "0.5rem 0.75rem", borderRadius: 10, textDecoration: "none",
+                  background: "transparent", color: "#64748b",
+                  fontWeight: 600, fontSize: "0.82rem",
+                  border: "1px solid #e2e8f0",
+                }}
               >
-                <Mail size={16} /> Email
+                <Mail size={15} /> Email
               </a>
 
               <button
                 onClick={copyToClipboard}
-                className="btn btn-outline-success btn-sm d-flex align-items-center justify-content-center gap-2 rounded-3"
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  padding: "0.5rem 0.75rem", borderRadius: 10,
+                  background: "transparent", color: "#1ba699",
+                  fontWeight: 600, fontSize: "0.82rem", cursor: "pointer",
+                  border: "1px solid rgba(27,166,153,0.35)",
+                  fontFamily: "inherit",
+                }}
               >
-                <LinkIcon size={16} /> Copy Link
+                <LinkIcon size={15} /> Copy Link
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Floating trigger button */}
+      <motion.button
+        whileTap={{ scale: 0.9 }}
+        whileHover={{ scale: 1.05 }}
+        onClick={() => setOpen(!open)}
+        aria-label="Refer & Earn"
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: "50%",
+          border: "none",
+          cursor: "pointer",
+          background: "linear-gradient(135deg, #1ba699 0%, #0e7a71 100%)",
+          boxShadow: "0 4px 18px rgba(27,166,153,0.45)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          flexShrink: 0,
+        }}
+      >
+        <motion.span
+          key={open ? "close" : "gift"}
+          initial={{ rotate: -30, opacity: 0 }}
+          animate={{ rotate: 0, opacity: 1 }}
+          transition={{ duration: 0.18 }}
+          style={{ display: "flex" }}
+        >
+          {open ? <X size={20} /> : <Gift size={20} />}
+        </motion.span>
+      </motion.button>
     </div>
   );
 }

@@ -10,6 +10,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { requireRole } from '@/lib/api-auth';
+import { sanitizeRichTextFields } from '@/lib/sanitizeHtml';
 
 const QUESTION_SELECT = `
   *,
@@ -32,6 +34,9 @@ const QUESTION_SELECT = `
 // ── GET /api/admin/questions ────────────────────────────────────────────────
 // Paginated, filtered list for the Question Bank admin table.
 export async function GET(request: NextRequest) {
+  const auth = await requireRole(['admin', 'super_admin']);
+  if (auth.error) return auth.error;
+
   const { searchParams } = new URL(request.url);
 
   try {
@@ -115,6 +120,9 @@ export async function GET(request: NextRequest) {
 // Create a single question from the Add Question form.
 // Body: { rows: [questionObject] } — always exactly one row.
 export async function POST(request: NextRequest) {
+  const auth = await requireRole(['admin', 'super_admin']);
+  if (auth.error) return auth.error;
+
   try {
     const body = await request.json();
     const rows = Array.isArray(body?.rows) ? body.rows : null;
@@ -123,9 +131,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'rows is required and must be a non-empty array' }, { status: 400 });
     }
 
+    const RICH_TEXT_FIELDS = [
+      'question_text', 'question_text_ur',
+      'option_a', 'option_b', 'option_c', 'option_d',
+      'option_a_ur', 'option_b_ur', 'option_c_ur', 'option_d_ur',
+      'answer_text', 'answer_text_ur',
+    ] as const;
+    const sanitizedRows = rows.map((row: Record<string, any>) => sanitizeRichTextFields(row, RICH_TEXT_FIELDS));
+
     const { data, error } = await supabaseAdmin
       .from('questions')
-      .insert(rows)
+      .insert(sanitizedRows)
       .select('id');
 
     if (error) throw error;

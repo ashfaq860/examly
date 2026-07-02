@@ -115,7 +115,7 @@ useEffect(() => {
   };
 
   return (
-    <AuthLayout title="Sign Up" subtitle="Only PTB Syllabus">
+    <AuthLayout title="Create Account" subtitle="" mode="signup">
       <form onSubmit={handleSignup}>
         {/* Full Name */}
         <div className="mb-3">
@@ -185,15 +185,9 @@ useEffect(() => {
           {loading ? 'Creating Account...' : 'Create Account'}
         </button>
 
-        <div className="mt-3 text-center">
-          <span className="text-muted">Already have an account? </span>
-          <Link
-            href="/auth/login"
-            className="btn btn-sm"
-            style={{ background: '#073E8C', color: 'white' }}
-          >
-            Sign in
-          </Link>
+        <div className="mt-3 text-center" style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+          Already have an account?{' '}
+          <Link href="/auth/login">Sign in</Link>
         </div>
       </form>
     </AuthLayout>

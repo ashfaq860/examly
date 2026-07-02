@@ -1,26 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getSessionFromRequest } from '@/lib/api-auth';
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await getSessionFromRequest();
+    if (auth.error) return auth.error;
+    const { user } = auth;
+
     const body = await req.json();
     const { paperId } = body;
 
     if (!paperId) {
       return NextResponse.json({ error: 'Missing paperId' }, { status: 400 });
     }
-
-    // Create Supabase admin client with service role key (bypasses RLS)
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    );
 
     // Get paper record
     const { data: paper, error: fetchError } = await supabaseAdmin
@@ -31,6 +24,19 @@ export async function POST(req: NextRequest) {
 
     if (fetchError || !paper) {
       return NextResponse.json({ error: fetchError?.message || 'Paper not found' }, { status: 404 });
+    }
+
+    // Ownership check — only the paper's creator or an admin may delete it
+    if (paper.created_by !== user.id) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!profile || (profile.role !== 'admin' && profile.role !== 'super_admin')) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     // Helper to extract path from storage URL

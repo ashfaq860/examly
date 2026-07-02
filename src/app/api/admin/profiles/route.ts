@@ -1,7 +1,11 @@
 // api/admin/profiles/route.ts
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireRole } from "@/lib/api-auth";
 
 export async function GET() {
+  const auth = await requireRole(["admin", "super_admin"]);
+  if (auth.error) return auth.error;
+
   const { data, error } = await supabaseAdmin
     .from("profiles")
     .select("*")
@@ -12,6 +16,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const auth = await requireRole(["admin", "super_admin"]);
+  if (auth.error) return auth.error;
+
   const body = await req.json();
 
   try {

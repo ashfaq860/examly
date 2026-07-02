@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getSessionFromRequest } from "@/lib/api-auth";
 
 // 🔹 GET → return all available packages
 export async function GET() {
@@ -21,9 +22,13 @@ export async function GET() {
 // 🔹 POST → request subscription
 export async function POST(req: NextRequest) {
   try {
-    const { userId, packageId } = await req.json();
+    const auth = await getSessionFromRequest();
+    if (auth.error) return auth.error;
 
-    if (!userId || !packageId) {
+    const { packageId } = await req.json();
+    const userId = auth.user.id; // never trust a client-supplied userId here
+
+    if (!packageId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -56,9 +61,14 @@ export async function POST(req: NextRequest) {
 
     if (existingError) throw new Error(existingError.message);
 
-    const hasPending = existing?.some(
-      (sub) => sub.is_active || (sub.expires_at && new Date(sub.expires_at) > new Date())
-    );
+    const now = new Date();
+    const hasPending = existing?.some((sub) => {
+      // Truly pending: submitted but not yet approved (is_active=false, no expires_at)
+      const isPending = !sub.is_active && !sub.expires_at;
+      // Currently active: approved and not yet expired
+      const isActive = sub.is_active && (!sub.expires_at || new Date(sub.expires_at) > now);
+      return isPending || isActive;
+    });
 
     if (hasPending) {
       return NextResponse.json(

@@ -2,197 +2,266 @@
 import Link from 'next/link';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import BreadcrumbAuto from '@/components/BreadcrumbAuto';
 
-export default function AboutUs() {
-  const teamMembers = [
-    {
-      name: "Abdul Rauf",
-      role: "Founder & CEO",
-      image: "/team/sarah.jpg",
-      description: "Former educator with 10+ years experience in curriculum development",
-      social: {
-        linkedin: "#",
-        twitter: "#"
-      }
-    },
-    {
-      name: "Fahad Farooq",
-      role: "CTO",
-      image: "/team/michael.jpg",
-      description: "Tech entrepreneur passionate about EdTech solutions",
-      social: {
-        linkedin: "#",
-        twitter: "#"
-      }
-    },
-    {
-      name: "Dr. Saeed Ahmad",
-      role: "Head of Education",
-      image: "/team/priya.jpg",
-      description: "M.Phil in Educational Technology with 15 years teaching experience",
-      social: {
-        linkedin: "#",
-        twitter: "#"
-      }
-    },
-    {
-      name: "Mushtaq Ahmed",
-      role: "Product Lead",
-      image: "/team/david.jpg",
-      description: "Product manager focused on user experience and innovation",
-      social: {
-        linkedin: "#",
-        twitter: "#"
-      }
-    }
-  ];
+const STATS = [
+  { value: '50K+',  label: 'Papers Generated'          },
+  { value: '5K+',   label: 'Active Educators'           },
+  { value: '100+',  label: 'Institutions Served'        },
+  { value: '95%',   label: 'Satisfaction Rate'          },
+];
 
-  const milestones = [
-    {
-      year: "2025",
-      title: "Company Founded",
-      description: "Started with a vision to transform educational assessment"
-    },
-    {
-      year: "2025",
-      title: "Platform Launch",
-      description: "Launched Examly as Paper Maker and quiz features"
-    },
-    {
-      year: "2025",
-      title: "10,000+ Users",
-      description: "Reached milestone of serving educators and students worldwide"
-    },
-    {
-      year: "2025",
-      title: "New Features",
-      description: "Added job test preparation and advanced analytics"
-    }
-  ];
+const VALUES = [
+  {
+    color: '#1e4fa6',
+    glyph: <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" fill="#fff"/>,
+    title: 'Innovation',
+    desc: 'Constantly evolving our platform to meet the changing demands of modern Pakistani classrooms.',
+  },
+  {
+    color: '#0b8c80',
+    glyph: <path d="M9 12l2 2 4-4M12 3a9 9 0 110 18A9 9 0 0112 3z" stroke="#fff" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>,
+    title: 'Quality',
+    desc: 'Questions sourced from past papers, model papers, and our own curated question bank.',
+  },
+  {
+    color: '#7c3aed',
+    glyph: <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="#fff" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>,
+    title: 'Accessibility',
+    desc: 'Making it effortless for any educator to create papers in seconds — no technical expertise needed.',
+  },
+  {
+    color: '#db6c1e',
+    glyph: <path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6" stroke="#fff" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>,
+    title: 'Growth',
+    desc: 'Helping educators save hours and helping students from Class 5–12 achieve their full potential.',
+  },
+];
 
-  const values = [
-    {
-      icon: "bi bi-lightbulb",
-      title: "Innovation",
-      description: "Constantly evolving to meet the changing needs of Making papers and tests."
-    },
-    {
-      icon: "bi bi-shield-check",
-      title: "Quality",
-      description: "Committed to Provide Questions from Past papers, Model papers and our own quality questions Bank."
-    },
-    {
-      icon: "bi bi-people",
-      title: "Accessibility",
-      description: "Making it very easy to make papers and tests for educators and learning for students."
-    },
-    {
-      icon: "bi bi-graph-up-arrow",
-      title: "Growth",
-      description: "Helping Educators to make make paper, make tests in seconds with examly a best paper maker and students achieve their full potential."
-    }
-  ];
+const TEAM = [
+  { name: 'Abdul Rauf',     role: 'Founder & CEO',        desc: 'Former educator with 10+ years in curriculum development', color: '#1e4fa6' },
+  { name: 'Fahad Farooq',   role: 'CTO',                  desc: 'Tech entrepreneur passionate about EdTech solutions',      color: '#0b8c80' },
+  { name: 'Dr. Saeed Ahmad',role: 'Head of Education',    desc: 'M.Phil in Educational Technology, 15 years teaching',     color: '#7c3aed' },
+  { name: 'Mushtaq Ahmed',  role: 'Product Lead',         desc: 'Product manager focused on UX and innovation',            color: '#db6c1e' },
+];
 
-  const stats = [
-    {
-      number: "50,000+",
-      label: "Papers Generated"
-    },
-    {
-      number: "25,000+",
-      label: "Active Users"
-    },
-    {
-      number: "100+",
-      label: "Educational Institutions"
-    },
-    {
-      number: "95%",
-      label: "User Satisfaction"
-    }
-  ];
+const MILESTONES = [
+  { title: 'Founded',             desc: 'Born from a vision to transform educational assessment in Pakistan.' },
+  { title: 'Platform Launch',     desc: 'Launched Examly — paper maker, quiz, and practice features go live.' },
+  { title: '10,000+ Users',       desc: 'Reached a major milestone of educators and students across Pakistan.' },
+  { title: 'New Features',        desc: 'Added job-test prep, game-mode quizzes, and advanced analytics.' },
+];
 
+const DIFFERENTIATORS = [
+  { color: '#1e4fa6', title: 'Paper Ready in 1 Minute',    desc: 'Generate a complete BISE-aligned exam paper in under 60 seconds.' },
+  { color: '#0b8c80', title: 'PTB Syllabus — All Classes', desc: 'Complete coverage of Class 5–12, all subjects, English & Urdu.' },
+  { color: '#7c3aed', title: 'Game-Mode Quizzes',          desc: 'Students stay engaged with animated swimmer quizzes and streaks.' },
+  { color: '#db6c1e', title: '3 Months Free Trial',        desc: 'No credit card needed — full access to every feature for 90 days.' },
+];
+
+export default function AboutPage() {
   return (
     <>
       <Header />
-      
-      <div className="about-page">
-        {/* Hero Section */}
-        <section className="hero-section bg-primary text-white py-5">
-          <div className="container">
-            <div className="row align-items-center min-vh-60 py-5">
-              <div className="col-lg-6">
-                <h1 className="display-4 fw-bold mb-4">
-                  About <span className="text-warning">Examly.<sub>pk</sub></span>
-                </h1>
-                <p className="lead mb-4 opacity-75">
-                  We're revolutionizing the way educators make paper, tests and save their hours of time and students test their learning level  with digital technology. Our mission is to provide a quick way to make papers, design tests and save hours of time of educators,wasted in making papers and tests.
+      <div className="container pt-header pb-2"><BreadcrumbAuto /></div>
+
+      <main className="ab-root">
+
+        {/* ══ HERO ══════════════════════════════════════════ */}
+        <section className="ab-hero">
+          <svg className="ab-grid" aria-hidden="true">
+            <defs>
+              <pattern id="abgrid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M40 0L0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#abgrid)" />
+          </svg>
+          <div className="ab-blob ab-ba" />
+          <div className="ab-blob ab-bb" />
+
+          <div className="ab-hero-inner">
+            <div className="ab-hero-copy">
+              <div className="ab-eyebrow">About Examly.pk</div>
+              <h1 className="ab-hero-h1">
+                Empowering Pakistan's<br />
+                <span className="ab-grad">educators, one paper</span><br />
+                at a time.
+              </h1>
+              <p className="ab-hero-sub">
+                We're revolutionising the way teachers create papers and students
+                practise — saving hours of work with a platform built specifically
+                for the PTB curriculum.
+              </p>
+              <div className="ab-hero-ctas">
+                <Link href="/auth/signup" className="ab-btn-primary">
+                  Start 3 Months Free
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </Link>
+                <Link href="/how-examly-works" className="ab-btn-ghost">How It Works</Link>
+              </div>
+            </div>
+
+            {/* stat grid */}
+            <div className="ab-stat-grid">
+              {STATS.map((s, i) => (
+                <div key={i} className="ab-stat-card">
+                  <div className="ab-stat-val">{s.value}</div>
+                  <div className="ab-stat-lbl">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ══ MISSION & VISION ══════════════════════════════ */}
+        <section className="ab-section ab-light">
+          <div className="ab-container">
+            <div className="ab-sec-head">
+              <div className="ab-eyebrow ab-ey-dark">Who We Are</div>
+              <h2 className="ab-h2">Mission &amp; Vision</h2>
+            </div>
+            <div className="ab-mv-grid">
+              <div className="ab-mv-card">
+                <div className="ab-mv-icon" style={{ background: 'linear-gradient(135deg,#1e4fa6,#2563eb)' }}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
+                    <line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/>
+                    <line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>
+                  </svg>
+                </div>
+                <h3 className="ab-mv-title">Our Mission</h3>
+                <p className="ab-mv-desc">
+                  To empower educators with intelligent tools that let them create
+                  papers and tests in seconds — freeing up time to focus on what
+                  truly matters: teaching. And to give students a platform to assess
+                  their skills and drive their own academic success.
                 </p>
-                <div className="d-flex gap-3 flex-wrap">
-                  <Link href="/auth/signup" className="btn btn-warning btn-lg px-4 py-2 fw-bold">
-                    Start Free Trial
-                  </Link>
-                  <Link href="/how" className="btn btn-outline-light btn-lg px-4 py-2">
-                    How It Works
-                  </Link>
-                </div>
               </div>
-              <div className="col-lg-6 text-center">
-                <div className="hero-illustration bg-white bg-opacity-10 rounded-3 p-5">
-                  <i className="bi bi-mortarboard display-1 text-warning"></i>
-                  <h4 className="mt-3 fw-bold">Transforming Education</h4>
-                  <p className="mb-0 opacity-75">One assessment at a time</p>
+              <div className="ab-mv-card">
+                <div className="ab-mv-icon" style={{ background: 'linear-gradient(135deg,#0b8c80,#0e7a71)' }}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                  </svg>
                 </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Mission & Vision Section */}
-        <section className="mission-section py-5 bg-light">
-          <div className="container">
-            <div className="row g-5">
-              <div className="col-lg-6">
-                <div className="mission-card bg-white rounded-3 p-4 shadow-sm h-100">
-                  <div className="mission-icon bg-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-4"
-                       style={{width: '70px', height: '70px'}}>
-                    <i className="bi bi-bullseye text-white fs-3"></i>
-                  </div>
-                  <h3 className="fw-bold mb-3 text-dark">Our Mission</h3>
-                  <p className="text-muted fs-5">
-                    To empower educators with intelligent tools that enable them to create papers and tests within seconds, saving valuable time and allowing them to focus on teaching effectiveness while providing students with a platform to assess their learning and drive academic success.
-                  </p>
-                </div>
-              </div>
-              <div className="col-lg-6">
-                <div className="vision-card bg-white rounded-3 p-4 shadow-sm h-100">
-                  <div className="vision-icon bg-success rounded-circle d-inline-flex align-items-center justify-content-center mb-4"
-                       style={{width: '70px', height: '70px'}}>
-                    <i className="bi bi-eye text-white fs-3"></i>
-                  </div>
-                  <h3 className="fw-bold mb-3 text-dark">Our Vision</h3>
-                  <p className="text-muted fs-5">
-                    We envision a Pakistan where every educator has access to powerful tools through Examly.pk, the leading paper-making platform, enabling them to create papers and tests within seconds. We aim to provide every student from 5th to 12th class with a digital platform to assess their skills, strengthen their learning, and ensure their path to academic success.
-                  </p>
-                </div>
+                <h3 className="ab-mv-title">Our Vision</h3>
+                <p className="ab-mv-desc">
+                  A Pakistan where every educator — from any city, any school —
+                  has access to powerful paper-making tools through Examly.pk.
+                  And every student from Class 5 to 12 has a digital space to
+                  strengthen their learning and reach their full potential.
+                </p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Stats Section */}
-        <section className="stats-section py-5 bg-white">
-          <div className="container">
-            <div className="text-center mb-5">
-              <h2 className="h1 fw-bold mb-3 text-dark">Making an Impact</h2>
-              <p className="lead text-muted">Join thousands of educators and students transforming education with Examly.<sub>pk</sub></p>
+        {/* ══ STORY ═════════════════════════════════════════ */}
+        <section className="ab-section ab-brand">
+          <svg className="ab-grid" aria-hidden="true">
+            <rect width="100%" height="100%" fill="url(#abgrid)" />
+          </svg>
+          <div className="ab-blob ab-ba" style={{ opacity: 0.12 }} />
+
+          <div className="ab-container" style={{ position: 'relative', zIndex: 1 }}>
+            <div className="ab-story-grid">
+              <div className="ab-story-copy">
+                <div className="ab-eyebrow" style={{ color: '#6ee7b7', background: 'rgba(110,231,183,0.1)', borderColor: 'rgba(110,231,183,0.28)' }}>Our Story</div>
+                <h2 className="ab-h2" style={{ color: '#e8eef8' }}>From a classroom problem<br />to a national solution.</h2>
+                <p className="ab-story-p">
+                  Examly was born from a simple observation: Pakistani educators
+                  were spending 2–3 hours making a single paper — time that could
+                  be spent teaching. Students, meanwhile, had no reliable digital
+                  platform aligned to the PTB curriculum to practise on.
+                </p>
+                <p className="ab-story-p">
+                  Founded in 2025 by a team of educators and technologists, we
+                  combined deep subject expertise with modern AI to build a
+                  platform that generates a complete, BISE-aligned exam paper in
+                  under 1 minute.
+                </p>
+                <p className="ab-story-p" style={{ marginBottom: 0 }}>
+                  Today we serve thousands of teachers and students across Pakistan,
+                  and we're just getting started.
+                </p>
+              </div>
+
+              {/* timeline */}
+              <div className="ab-timeline">
+                {MILESTONES.map((m, i) => (
+                  <div key={i} className="ab-tl-item">
+                    <div className="ab-tl-dot" />
+                    {i < MILESTONES.length - 1 && <div className="ab-tl-line" />}
+                    <div className="ab-tl-body">
+                      <div className="ab-tl-title">{m.title}</div>
+                      <div className="ab-tl-desc">{m.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="row g-4">
-              {stats.map((stat, index) => (
-                <div key={index} className="col-lg-3 col-md-6">
-                  <div className="stat-card text-center p-4">
-                    <h2 className="display-4 fw-bold text-primary mb-2">{stat.number}</h2>
-                    <p className="text-muted fw-medium mb-0">{stat.label}</p>
+          </div>
+        </section>
+
+        {/* ══ VALUES ════════════════════════════════════════ */}
+        <section className="ab-section ab-white">
+          <div className="ab-container">
+            <div className="ab-sec-head">
+              <div className="ab-eyebrow ab-ey-dark">What Drives Us</div>
+              <h2 className="ab-h2">Our Core Values</h2>
+              <p className="ab-sec-sub">The principles behind every decision we make</p>
+            </div>
+            <div className="ab-val-grid">
+              {VALUES.map((v, i) => (
+                <div key={i} className="ab-val-card">
+                  <div className="ab-val-icon" style={{ background: v.color }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24">{v.glyph}</svg>
+                  </div>
+                  <h4 className="ab-val-title">{v.title}</h4>
+                  <p className="ab-val-desc">{v.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ══ TEAM ══════════════════════════════════════════ */}
+        <section className="ab-section ab-light">
+          <div className="ab-container">
+            <div className="ab-sec-head">
+              <div className="ab-eyebrow ab-ey-dark">The People</div>
+              <h2 className="ab-h2">Meet Our Team</h2>
+              <p className="ab-sec-sub">Educators and technologists working together</p>
+            </div>
+            <div className="ab-team-grid">
+              {TEAM.map((m, i) => (
+                <div key={i} className="ab-team-card">
+                  <div className="ab-team-avatar" style={{ background: `linear-gradient(135deg,${m.color},${m.color}99)` }}>
+                    {m.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                  </div>
+                  <h4 className="ab-team-name">{m.name}</h4>
+                  <div className="ab-team-role" style={{ color: m.color }}>{m.role}</div>
+                  <p className="ab-team-desc">{m.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ══ DIFFERENTIATORS ═══════════════════════════════ */}
+        <section className="ab-section ab-white">
+          <div className="ab-container">
+            <div className="ab-sec-head">
+              <div className="ab-eyebrow ab-ey-dark">Why Examly</div>
+              <h2 className="ab-h2">What makes us different</h2>
+            </div>
+            <div className="ab-diff-grid">
+              {DIFFERENTIATORS.map((d, i) => (
+                <div key={i} className="ab-diff-card">
+                  <div className="ab-diff-dot" style={{ background: d.color, boxShadow: `0 0 10px ${d.color}60` }} />
+                  <div>
+                    <h4 className="ab-diff-title">{d.title}</h4>
+                    <p className="ab-diff-desc">{d.desc}</p>
                   </div>
                 </div>
               ))}
@@ -200,248 +269,234 @@ export default function AboutUs() {
           </div>
         </section>
 
-        {/* Story Section */}
-        <section className="story-section py-5 bg-primary text-white">
-          <div className="container">
-            <div className="row align-items-center">
-              <div className="col-lg-6">
-                <h2 className="h1 fw-bold mb-4">Our Story</h2>
-                <p className="lead mb-4 opacity-75">
-                  Examly was born from a simple observation: educators spend countless hours 
-                  creating assessments while students struggle to find quality practice materials.
-                </p>
-                <p className="mb-4 opacity-75">
-                  Founded in 2025 by a team of educators and technologists, we set out to 
-                  bridge this gap. We combined artificial intelligence with educational expertise 
-                  to create a platform that simplifies assessment creation while enhancing 
-                  learning outcomes.
-                </p>
-                <p className="mb-0 opacity-75">
-                  Today, we serve thousands of educators, students, and institutions worldwide, 
-                  constantly innovating to meet the evolving needs of modern education.
-                </p>
-              </div>
-              <div className="col-lg-6">
-                <div className="timeline">
-                  {milestones.map((milestone, index) => (
-                    <div key={index} className="timeline-item position-relative ps-4 pb-4">
-                      <div className="timeline-year bg-warning text-dark rounded-pill px-3 py-1 d-inline-block fw-bold mb-2">
-                        {milestone.year}
-                      </div>
-                      <h5 className="fw-bold mb-2">{milestone.title}</h5>
-                      <p className="opacity-75 mb-0">{milestone.description}</p>
-                      {index < milestones.length - 1 && (
-                        <div className="timeline-connector position-absolute start-0 top-0 h-100 border-start border-2 border-warning"></div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+        {/* ══ CTA ═══════════════════════════════════════════ */}
+        <section className="ab-cta">
+          <svg className="ab-grid" aria-hidden="true">
+            <rect width="100%" height="100%" fill="url(#abgrid)" />
+          </svg>
+          <div className="ab-blob ab-ba" />
+          <div className="ab-blob ab-bb" />
+          <div className="ab-cta-inner">
+            <div className="ab-eyebrow" style={{ color: '#6ee7b7', background: 'rgba(110,231,183,0.1)', borderColor: 'rgba(110,231,183,0.28)' }}>Join Us</div>
+            <h2 className="ab-cta-h2">Join the Examly community</h2>
+            <p className="ab-cta-sub">Be part of Pakistan's fastest-growing EdTech platform. Start free — no card needed.</p>
+            <div className="ab-cta-btns">
+              <Link href="/auth/signup" className="ab-btn-primary">🚀 Start 3 Months Free</Link>
+              <Link href="/how-examly-works" className="ab-btn-ghost">How It Works →</Link>
             </div>
           </div>
         </section>
 
-        {/* Values Section */}
-        <section className="values-section py-5 bg-light">
-          <div className="container">
-            <div className="text-center mb-5">
-              <h2 className="h1 fw-bold mb-3 text-dark">Our Values</h2>
-              <p className="lead text-muted">The principles that guide everything we do</p>
-            </div>
-            <div className="row g-4">
-              {values.map((value, index) => (
-                <div key={index} className="col-lg-3 col-md-6">
-                  <div className="value-card text-center bg-white rounded-3 p-4 shadow-sm h-100 transition-all hover-lift">
-                    <div className="value-icon bg-primary rounded-circle mx-auto d-flex align-items-center justify-content-center mb-3"
-                         style={{width: '80px', height: '80px'}}>
-                      <i className={`${value.icon} text-white fs-2`}></i>
-                    </div>
-                    <h5 className="fw-bold mb-3 text-dark">{value.title}</h5>
-                    <p className="text-muted mb-0">{value.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Team Section */}
-        <section className="team-section py-5 bg-white">
-          <div className="container">
-            <div className="text-center mb-5">
-              <h2 className="h1 fw-bold mb-3 text-dark">Meet Our Team</h2>
-              <p className="lead text-muted">Passionate educators and innovators driving change</p>
-            </div>
-            <div className="row g-4">
-              {teamMembers.map((member, index) => (
-                <div key={index} className="col-lg-3 col-md-6">
-                  <div className="team-card text-center bg-light rounded-3 p-4 h-100 transition-all hover-lift">
-                    <div className="team-image bg-primary rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center"
-                         style={{width: '120px', height: '120px'}}>
-                      <i className="bi bi-person-fill text-white fs-1"></i>
-                    </div>
-                    <h5 className="fw-bold mb-2 text-dark">{member.name}</h5>
-                    <p className="text-primary fw-medium mb-2">{member.role}</p>
-                    <p className="text-muted small mb-3">{member.description}</p>
-                    <div className="social-links">
-                      <a href={member.social.linkedin} className="text-muted me-2 hover-text-primary">
-                        <i className="bi bi-linkedin fs-5"></i>
-                      </a>
-                      <a href={member.social.twitter} className="text-muted hover-text-primary">
-                        <i className="bi bi-twitter fs-5"></i>
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Features Highlight Section */}
-        <section className="features-highlight-section py-5 bg-primary text-white">
-          <div className="container">
-            <div className="row align-items-center">
-              <div className="col-lg-6">
-                <h2 className="h1 fw-bold mb-4">What Makes Examly Different</h2>
-                <div className="feature-list">
-                  <div className="feature-item d-flex align-items-start mb-4">
-                    <div className="feature-icon me-3">
-                      <i className="bi bi-lightning-charge-fill text-warning fs-4"></i>
-                    </div>
-                    <div>
-                      <h5 className="fw-bold mb-2">AI-Powered Paper Maker</h5>
-                      <p className="opacity-75 mb-0">Create customized assessments in seconds, not hours</p>
-                    </div>
-                  </div>
-                  <div className="feature-item d-flex align-items-start mb-4">
-                    <div className="feature-icon me-3">
-                      <i className="bi bi-graph-up-arrow text-warning fs-4"></i>
-                    </div>
-                    <div>
-                      <h5 className="fw-bold mb-2">Smart Analytics</h5>
-                      <p className="opacity-75 mb-0">Track student progress and identify learning gaps</p>
-                    </div>
-                  </div>
-                  <div className="feature-item d-flex align-items-start mb-4">
-                    <div className="feature-icon me-3">
-                      <i className="bi bi-phone-fill text-warning fs-4"></i>
-                    </div>
-                    <div>
-                      <h5 className="fw-bold mb-2">Mobile-First Design</h5>
-                      <p className="opacity-75 mb-0">Learn and teach anywhere, on any device</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="col-lg-6 text-center">
-                <div className="feature-illustration bg-white bg-opacity-10 rounded-3 p-5">
-                  <i className="bi bi-star-fill display-1 text-warning"></i>
-                  <h4 className="mt-3 fw-bold">Trusted by Educators</h4>
-                  <p className="mb-0 opacity-75">Rated 4.8/5 by thousands of users</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="cta-section py-5 bg-dark text-white">
-          <div className="container">
-            <div className="row justify-content-center text-center">
-              <div className="col-lg-8">
-                <h2 className="h1 fw-bold mb-4">Join the Examly Community</h2>
-                <p className="lead mb-4 opacity-75">
-                  Be part of the educational revolution. Start creating better assessments 
-                  and engaging learning experiences today.
-                </p>
-                <div className="d-flex gap-3 justify-content-center flex-wrap">
-                  <Link href="/auth/signup" className="btn btn-warning btn-lg px-5 py-3 fw-bold">
-                    Start Free Trial
-                  </Link>
-                  <Link href="/contact" className="btn btn-outline-light btn-lg px-5 py-3">
-                    Contact Us
-                  </Link>
-                </div>
-                <div className="mt-4">
-                  <small className="opacity-75">
-                    1 Month Free Trial | No Credit Card Required | Cancel Anytime
-                  </small>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
+      </main>
 
       <Footer />
 
       <style jsx>{`
-        .about-page {
-          font-family: 'Inter', sans-serif;
+        /* ── base ─────────────────────────────── */
+        .ab-root { overflow-x: hidden; }
+        .ab-container { max-width: 1120px; margin: 0 auto; padding: 0 1.5rem; }
+        .ab-section { padding: 5rem 0; }
+        .ab-white { background: #fff; }
+        .ab-light { background: #f5f7fb; }
+        .ab-brand {
+          background: linear-gradient(145deg,#0f2452 0%,#1e4fa6 48%,#0d6b60 100%);
+          position: relative; overflow: hidden;
         }
-        
-        .min-vh-60 {
-          min-height: 60vh;
+        .ab-grid { position:absolute;inset:0;width:100%;height:100%;pointer-events:none; }
+        .ab-blob { position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none; }
+        .ab-ba { width:500px;height:500px;background:rgba(100,210,190,0.14);top:-150px;right:-80px; }
+        .ab-bb { width:380px;height:380px;background:rgba(30,79,166,0.18);bottom:-120px;left:-60px; }
+
+        /* section head */
+        .ab-sec-head { text-align:center;margin-bottom:3rem; }
+        .ab-eyebrow {
+          display:inline-flex;align-items:center;
+          font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
+          color:#1e4fa6;background:rgba(30,79,166,0.08);border:1px solid rgba(30,79,166,0.2);
+          border-radius:999px;padding:4px 14px;margin-bottom:0.9rem;
         }
-        
-        .hover-lift:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175) !important;
+        .ab-ey-dark { color:#1e4fa6; }
+        .ab-h2 {
+          font-size:clamp(1.7rem,3vw,2.4rem);font-weight:800;
+          color:#0f172a;letter-spacing:-0.025em;margin-bottom:0.5rem;
         }
-        
-        .transition-all {
-          transition: all 0.3s ease;
+        .ab-sec-sub { font-size:0.95rem;color:#64748b;margin:0; }
+
+        /* ── hero ─────────────────────────────── */
+        .ab-hero {
+          background:linear-gradient(145deg,#0f2452 0%,#1e4fa6 48%,#0d6b60 100%);
+          padding:5.5rem 1.5rem 4.5rem;position:relative;overflow:hidden;
         }
-        
-        .hover-text-primary:hover {
-          color: var(--bs-primary) !important;
+        .ab-hero-inner {
+          max-width:1120px;margin:0 auto;
+          display:flex;align-items:center;gap:4rem;position:relative;z-index:1;
         }
-        
-        .timeline {
-          position: relative;
+        .ab-hero-copy { flex:1 1 55%; }
+        .ab-hero-h1 {
+          font-size:clamp(2.1rem,3.8vw,3.2rem);font-weight:800;
+          color:#e8eef8;line-height:1.13;letter-spacing:-0.03em;margin-bottom:1.1rem;
         }
-        
-        .timeline-item {
-          border-left: 2px solid var(--bs-warning);
+        .ab-grad {
+          background:linear-gradient(90deg,#6ee7b7,#93c5fd);
+          -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
         }
-        
-        .timeline-connector {
-          left: -1px;
+        .ab-hero-sub { font-size:1rem;color:rgba(220,232,255,0.68);line-height:1.7;margin-bottom:2rem;max-width:500px; }
+        .ab-hero-ctas { display:flex;gap:1rem;flex-wrap:wrap; }
+
+        /* stat grid */
+        .ab-stat-grid {
+          flex:0 0 42%;
+          display:grid;grid-template-columns:1fr 1fr;gap:1rem;
         }
-        
-        .team-image {
-          background: linear-gradient(135deg, var(--bs-primary), var(--bs-info));
+        .ab-stat-card {
+          background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);
+          border-radius:16px;padding:1.4rem 1.2rem;text-align:center;
+          backdrop-filter:blur(8px);
+          transition:background 0.2s;
         }
-        
-        .hero-illustration, .feature-illustration {
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+        .ab-stat-card:hover { background:rgba(255,255,255,0.13); }
+        .ab-stat-val { font-size:1.9rem;font-weight:900;color:#fff;line-height:1;margin-bottom:4px; }
+        .ab-stat-lbl { font-size:0.72rem;font-weight:600;color:rgba(220,232,255,0.55);text-transform:uppercase;letter-spacing:0.06em; }
+
+        /* ── buttons ──────────────────────────── */
+        .ab-btn-primary {
+          display:inline-flex;align-items:center;gap:8px;
+          background:linear-gradient(135deg,#fff,#e0f0ff);
+          color:#1e4fa6;font-weight:700;font-size:0.9rem;
+          padding:0.72rem 1.5rem;border-radius:10px;border:none;
+          text-decoration:none;box-shadow:0 4px 18px rgba(0,0,0,0.16);
+          transition:transform 0.18s,box-shadow 0.18s;
         }
-        
-        .stat-card {
-          border-right: 1px solid #e9ecef;
+        .ab-btn-primary:hover { transform:translateY(-2px);box-shadow:0 8px 26px rgba(0,0,0,0.2);color:#1e4fa6;text-decoration:none; }
+        .ab-btn-ghost {
+          display:inline-flex;align-items:center;gap:7px;
+          background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.25);
+          color:rgba(255,255,255,0.88);font-weight:600;font-size:0.9rem;
+          padding:0.72rem 1.5rem;border-radius:10px;text-decoration:none;
+          transition:background 0.18s;
         }
-        
-        .stat-card:last-child {
-          border-right: none;
+        .ab-btn-ghost:hover { background:rgba(255,255,255,0.18);color:#fff;text-decoration:none; }
+
+        /* ── mission / vision ─────────────────── */
+        .ab-mv-grid { display:grid;grid-template-columns:1fr 1fr;gap:1.5rem; }
+        .ab-mv-card {
+          background:#fff;border-radius:20px;padding:2rem 1.8rem;
+          border:1px solid #e8eef5;
+          box-shadow:0 2px 8px rgba(15,23,42,0.04);
+          transition:transform 0.2s,box-shadow 0.2s;
         }
-        
-        @media (max-width: 768px) {
-          .hero-section .display-4 {
-            font-size: 2.5rem !important;
-          }
-          
-          .stat-card {
-            border-right: none;
-            border-bottom: 1px solid #e9ecef;
-            padding-bottom: 2rem;
-          }
-          
-          .stat-card:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-          }
+        .ab-mv-card:hover { transform:translateY(-4px);box-shadow:0 14px 40px rgba(15,23,42,0.09); }
+        .ab-mv-icon {
+          width:52px;height:52px;border-radius:14px;
+          display:flex;align-items:center;justify-content:center;
+          margin-bottom:1.2rem;box-shadow:0 4px 14px rgba(0,0,0,0.15);
+        }
+        .ab-mv-title { font-size:1.15rem;font-weight:800;color:#0f172a;margin-bottom:0.7rem; }
+        .ab-mv-desc { font-size:0.9rem;color:#475569;line-height:1.7;margin:0; }
+
+        /* ── story ────────────────────────────── */
+        .ab-story-grid {
+          display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:start;
+        }
+        .ab-story-p { font-size:0.92rem;color:rgba(220,232,255,0.72);line-height:1.75;margin-bottom:1rem; }
+
+        /* timeline */
+        .ab-timeline { display:flex;flex-direction:column;gap:0; }
+        .ab-tl-item { display:flex;gap:1rem;position:relative; }
+        .ab-tl-dot {
+          width:14px;height:14px;border-radius:50%;flex-shrink:0;
+          background:#6ee7b7;margin-top:4px;position:relative;z-index:1;
+          box-shadow:0 0 8px #6ee7b760;
+        }
+        .ab-tl-line {
+          position:absolute;left:6px;top:18px;bottom:-24px;
+          width:2px;background:rgba(110,231,183,0.25);
+        }
+        .ab-tl-body { padding-bottom:2rem; }
+        .ab-tl-title { font-size:0.95rem;font-weight:800;color:#e8eef8;margin-bottom:3px; }
+        .ab-tl-desc { font-size:0.82rem;color:rgba(220,232,255,0.6);line-height:1.6; }
+
+        /* ── values ───────────────────────────── */
+        .ab-val-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:1.2rem; }
+        .ab-val-card {
+          background:#f5f7fb;border-radius:16px;padding:1.6rem 1.3rem;
+          border:1px solid #e8eef5;
+          transition:transform 0.2s,box-shadow 0.2s,background 0.2s;
+        }
+        .ab-val-card:hover { transform:translateY(-5px);box-shadow:0 12px 36px rgba(15,23,42,0.08);background:#fff; }
+        .ab-val-icon {
+          width:46px;height:46px;border-radius:12px;
+          display:flex;align-items:center;justify-content:center;
+          margin-bottom:1rem;box-shadow:0 4px 12px rgba(0,0,0,0.15);
+        }
+        .ab-val-title { font-size:0.95rem;font-weight:800;color:#0f172a;margin-bottom:0.4rem; }
+        .ab-val-desc { font-size:0.82rem;color:#64748b;line-height:1.6;margin:0; }
+
+        /* ── team ─────────────────────────────── */
+        .ab-team-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:1.3rem; }
+        .ab-team-card {
+          background:#fff;border-radius:18px;padding:1.8rem 1.4rem;text-align:center;
+          border:1px solid #e8eef5;
+          box-shadow:0 2px 8px rgba(15,23,42,0.04);
+          transition:transform 0.2s,box-shadow 0.2s;
+        }
+        .ab-team-card:hover { transform:translateY(-5px);box-shadow:0 14px 40px rgba(15,23,42,0.09); }
+        .ab-team-avatar {
+          width:72px;height:72px;border-radius:50%;
+          color:#fff;font-size:1.4rem;font-weight:800;
+          display:flex;align-items:center;justify-content:center;
+          margin:0 auto 1rem;
+          box-shadow:0 6px 20px rgba(0,0,0,0.18);
+        }
+        .ab-team-name { font-size:1rem;font-weight:800;color:#0f172a;margin-bottom:3px; }
+        .ab-team-role { font-size:0.78rem;font-weight:700;margin-bottom:0.6rem; }
+        .ab-team-desc { font-size:0.8rem;color:#64748b;line-height:1.55;margin:0; }
+
+        /* ── differentiators ──────────────────── */
+        .ab-diff-grid { display:grid;grid-template-columns:1fr 1fr;gap:1.2rem; }
+        .ab-diff-card {
+          display:flex;gap:1rem;align-items:flex-start;
+          background:#f5f7fb;border-radius:14px;padding:1.4rem 1.3rem;
+          border:1px solid #e8eef5;
+          transition:transform 0.2s,box-shadow 0.2s;
+        }
+        .ab-diff-card:hover { transform:translateY(-3px);box-shadow:0 8px 24px rgba(15,23,42,0.07); }
+        .ab-diff-dot { width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:6px; }
+        .ab-diff-title { font-size:0.95rem;font-weight:800;color:#0f172a;margin-bottom:3px; }
+        .ab-diff-desc { font-size:0.83rem;color:#475569;line-height:1.6;margin:0; }
+
+        /* ── cta ──────────────────────────────── */
+        .ab-cta {
+          background:linear-gradient(145deg,#0f2452 0%,#1e4fa6 50%,#0d6b60 100%);
+          padding:5.5rem 1.5rem;text-align:center;position:relative;overflow:hidden;
+        }
+        .ab-cta-inner { position:relative;z-index:1;max-width:640px;margin:0 auto; }
+        .ab-cta-h2 {
+          font-size:clamp(1.8rem,3.5vw,2.8rem);font-weight:800;
+          color:#e8eef8;letter-spacing:-0.025em;margin-bottom:0.8rem;
+        }
+        .ab-cta-sub { font-size:0.95rem;color:rgba(220,232,255,0.62);margin-bottom:2rem; }
+        .ab-cta-btns { display:flex;gap:1rem;justify-content:center;flex-wrap:wrap; }
+
+        /* ── responsive ───────────────────────── */
+        @media(max-width:1024px){
+          .ab-val-grid { grid-template-columns:repeat(2,1fr); }
+          .ab-team-grid { grid-template-columns:repeat(2,1fr); }
+        }
+        @media(max-width:900px){
+          .ab-hero-inner { flex-direction:column;gap:2.5rem; }
+          .ab-stat-grid { grid-template-columns:repeat(4,1fr); }
+          .ab-mv-grid,
+          .ab-story-grid,
+          .ab-diff-grid { grid-template-columns:1fr; }
+        }
+        @media(max-width:640px){
+          .ab-hero { padding:4rem 1rem 3rem; }
+          .ab-section { padding:3.5rem 0; }
+          .ab-stat-grid { grid-template-columns:1fr 1fr;gap:0.75rem; }
+          .ab-val-grid,
+          .ab-team-grid { grid-template-columns:1fr; }
+          .ab-cta { padding:4rem 1rem; }
         }
       `}</style>
     </>

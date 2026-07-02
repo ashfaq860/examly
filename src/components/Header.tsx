@@ -7,7 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 
 export default function Header() {
   const [open, setOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [activeLink, setActiveLink] = useState('');
@@ -19,32 +19,18 @@ export default function Header() {
 
   useEffect(() => setActiveLink(pathname), [pathname]);
 
-  // 🌙 Dark mode handling
   useEffect(() => {
-    const storedMode = localStorage.getItem('darkMode');
-    if (storedMode !== null) setDarkMode(storedMode === 'true');
-    else if (window.matchMedia('(prefers-color-scheme: dark)').matches)
-      setDarkMode(true);
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', darkMode);
-    localStorage.setItem('darkMode', darkMode ? 'true' : 'false');
-  }, [darkMode]);
-
-  const toggleDarkMode = () => setDarkMode(!darkMode);
-
-  // 👤 User & role
-  useEffect(() => {
     const getUser = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setUser(session.user);
-        const { data: roleData } = await supabase.rpc('get_user_role', {
-          user_id: session.user.id,
-        });
+        const { data: roleData } = await supabase.rpc('get_user_role', { user_id: session.user.id });
         if (roleData) setRole(roleData);
       } else {
         setUser(null);
@@ -53,21 +39,17 @@ export default function Header() {
     };
     getUser();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session?.user) {
-          setUser(session.user);
-          supabase
-            .rpc('get_user_role', { user_id: session.user.id })
-            .then(({ data }) => {
-              if (data) setRole(data);
-            });
-        } else {
-          setUser(null);
-          setRole(null);
-        }
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        supabase.rpc('get_user_role', { user_id: session.user.id }).then(({ data }) => {
+          if (data) setRole(data);
+        });
+      } else {
+        setUser(null);
+        setRole(null);
       }
-    );
+    });
 
     return () => authListener.subscription.unsubscribe();
   }, [supabase]);
@@ -94,37 +76,21 @@ export default function Header() {
     return false;
   };
 
-  // Handle menu toggle with smooth animation
   const handleMenuToggle = () => {
     if (isAnimating) return;
-    
-    if (window.innerWidth >= 992) {
-      setOpen(false);
-      return;
-    }
-    
+    if (window.innerWidth >= 992) { setOpen(false); return; }
+
     if (!open) {
-      // Opening animation - slower on mobile
       setIsAnimating(true);
       setOpen(true);
-      
-      // Force reflow to ensure transition starts
       if (menuRef.current) {
         menuRef.current.style.display = 'block';
         menuRef.current.offsetHeight;
       }
-      
-      setTimeout(() => {
-        setIsAnimating(false);
-      }, 600); // Increased duration for mobile
+      setTimeout(() => setIsAnimating(false), 500);
     } else {
-      // Closing animation - slower on mobile
       setIsAnimating(true);
-      
-      if (menuRef.current) {
-        menuRef.current.classList.add('closing');
-      }
-      
+      if (menuRef.current) menuRef.current.classList.add('closing');
       setTimeout(() => {
         setOpen(false);
         setIsAnimating(false);
@@ -132,46 +98,40 @@ export default function Header() {
           menuRef.current.classList.remove('closing');
           menuRef.current.style.display = 'none';
         }
-      }, 500); // Increased duration for mobile
+      }, 400);
     }
   };
 
-  // Handle link click - close menu smoothly
   const handleLinkClick = () => {
     if (window.innerWidth < 992) {
       if (menuRef.current) {
         menuRef.current.classList.add('closing');
-        
         setTimeout(() => {
           setOpen(false);
           if (menuRef.current) {
             menuRef.current.classList.remove('closing');
             menuRef.current.style.display = 'none';
           }
-        }, 400);
+        }, 350);
       } else {
         setOpen(false);
       }
     }
   };
 
-  // Close menu when clicking outside (mobile only)
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (window.innerWidth < 992 && 
-          menuRef.current && 
+      if (window.innerWidth < 992 &&
+          menuRef.current &&
           !menuRef.current.contains(event.target) &&
-          !event.target.closest('.navbar-toggler') &&
-          open) {
+          !event.target.closest('.navbar-toggler') && open) {
         handleLinkClick();
       }
     };
-
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, [open]);
 
-  // Close menu on window resize to desktop
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 992 && open) {
@@ -182,7 +142,6 @@ export default function Header() {
         }
       }
     };
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [open]);
@@ -190,282 +149,221 @@ export default function Header() {
   return (
     <>
       <style jsx>{`
-        /* Smooth Curtain Animation with slower timing (mobile only) */
+        /* ── Mobile menu curtain ── */
         @media (max-width: 991px) {
           .curtain-container {
             max-height: 0;
             opacity: 0;
             overflow: hidden;
-            transform: translateY(-15px);
-            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); /* Slower, bouncier easing */
+            transform: translateY(-12px);
+            transition: max-height 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+                        opacity 0.4s ease,
+                        transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
             display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 999;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-subtle);
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+            border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+            padding: 0.5rem 0.75rem 1rem;
+          }
+
+          .dark .curtain-container {
+            background: rgba(15, 23, 42, 0.97);
+            border-bottom-color: rgba(255,255,255,0.08);
           }
 
           .curtain-container.open {
-            max-height: 1200px; /* Large enough for menu */
+            max-height: 600px;
             opacity: 1;
             transform: translateY(0);
             display: block;
-            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); /* Slower opening */
           }
 
           .curtain-container.closing {
             max-height: 0 !important;
             opacity: 0 !important;
-            transform: translateY(-15px) !important;
-            transition: all 0.5s cubic-bezier(0.36, 0, 0.66, -0.56) !important; /* Slower closing with bounce */
+            transform: translateY(-12px) !important;
+            transition: all 0.35s ease-in !important;
           }
 
-          /* Enhanced hover effects for mobile menu items */
-          .curtain-container .navbar-nav {
-            padding: 1rem 0;
-            opacity: 1;
-            transition: opacity 0.3s ease;
-          }
+          .curtain-container .navbar-nav { padding: 0.5rem 0; gap: 2px; }
 
-          .curtain-container.closing .navbar-nav {
-            opacity: 0.8;
-          }
+          .curtain-container .nav-item { margin: 0; }
 
-          /* Mobile menu items styling */
-          .curtain-container .navbar-nav .nav-item {
-            margin: 4px 0;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-          }
-
-          .curtain-container .navbar-nav .nav-link {
-            padding: 12px 20px !important;
-            border-radius: 8px;
-            transition: all 0.3s ease;
+          .curtain-container .nav-link {
+            padding: 0.65rem 0.9rem !important;
+            border-radius: var(--radius-md);
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-secondary) !important;
+            transition: all 0.2s ease;
             display: block;
             width: 100%;
-            text-align: left;
-            font-size: 16px;
-            position: relative;
-            color: #333;
-            background: transparent;
           }
 
-          .dark .curtain-container .navbar-nav .nav-link {
-            color: #e5e7eb;
+          .dark .curtain-container .nav-link { color: rgba(226,232,240,0.85) !important; }
+
+          .curtain-container .nav-link:hover,
+          .curtain-container .nav-link:active {
+            background: var(--brand-primary-50);
+            color: var(--brand-primary) !important;
+            transform: translateX(3px);
           }
 
-          /* Hover effect for mobile menu items */
-          .curtain-container .navbar-nav .nav-item:hover .nav-link,
-          .curtain-container .navbar-nav .nav-item:active .nav-link,
-          .curtain-container .navbar-nav .nav-item:focus-within .nav-link {
-            background-color: rgba(59, 130, 246, 0.1);
-            color: #2563eb;
-            transform: translateX(5px);
+          .dark .curtain-container .nav-link:hover,
+          .dark .curtain-container .nav-link:active {
+            background: rgba(43, 167, 255, 0.08);
+            color: var(--brand-primary-400) !important;
           }
 
-          .dark .curtain-container .navbar-nav .nav-item:hover .nav-link,
-          .dark .curtain-container .navbar-nav .nav-item:active .nav-link,
-          .dark .curtain-container .navbar-nav .nav-item:focus-within .nav-link {
-            background-color: rgba(96, 165, 250, 0.2);
-            color: #60a5fa;
-          }
-
-          /* Active link styling for mobile */
-          .curtain-container .navbar-nav .nav-link.active {
-            background-color: rgba(37, 99, 235, 0.15);
-            color: #2563eb;
+          .curtain-container .nav-link.active {
+            background: var(--brand-primary-50);
+            color: var(--brand-primary) !important;
             font-weight: 600;
           }
 
-          .dark .curtain-container .navbar-nav .nav-link.active {
-            background-color: rgba(96, 165, 250, 0.25);
-            color: #60a5fa;
+          .dark .curtain-container .nav-link.active {
+            background: rgba(43, 167, 255, 0.1);
+            color: var(--brand-primary-400) !important;
           }
 
-          /* Mobile button styling */
-          .curtain-container .btn {
-            padding: 10px 20px !important;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            text-align: center;
+          .curtain-container .mobile-divider {
+            height: 1px;
+            background: var(--border-subtle);
+            margin: 0.5rem 0.25rem;
+          }
+
+          .curtain-container .mobile-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding-top: 0.5rem;
+          }
+
+          .curtain-container .mobile-actions .btn {
             width: 100%;
-            margin: 8px 0;
-          }
-
-          .curtain-container .btn:hover,
-          .curtain-container .btn:active {
-            transform: scale(0.98);
-            opacity: 0.9;
-          }
-
-          /* Mobile auth button styling */
-          .curtain-container .navbar-nav .btn-link {
-            text-decoration: none;
-            padding: 12px 20px !important;
-            text-align: left;
-          }
-
-          .curtain-container .navbar-nav .btn-link:hover,
-          .curtain-container .navbar-nav .btn-link:active {
-            background-color: rgba(59, 130, 246, 0.1);
-            text-decoration: none;
-          }
-
-          .dark .curtain-container .navbar-nav .btn-link:hover,
-          .dark .curtain-container .navbar-nav .btn-link:active {
-            background-color: rgba(96, 165, 250, 0.2);
+            padding: 0.6rem 1rem;
+            font-size: 0.9rem;
           }
         }
 
-        /* Desktop styles - keep original speed */
+        /* ── Desktop ── */
         @media (min-width: 992px) {
           .curtain-container {
             display: flex !important;
             max-height: none !important;
             opacity: 1 !important;
             transform: none !important;
-            transition: none !important;
+            position: static;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            padding: 0;
           }
 
-          /* Desktop hover effects */
-          .curtain-container .navbar-nav .nav-link {
-            transition: all 0.2s ease;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
+          .navbar-nav .nav-link {
+            padding: 0.42rem 0.85rem !important;
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary) !important;
+            text-decoration: none !important;
+            transition: background 0.18s ease, color 0.18s ease;
           }
 
-          .curtain-container .navbar-nav .nav-link:hover {
-            background-color: rgba(0, 0, 0, 0.05);
-            color: #2563eb;
+          .navbar-nav .nav-link:hover {
+            background: var(--brand-primary-50);
+            color: var(--brand-primary) !important;
+            text-decoration: none !important;
           }
 
-          .dark .curtain-container .navbar-nav .nav-link:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-            color: #60a5fa;
-          }
-
-          .curtain-container .navbar-nav .nav-link.active {
-            color: #2563eb;
+          .navbar-nav .nav-link.active {
+            background: var(--brand-primary-50);
+            color: var(--brand-primary) !important;
             font-weight: 600;
-          }
-
-          .dark .curtain-container .navbar-nav .nav-link.active {
-            color: #60a5fa;
+            text-decoration: none !important;
           }
         }
-        
-        /* Common active link underline for desktop */
-        ul.TopMenus li a {
-          font-size: 16px;
-          position: relative;
-        }
-        
-        ul.TopMenus li a.active::after {
-          content: '';
-          position: absolute;
-          bottom: -2px;
-          left: 0;
-          right: 0;
-          height: 2px;
-          background-color: currentColor;
-          border-radius: 1px;
-        }
-        
-        /* Dark mode toggle button style */
-        .dark-toggle-btn {
-          background: none;
-          border: 1px solid #ddd;
-          border-radius: var(--radius-md);
-          padding: 5px 12px;
-          cursor: pointer;
-          font-size: 14px;
-          transition: all 0.3s;
-        }
-        
-        .dark-toggle-btn:hover {
-          background-color: #f0f0f0;
-        }
-        
-        .dark .dark-toggle-btn {
-          border-color: #555;
-          color: #fff;
-        }
-        
-        .dark .dark-toggle-btn:hover {
-          background-color: #333;
-        }
 
-        /* Mobile toggler animation */
+        /* ── Toggler ── */
         .navbar-toggler {
-          transition: all 0.3s;
+          padding: 6px 8px;
+          border: 1.5px solid var(--border-subtle);
+          border-radius: var(--radius-md);
+          background: var(--surface);
+          transition: all 0.2s ease;
           position: relative;
-          z-index: 1000;
+          z-index: 1001;
         }
 
-        .navbar-toggler:focus {
-          box-shadow: none;
-          outline: none;
+        .navbar-toggler:hover {
+          border-color: var(--brand-primary);
+          background: var(--brand-primary-50);
         }
+
+        .navbar-toggler:focus { box-shadow: none; outline: none; }
 
         .navbar-toggler .navbar-toggler-icon {
-          transition: all 0.3s;
-          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%280, 0, 0, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+          transition: all 0.3s ease;
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(51,65,85,0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2.2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+          width: 20px; height: 20px;
         }
 
         .dark .navbar-toggler .navbar-toggler-icon {
-          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(226,232,240,0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2.2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
         }
 
         .navbar-toggler.open .navbar-toggler-icon {
-          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%280, 0, 0, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M6 6L24 24M6 24L24 6'/%3e%3c/svg%3e");
-          transform: rotate(180deg);
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(51,65,85,0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2.2' d='M6 6L24 24M6 24L24 6'/%3e%3c/svg%3e");
+          transform: rotate(90deg);
         }
 
         .dark .navbar-toggler.open .navbar-toggler-icon {
-          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M6 6L24 24M6 24L24 6'/%3e%3c/svg%3e");
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(226,232,240,0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2.2' d='M6 6L24 24M6 24L24 6'/%3e%3c/svg%3e");
         }
 
-        /* Animation for hamburger to X */
-        @keyframes hamburgerToX {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(180deg);
-          }
+        /* ── User email truncation on desktop ── */
+        .user-email-btn {
+          max-width: 180px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
-        .navbar-toggler.open .navbar-toggler-icon {
-          animation: hamburgerToX 0.3s ease forwards;
-        }
+        /* ── Header scroll shadow ── */
+        .header-nav { transition: box-shadow 0.3s ease, background 0.3s ease; }
+        .header-nav.scrolled { box-shadow: var(--shadow-md); }
       `}</style>
 
-      <header className="header-nav dark:bg-gray-900 transition-colors duration-300">
+      <header className={`header-nav ${scrolled ? 'scrolled' : ''}`} style={{ position: 'fixed', top: 0, width: '100%', zIndex: 1000 }}>
         <div className="container">
-          <nav className="navbar navbar-expand-lg p-0">
+          <nav className="navbar navbar-expand-lg p-0" style={{ position: 'relative' }}>
+
+            {/* Brand */}
             <Link
-              className={`navbar-brand me-3 dark:text-white ${isLinkActive('/') ? 'active' : ''}`}
+              className={`navbar-brand me-3 ${isLinkActive('/') ? 'active' : ''}`}
               href="/"
               onClick={handleLinkClick}
             >
               <img
                 src="/examly.jpg"
                 alt="Examly Logo"
-                className="h-8 inline-block mr-2"
-                height="50"
-                width="160"
+                height="38"
+                width="140"
+                style={{ height: '38px', width: 'auto' }}
               />
             </Link>
 
-            {/* Dark Mode Toggle (Mobile) 
+            {/* Mobile toggler */}
             <button
-              onClick={toggleDarkMode}
-              className="dark-toggle-btn me-3 d-lg-none"
-              aria-label="Toggle dark mode"
-            >
-              {darkMode ? '🌙 Dark' : '☀️ Light'}
-            </button>
-*/}
-            {/* Mobile Toggler with animation */}
-            <button
-              className={`navbar-toggler dark:text-white ${open ? 'open' : ''}`}
+              className={`navbar-toggler ${open ? 'open' : ''}`}
               type="button"
               onClick={handleMenuToggle}
               aria-label="Toggle navigation"
@@ -475,125 +373,89 @@ export default function Header() {
               <span className="navbar-toggler-icon"></span>
             </button>
 
-            {/* Smooth Curtain Menu */}
+            {/* Nav menu */}
             <div
               ref={menuRef}
               className={`navbar-collapse curtain-container ${open ? 'open' : ''}`}
             >
-              <ul className="navbar-nav ms-auto align-items-lg-center TopMenus">
-                <li className="nav-item">
-                  <Link
-                    prefetch={true}
-                    className={`nav-link dark:text-gray-300 ${isLinkActive('/') ? 'active' : ''}`}
-                    href="/"
-                    onClick={handleLinkClick}
-                  >
-                    Home
-                  </Link>
-                </li>
-                <li className="nav-item">
-                  <Link
-                    prefetch={true}
-                    className={`nav-link dark:text-gray-300 ${isLinkActive('/dashboard/generate-paper') ? 'active' : ''}`}
-                    href="/dashboard/generate-paper"
-                    onClick={handleLinkClick}
-                  >
-                    Make Test
-                  </Link>
-                </li>
-                <li className="nav-item">
-                  <Link
-                    prefetch={true}
-                    className={`nav-link dark:text-gray-300 ${isLinkActive('/quiz') ? 'active' : ''}`}
-                    href="/quiz"
-                    onClick={handleLinkClick}
-                  >
-                    Quiz
-                  </Link>
-                </li>
-                <li className="nav-item">
-                  <Link
-                    prefetch={true}
-                    className={`nav-link dark:text-gray-300 ${isLinkActive('/how-examly-works') ? 'active' : ''}`}
-                    href="/how-examly-works"
-                    onClick={handleLinkClick}
-                  >
-                    How Examly<sub>.pk</sub> Works
-                  </Link>
-                </li>
-                <li className="nav-item">
-                  <Link
-                    prefetch={true}
-                    className={`nav-link dark:text-gray-300 ${isLinkActive('/packages') ? 'active' : ''}`}
-                    href="/packages"
-                    onClick={handleLinkClick}
-                  >
-                    Packages
-                  </Link>
+              <ul className="navbar-nav ms-auto align-items-lg-center" style={{ gap: '2px' }}>
+                {[
+                  { href: '/', label: 'Home' },
+                  { href: '/dashboard/generate-paper', label: 'Make Test' },
+                  { href: '/quiz', label: 'Quiz' },
+                  { href: '/how-examly-works', label: 'How It Works' },
+                  { href: '/packages', label: 'Packages' },
+                ].map(({ href, label }) => (
+                  <li key={href} className="nav-item">
+                    <Link
+                      prefetch={true}
+                      className={`nav-link ${isLinkActive(href) ? 'active' : ''}`}
+                      href={href}
+                      onClick={handleLinkClick}
+                    >
+                      {label}
+                    </Link>
+                  </li>
+                ))}
+
+                {/* Desktop divider */}
+                <li className="nav-item d-none d-lg-block" aria-hidden="true">
+                  <span style={{ display: 'block', width: 1, height: 20, background: 'var(--border-medium)', margin: '0 8px', alignSelf: 'center' }} />
                 </li>
 
-                {/* Dark Mode Toggle (Desktop)
-                <li className="nav-item d-none d-lg-block">
-                  <button
-                    onClick={toggleDarkMode}
-                    className="dark-toggle-btn ms-2"
-                    aria-label="Toggle dark mode"
-                  >
-                    {darkMode ? '🌙 Dark' : '☀️ Light'}
-                  </button>
-                </li>
- */}
-                {/* Auth UI */}
+                {/* Mobile divider */}
+                <li className="nav-item d-lg-none"><div className="mobile-divider" /></li>
+
                 {user ? (
-                  <>
-                    <li className="nav-item">
+                  <li className="nav-item">
+                    <div className="d-flex align-items-center gap-2 flex-column flex-lg-row">
                       <button
-                        onClick={() => {
-                          handleUserClick();
-                          handleLinkClick();
-                        }}
-                        className={`nav-link btn btn-link dark:text-gray-300 pe-3 ${isUserLinkActive() ? 'active' : ''}`}
+                        onClick={() => { handleUserClick(); handleLinkClick(); }}
+                        className={`nav-link user-email-btn ${isUserLinkActive() ? 'active' : ''}`}
+                        title={user.email}
                       >
                         {user.email}
                       </button>
-                    </li>
-                    <li className="nav-item ms-lg-2">
-                      <button 
-                        onClick={() => {
-                          handleLogout();
-                          handleLinkClick();
-                        }} 
-                        className="btn btn-danger btn-sm w-100 w-lg-auto"
+                      <button
+                        onClick={() => { handleLogout(); handleLinkClick(); }}
+                        className="btn btn-sm d-flex align-items-center gap-1 w-100 w-lg-auto"
+                        style={{
+                          background: 'var(--brand-danger)',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 'var(--radius-md)',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          padding: '0.4rem 0.9rem',
+                          whiteSpace: 'nowrap',
+                        }}
                       >
-                        Logout
+                        Sign out
                       </button>
-                    </li>
-                  </>
+                    </div>
+                  </li>
                 ) : (
-                  <>
-                    <li className="nav-item">
+                  <li className="nav-item">
+                    <div className="d-flex align-items-center gap-2 flex-column flex-lg-row">
                       <Link
                         prefetch={true}
-                        className={`nav-link dark:text-gray-300 pe-3 ${isLinkActive('/auth/login') ? 'active' : ''}`}
+                        className={`nav-link ${isLinkActive('/auth/login') ? 'active' : ''}`}
                         href="/auth/login"
                         onClick={handleLinkClick}
                       >
                         Login
                       </Link>
-                    </li>
-                    <li className="nav-item ms-lg-2">
                       <Link
                         prefetch={true}
-                        className={`btn btn-light btn-sm dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 w-100 w-lg-auto ${
-                          isLinkActive('/auth/signup') ? 'active' : ''
-                        }`}
+                        className="btn btn-gradient btn-sm w-100 w-lg-auto"
                         href="/auth/signup"
                         onClick={handleLinkClick}
+                        style={{ padding: '0.4rem 1.1rem', fontSize: '0.85rem' }}
                       >
-                        Sign Up
+                        <span>Get Started</span>
                       </Link>
-                    </li>
-                  </>
+                    </div>
+                  </li>
                 )}
               </ul>
             </div>

@@ -2,10 +2,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { 
-MapPin,  User, Phone, University, Mail, Save, Upload, X, Calendar, CheckCircle, AlertCircle, Package, FileText, Clock, Crown 
+import {
+  MapPin, User, Phone, University, Mail, Save, Upload, X, Calendar,
+  CheckCircle, AlertCircle, Package, FileText, Clock, Crown, Gift, ShieldCheck, FilePlus,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import toast from "react-hot-toast";
 import { useUser } from "@/app/context/userContext";
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -33,7 +35,6 @@ export default function ProfileSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [cellnoStatus, setCellnoStatus] = useState<'valid' | 'invalid' | 'checking' | null>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -54,26 +55,22 @@ export default function ProfileSettingsPage() {
     const checkAuth = async () => {
       try {
         const { data: { session }, error: authError } = await supabase.auth.getSession();
-        
+
         if (authError || !session) {
-          console.log('No user found, redirecting to login');
           router.push('/auth/login');
           return;
         }
 
-        // Check user role - only teachers can access
         const { data: roleData, error: roleError } = await supabase.rpc(
           'get_user_role',
           { user_id: session.user.id }
         );
 
         if (roleError || roleData !== 'teacher') {
-          console.log('User is not a teacher, redirecting to home');
           router.push('/');
           return;
         }
 
-        // User is authorized
         setIsAuthorized(true);
       } catch (error) {
         console.error('Error checking auth:', error);
@@ -85,7 +82,6 @@ export default function ProfileSettingsPage() {
 
     checkAuth();
 
-    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         router.push('/auth/login');
@@ -99,7 +95,7 @@ export default function ProfileSettingsPage() {
   useEffect(() => {
     const fetchProfile = async () => {
       if (!isAuthorized) return;
-      
+
       setLoading(true);
       try {
         const res = await fetch("/api/profile/update", { method: "GET", credentials: "include" });
@@ -113,7 +109,7 @@ export default function ProfileSettingsPage() {
         setLoading(false);
       }
     };
-    
+
     if (isAuthorized) fetchProfile();
   }, [isAuthorized]);
 
@@ -152,7 +148,7 @@ export default function ProfileSettingsPage() {
         setCellnoStatus('invalid');
       }
     };
-    
+
     const timeoutId = setTimeout(checkCellnoAvailability, 500);
     return () => clearTimeout(timeoutId);
   }, [formData.cellno, profile?.cellno]);
@@ -168,12 +164,74 @@ export default function ProfileSettingsPage() {
     }
   };
 
+  // Ask the user if they'd like to jump straight into generating a paper
+  const promptGeneratePaper = () => {
+    toast.custom(
+      (t) => (
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-lg)',
+            border: '1px solid var(--border-subtle)',
+            padding: '1rem 1.1rem',
+            maxWidth: 360,
+            opacity: t.visible ? 1 : 0,
+            transform: t.visible ? 'translateY(0)' : 'translateY(-8px)',
+            transition: 'all 0.2s ease',
+          }}
+        >
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+              background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <FilePlus size={16} color="#fff" />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                Profile updated!
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                Would you like to generate a question paper now?
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button
+              onClick={() => { toast.dismiss(t.id); router.push('/dashboard/generate-paper'); }}
+              style={{
+                flex: 1, padding: '0.5rem 0.75rem', border: 'none', cursor: 'pointer',
+                borderRadius: 'var(--radius-md)', fontWeight: 700, fontSize: '0.82rem',
+                color: '#fff', fontFamily: 'inherit',
+                background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+              }}
+            >
+              Yes, generate paper
+            </button>
+            <button
+              onClick={() => toast.dismiss(t.id)}
+              style={{
+                padding: '0.5rem 0.75rem', cursor: 'pointer', fontFamily: 'inherit',
+                borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '0.82rem',
+                color: 'var(--text-muted)', background: 'var(--surface-soft)', border: '1px solid var(--border-subtle)',
+              }}
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      ),
+      { duration: 9000 }
+    );
+  };
+
   // Submit profile changes
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
-    setSuccess(null);
 
     if (formData.cellno && !validatePhoneNumber(formData.cellno)) {
       setError("Please enter a valid 11-digit phone number starting with 03");
@@ -187,6 +245,8 @@ export default function ProfileSettingsPage() {
       return;
     }
 
+    const justAddedCellno = !!formData.cellno && formData.cellno !== profile?.cellno;
+
     try {
       const res = await fetch('/api/profile/update', {
         method: 'PUT',
@@ -198,13 +258,19 @@ export default function ProfileSettingsPage() {
       const updatedData = await res.json();
 
       setProfile(prev => prev ? { ...prev, ...updatedData } : null);
-      setSuccess("Profile updated successfully!");
 
-      // ✅ Refresh trial status after profile update
+      toast.success(
+        justAddedCellno
+          ? "Profile updated! Your 3-month free reward is now active."
+          : "Profile updated successfully!"
+      );
+
       await refreshTrialStatus();
+      promptGeneratePaper();
 
     } catch (err: any) {
       setError(err.message || "An error occurred while updating profile");
+      toast.error(err.message || "An error occurred while updating profile");
     } finally {
       setSaving(false);
     }
@@ -226,9 +292,9 @@ export default function ProfileSettingsPage() {
       if (!res.ok) throw new Error(await res.text() || "Failed to upload logo");
       const data = await res.json();
       setProfile(prev => prev ? { ...prev, logo: data.logo } : null);
-      setSuccess("Profile picture updated successfully!");
+      toast.success("Profile picture updated successfully!");
     } catch (err: any) {
-      setError(err.message || "Error uploading image");
+      toast.error(err.message || "Error uploading image");
     } finally {
       setUploading(false);
     }
@@ -239,414 +305,417 @@ export default function ProfileSettingsPage() {
       const res = await fetch('/api/profile/logo', { method: 'DELETE', credentials: 'include' });
       if (!res.ok) throw new Error(await res.text() || "Failed to remove logo");
       setProfile(prev => prev ? { ...prev, logo: null } : null);
-      setSuccess("Profile picture removed successfully!");
+      toast.success("Profile picture removed successfully!");
     } catch (err: any) {
-      setError(err.message || "Error removing profile picture");
+      toast.error(err.message || "Error removing profile picture");
     }
   };
 
-  // Render trial/package status
-  const renderPackageStatus = () => {
+  // Package/trial status pill data
+  const getStatusInfo = () => {
     if (trialLoading || !trialStatus) return null;
-
     const { isTrial, trialEndsAt, hasActiveSubscription, papersRemaining, subscriptionName, subscriptionType, subscriptionEndDate, message } = trialStatus;
 
-    let alertType = "info", icon = <Package size={18} />, title = "Package Status", content = null;
-
     if (message) {
-      content = <div>{message}</div>;
-    } else if (isTrial && trialEndsAt) {
-      alertType = "success";
-      icon = <Crown size={18} />;
-      title = "Free Trial Active";
-      content = (
-        <>
-          <div>Your trial ends on {new Date(trialEndsAt).toLocaleDateString()}</div>
-          <small className="text-muted">You have unlimited paper generation during your trial period</small>
-        </>
-      );
-    } else if (hasActiveSubscription) {
-      alertType = "warning";
-      icon = <Crown size={18} />;
-      title = subscriptionName || "Active Subscription";
-      content = (
-        <>
-          <div>
-            {subscriptionType === 'paper_pack' ? (
-              <>
-                <FileText size={16} className="me-1" />
-                Paper Pack: {papersRemaining === 'unlimited' ? 'Unlimited' : `${papersRemaining} papers remaining`}
-              </>
-            ) : (
-              <>
-                <Clock size={16} className="me-1" />
-                Subscription ends on {subscriptionEndDate ? new Date(subscriptionEndDate).toLocaleDateString() : 'N/A'}
-              </>
-            )}
-          </div>
-          {papersRemaining !== 'unlimited' && subscriptionType === 'paper_pack' && (
-            <small className="text-muted">Papers generated: {trialStatus.papersGenerated || 0}</small>
-          )}
-        </>
-      );
-    } else {
-      alertType = "secondary";
-      icon = <FileText size={18} />;
-      title = "Free Plan";
-      content = (
-        <>
-          <div>You are currently on the free plan</div>
-          <small className="text-muted">
-            {papersRemaining === 0 ? "You have no papers remaining. Upgrade to generate more papers." : `You have ${papersRemaining} papers remaining`}
-          </small>
-        </>
-      );
+      return { tone: 'warning', icon: Gift, title: 'Reward Available', lines: [message] };
     }
-
-    return (
-      <div className={`alert alert-${alertType} mb-4`}>
-        <div className="d-flex align-items-center">
-          <div className="me-2">{icon}</div>
-          <div><strong>{title}</strong>{content}</div>
-        </div>
-      </div>
-    );
+    if (isTrial && trialEndsAt) {
+      return {
+        tone: 'success', icon: Crown, title: 'Free Trial Active',
+        lines: [`Ends on ${new Date(trialEndsAt).toLocaleDateString()}`, 'Unlimited paper generation during your trial'],
+      };
+    }
+    if (hasActiveSubscription) {
+      return {
+        tone: 'primary', icon: Crown, title: subscriptionName || 'Active Subscription',
+        lines: [
+          subscriptionType === 'paper_pack'
+            ? `${papersRemaining === 'unlimited' ? 'Unlimited' : papersRemaining} papers remaining`
+            : `Renews on ${subscriptionEndDate ? new Date(subscriptionEndDate).toLocaleDateString() : 'N/A'}`,
+        ],
+      };
+    }
+    return {
+      tone: 'muted', icon: FileText, title: 'Free Plan',
+      lines: [papersRemaining === 0 ? 'No papers remaining — upgrade to generate more.' : `${papersRemaining} papers remaining`],
+    };
   };
 
-  // Show loading until auth is checked
+  const statusInfo = getStatusInfo();
+  const toneColors: Record<string, { bg: string; border: string; fg: string }> = {
+    warning: { bg: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)', border: '#fde68a', fg: '#92400e' },
+    success: { bg: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', border: '#a7f3d0', fg: '#065f46' },
+    primary: { bg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', border: '#bfdbfe', fg: 'var(--brand-primary)' },
+    muted:   { bg: 'var(--surface-soft)', border: 'var(--border-subtle)', fg: 'var(--text-muted)' },
+  };
+
+  const showRewardBanner = !loading && profile && !profile.cellno;
+
+  // Loading state
   if (!authChecked || (loading && isAuthorized)) {
     return (
-      
-        <div className="container-fluid text-center py-5">
-          <div className="spinner-border text-primary" />
-        </div>
-      
+      <div className="container-fluid text-center py-5">
+        <div className="spinner-border text-primary" />
+      </div>
     );
   }
 
-  // Don't render anything if not authorized (will redirect in useEffect)
-  if (!isAuthorized) {
-    return null;
-  }
+  if (!isAuthorized) return null;
 
-  // Error state for profile fetch (after authentication)
   if (error && !profile) return (
-  
-      <div className="container px-1 px-md-3 py-3">
-        <div className="alert alert-danger d-flex align-items-center" role="alert">
-          <div><strong>Error: </strong>{error}</div>
-          <button type="button" className="btn-close ms-auto" onClick={() => setError(null)}></button>
-        </div>
-        <div className="text-center mt-4">
-          <button className="btn btn-primary" onClick={() => window.location.reload()}>Try Again</button>
-        </div>
+    <div style={{ maxWidth: 480, margin: '3rem auto', textAlign: 'center' }}>
+      <div style={{
+        background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b',
+        borderRadius: 'var(--radius-lg)', padding: '1rem 1.25rem', marginBottom: '1rem',
+      }}>
+        <strong>Error: </strong>{error}
       </div>
-  
+      <button
+        onClick={() => window.location.reload()}
+        style={{
+          padding: '0.6rem 1.5rem', border: 'none', borderRadius: 'var(--radius-md)',
+          background: 'var(--brand-primary)', color: '#fff', fontWeight: 600, cursor: 'pointer',
+        }}
+      >
+        Try Again
+      </button>
+    </div>
   );
 
   return (
-    <>
-      <div className="container px-2 px-md-3 py-0 py-md-3">
-        <motion.h1 
-          initial={{ opacity: 0, y: -20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ duration: 0.5 }}
-          className="text-center mb-2 mb-md-3 fw-bold"
-          style={{ 
-            fontSize: '2.5rem', 
-            background: 'linear-gradient(to right, #0d6efd, #6f42c1)', 
-            WebkitBackgroundClip: 'text', 
-            WebkitTextFillColor: 'transparent' 
+    <div>
+      {/* Page header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+          background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 4px 12px rgba(7,62,140,0.25)',
+        }}>
+          <User size={20} color="#fff" />
+        </div>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)' }}>
+            Profile Settings
+          </h1>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            Manage your academy profile and account details
+          </p>
+        </div>
+      </div>
+
+      {/* Reward banner */}
+      {showRewardBanner && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+            background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+            border: '1px solid #fde68a', borderRadius: 'var(--radius-xl)',
+            padding: '1rem 1.25rem', marginBottom: '1.5rem',
           }}
         >
-          Profile Settings
-        </motion.h1>
+          <div style={{
+            width: 42, height: 42, borderRadius: 11, flexShrink: 0,
+            background: 'rgba(245,158,11,0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Gift size={20} style={{ color: '#b45309' }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem', color: '#92400e' }}>
+              Get 3 months free — unlimited papers!
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: '#92400e', opacity: 0.85 }}>
+              Add a working mobile number below to activate your free reward instantly.
+            </p>
+          </div>
+        </motion.div>
+      )}
 
-        {profile && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }} 
-            animate={{ opacity: 1, scale: 1 }} 
-            transition={{ duration: 0.4 }} 
-            className="row justify-content-center"
-          >
-            <div className="col-lg-8">
-              {error && (
-                <div className="alert alert-danger alert-dismissible fade show" role="alert">
-                  <strong>Error: </strong>{error}
-                  <button type="button" className="btn-close" onClick={() => setError(null)}></button>
-                </div>
-              )}
-              
-              {success && (
-                <div className="alert alert-success alert-dismissible fade show" role="alert">
-                  <strong>Success: </strong>{success}
-                  <button type="button" className="btn-close" onClick={() => setSuccess(null)}></button>
-                </div>
-              )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr', gap: '1.5rem', alignItems: 'start' }} className="settings-grid">
+        {/* Main form card */}
+        <div style={{
+          background: '#fff', borderRadius: 'var(--radius-xl)',
+          border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-subtle)',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <ShieldCheck size={16} style={{ color: 'var(--brand-primary)' }} />
+            <h2 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>
+              Edit Your Profile
+            </h2>
+          </div>
 
-              {/* Profile Edit Card */}
-              <div className="card shadow-sm border-0">
-                <div className="card-header bg-primary text-white py-3">
-                  <h5 className="card-title mb-0">Edit Your Profile</h5>
-                </div>
-                <div className="card-body p-1 p-md-4">
-                  <form onSubmit={handleSubmit}>
-                    {/* Logo Upload */}
-                    <div className="row mb-4">
-                      <div className="col-md-12">
-                        <label className="form-label fw-semibold">
-                          Academy Logo <small>(For Question paper or Test)</small>
-                        </label>
-                        <div className="d-flex align-items-center">
-                          <div className="position-relative me-4">
-                            {profile.logo ? (
-                              <img 
-                                src={profile.logo} 
-                                alt="Profile" 
-                                className="rounded-circle object-fit-cover border border-3 border-primary" 
-                                style={{ width: '100px', height: '100px' }}
-                              />
-                            ) : (
-                              <div 
-                                className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold border border-3 border-primary"
-                                style={{ 
-                                  width: '100px', 
-                                  height: '100px', 
-                                  background: 'linear-gradient(to right, #bee3f8, #a3bffa)', 
-                                  fontSize: '2.5rem' 
-                                }}
-                              >
-                                {profile.full_name ? profile.full_name.charAt(0).toUpperCase() : 'U'}
-                              </div>
-                            )}
-                            {profile.logo && (
-                              <button 
-                                type="button" 
-                                className="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle" 
-                                style={{ width: '28px', height: '28px' }} 
-                                onClick={removeLogo}
-                              >
-                                <X size={14} />
-                              </button>
-                            )}
-                          </div>
-                          <div>
-                            <input 
-                              type="file" 
-                              id="logo-upload" 
-                              accept="image/*" 
-                              onChange={handleLogoUpload} 
-                              style={{ display: 'none' }}
-                            />
-                            <label htmlFor="logo-upload" className="btn btn-outline-primary mb-2">
-                              {uploading ? (
-                                <>
-                                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                                  Uploading...
-                                </>
-                              ) : (
-                                <>
-                                  <Upload size={16} className="me-2"/> 
-                                  Upload Academy Logo
-                                </>
-                              )}
-                            </label>
-                            <div className="form-text">JPG, PNG or GIF. Max size 500KB.</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Name, Email, Institution, Phone */}
-                    <div className="row mb-3">
-                      <div className="col-md-6">
-                        <label htmlFor="full_name" className="form-label">
-                          <User size={16} className="me-2"/>Full Name
-                        </label>
-                        <input 
-                          type="text" 
-                          className="form-control" 
-                          id="full_name" 
-                          name="full_name" 
-                          value={formData.full_name} 
-                          onChange={handleInputChange} 
-                          placeholder="Enter your full name"
-                        />
-                      </div>
-                      <div className="col-md-6">
-                        <label htmlFor="email" className="form-label">
-                          <Mail size={16} className="me-2"/>Email Address
-                        </label>
-                        <input 
-                          type="email" 
-                          className="form-control" 
-                          id="email" 
-                          name="email" 
-                          value={formData.email} 
-                          onChange={handleInputChange} 
-                          disabled 
-                          placeholder="Email address"
-                        />
-                        <div className="form-text">Email cannot be changed</div>
-                      </div>
-                    </div>
-                    
-                    <div className="row mb-3">
-                      <div className="col-md-6">
-                        <label htmlFor="institution" className="form-label">
-                          <University size={16} className="me-2"/>Institution
-                        </label>
-                        <input 
-                          type="text" 
-                          className="form-control" 
-                          id="institution" 
-                          name="institution" 
-                          value={formData.institution} 
-                          onChange={handleInputChange} 
-                          placeholder="Enter your institution"
-                        />
-                      </div>
-                      <div className="col-md-6">
-                        <label htmlFor="cellno" className="form-label">
-                          <Phone size={16} className="me-2"/>Phone Number
-                        </label>
-                        <div className="position-relative">
-                          <input 
-                            type="tel" 
-                            className={`form-control ${cellnoStatus === 'invalid' ? 'is-invalid' : ''} ${cellnoStatus === 'valid' ? 'is-valid' : ''}`} 
-                            id="cellno" 
-                            name="cellno" 
-                            value={formData.cellno} 
-                            onChange={handleInputChange} 
-                            placeholder="0300-1234567" 
-                            maxLength={12}
-                          />
-                          {cellnoStatus === 'checking' && (
-                            <div className="position-absolute end-0 top-0 mt-2 me-2">
-                              <div className="spinner-border spinner-border-sm text-primary" role="status">
-                                <span className="visually-hidden">Checking...</span>
-                              </div>
-                            </div>
-                          )}
-                          {cellnoStatus === 'valid' && (
-                            <div className="position-absolute end-0 top-0 mt-2 me-2">
-                              <CheckCircle size={16} className="text-success"/>
-                            </div>
-                          )}
-                          {cellnoStatus === 'invalid' && (
-                            <div className="position-absolute end-0 top-0 mt-2 me-2">
-                              <AlertCircle size={16} className="text-danger"/>
-                            </div>
-                          )}
-                        </div>
-                        <div className="form-text">
-                          {cellnoStatus === 'invalid' ? "Phone number is invalid or already registered" : 
-                           cellnoStatus === 'valid' ? "Phone number is available" :
-                           "11-digit number starting with 03 (e.g., 03001234567)"}
-                        </div>
-                      </div>
-                    </div>
-                    {/* Address Field */}
-                    <div className="row mb-3">
-                      <div className="col-md-12">
-                        <label htmlFor="address" className="form-label">
-                          <MapPin size={16} className="me-2"/>Postal Address
-                        </label>
-                        <textarea 
-                          className="form-control" 
-                          id="address" 
-                          name="address" 
-                          rows="2"
-                          value={formData.address} 
-                          onChange={handleInputChange} 
-                          placeholder="Enter your complete academy or personal address"
-                        ></textarea>
-                      </div>
-                    </div>
-                    {/* Package Status */}
-                    {renderPackageStatus()}
-
-                    <div className="mt-4 d-flex justify-content-end">
-                      <button 
-                        type="submit" 
-                        className="btn btn-primary px-4 py-2" 
-                        disabled={saving || (formData.cellno && formData.cellno !== profile.cellno && cellnoStatus !== 'valid')}
-                      >
-                        {saving ? (
-                          <>
-                            <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <Save size={18} className="me-2"/>
-                            Save Changes
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </form>
-                </div>
+          <div style={{ padding: '1.25rem' }}>
+            {error && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b',
+                borderRadius: 'var(--radius-md)', padding: '0.65rem 0.9rem', marginBottom: '1rem', fontSize: '0.85rem',
+              }}>
+                <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                <span style={{ flex: 1 }}>{error}</span>
+                <button
+                  type="button"
+                  onClick={() => setError(null)}
+                  style={{ border: 'none', background: 'transparent', color: '#991b1b', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}
+                >
+                  <X size={14} />
+                </button>
               </div>
+            )}
 
-              {/* Account Info Card */}
-              <div className="card shadow-sm border-0 mt-4">
-                <div className="card-header bg-light py-3">
-                  <h5 className="card-title mb-0">Account Information</h5>
-                </div>
-                <div className="card-body p-4">
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <div className="d-flex align-items-center p-3 bg-light rounded">
-                        <div className="me-3 p-2 bg-primary bg-opacity-10 rounded">
-                          <User className="text-primary" size={20}/>
-                        </div>
-                        <div>
-                          <div className="text-muted small">Account Role</div>
-                          <div className="fw-semibold">{profile.role}</div>
-                        </div>
+            <form onSubmit={handleSubmit}>
+              {/* Logo upload */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={fieldLabelStyle}>
+                  Academy Logo <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(for question papers)</span>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative' }}>
+                    {profile?.logo ? (
+                      <img
+                        src={profile.logo}
+                        alt="Profile"
+                        style={{
+                          width: 88, height: 88, borderRadius: '50%', objectFit: 'cover',
+                          border: '3px solid var(--brand-primary-50)',
+                        }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 88, height: 88, borderRadius: '50%', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700,
+                        fontSize: '2rem', background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+                      }}>
+                        {profile?.full_name ? profile.full_name.charAt(0).toUpperCase() : 'U'}
                       </div>
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <div className="d-flex align-items-center p-3 bg-light rounded">
-                        <div className="me-3 p-2 bg-success bg-opacity-10 rounded">
-                          <Calendar className="text-success" size={20}/>
-                        </div>
-                        <div>
-                          <div className="text-muted small">Member Since</div>
-                          <div className="fw-semibold">{new Date(profile.created_at).toLocaleDateString()}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <div className="d-flex align-items-center p-3 bg-light rounded">
-                        <div className="me-3 p-2 bg-info bg-opacity-10 rounded">
-                          <Save className="text-info" size={20}/>
-                        </div>
-                        <div>
-                          <div className="text-muted small">Last Updated</div>
-                          <div className="fw-semibold">{new Date(profile.updated_at).toLocaleDateString()}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <div className="d-flex align-items-center p-3 bg-light rounded">
-                        <div className="me-3 p-2 bg-warning bg-opacity-10 rounded">
-                          <Mail className="text-warning" size={20}/>
-                        </div>
-                        <div>
-                          <div className="text-muted small">Subscription Status</div>
-                          <div className="fw-semibold">{profile.subscription_status || 'inactive'}</div>
-                        </div>
-                      </div>
-                    </div>
+                    )}
+                    {profile?.logo && (
+                      <button
+                        type="button"
+                        onClick={removeLogo}
+                        style={{
+                          position: 'absolute', top: -2, right: -2, width: 24, height: 24, borderRadius: '50%',
+                          border: '2px solid #fff', background: '#ef4444', color: '#fff', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      type="file"
+                      id="logo-upload"
+                      accept="image/*"
+                      onChange={handleLogoUpload}
+                      style={{ display: 'none' }}
+                    />
+                    <label htmlFor="logo-upload" style={{ ...secondaryBtnStyle, display: 'inline-flex', marginBottom: 6 }}>
+                      {uploading ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm" style={{ width: 14, height: 14 }} />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={15} />
+                          Upload Academy Logo
+                        </>
+                      )}
+                    </label>
+                    <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>JPG, PNG or GIF. Max size 500KB.</div>
                   </div>
                 </div>
               </div>
+
+              <div style={fieldRowStyle}>
+                <div style={fieldColStyle}>
+                  <label htmlFor="full_name" style={fieldLabelStyle}><User size={14} /> Full Name</label>
+                  <input
+                    type="text" id="full_name" name="full_name"
+                    value={formData.full_name} onChange={handleInputChange}
+                    placeholder="Enter your full name" style={inputStyle}
+                  />
+                </div>
+                <div style={fieldColStyle}>
+                  <label htmlFor="email" style={fieldLabelStyle}><Mail size={14} /> Email Address</label>
+                  <input
+                    type="email" id="email" name="email"
+                    value={formData.email} disabled
+                    style={{ ...inputStyle, background: 'var(--surface-soft)', color: 'var(--text-muted)', cursor: 'not-allowed' }}
+                  />
+                  <div style={fieldHintStyle}>Email cannot be changed</div>
+                </div>
+              </div>
+
+              <div style={fieldRowStyle}>
+                <div style={fieldColStyle}>
+                  <label htmlFor="institution" style={fieldLabelStyle}><University size={14} /> Institution</label>
+                  <input
+                    type="text" id="institution" name="institution"
+                    value={formData.institution} onChange={handleInputChange}
+                    placeholder="Enter your institution" style={inputStyle}
+                  />
+                </div>
+                <div style={fieldColStyle}>
+                  <label htmlFor="cellno" style={fieldLabelStyle}><Phone size={14} /> Phone Number</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="tel" id="cellno" name="cellno"
+                      value={formData.cellno} onChange={handleInputChange}
+                      placeholder="0300-1234567" maxLength={12}
+                      style={{
+                        ...inputStyle,
+                        paddingRight: 34,
+                        borderColor: cellnoStatus === 'invalid' ? '#ef4444' : cellnoStatus === 'valid' ? '#22c55e' : 'var(--border-subtle)',
+                        boxShadow: !profile?.cellno && !formData.cellno ? '0 0 0 3px rgba(245,158,11,0.12)' : 'none',
+                      }}
+                    />
+                    <div style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)' }}>
+                      {cellnoStatus === 'checking' && <span className="spinner-border spinner-border-sm text-primary" style={{ width: 14, height: 14 }} />}
+                      {cellnoStatus === 'valid' && <CheckCircle size={16} style={{ color: '#22c55e' }} />}
+                      {cellnoStatus === 'invalid' && <AlertCircle size={16} style={{ color: '#ef4444' }} />}
+                    </div>
+                  </div>
+                  <div style={{ ...fieldHintStyle, color: cellnoStatus === 'invalid' ? '#ef4444' : cellnoStatus === 'valid' ? '#16a34a' : 'var(--text-muted)' }}>
+                    {cellnoStatus === 'invalid' ? "Phone number is invalid or already registered" :
+                     cellnoStatus === 'valid' ? "Phone number is available" :
+                     "11-digit number starting with 03 (e.g., 03001234567)"}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1.1rem' }}>
+                <label htmlFor="address" style={fieldLabelStyle}><MapPin size={14} /> Postal Address</label>
+                <textarea
+                  id="address" name="address" rows={2}
+                  value={formData.address}
+                  onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                  placeholder="Enter your complete academy or personal address"
+                  style={{ ...inputStyle, resize: 'vertical' as const, fontFamily: 'inherit' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="submit"
+                  disabled={!!(saving || (formData.cellno && formData.cellno !== profile?.cellno && cellnoStatus !== 'valid'))}
+                  style={{
+                    ...primaryBtnStyle,
+                    opacity: (saving || (!!formData.cellno && formData.cellno !== profile?.cellno && cellnoStatus !== 'valid')) ? 0.6 : 1,
+                    cursor: (saving || (!!formData.cellno && formData.cellno !== profile?.cellno && cellnoStatus !== 'valid')) ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {saving ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm" style={{ width: 14, height: 14 }} />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={16} />
+                      Save Changes
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {/* Sidebar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* Package status */}
+          {statusInfo && (
+            <div style={{
+              background: toneColors[statusInfo.tone].bg,
+              border: `1px solid ${toneColors[statusInfo.tone].border}`,
+              borderRadius: 'var(--radius-xl)', padding: '1.1rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <statusInfo.icon size={17} style={{ color: toneColors[statusInfo.tone].fg }} />
+                <span style={{ fontWeight: 700, fontSize: '0.88rem', color: toneColors[statusInfo.tone].fg }}>
+                  {statusInfo.title}
+                </span>
+              </div>
+              {statusInfo.lines.map((line, i) => (
+                <p key={i} style={{ margin: '2px 0 0', fontSize: '0.8rem', color: toneColors[statusInfo.tone].fg, opacity: 0.88 }}>
+                  {line}
+                </p>
+              ))}
             </div>
-          </motion.div>
-        )}
+          )}
+
+          {/* Account info */}
+          <div style={{
+            background: '#fff', borderRadius: 'var(--radius-xl)',
+            border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden',
+          }}>
+            <div style={{ padding: '0.9rem 1.1rem', borderBottom: '1px solid var(--border-subtle)' }}>
+              <h3 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)' }}>Account Information</h3>
+            </div>
+            <div style={{ padding: '0.6rem 0.6rem' }}>
+              {profile && [
+                { icon: User, label: 'Account Role', value: profile.role, color: 'var(--brand-primary)' },
+                { icon: Calendar, label: 'Member Since', value: new Date(profile.created_at).toLocaleDateString(), color: '#16a34a' },
+                { icon: Save, label: 'Last Updated', value: new Date(profile.updated_at).toLocaleDateString(), color: 'var(--brand-accent)' },
+                { icon: Package, label: 'Subscription', value: profile.subscription_status || 'inactive', color: '#f59e0b' },
+              ].map((row, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.55rem' }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                    background: 'var(--surface-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <row.icon size={15} style={{ color: row.color }} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{row.label}</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', textTransform: 'capitalize' }}>{row.value}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
-    </>
+
+      <style jsx global>{`
+        @media (max-width: 900px) {
+          .settings-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+    </div>
   );
 }
+
+const fieldRowStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.1rem' };
+const fieldColStyle: React.CSSProperties = { minWidth: 0 };
+const fieldLabelStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', fontWeight: 600,
+  color: 'var(--text-secondary)', marginBottom: 6,
+};
+const fieldHintStyle: React.CSSProperties = { fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: 4 };
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '0.55rem 0.75rem', borderRadius: 'var(--radius-md)',
+  border: '1px solid var(--border-subtle)', fontSize: '0.88rem', fontFamily: 'inherit',
+  outline: 'none', color: 'var(--text-main)', background: '#fff',
+};
+const primaryBtnStyle: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0.6rem 1.5rem', border: 'none',
+  borderRadius: 'var(--radius-md)', fontWeight: 700, fontSize: '0.88rem', color: '#fff', fontFamily: 'inherit',
+  background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+  boxShadow: '0 4px 12px rgba(7,62,140,0.2)',
+};
+const secondaryBtnStyle: React.CSSProperties = {
+  alignItems: 'center', gap: 8, padding: '0.5rem 1rem', border: '1px solid var(--border-subtle)',
+  borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '0.82rem', color: 'var(--brand-primary)',
+  background: '#fff', cursor: 'pointer', fontFamily: 'inherit',
+};

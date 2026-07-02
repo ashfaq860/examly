@@ -23,7 +23,7 @@ interface Props {
   profile: any;
   questionLineSpacing?: number;
   subjectUrduName?: string;
-  paperPart: any;
+  paperPart?: any;
 }
 
 const URDU_FONT = "'JameelNoori', 'Noto Nastaliq Urdu', serif";
@@ -251,7 +251,7 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
       const engText = q.question_text || q.question || '';
       const urText  = q.question_text_ur || '';
       const len = engText.length + urText.length * 1.5;
-      return len < 50 ? 'col-3' : len < 60 ? 'col-4' : len < 110 ? 'col-6' : 'col-12';
+      return len < 50 ? 'col-3' : len < 60 ? 'col-4' : len < 120 ? 'col-6' : 'col-12';
     };
 const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation') || sectionType.includes('punctuation')|| sectionType.includes('pair_of_words')
     const isLongType = sectionType.includes('long') || sectionType.includes('summary') ||
@@ -264,6 +264,7 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
     const hasSubgroups = Array.isArray(subgroups) && subgroups.length > 1;
     const suppressNumberingSection = Boolean((section as any).suppressNumbering);
     const singleItemMarksOnly      = Boolean((section as any).singleItemMarksOnly);
+    const isSingleTranslateSection = (sectionType === 'translate_urdu' || sectionType === 'translate_english') && questions.length === 1;
     const hideHeader = isPairedLong || isAlternativeGroup || (hasSubgroups&&isStanzaPunctuationPairWords)  ||
       (isUrduOrEnglish && isSingleAttemptLong && !isPoetry && !isGazal && !isCorrection && isCompletion);
 
@@ -282,7 +283,7 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
       const isBilingualLang = paperLanguage === 'bilingual';
 
       const enLabelText = `Q.${startNum}`;
-      const urLabelText = `${startNum}.Q`;
+      const urLabelText = `Q.${startNum}`;
       const qNoFontPx = settings.headingFontSize + 2;
       const estimateLabelWidth = (text: string, fontPx: number) =>
         Math.ceil(text.length * fontPx * 0.62);
@@ -293,7 +294,13 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
       const altQuestionFontSize   = settings.headingFontSize;
       const altQuestionFontSizeUr = settings.headingFontSize + 2;
       const altQuestionFontFamily = settings.headingFontFamily;
-      const altQuestionFontWeight = 'bold';
+      // Only the "Q.N" number label (its own separate fw-bold span) should
+      // be bold — the question sentence itself should render at normal
+      // weight, matching every other layout in this app (QuestionRenderer
+      // defaults question content to fontWeight: 'normal'). This was
+      // wrongly set to 'bold' and applied to the question text too, making
+      // the whole alternative-question sentence render bold in board papers.
+      const altQuestionFontWeight = 'normal';
 
       const OrDivider = () => (
         <div
@@ -513,7 +520,7 @@ const renderPairedQuestions = () => {
   const sharedNoteUr: string | null = (section as any).sharedAttemptNoteUr  || null;
 
   const enLabelText   = `Q.${startNum}`;
-  const urLabelText   = `${startNum}.Q`;
+  const urLabelText   = `Q.${startNum}`;
   const qNoFontPx     = settings.headingFontSize + 2;
 
   const estimateLabelWidth = (text: string, fontPx: number) =>
@@ -522,8 +529,8 @@ const renderPairedQuestions = () => {
   const qNoColWidthEn = `${estimateLabelWidth(enLabelText, qNoFontPx) + 6}px`;
   const qNoColWidthUr = `${estimateLabelWidth(urLabelText, qNoFontPx) + 6}px`;
 
-  const subLabelFs   = settings.headingFontSize;
-  const subLabelFsUr = settings.headingFontSize + 2;
+  const subLabelFs   = settings.fontSize;
+  const subLabelFsUr = settings.fontSize + 2;
   const noteFontSize = Math.max(settings.fontSize + 1, 12);
 
   return (
@@ -543,7 +550,7 @@ const renderPairedQuestions = () => {
               width: '100%',
               gap: '12px',
               alignItems: 'flex-start',
-              marginBottom: '10px',
+              marginBottom: '2px',
               marginTop: '4px',
             }}>
               {/* LEFT — English note */}
@@ -695,9 +702,9 @@ const renderPairedQuestions = () => {
                     </div>
                     <span
                       className="fw-bold text-nowrap"
-                      style={{ fontSize: `${subLabelFs}px`, flexShrink: 0 }}
+                      style={{ fontSize: `${subLabelFs}px`, flexShrink: 0, fontFamily: settings.headingFontFamily }}
                     >
-                      ({qMarks})
+                      {qMarks}
                     </span>
                   </div>
                 </div>
@@ -787,9 +794,10 @@ const renderPairedQuestions = () => {
                         flexShrink: 0,
                         direction: 'ltr',
                         unicodeBidi: 'embed' as any,
+                        fontFamily: settings.headingFontFamily,
                       }}
                     >
-                      ({qMarks})
+                      {qMarks}
                     </span>
                   </div>
                 </div>
@@ -880,9 +888,10 @@ const renderPairedQuestions = () => {
                       flexShrink: 0,
                       direction: 'ltr',
                       unicodeBidi: 'embed' as any,
+                      fontFamily: settings.headingFontFamily,
                     }}
                   >
-                    ({qMarks})
+                    {qMarks}
                   </span>
                 </div>
               </div>
@@ -947,9 +956,9 @@ const renderPairedQuestions = () => {
                 </div>
                 <span
                   className="fw-bold text-nowrap"
-                  style={{ fontSize: `${subLabelFs}px`, flexShrink: 0 }}
+                  style={{ fontSize: `${subLabelFs}px`, flexShrink: 0, fontFamily: settings.headingFontFamily }}
                 >
-                  ({qMarks})
+                  {qMarks}
                 </span>
               </div>
             </div>
@@ -987,8 +996,8 @@ const renderPairedQuestions = () => {
                 metaFontSize={settings.metaFontSize}
                 questionFontFamily={settings.fontFamily}
                 questionLineSpacing={settings.lineHeight}
-                mcqFontSize={settings.mcqFontSize}
-                mcqLineHeight={settings.mcqLineHeight}
+                mcqFontSize={settings.mcqFontSize ?? 12}
+                mcqLineHeight={settings.mcqLineHeight ?? 1.2}
                 onTextChange={onTextChange}
                 marks={q.marks || section.marksEach}
                 isUrduSubject={isUrduOrEnglish}
@@ -1029,7 +1038,7 @@ const renderPairedQuestions = () => {
             headingFontFamily={settings.headingFontFamily}
             paperLanguage={paperLanguage}
             customUrHeader={isPoetry ? combinedPoetryInstruction : combinedCorrectCompleteInstruction}
-            customEnHeader={section.customEnHeader}
+            customEnHeader={(section as any).customEnHeader}
             onHeaderChange={handleHeaderChange}
             singleItemMarksOnly={singleItemMarksOnly}
             isEditMode={isEditMode}
@@ -1059,11 +1068,11 @@ const renderPairedQuestions = () => {
                 headingFontSize={settings.headingFontSize}
                 headingFontFamily={settings.headingFontFamily}
                 paperLanguage={paperLanguage}
-                customEnHeader={section.customEnHeader}
-                customUrHeader={section.customUrHeader}
+                customEnHeader={(section as any).customEnHeader}
+                customUrHeader={(section as any).customUrHeader}
                 onHeaderChange={handleHeaderChange}
                 isEditMode={isEditMode}
-                singleItemMarksOnly={singleItemMarksOnly}
+                singleItemMarksOnly={singleItemMarksOnly || isSingleTranslateSection}
               />
             )}
           </div>
@@ -1139,7 +1148,7 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
           <div style={{ flex: 1, display: 'flex', flexDirection: 'row-reverse', alignItems: 'baseline', gap: '6px', direction: 'rtl' }}>
             {sgIdx === 0 && isNotMCQ && (
               <span style={{ fontWeight: 700, fontFamily: URDU_FONT, fontSize: `${settings.headingFontSize + 2}px`, flexShrink: 0, direction: 'ltr' }}>
-                {startNum}.Q
+                Q.{startNum}
               </span>
             )}
             {urLabel ? (
@@ -1167,7 +1176,7 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
         <div style={{ display: 'flex', flexDirection: 'row-reverse', width: '100%', alignItems: 'baseline', gap: '6px', marginBottom: '3px', direction: 'rtl' }}>
           {sgIdx === 0 && isNotMCQ && (
             <span style={{ fontWeight: 700, fontFamily: URDU_FONT, fontSize: `${settings.headingFontSize + 2}px`, flexShrink: 0, direction: 'ltr' }}>
-              {startNum}.Q
+              Q.{startNum}
             </span>
           )}
           <span dir="rtl" lang="ur" style={{ fontWeight: 600, fontSize: `${settings.fontSize + 2}px`, fontFamily: URDU_FONT, flex: 1 }}>
@@ -1211,7 +1220,7 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
           <div className="questions-list row g-2 mx-0"
         style={{ [paddingSide]: indent }}
           >
-            {sgQuestions.map((q, qIdx) => {
+            {sgQuestions.map((q: any, qIdx: number) => {
               // Suppress index ONLY if it's a single question AND NOT an MCQ
               const suppressIndex = isNotMCQ && sgQuestions.length === 1;
               
@@ -1234,8 +1243,8 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
                     metaFontSize={settings.metaFontSize}
                     questionFontFamily={settings.fontFamily}
                     questionLineSpacing={settings.lineHeight}
-                    mcqFontSize={settings.mcqFontSize}
-                    mcqLineHeight={settings.mcqLineHeight}
+                    mcqFontSize={settings.mcqFontSize ?? 12}
+                    mcqLineHeight={settings.mcqLineHeight ?? 1.2}
                     onTextChange={onTextChange}
                     marks={q.marks || section.marksEach}
                     isUrduSubject={isUrduOrEnglish}
@@ -1258,7 +1267,7 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
   })()
 )  : (
           //renderQuestionsList(questions, 0)
-           renderQuestionsList(questions, 0, suppressNumberingSection)
+           renderQuestionsList(questions, 0, suppressNumberingSection || isSingleTranslateSection)
         )}
       </div>
     );
@@ -1277,7 +1286,7 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
             fontFamily: settings.headingFontFamily,
             fontSize: settings.headingFontSize,
             borderBottom: '2px solid #000',
-            paddingBottom: '10px',
+            paddingBottom: '2px',
             fontWeight: 'bold',
           }}>
             MCQ Answer Keys — For Class: {(currentClass as any)?.name || currentClass} ({subject})
@@ -1363,7 +1372,7 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
     }
     else if (['two_papers', 'two_paper', 'three_papers', 'three_paper'].includes(currentLayout)) {
       const count      = currentLayout.startsWith('two') ? 2 : 3;
-      const slotHeight = count === 2 ? '142mm' : '95mm';
+      const slotHeight = count === 2 ? '142mm' : '93mm'; // 3×93+2×3=285mm < 289mm content area
       const fsOffset   = currentLayout.startsWith('three') ? -3 : -1;
       const wmScale    = currentLayout.startsWith('two')   ? 0.7 : 0.5;
 
@@ -1399,7 +1408,7 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
     }
     else if (currentLayout === 'four_papers') {
       const count      = 4;
-      const slotHeight = '71mm';
+      const slotHeight = '70mm'; // 4×70 + 3×~3mm dashes = ~289mm = fits within 289mm content area
       const fontShrink = 4;
       const wmScale    = 0.4;
 
@@ -1439,35 +1448,68 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
   return (
     <div className="paper-builder-renderer bg-secondary-subtle">
       <style>{`
+        /* ── Screen: visual frame around each paper sheet ── */
         @media screen {
           .paper-sheet {
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            border: 1px solid #dee2e6;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
             margin: 20px auto;
             background: white;
           }
         }
+
+        /* ── Print: make paper fill the page exactly ─────────────────
+           All layout (width, height, padding, flex, font) is in
+           inline styles on .paper-sheet — we only strip chrome here.
+           ─────────────────────────────────────────────────────────── */
         @media print {
-          @page { size: A4; margin: 0mm !important; }
+          @page { size: A4 portrait; margin: 0mm; }
+
           html, body {
             margin: 0 !important; padding: 0 !important;
-            height: auto !important; overflow: visible !important; background: white !important;
+            width: 100% !important; height: auto !important;
+            overflow: visible !important; background: white !important;
           }
-          body * {
+
+          /* ── Kill AcademyLayout chrome (classnames added to AcademyLayout.tsx) ── */
+          .al-sidebar-desktop, .al-sidebar-mobile,
+          .al-mobile-topbar, .al-footer-wrap,
+          aside, nav, footer,
+          header:not(.paper-header),
+          .no-print, .page-border { display: none !important; }
+
+          /* Outer layout wrappers: block + no space */
+          .al-body-row  { display: block !important; }
+          .al-main, main, [role="main"] {
+            display: block !important;
+            overflow: visible !important;
+            width: 100% !important; max-width: 100% !important;
+            height: auto !important;
+            margin: 0 !important; padding: 0 !important;
+          }
+          .al-content-pad, .al-content-inner {
+            padding: 0 !important; margin: 0 !important;
+            max-width: 100% !important; width: 100% !important;
+          }
+
+          .paper-builder-renderer { padding: 0 !important; background: white !important; }
+
+          /* ── Paper sheet: block so overflow:hidden clips correctly in print ── */
+          .paper-sheet {
+            display: block !important;
+            margin: 0 !important; border: 0 !important;
+            box-shadow: none !important; outline: 0 !important;
+            page-break-after: always !important; break-after: page !important;
+            page-break-inside: avoid !important; break-inside: avoid !important;
+            overflow: hidden !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          main { margin: 0 !important; padding: 0 !important; }
-          .paper-builder-renderer { padding: 0 !important; background: white !important; }
-          .paper-sheet {
-            margin: 0 !important; border: 0 !important; box-shadow: none !important;
-            outline: 0 !important; page-break-after: always !important;
-            page-break-inside: avoid !important; height: 297mm !important; overflow: hidden !important;
+          .print-container > .paper-sheet:last-child {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
           }
-          .print-container > .paper-sheet:last-child { page-break-after: avoid !important; }
-          .section-block { page-break-inside: avoid !important; }
-          .no-print, nav, .sidebar, .page-border, .app-header,
-          .appHeaderContent, header:not(.paper-header), .btn { display: none !important; }
+
+          .section-block { page-break-inside: avoid !important; break-inside: avoid !important; }
         }
       `}</style>
       {renderContent()}

@@ -23,6 +23,7 @@ const GeneratePaperPage = () => {
     setSelectedQuestions,
     setPreviewQuestions,
     isLoading,
+    isSubjectsLoading,
     isLoadingPreview,
     isDownloadingKey,
     previewQuestions,
@@ -130,6 +131,90 @@ const GeneratePaperPage = () => {
       )}
 
       <div className="container-fluid px-0 px-lg-4">
+
+        {/* ── Step Progress Indicator ── */}
+        <style jsx>{`
+          .step-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0px 0 0px;
+          }
+          .step-node {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            border: 2px solid #e9ecef;
+            background: #f8f9fa;
+            color: #9ca3af;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+          }
+          .step-node.step-done {
+            background: #ecfdf5;
+            border-color: #86efac;
+            color: #16a34a;
+          }
+          .step-node.step-active {
+            background: #0d6efd;
+            border-color: #0d6efd;
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(13, 110, 253, 0.3);
+          }
+          .step-bubble {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            background: #e9ecef;
+          }
+          .step-node.step-done .step-bubble {
+            background: rgba(22, 163, 74, 0.12);
+          }
+          .step-node.step-active .step-bubble {
+            background: rgba(255, 255, 255, 0.2);
+          }
+          .step-line {
+            width: 32px;
+            height: 2px;
+            background: #e9ecef;
+            border-radius: 2px;
+            margin: 0 2px;
+            flex-shrink: 0;
+            transition: background 0.3s ease;
+          }
+          .step-line.step-done { background: #86efac; }
+          .step-lbl { display: none; }
+          @media (min-width: 480px) { .step-lbl { display: inline; } }
+        `}</style>
+        {step < 4 && <div className="step-bar">
+          {[
+            { n: 1, label: 'Class', emoji: '🎓' },
+            { n: 2, label: 'Subject', emoji: '📚' },
+            { n: 3, label: 'Chapters', emoji: '📋' },
+            { n: 4, label: 'Build Paper', emoji: '📄' },
+          ].map((s, i) => {
+            const done = step > s.n;
+            const active = step === s.n;
+            return (
+              <React.Fragment key={s.n}>
+                <div className={`step-node${done ? ' step-done' : active ? ' step-active' : ''}`}>
+                  <div className="step-bubble">{done ? '✓' : s.emoji}</div>
+                  <span className="step-lbl">{s.label}</span>
+                </div>
+                {i < 3 && <div className={`step-line${done ? ' step-done' : ''}`} />}
+              </React.Fragment>
+            );
+          })}
+        </div>}
+
         <div
           className="position-relative"
           style={{
@@ -179,7 +264,7 @@ const GeneratePaperPage = () => {
                 classes={classes}
                 setValue={setValue}
                 errors={errors}
-                isLoading={isLoading}
+                isLoading={isSubjectsLoading}
               />
             )}
 
@@ -190,6 +275,8 @@ const GeneratePaperPage = () => {
                 watchedChapterOption={watchedChapterOption}
                 selectedChapters={watch('selectedChapters') || []}
                 subjects={subjects}
+                classes={classes}
+                watchedClassId={watchedClassId}
                 setValue={setValue}
                 setStep={setStep}
                 watch={watch}

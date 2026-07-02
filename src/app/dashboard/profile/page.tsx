@@ -12,12 +12,13 @@ import {
   Package as PackageIcon,
   Clock,
   Mail,
-  Link as LinkIcon,
+  Copy,
+  Gift,
+  ShieldCheck,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import toast, { Toaster } from "react-hot-toast";
-import ReferralSection from "@/components/ReferralSection";
+import toast from "react-hot-toast";
 
 type Profile = {
   id: string;
@@ -73,26 +74,22 @@ export default function ProfilePage() {
     const checkAuth = async () => {
       try {
         const { data: { session }, error: authError } = await supabase.auth.getSession();
-        
+
         if (authError || !session) {
-          console.log('No user found, redirecting to login');
           router.push('/auth/login');
           return;
         }
 
-        // Check user role - only teachers can access
         const { data: roleData, error: roleError } = await supabase.rpc(
           'get_user_role',
           { user_id: session.user.id }
         );
 
         if (roleError || roleData !== 'teacher') {
-          console.log('User is not a teacher, redirecting to home');
           router.push('/');
           return;
         }
 
-        // User is authorized
         setSession(session);
         setIsAuthorized(true);
       } catch (error) {
@@ -105,7 +102,6 @@ export default function ProfilePage() {
 
     checkAuth();
 
-    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         router.push('/auth/login');
@@ -119,7 +115,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchProfileAndPackages = async () => {
       if (!isAuthorized) return;
-      
+
       setLoading(true);
       setError(null);
       try {
@@ -147,28 +143,21 @@ export default function ProfilePage() {
     if (isAuthorized && session) fetchProfileAndPackages();
   }, [session, isAuthorized]);
 
-  // Show loading until auth is checked
   if (!authChecked || (loading && isAuthorized)) {
     return (
-      
-        <div className="container-fluid text-center py-5">
-          <div className="spinner-border text-primary" />
-        </div>
-    
+      <div className="container-fluid text-center py-5">
+        <div className="spinner-border text-primary" />
+      </div>
     );
   }
 
-  // Don't render anything if not authorized (will redirect in useEffect)
-  if (!isAuthorized) {
-    return null;
-  }
+  if (!isAuthorized) return null;
 
-  // Helpers
   const getPackageStatus = (userPackage: UserPackage) => {
     const now = new Date();
     const expiresAt = userPackage.expires_at ? new Date(userPackage.expires_at) : null;
 
-    if (!userPackage.is_active) return { status: 'pending', label: 'Pending', badgeClass: 'bg-secondary' };
+    if (!userPackage.is_active) return { status: 'pending', label: 'Pending', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' };
 
     const isExpiredByDate = expiresAt && expiresAt < now;
     const isPaperPackEmpty =
@@ -176,9 +165,9 @@ export default function ProfilePage() {
       userPackage.papers_remaining !== null &&
       userPackage.papers_remaining <= 0;
 
-    if (isExpiredByDate || isPaperPackEmpty) return { status: 'expired', label: 'Expired', badgeClass: 'bg-danger' };
+    if (isExpiredByDate || isPaperPackEmpty) return { status: 'expired', label: 'Expired', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' };
 
-    return { status: 'active', label: 'Active', badgeClass: 'bg-success' };
+    return { status: 'active', label: 'Active', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' };
   };
 
   const calculateDaysRemaining = (expiresAt: string | null) => {
@@ -199,228 +188,264 @@ export default function ProfilePage() {
     toast.success("Link copied!");
   };
 
-  // Error handling for profile fetch (after authentication)
   if (error) {
     return (
-  
-        <div className="container px-0 px-md-3 py-2">
-          <div className="alert alert-danger" role="alert">
-            <strong>Error: </strong>{error}
-          </div>
+      <div style={{ maxWidth: 480, margin: '3rem auto', textAlign: 'center' }}>
+        <div style={{
+          background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b',
+          borderRadius: 'var(--radius-lg)', padding: '1rem 1.25rem',
+        }}>
+          <strong>Error: </strong>{error}
         </div>
-  
+      </div>
     );
   }
 
   return (
-    <>
-      <Toaster position="top-right" />
-      <div className="container px-0 px-md-3 py-2">
-        <motion.h1
-          initial={{ opacity: 0, y: -20 }}
+    <div>
+      {/* Page header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+          background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 4px 12px rgba(7,62,140,0.25)',
+        }}>
+          <User size={20} color="#fff" />
+        </div>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)' }}>My Profile</h1>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            Your academy account, plan and referral overview
+          </p>
+        </div>
+      </div>
+
+      {profile && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-2 fw-bold"
+          transition={{ duration: 0.35 }}
           style={{
-            fontSize: '2.5rem',
-            background: 'linear-gradient(to right, #0d6efd, #6f42c1)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
+            background: 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)',
+            border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)',
+            padding: '1.5rem', marginBottom: '1.5rem', boxShadow: 'var(--shadow-sm)',
           }}
         >
-          My Profile
-        </motion.h1>
+          {/* Profile header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+            {profile.logo ? (
+              <img
+                src={profile.logo}
+                alt="Profile"
+                style={{
+                  width: 88, height: 88, borderRadius: '50%', objectFit: 'cover',
+                  border: '3px solid #fff', boxShadow: 'var(--shadow-md)',
+                }}
+              />
+            ) : (
+              <div style={{
+                width: 88, height: 88, borderRadius: '50%', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700,
+                fontSize: '2.2rem', background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%)',
+                boxShadow: 'var(--shadow-md)',
+              }}>
+                {profile.full_name ? profile.full_name.charAt(0).toUpperCase() : 'U'}
+              </div>
+            )}
 
-        {profile && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4 }}
-            className="rounded-3 shadow-lg p-2 p-md-4 mb-5"
-            style={{ background: 'linear-gradient(to right, #eef2ff, #eff6ff)' }}
-          >
-            {/* Profile Header */}
-            <div className="d-flex flex-column flex-md-row align-items-center gap-4 mb-4">
-              {profile.logo ? (
-                <img
-                  src={profile.logo}
-                  alt="Profile"
-                  className="rounded-circle object-fit-cover border border-4 border-primary shadow"
-                  style={{ width: '7rem', height: '7rem' }}
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                {profile.full_name || "No Name Provided"}
+              </h2>
+              <p style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0 10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                <Mail size={14} /> {profile.email}
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Badge label={profile.role} color="#fff" bg="var(--brand-primary)" />
+                <Badge
+                  label={profile.subscription_status === 'active' ? 'Active' : 'Inactive'}
+                  color="#fff"
+                  bg={profile.subscription_status === 'active' ? '#16a34a' : '#94a3b8'}
                 />
-              ) : (
-                <div
-                  className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold shadow"
-                  style={{
-                    width: '7rem',
-                    height: '7rem',
-                    background: 'linear-gradient(to right, #bee3f8, #a3bffa)',
-                    fontSize: '2.5rem',
-                  }}
-                >
-                  {profile.full_name ? profile.full_name.charAt(0).toUpperCase() : 'U'}
-                </div>
-              )}
+              </div>
+            </div>
+          </div>
 
-              <div className="flex-grow-1">
-                <h2 className="d-flex align-items-center gap-2 fs-3 fw-semibold text-dark mb-1">
-                  <User size={20} /> {profile.full_name || "No Name Provided"}
-                </h2>
-                <p className="text-muted d-flex align-items-center gap-2 mb-2">
-                  <Mail size={16} /> {profile.email}
-                </p>
-                <div className="d-flex gap-2 flex-wrap">
-                  <span className="badge bg-primary">{profile.role}</span>
-                  <span className={`badge ${profile.subscription_status === 'active' ? 'bg-success' : 'bg-danger'}`}>
-                    {profile.subscription_status || 'inactive'}
-                  </span>
+          {/* Info grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.85rem' }}>
+            <InfoCard icon={University} label="Institution" value={profile.institution || "Not specified"} color="var(--brand-primary)" />
+            <InfoCard icon={FileText} label="Papers Generated" value={String(profile.papers_generated || 0)} color="var(--brand-accent)" />
+            <InfoCard icon={Calendar} label="Member Since" value={new Date(profile.created_at).toLocaleDateString()} color="#16a34a" />
+            <InfoCard icon={Phone} label="Phone Number" value={profile.cellno || "Not provided"} color="#f59e0b" />
+          </div>
+
+          {/* Trial info */}
+          {profile.trial_ends_at && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12, marginTop: '1rem',
+              background: 'rgba(245,158,11,0.1)', borderRadius: 'var(--radius-lg)', padding: '0.85rem 1rem',
+            }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 9, flexShrink: 0,
+                background: 'rgba(245,158,11,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Clock size={17} style={{ color: '#b45309' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Trial Period</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#92400e' }}>
+                  Your trial ends on {new Date(profile.trial_ends_at).toLocaleDateString()}
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Profile Info Grid */}
-            <div className="row mt-4">
-              <div className="col-md-6 mb-3">
-                <div className="d-flex align-items-center p-3 bg-white rounded shadow-sm">
-                  <div className="me-3 p-2 bg-primary bg-opacity-10 rounded">
-                    <University className="text-primary" size={20} />
-                  </div>
-                  <div>
-                    <div className="text-muted small">Institution</div>
-                    <div className="fw-semibold">{profile.institution || "Not specified"}</div>
-                  </div>
+          {/* Referral */}
+          {profile.referral_code && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12, marginTop: '1rem', flexWrap: 'wrap',
+              background: '#fff', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '0.85rem 1rem',
+            }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 9, flexShrink: 0,
+                background: 'var(--brand-primary-50)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Gift size={17} style={{ color: 'var(--brand-primary)' }} />
+              </div>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Referral Link</div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {getReferralLink()}
                 </div>
               </div>
-
-              <div className="col-md-6 mb-3">
-                <div className="d-flex align-items-center p-3 bg-white rounded shadow-sm">
-                  <div className="me-3 p-2 bg-info bg-opacity-10 rounded">
-                    <FileText className="text-info" size={20} />
-                  </div>
-                  <div>
-                    <div className="text-muted small">Papers Generated</div>
-                    <div className="fw-semibold">{profile.papers_generated || 0}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-md-6 mb-3">
-                <div className="d-flex align-items-center p-3 bg-white rounded shadow-sm">
-                  <div className="me-3 p-2 bg-success bg-opacity-10 rounded">
-                    <Calendar className="text-success" size={20} />
-                  </div>
-                  <div>
-                    <div className="text-muted small">Member Since</div>
-                    <div className="fw-semibold">{new Date(profile.created_at).toLocaleDateString()}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-md-6 mb-3">
-                <div className="d-flex align-items-center p-3 bg-white rounded shadow-sm">
-                  <div className="me-3 p-2 bg-warning bg-opacity-10 rounded">
-                    <Phone className="text-warning" size={20} />
-                  </div>
-                  <div>
-                    <div className="text-muted small">Phone Number</div>
-                    <div className="fw-semibold">{profile.cellno || "Not provided"}</div>
-                  </div>
-                </div>
-              </div>
+              <button
+                onClick={() => copyToClipboard(getReferralLink())}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '0.45rem 0.9rem',
+                  border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)',
+                  background: 'var(--surface-soft)', color: 'var(--brand-primary)', fontWeight: 600,
+                  fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                <Copy size={13} /> Copy
+              </button>
             </div>
+          )}
+        </motion.div>
+      )}
 
-            {/* Trial Info */}
-            {profile.trial_ends_at && (
-              <div className="d-flex align-items-center p-3 bg-warning bg-opacity-10 rounded mt-3">
-                <div className="me-3 p-2 bg-warning bg-opacity-25 rounded">
-                  <Clock className="text-warning" size={20} />
-                </div>
-                <div>
-                  <div className="text-warning small">Trial Period</div>
-                  <div className="fw-semibold">
-                    Your trial ends on {new Date(profile.trial_ends_at).toLocaleDateString()}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Referral Section */}
-            {profile.referral_code && (
-              <ReferralSection referralCode={profile.referral_code} copyToClipboard={copyToClipboard} />
-            )}
-          </motion.div>
-        )}
-
-        {/* Subscriptions */}
-        <h2 className="d-flex align-items-center gap-2 mb-4 fw-bold fs-3 text-dark">
-          <PackageIcon size={28} /> My Subscriptions
-        </h2>
-
-        {userPackages.length === 0 ? (
-          <div className="bg-white rounded shadow p-4 text-center text-muted">
-            No subscription packages found.
-          </div>
-        ) : (
-          <div className="row">
-            {userPackages.map((userPackage) => {
-              const packageStatus = getPackageStatus(userPackage);
-              const daysRemaining = calculateDaysRemaining(userPackage.expires_at);
-
-              return (
-                <motion.div key={userPackage.id} whileHover={{ scale: 1.02 }} className="col-md-6 col-lg-4 mb-4">
-                  <div className="card h-100 border-0 shadow-sm">
-                    <div className={`card-header ${packageStatus.badgeClass.replace('bg-', 'bg-')}-10`}>
-                      <h5 className="card-title mb-1">{userPackage.packages.name}</h5>
-                      <p className="card-text text-muted small mb-0">{userPackage.packages.description}</p>
-                    </div>
-                    <div className="card-body">
-                      <div className="d-flex justify-content-between mb-2">
-                        <span>Status:</span>
-                        <span className={`badge ${packageStatus.badgeClass}`}>{packageStatus.label}</span>
-                      </div>
-                      <div className="d-flex justify-content-between mb-2">
-                        <span>Type:</span>
-                        <span>{userPackage.packages.type}</span>
-                      </div>
-                      <div className="d-flex justify-content-between mb-2">
-                        <span>Price:</span>
-                        <span>Rs.{userPackage.packages.price}</span>
-                      </div>
-                      <div className="d-flex justify-content-between mb-2">
-                        <span>Papers Remaining:</span>
-                        <span>
-                          {userPackage.packages.type === 'paper_pack'
-                            ? userPackage.papers_remaining ?? 0
-                            : 'Unlimited'}
-                        </span>
-                      </div>
-                      {userPackage.expires_at && (
-                        <div className="d-flex justify-content-between mb-2">
-                          <span>Expires:</span>
-                          <span>{new Date(userPackage.expires_at).toLocaleDateString()}</span>
-                        </div>
-                      )}
-                      {daysRemaining !== null && packageStatus.status === 'active' && (
-                        <div className="d-flex justify-content-between mb-2">
-                          <span>Days Remaining:</span>
-                          <span className={daysRemaining <= 7 ? 'text-danger fw-bold' : 'text-success'}>
-                            {daysRemaining}
-                          </span>
-                        </div>
-                      )}
-                      {userPackage.is_trial && (
-                        <div className="alert alert-warning mt-3 mb-0 py-2">
-                          <small>Trial Package</small>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
+      {/* Subscriptions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1rem' }}>
+        <PackageIcon size={18} style={{ color: 'var(--brand-primary)' }} />
+        <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)' }}>My Subscriptions</h2>
       </div>
-    </>
+
+      {userPackages.length === 0 ? (
+        <div style={{
+          background: '#fff', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)',
+          padding: '2.5rem 1rem', textAlign: 'center', color: 'var(--text-muted)',
+        }}>
+          <ShieldCheck size={28} style={{ opacity: 0.35, marginBottom: 8 }} />
+          <p style={{ margin: 0, fontSize: '0.9rem' }}>No subscription packages found.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+          {userPackages.map((userPackage) => {
+            const packageStatus = getPackageStatus(userPackage);
+            const daysRemaining = calculateDaysRemaining(userPackage.expires_at);
+
+            return (
+              <motion.div
+                key={userPackage.id}
+                whileHover={{ y: -3 }}
+                style={{
+                  background: '#fff', borderRadius: 'var(--radius-xl)', border: '1px solid var(--border-subtle)',
+                  boxShadow: 'var(--shadow-sm)', overflow: 'hidden',
+                }}
+              >
+                <div style={{ padding: '1rem 1.1rem', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>{userPackage.packages.name}</h3>
+                    <Badge label={packageStatus.label} color={packageStatus.color} bg={packageStatus.bg} />
+                  </div>
+                  {userPackage.packages.description && (
+                    <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>{userPackage.packages.description}</p>
+                  )}
+                </div>
+                <div style={{ padding: '0.9rem 1.1rem', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <Row label="Type" value={userPackage.packages.type} />
+                  <Row label="Price" value={`Rs. ${userPackage.packages.price}`} />
+                  <Row
+                    label="Papers Remaining"
+                    value={userPackage.packages.type === 'paper_pack' ? String(userPackage.papers_remaining ?? 0) : 'Unlimited'}
+                  />
+                  {userPackage.expires_at && (
+                    <Row label="Expires" value={new Date(userPackage.expires_at).toLocaleDateString()} />
+                  )}
+                  {daysRemaining !== null && packageStatus.status === 'active' && (
+                    <Row
+                      label="Days Remaining"
+                      value={String(daysRemaining)}
+                      valueColor={daysRemaining <= 7 ? '#ef4444' : '#16a34a'}
+                    />
+                  )}
+                  {userPackage.is_trial && (
+                    <div style={{
+                      marginTop: 4, padding: '0.4rem 0.65rem', borderRadius: 'var(--radius-md)',
+                      background: 'rgba(245,158,11,0.1)', color: '#92400e', fontSize: '0.76rem', fontWeight: 600,
+                    }}>
+                      Trial Package
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Badge({ label, color, bg }: { label: string; color: string; bg: string }) {
+  return (
+    <span style={{
+      display: 'inline-block', padding: '2px 10px', borderRadius: 99,
+      fontSize: '0.72rem', fontWeight: 700, color, background: bg, textTransform: 'capitalize',
+    }}>
+      {label}
+    </span>
+  );
+}
+
+function InfoCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color: string }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, background: '#fff',
+      borderRadius: 'var(--radius-lg)', padding: '0.75rem 0.9rem', boxShadow: 'var(--shadow-xs)',
+    }}>
+      <div style={{
+        width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+        background: 'var(--surface-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon size={16} style={{ color }} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{label}</div>
+        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {value}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+      <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ fontWeight: 600, color: valueColor || 'var(--text-main)', textTransform: 'capitalize' }}>{value}</span>
+    </div>
   );
 }

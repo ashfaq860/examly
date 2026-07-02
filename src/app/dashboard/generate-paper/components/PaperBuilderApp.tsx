@@ -368,7 +368,7 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
     if (type === 'mcq') return expectedPattern.mcq.marks;
     if (type === 'short') return expectedPattern.short.marks;
     if (type === 'long') return expectedPattern.long.marks;
-    const additional = expectedPattern.additionalTypes?.find(t => t.name.toLowerCase() === type);
+    const additional = expectedPattern.additionalTypes?.find((t: any) => t.name.toLowerCase() === type);
     return additional?.marks ?? 1; // 1 is a last-resort floor, not a guess about subject content
   };
 
@@ -1144,7 +1144,7 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
 
       {/* 2. MAIN SCROLLABLE AREA */}
       <main
-        className="flex-grow-1 overflow-auto bg-secondary bg-opacity-10 custom-scrollbar d-print-block paper-preview-main"
+        className="flex-grow-1 overflow-auto  bg-opacity-10 custom-scrollbar d-print-block paper-preview-main"
         style={{ touchAction: 'pan-y pinch-zoom', overflowX: 'hidden' }}
       >
         <div className="paper-canvas-wrapper">
@@ -1257,13 +1257,7 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
 
         /* ── Screen baseline ── */
         @media screen {
-          html, body {
-            overflow-x: hidden;
-            overflow-y: auto;
-          }
-          .paper-preview-main {
-            padding-top: 92px !important;
-          }
+          html, body { overflow-x: hidden; }
           .paper-canvas {
             width: 210mm;
             min-height: 297mm;
@@ -1271,6 +1265,23 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
             background: white;
             transform-origin: top center;
             transition: transform 0.2s ease;
+          }
+        }
+
+        /* ── Desktop: pin paper-preview-main to viewport, no body scroll ── */
+        @media screen and (min-width: 992px) {
+          html, body { overflow: hidden; }
+          .paper-preview-main {
+            position: fixed !important;
+            top: 72px !important;
+            left: 256px !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
           }
         }
 
@@ -1355,9 +1366,12 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
         .right-fade { right: 4px; }
 
         .app-header {
-          position: fixed; top: 0; right: 0; left: 280px;
+          position: fixed; top: 0; right: 0; left: 256px;
           height: 72px; z-index: 1020;
-          background: rgba(255,255,255,0.9); backdrop-filter: blur(8px); transition: all 0.3s ease;
+          background: rgba(255,255,255,0.97); backdrop-filter: blur(8px);
+          border-bottom: 1px solid #e9ecef;
+          box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+          transition: all 0.3s ease;
         }
 
         .empty-state .btn-primary { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border: none; transition: all 0.3s ease; }

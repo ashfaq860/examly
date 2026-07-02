@@ -1,232 +1,199 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
-import BreadcrumbAuto from '@/components/BreadcrumbAuto';
+import Breadcrumb from "@/components/Breadcrumb";
+import Link from "next/link";
+import { toSlug, chapterSlug } from "@/lib/slugUtils";
+
 export default function ChaptersPage() {
   const { classId, subjectId } = useParams();
   const router = useRouter();
   const [chapters, setChapters] = useState<any[]>([]);
-  const [darkMode, setDarkMode] = useState(false);
   const [subjectName, setSubjectName] = useState("");
   const [className, setClassName] = useState("");
   const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!subjectId || !classId) return;
-
-    const fetchChapters = async () => {
+    const fetch = async () => {
       setLoading(true);
-      setErrorMessage("");
-
+      setError("");
       try {
+        // Resolve class
+        const { data: classData } = await supabase
+          .from("classes").select("id,name").eq("name", classId).single();
+        if (!classData) { setError("Class not found."); setLoading(false); return; }
+        setClassName(classData.name);
 
-    const { data: classData, error: classError } = await supabase
-        .from("classes")
-        .select("id, name")
-        .eq("name", classId)
-        .single();
+        // Resolve subject slug → id. The subjects table has duplicate rows
+        // for the same subject name (different casing, e.g. "PHYSICS" vs
+        // "Physics"), which all produce the same slug — so instead of
+        // taking the first slug match, check each candidate against
+        // class_subjects and use whichever one is actually linked to this
+        // class. This is what "This subject is not available for this
+        // class" was wrongly reporting when a *different* same-named
+        // duplicate (not linked to this class) got matched first.
+        const { data: allSubjects } = await supabase.from("subjects").select("id,name");
+        const candidates = (allSubjects || []).filter(s => toSlug(s.name) === (subjectId as string));
+        if (candidates.length === 0) { setError("Subject not found."); setLoading(false); return; }
 
-      if (classError || !classData) {
-        console.error("Class not found:", classError?.message);
-        setLoading(false);
-        return;
-      }
-       const classUUID = classData.id;
-        // ✅ Step 1: Get the specific class-subject relationship
-        const { data: classSubjectData, error: relError } = await supabase
-          .from("class_subjects")
-          .select(`
-            id,
-            classes:class_id (id, name),
-            subjects:subject_id (id, name)
-          `)
-          .eq("class_id", classUUID)
-          .eq("subject_id", subjectId)
-          .single();
-
-        if (relError || !classSubjectData) {
-          setErrorMessage("⚠️ This subject does not belong to the selected class.");
-          setChapters([]);
-          setLoading(false);
-          return;
+        let subject: { id: string; name: string } | null = null;
+        let cs: { id: string } | null = null;
+        for (const candidate of candidates) {
+          const { data: csRow } = await supabase
+            .from("class_subjects").select("id")
+            .eq("class_id", classData.id).eq("subject_id", candidate.id).maybeSingle();
+          if (csRow) { subject = candidate; cs = csRow; break; }
         }
+        if (!subject || !cs) { setError("This subject is not available for this class."); setLoading(false); return; }
+        setSubjectName(subject.name);
 
-        // ✅ Step 2: Fetch chapters for this specific class_subject
-        const { data: chaptersData, error: chapError } = await supabase
-          .from("chapters")
-          .select("id, name, chapterNo, class_subject_id")
-          .eq("class_subject_id", classSubjectData.id)
-          .order("chapterNo", { ascending: true });
-
-        if (chapError) {
-          console.error("Error fetching chapters:", chapError.message);
-          setErrorMessage("Failed to load chapters.");
-        } else {
-          setChapters(chaptersData || []);
-          setSubjectName((classSubjectData.subjects as any)?.name || "");
-          setClassName((classSubjectData.classes as any)?.name || "");
-        }
-      } catch (err) {
-        console.error(err);
-        setErrorMessage("Something went wrong while loading chapters.");
-      } finally {
-        setLoading(false);
-      }
+        // Get chapters
+        const { data: ch } = await supabase
+          .from("chapters").select("id,name,chapterNo")
+          .eq("class_subject_id", cs.id).order("chapterNo", { ascending: true });
+        setChapters(ch || []);
+      } catch { setError("Something went wrong."); }
+      setLoading(false);
     };
-
-    fetchChapters();
+    fetch();
   }, [subjectId, classId]);
 
-  // ✅ Loading Spinner
-  if (loading) {
-    return (
-      <>
-        <Header darkMode={darkMode} setDarkMode={setDarkMode} />
-        <div
-          className="d-flex flex-column align-items-center justify-content-center text-center"
-          style={{ minHeight: "80vh" }}
-        >
-          <div
-            className="spinner-border text-primary mb-4"
-            style={{ width: "4rem", height: "4rem" }}
-            role="status"
-          ></div>
-          <h5 className="fw-semibold text-muted mb-2">Loading Chapters...</h5>
-          <p className="text-secondary small">
-            Please wait while we load the chapters for this subject ⏳
-          </p>
+  if (loading) return (
+    <>
+      <Header />
+      <div className="d-flex align-items-center justify-content-center" style={{ minHeight:"100vh" }}>
+        <div className="text-center">
+          <div className="spinner-border mb-3" style={{ color:"#073e8c", width:"3.5rem", height:"3.5rem" }} />
+          <p className="text-muted fw-semibold">Loading chapters…</p>
         </div>
-        <Footer darkMode={darkMode} />
-      </>
-    );
-  }
+      </div>
+      <Footer />
+    </>
+  );
 
-  // ✅ Invalid Relationship or Error Message
-  if (errorMessage) {
-    return (
-      <>
-        <Header darkMode={darkMode} setDarkMode={setDarkMode} />
-        <div
-          className="d-flex flex-column align-items-center justify-content-center text-center"
-          style={{ minHeight: "80vh" }}
-        >
-          <div className="alert alert-danger w-75">{errorMessage}</div>
-          <button
-            className="btn btn-outline-primary mt-3"
-            onClick={() => router.back()}
-          >
-            🔙 Go Back
-          </button>
+  if (error) return (
+    <>
+      <Header />
+      <div className="d-flex align-items-center justify-content-center" style={{ minHeight:"80vh" }}>
+        <div className="text-center">
+          <div className="alert alert-danger">{error}</div>
+          <button className="btn btn-outline-primary" onClick={() => router.back()}>← Go Back</button>
         </div>
-        <Footer darkMode={darkMode} />
-      </>
-    );
-  }
+      </div>
+      <Footer />
+    </>
+  );
 
   return (
     <>
-      <Header darkMode={darkMode} setDarkMode={setDarkMode} />
+      <Header />
+      <div className="container pt-header pb-2">
+        <Breadcrumb items={[
+          { label: 'Home', href: '/' },
+          { label: 'Quiz', href: '/quiz' },
+          { label: `Class ${classId}`, href: `/quiz/${classId}` },
+          { label: subjectName },
+        ]} />
+      </div>
 
-      <div className="container py-5" style={{ marginTop: "100px" }}>
-        {/* Title */}
-        <BreadcrumbAuto />
-        <div className="text-center mb-5">
-          <h2 className="fw-bold text-primary">
-            📖 Chapters for {subjectName || "Subject"}
-          </h2>
-          <p className="text-muted">
-            Class {className} • Select a chapter to start the quiz or attempt the full subject quiz.
-          </p>
+      {/* Header band */}
+      <div style={{ background:"linear-gradient(135deg,#073e8c 0%,#0e7a71 100%)", paddingTop:40 }}>
+        <div className="container text-white py-4">
+          <Link href={`/quiz/${classId}`} style={{ color:"rgba(255,255,255,0.7)", fontSize:"0.85rem", textDecoration:"none", display:"inline-flex", alignItems:"center", gap:6, marginBottom:12 }}>
+            ← Class {classId}
+          </Link>
+          <h1 style={{ fontSize:"clamp(1.5rem,4vw,2.3rem)", fontWeight:800, marginBottom:4 }}>{subjectName}</h1>
+          <p style={{ opacity:0.82, fontSize:"0.92rem" }}>Class {className} • {chapters.length} chapter{chapters.length !== 1 ? "s" : ""}</p>
+        </div>
+        <div style={{ height:36, background:"#f8fafc", borderRadius:"50% 50% 0 0 / 36px 36px 0 0" }} />
+      </div>
+
+      <div className="container py-4" style={{ background:"#f8fafc", minHeight:"60vh" }}>
+        {/* Full subject quiz CTA */}
+        <div className="full-quiz-cta" onClick={() => router.push(`/quiz/${classId}/${subjectId}/full`)}>
+          <div>
+            <div style={{ fontWeight:700, fontSize:"1.05rem", marginBottom:2 }}>🚀 Full Subject Quiz</div>
+            <div style={{ fontSize:"0.83rem", opacity:0.8 }}>30 random questions from all chapters</div>
+          </div>
+          <span style={{ fontSize:"1.4rem" }}>→</span>
         </div>
 
-        {/* Full Subject Quiz Button */}
-        <div className="text-center mb-5">
-          <button
-            onClick={() => router.push(`/quiz/${classId}/${subjectId}/full`)}
-            className="btn btn-lg btn-primary shadow-sm px-5 py-3 rounded-4 fw-semibold"
-            style={{ transition: "0.3s" }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.transform = "scale(1.05)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.transform = "scale(1)")
-            }
-          >
-            🚀 Start Full Subject Quiz
-          </button>
-        </div>
-
-        {/* Chapters Grid */}
-        <div className="row justify-content-center">
-          {chapters.map((ch, index) => (
-            <div key={ch.id} className="col-12 col-sm-6 col-md-4 col-lg-3 mb-4">
-              <div
-                className="card shadow-lg border-0 rounded-4 chapter-card h-100"
-                style={{
-                  transition: "transform 0.3s, box-shadow 0.3s",
-                  cursor: "pointer",
-                }}
-                onClick={() =>
-                  router.push(
-                    `/quiz/${classId}/${subjectId}/chapter/${ch.id}`
-                  )
-                }
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-8px)";
-                  e.currentTarget.style.boxShadow =
-                    "0 1rem 2rem rgba(0,0,0,.2)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow =
-                    "0 .5rem 1rem rgba(0,0,0,.1)";
-                }}
-              >
-                <div className="card-body text-center p-4 d-flex flex-column justify-content-center">
-                  <div
-                    className="rounded-circle bg-primary text-white mx-auto mb-3 d-flex align-items-center justify-content-center"
-                    style={{
-                      width: "60px",
-                      height: "60px",
-                      fontSize: "1.3rem",
-                      transition: "transform 0.3s",
-                    }}
-                  >
-                    {["📘", "📗", "📕", "📙"][index % 4]}
+        {/* Chapters */}
+        <h3 style={{ fontWeight:700, fontSize:"1.05rem", color:"#334155", marginBottom:12, marginTop:24 }}>
+          Chapter-wise Practice
+        </h3>
+        {chapters.length === 0 ? (
+          <div className="alert alert-info">No chapters found for {subjectName}.</div>
+        ) : (
+          <div className="row g-3">
+            {chapters.map((ch, idx) => (
+              <div key={ch.id} className="col-12 col-sm-6 col-md-4">
+                <div
+                  className="chapter-card"
+                  onClick={() => router.push(`/quiz/${classId}/${subjectId}/chapter/${chapterSlug(ch.chapterNo, idx)}`)}
+                >
+                  <div className="ch-num">{ch.chapterNo ?? idx + 1}</div>
+                  <div className="ch-info">
+                    <div className="ch-title">{ch.name}</div>
+                    <div className="ch-meta">Class {className} • {subjectName}</div>
                   </div>
-                  <h5 className="fw-bold">
-                    {ch.chapterNo ? `Chapter ${ch.chapterNo}: ` : ""}
-                    {ch.name}
-                  </h5>
-                  <small className="text-muted mt-1">
-                    Class {className} • {subjectName}
-                  </small>
+                  <span className="ch-arrow">›</span>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-
-        {/* No Chapters */}
-        {chapters.length === 0 && !errorMessage && (
-          <div className="alert alert-warning text-center mt-5">
-            No chapters found for {subjectName} in Class {className}.
+            ))}
           </div>
         )}
       </div>
 
-      <Footer darkMode={darkMode} />
-
-      <style jsx>{`
-        .chapter-card:hover div.rounded-circle {
-          transform: scale(1.2) rotate(10deg);
-          background: #0d6efd;
+      <Footer />
+      <style jsx global>{`
+        .full-quiz-cta {
+          background: linear-gradient(135deg,#073e8c,#0e7a71);
+          color: #fff;
+          border-radius: 16px;
+          padding: 1.25rem 1.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          cursor: pointer;
+          box-shadow: 0 4px 20px rgba(7,62,140,0.25);
+          transition: transform 0.2s, box-shadow 0.2s;
         }
+        .full-quiz-cta:hover { transform: translateY(-3px); box-shadow: 0 8px 28px rgba(7,62,140,0.35); }
+
+        .chapter-card {
+          background: #fff;
+          border-radius: 14px;
+          padding: 1rem 1.1rem;
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          cursor: pointer;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 2px 8px rgba(15,23,42,0.05);
+          transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+        }
+        .chapter-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 8px 24px rgba(7,62,140,0.12);
+          border-color: #073e8c;
+        }
+        .ch-num {
+          width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+          background: linear-gradient(135deg,#073e8c,#0b63d4);
+          color: #fff; font-weight: 800; font-size: 1.1rem;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .ch-info { flex: 1; min-width: 0; }
+        .ch-title { font-weight: 600; font-size: 0.92rem; color: #0f172a; line-height: 1.4; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ch-meta { font-size: 0.75rem; color: #64748b; }
+        .ch-arrow { font-size: 1.5rem; color: #94a3b8; flex-shrink: 0; }
+        .chapter-card:hover .ch-arrow { color: #073e8c; }
       `}</style>
     </>
   );

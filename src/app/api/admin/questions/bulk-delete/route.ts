@@ -1,6 +1,7 @@
 // app/api/questions/bulk-delete/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireRole } from '@/lib/api-auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,6 +10,9 @@ const supabase = createClient(
 
 /** POST /api/questions/bulk-delete  body: { ids: string[] } */
 export async function POST(req: NextRequest) {
+  const auth = await requireRole(['admin', 'super_admin']);
+  if (auth.error) return auth.error;
+
   try {
     const { ids } = await req.json();
     if (!Array.isArray(ids) || ids.length === 0) {

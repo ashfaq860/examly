@@ -1,6 +1,7 @@
 // app/api/admin/resolve-topic/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireRole } from '@/lib/api-auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,6 +17,9 @@ const supabase = createClient(
  * bypassing the 1000-row Supabase default limit on fetchLookups.
  */
 export async function POST(req: NextRequest) {
+  const auth = await requireRole(['admin', 'super_admin']);
+  if (auth.error) return auth.error;
+
   try {
     const pairs: { chapter: string; topic: string }[] = await req.json();
 

@@ -4,6 +4,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 //import '../styles/nprogress.css';
 import { Toaster } from 'react-hot-toast';
 import type { ReactNode } from 'react';
+import Script from 'next/script';
 import { UserProvider } from './context/userContext';
 import ClientLayoutWrapper from "./ClientLayoutWrapper";
 
@@ -13,8 +14,27 @@ import { InlineMath, BlockMath } from 'react-katex';
 
 
 export const metadata = {
-  title: 'Examly - Online Test Maker, Question Paper Generator & Quiz Platform',
-  description: 'Examly is a powerful online test maker and question paper generator designed for schools, colleges, and academies. Create professional exams, full or half-book papers, and custom chapter tests with difficulty-based and question-type balanced distribution. Generate board pattern papers in BISE format, manage online quizzes, and design teacher timetables easily. Perfect for educators seeking a smart, time-saving system for high-quality assessments. With Examly, you can automate test creation, instantly download printable papers, and provide students with accurate, organized, and fair evaluations. Boost efficiency, save time, and enhance academic performance with our comprehensive paper generation and online test platform.'
+  metadataBase: new URL('https://www.examly.pk'),
+  title: {
+    default: 'Examly - Online Test Maker, Question Paper Generator & Quiz Platform',
+    template: '%s',
+  },
+  description: 'Examly is a powerful online test maker and question paper generator designed for schools, colleges, and academies. Create professional exams, full or half-book papers, and custom chapter tests with difficulty-based and question-type balanced distribution. Generate board pattern papers in BISE format, manage online quizzes, and design teacher timetables easily. Perfect for educators seeking a smart, time-saving system for high-quality assessments. With Examly, you can automate test creation, instantly download printable papers, and provide students with accurate, organized, and fair evaluations. Boost efficiency, save time, and enhance academic performance with our comprehensive paper generation and online test platform.',
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    siteName: 'Examly.pk',
+    title: 'Examly - Online Test Maker, Question Paper Generator & Quiz Platform',
+    description: 'Create professional exams, board-pattern papers, and online quizzes in minutes — built for schools, colleges, and academies.',
+    url: 'https://www.examly.pk',
+    images: ['/examly.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Examly - Online Test Maker, Question Paper Generator & Quiz Platform',
+    description: 'Create professional exams, board-pattern papers, and online quizzes in minutes — built for schools, colleges, and academies.',
+    images: ['/examly.png'],
+  },
 };
 
 
@@ -41,11 +61,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap"
           rel="stylesheet"
         />
-        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       </head>
 
       <body>
-        <Toaster 
+        {/* Only the admin question bank / manual question selection screens
+            use MathJax — load it off the critical path everywhere else so
+            it doesn't block first paint on marketing/dashboard pages. */}
+        <Script
+          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+          strategy="lazyOnload"
+        />
+        <Toaster
   position="top-center" 
   reverseOrder={false} 
   containerStyle={{
