@@ -1,6 +1,7 @@
 //dashboard/generate-paper/components/PaperLayoutRenderer.tsx
 'use client';
 import React, { useMemo, useEffect } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { PaperSection, PaperSettings, LanguageConfig } from '@/types/paper-builder';
 import { PaperHeader } from './PaperHeader';
 import { SectionHeader } from './SectionHeader';
@@ -24,6 +25,8 @@ interface Props {
   questionLineSpacing?: number;
   subjectUrduName?: string;
   paperPart?: any;
+  onEditSection?: (section: PaperSection) => void;
+  onDeleteSection?: (sectionId: string) => void;
 }
 
 const URDU_FONT = "'JameelNoori', 'Noto Nastaliq Urdu', serif";
@@ -76,6 +79,8 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
   currentClass,
   profile,
   subjectUrduName,
+  onEditSection,
+  onDeleteSection,
 }) => {
   const subject = useMemo(() => paperSections[0]?.subject || '', [paperSections]);
 
@@ -1020,12 +1025,54 @@ const renderPairedQuestions = () => {
       <div
         className="section-block"
         style={{
-          border:        isEditMode ? '2px dashed #ccc' : 'none',
+          border:        isEditMode ? '2px dashed #fcd34d' : 'none',
           marginTop:     isSecondPartOfPair ? '5px' : '5px',
           marginBottom:  '0px',
           width:         '100%',
+          position:      'relative',
         }}
       >
+        {isEditMode && (onEditSection || onDeleteSection) && (
+          <div
+            className="section-edit-controls d-print-none"
+            style={{
+              position: 'absolute', top: '2px', left: '2px', zIndex: 5,
+              display: 'flex', gap: '4px',
+            }}
+          >
+            {onEditSection && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onEditSection(section); }}
+                title="Edit questions in this section"
+                style={{
+                  width: '26px', height: '26px', borderRadius: '6px',
+                  border: '1px solid #fcd34d', background: '#fffbeb', color: '#92400e',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', padding: 0,
+                }}
+              >
+                <Pencil size={13} />
+              </button>
+            )}
+            {onDeleteSection && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onDeleteSection(section.id); }}
+                title="Delete this section"
+                style={{
+                  width: '26px', height: '26px', borderRadius: '6px',
+                  border: '1px solid #fecaca', background: '#fef2f2', color: '#b91c1c',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', padding: 0,
+                }}
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
+        )}
+
         {isFirstPartOfPair && (
           <SectionHeader
             sectionId={section.id}

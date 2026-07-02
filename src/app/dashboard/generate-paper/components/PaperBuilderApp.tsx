@@ -118,6 +118,7 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
   isLoading,
 }: any) => {
   const [showQuestionSelector, setShowQuestionSelector] = useState(false);
+  const [editingSection, setEditingSection] = useState<PaperSection | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [paperSections, setPaperSections] = useState<PaperSection[]>([]);
   const [paperLanguage, setPaperLanguage] = useState<'english' | 'urdu' | 'bilingual'>('english');
@@ -201,10 +202,26 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
       document.documentElement.style.setProperty('--paper-scale', scale.toFixed(4));
       document.documentElement.style.setProperty('--paper-margin-bottom', `${marginBottom.toFixed(1)}px`);
       document.documentElement.style.setProperty('--paper-margin-left', `${marginLeft.toFixed(1)}px`);
+
+      // Measure the real dashboard mobile top bar (AcademyLayout's sticky
+      // .al-mobile-topbar) so our own fixed header/canvas stack on mobile
+      // sits exactly below it, instead of relying on a guessed pixel offset
+      // that drifts whenever that bar's content/height changes.
+      const topbarEl = document.querySelector('.al-mobile-topbar');
+      const topbarHeight = topbarEl ? topbarEl.getBoundingClientRect().height : 0;
+      document.documentElement.style.setProperty('--mobile-topbar-h', `${topbarHeight}px`);
     };
     syncLayout();
     window.addEventListener('resize', syncLayout);
-    return () => window.removeEventListener('resize', syncLayout);
+
+    const topbarEl = document.querySelector('.al-mobile-topbar');
+    const resizeObserver = topbarEl ? new ResizeObserver(syncLayout) : null;
+    resizeObserver?.observe(topbarEl as Element);
+
+    return () => {
+      window.removeEventListener('resize', syncLayout);
+      resizeObserver?.disconnect();
+    };
   }, []);
 
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
@@ -1084,6 +1101,16 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
     localStorage.setItem('questionPapers', JSON.stringify({ layout: currentLayout, language: paperLanguage, sections: updatedSections }));
   }, [currentLayout, paperLanguage]);
 
+  const handleEditSection = useCallback((section: PaperSection) => {
+    setEditingSection(section);
+    setShowQuestionSelector(true);
+  }, []);
+
+  const handleDeleteSection = useCallback((sectionId: string) => {
+    if (!confirm('Delete this section from the paper?')) return;
+    handleSectionUpdate(paperSections.filter(s => s.id !== sectionId));
+  }, [paperSections, handleSectionUpdate]);
+
   const handleTextChange = (sectionId: string, questionId: string, field: string, value: string) => {
     const updated = paperSections.map(s =>
       s.id === sectionId
@@ -1127,7 +1154,7 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
         <div className="w-100 appHeaderContent">
           <AppHeader
             onBoardPattern={handleBoardPattern}
-            onConfigurePaper={() => setShowQuestionSelector(true)}
+            onConfigurePaper={() => { setEditingSection(null); setShowQuestionSelector(true); }}
             isEditMode={isEditMode}
             onToggleEditMode={() => setIsEditMode(!isEditMode)}
             onSavePaper={paperSections.length > 0 ? handleSaveToSupabase : undefined}
@@ -1145,14 +1172,18 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
       {/* 2. MAIN SCROLLABLE AREA */}
       <main
         className="flex-grow-1 overflow-auto  bg-opacity-10 custom-scrollbar d-print-block paper-preview-main"
-        style={{ touchAction: 'pan-y pinch-zoom', overflowX: 'hidden' }}
+        style={{ touchAction: 'pan-x pan-y pinch-zoom', overflowX: 'hidden' }}
       >
         <div className="paper-canvas-wrapper">
           <div
             id="printable-paper"
             ref={paperRef}
             className={`bg-white shadow-lg paper-canvas ${paperSections.length === 0 ? 'paper-canvas--empty' : ''}`}
-            style={{ height: 'auto', fontFamily: settings.fontFamily, direction: config.direction as any }}
+            style={{
+              height: 'auto', fontFamily: settings.fontFamily, direction: config.direction as any,
+              outline: isEditMode ? '3px solid #fcd34d' : 'none',
+              outlineOffset: isEditMode ? '3px' : '0',
+            }}
           >
             {paperSections.length === 0 ? (
               <div
@@ -1201,6 +1232,8 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
                 profile={profile?.profile}
                 isPremium={isUserPremium}
                 onSectionUpdate={handleSectionUpdate}
+                onEditSection={handleEditSection}
+                onDeleteSection={handleDeleteSection}
               />
             )}
           </div>
@@ -1230,7 +1263,7 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
       {showQuestionSelector && (
         <QuestionSelectorModal
           isOpen={showQuestionSelector}
-          onClose={() => { setShowQuestionSelector(false); refreshPaperData(); }}
+          onClose={() => { setShowQuestionSelector(false); setEditingSection(null); refreshPaperData(); }}
           subjectId={watchedSubjectId}
           classId={watchedClassId}
           chapterOption={watchedChapterOption}
@@ -1243,6 +1276,7 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
           setValue={setValue}
           currentSubject={currentSubject}
           currentClass={currentClass}
+          editingSection={editingSection}
         />
       )}
 
@@ -1254,6 +1288,13 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
           font-style: normal;
           font-display: swap;
         }
+
+        /* This step is its own full-bleed paper editor — the dashboard's
+           breadcrumb trail has no room here and, on mobile, shows through
+           behind the fixed header/canvas since paper-preview-main isn't
+           opaque outside the centered sheet. Hide it only while this step
+           is mounted (unmounts automatically when leaving the step). */
+        .examly-breadcrumb { display: none !important; }
 
         /* ── Screen baseline ── */
         @media screen {
@@ -1380,17 +1421,26 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
         .empty-state .btn-outline-dark:hover { background: #f8fafc; border-color: #cbd5e1; transform: translateY(-2px); }
 
         @media (max-width: 990px) {
-          .app-header { left: 0; height: 64px; top: 55px; }
+          .app-header { left: 0; height: 64px; top: var(--mobile-topbar-h, 55px); }
           .btn-premium { height: 38px; padding: 0 12px; font-size: 0.8rem; }
         }
 
+        /* ── Mobile: pin paper-preview-main below the dashboard's own sticky
+           top bar + our app-header, exactly mirroring the desktop fixed-panel
+           approach above. This avoids depending on (and duplicating) the
+           dashboard layout's own padding/breadcrumb flow height, which was
+           the source of the large blank gap between the tabs and the paper. */
         @media screen and (max-width: 991px) {
+          html, body { overflow: hidden; }
           .paper-preview-main {
-            padding-top: 72px !important;
-            padding-left: 0 !important; padding-right: 0 !important;
-            padding-bottom: 80px !important;
-            overflow-x: hidden !important; margin-top: 0 !important;
-            touch-action: pan-y pinch-zoom;
+            position: fixed !important;
+            top: calc(var(--mobile-topbar-h, 55px) + 64px) !important;
+            left: 0 !important; right: 0 !important; bottom: 0 !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 0 80px 0 !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
           }
           .paper-canvas-wrapper {
             display: flex !important; justify-content: center !important;
@@ -1400,6 +1450,15 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
           }
           .paper-canvas {
             width: 793.7px !important;
+            /* Flex items shrink below their specified width by default
+               (flexbox's automatic minimum size falls back to the item's
+               min-content size, which text content makes far smaller than
+               793.7px). That silently squeezed the whole A4 layout — tables,
+               bilingual columns, headers — into a narrower box than it was
+               designed for, reading as "cut off" content. flex-shrink: 0
+               keeps the canvas at its true width so the transform below
+               scales the WHOLE thing down uniformly instead. */
+            flex-shrink: 0 !important;
             transform: scale(var(--paper-scale, 0.45)) !important;
             transform-origin: top center !important;
             margin: 12px 0 var(--paper-margin-bottom, -400px) 0 !important;

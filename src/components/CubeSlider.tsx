@@ -64,7 +64,6 @@ const TRANSITION = 700;
 
 export default function CubeSlider({ slides = defaultSlides }) {
   const [active, setActive] = useState(0);
-  const [prev, setPrev] = useState<number | null>(null);
   const [animating, setAnimating] = useState(false);
   const [progress, setProgress] = useState(0);
 
@@ -78,18 +77,20 @@ export default function CubeSlider({ slides = defaultSlides }) {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
   }, []);
 
+  // Moves to `idx`. Every slide's position is derived from its offset
+  // relative to `active` (see render), so this only needs to update the
+  // index — the whole filmstrip slides smoothly in the right direction,
+  // including wraparound, with no extra "direction" bookkeeping needed.
   const goTo = useCallback((idx: number) => {
     if (animatingRef.current || idx === activeRef.current) return;
     animatingRef.current = true;
     setAnimating(true);
-    setPrev(activeRef.current);
     activeRef.current = idx;
     setActive(idx);
     setProgress(0);
     setTimeout(() => {
       animatingRef.current = false;
       setAnimating(false);
-      setPrev(null);
     }, TRANSITION + 50);
   }, []);
 
@@ -135,13 +136,26 @@ export default function CubeSlider({ slides = defaultSlides }) {
   return (
     <div className="hs-root" aria-label="Hero slider">
       {slides.map((slide, i) => {
-        const isActive = i === active;
-        const isPrev = i === prev;
+        // Shortest signed distance from `active`, wrapping around the ends —
+        // always -1, 0, or 1 for this 3-slide set, so the whole filmstrip
+        // glides continuously left/right instead of hard-cutting between slides.
+        let offset = i - active;
+        const half = slides.length / 2;
+        if (offset > half) offset -= slides.length;
+        if (offset < -half) offset += slides.length;
+        const isActive = offset === 0;
+
         return (
           <div
             key={i}
-            className={`hs-slide ${isActive ? "hs-in" : isPrev ? "hs-out" : "hs-hidden"}`}
-            style={{ background: slide.gradient }}
+            className="hs-slide"
+            style={{
+              background: slide.gradient,
+              transform: `translateX(${offset * 100}%)`,
+              opacity: isActive ? 1 : 0,
+              zIndex: isActive ? 2 : 1,
+              pointerEvents: isActive ? "auto" : "none",
+            }}
             aria-hidden={!isActive}
           >
             {/* Background blobs */}
@@ -175,6 +189,7 @@ export default function CubeSlider({ slides = defaultSlides }) {
                       href={slide.secondaryLink}
                       className="hs-btn-secondary"
                       tabIndex={isActive ? 0 : -1}
+                      style={{ '--btn-accent': slide.accent } as React.CSSProperties}
                     >
                       {slide.secondaryCta}
                       <svg className="hs-sec-arrow" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -252,10 +267,9 @@ export default function CubeSlider({ slides = defaultSlides }) {
           position: absolute;
           inset: 0;
           overflow: hidden;
+          transition: transform ${TRANSITION}ms cubic-bezier(0.65, 0, 0.35, 1), opacity ${TRANSITION}ms ease;
+          will-change: transform, opacity;
         }
-        .hs-hidden  { opacity: 0; z-index: 0; pointer-events: none; }
-        .hs-out     { opacity: 0; z-index: 1; pointer-events: none; transition: opacity ${TRANSITION}ms ease; }
-        .hs-in      { opacity: 1; z-index: 2; pointer-events: auto; transition: opacity ${TRANSITION}ms ease; }
 
         /* ── Background decorations ── */
         .hs-blob {
@@ -395,32 +409,28 @@ export default function CubeSlider({ slides = defaultSlides }) {
           gap: 7px;
           padding: 0.78rem 1.45rem;
           border-radius: 12px;
-          font-weight: 600;
+          font-weight: 700;
           font-size: 0.95rem;
-          color: rgba(255,255,255,0.92);
+          color: var(--btn-accent, #073e8c);
           text-decoration: none;
-          border: 1.5px solid rgba(255,255,255,0.32);
-          background: rgba(255,255,255,0.08);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
-          transition: border-color 0.22s, background 0.22s, transform 0.22s, box-shadow 0.22s, color 0s;
+          border: none;
+          background: #fff;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.22);
+          transition: transform 0.22s ease, box-shadow 0.22s ease, color 0s;
           white-space: nowrap;
           line-height: 1;
         }
 
         .hs-sec-arrow {
           flex-shrink: 0;
-          opacity: 0.65;
+          opacity: 0.85;
           transition: transform 0.22s ease, opacity 0.22s ease;
         }
 
         .hs-btn-secondary:hover {
-          border-color: rgba(255,255,255,0.58);
-          background: rgba(255,255,255,0.17);
-          color: #fff;
-          transform: translateY(-3px);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.18);
+          color: var(--btn-accent, #073e8c);
+          transform: translateY(-3px) scale(1.03);
+          box-shadow: 0 10px 28px rgba(0,0,0,0.3);
         }
         .hs-btn-secondary:hover .hs-sec-arrow { transform: translateX(4px); opacity: 1; }
 
@@ -549,35 +559,39 @@ export default function CubeSlider({ slides = defaultSlides }) {
 
         /* ── Responsive ── */
         @media (max-width: 991px) {
-          .hs-root { height: auto; min-height: 480px; }
-          .hs-inner { flex-direction: column; height: auto; padding: 100px 0 80px; gap: 2rem; }
+          .hs-root { height: 420px; }
+          .hs-inner {
+            flex-direction: column;
+            height: 100%;
+            padding: 84px 0 56px;
+            gap: 1.4rem;
+            justify-content: center;
+          }
           .hs-text-col { flex: none; width: 100%; text-align: center; }
-          .hs-desc { margin-left: auto; margin-right: auto; }
+          .hs-desc { margin-left: auto; margin-right: auto; margin-bottom: 0; }
           .hs-actions { justify-content: center; }
           .hs-img-col { display: none; }
           .hs-float { display: none; }
-          .hs-slide { position: absolute; inset: 0; }
-          .hs-root { height: 480px; }
         }
 
         @media (max-width: 768px) {
-          .hs-root { height: 460px; }
-          .hs-inner { padding: 90px 0 70px; }
-          .hs-title { font-size: 1.7rem; }
-          .hs-desc { font-size: 0.95rem; }
+          .hs-root { height: 380px; }
+          .hs-inner { padding: 80px 0 52px; }
+          .hs-title { font-size: 1.65rem; margin-bottom: 0.8rem; }
+          .hs-desc { font-size: 0.92rem; }
           .desktop-desc { display: none; }
           .mobile-desc { display: block !important; }
-          .hs-badge { font-size: 0.72rem; }
+          .hs-badge { font-size: 0.72rem; margin-bottom: 0.8rem; }
         }
 
         @media (max-width: 576px) {
-          .hs-root { height: 420px; }
-          .hs-inner { padding: 80px 0 60px; gap: 1.2rem; }
-          .hs-title { font-size: 1.5rem; }
-          .hs-actions { gap: 0.75rem; }
-          .hs-btn-primary { font-size: 0.875rem; padding: 0.65rem 1.25rem; gap: 7px; }
-          .hs-btn-secondary { font-size: 0.875rem; padding: 0.65rem 1.1rem; gap: 6px; }
-          .hs-nav { width: 38px; height: 38px; }
+          .hs-root { height: 340px; }
+          .hs-inner { padding: 72px 0 48px; gap: 1.1rem; }
+          .hs-title { font-size: 1.42rem; }
+          .hs-actions { gap: 0.65rem; }
+          .hs-btn-primary { font-size: 0.85rem; padding: 0.65rem 1.2rem; gap: 6px; }
+          .hs-btn-secondary { font-size: 0.85rem; padding: 0.65rem 1.05rem; gap: 5px; }
+          .hs-nav { width: 36px; height: 36px; }
         }
       `}</style>
     </div>

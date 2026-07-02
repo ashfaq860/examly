@@ -14,18 +14,26 @@ import { getBucket } from '@/lib/paperQuestionBuckets';
 export const QuestionSelectorModal: React.FC<any> = ({
   isOpen, onClose, onAddQuestions, subjectId, classId, chapterOption,
   selectedChapters, chapters, subjects = [],
-  language: initialLanguage, getQuestionTypes, watch, setValue, currentSubject, currentClass
+  language: initialLanguage, getQuestionTypes, watch, setValue, currentSubject, currentClass,
+  editingSection
 }) => {
   // --- States ---
-  const [selectedType, setSelectedType] = useState<string>('');
+  // When editingSection is passed, this modal opens pre-loaded with that
+  // section's own type/count/questions and every save replaces that section
+  // in place instead of appending a new one. This component remounts fresh
+  // each time it opens (see PaperBuilderApp's `{showQuestionSelector && ...}`),
+  // so seeding state straight from the prop here is enough — no reset effect needed.
+  const [selectedType, setSelectedType] = useState<string>(editingSection?.type || '');
   const [selectedSources, setSelectedSources] = useState<string[]>(['all']);
   const [currentLanguage, setCurrentLanguage] = useState(initialLanguage || 'english');
-  const [totalQuestions, setTotalQuestions] = useState<number | ''>('');
-  const [attemptCount, setAttemptCount] = useState<number | ''>('');
-  const [marksEach, setMarksEach] = useState<number | ''>('');
-  const [useManualSelection, setUseManualSelection] = useState<boolean>(false);
-  const [manualSelectionComplete, setManualSelectionComplete] = useState<boolean>(false);
-  const [selectedQuestions, setSelectedQuestions] = useState<Record<string, any[]>>({});
+  const [totalQuestions, setTotalQuestions] = useState<number | ''>(editingSection?.totalQuestions ?? '');
+  const [attemptCount, setAttemptCount] = useState<number | ''>(editingSection?.attemptCount ?? '');
+  const [marksEach, setMarksEach] = useState<number | ''>(editingSection?.marksEach ?? '');
+  const [useManualSelection, setUseManualSelection] = useState<boolean>(!!editingSection);
+  const [manualSelectionComplete, setManualSelectionComplete] = useState<boolean>(!!editingSection);
+  const [selectedQuestions, setSelectedQuestions] = useState<Record<string, any[]>>(
+    editingSection ? { [editingSection.type]: editingSection.questions } : {}
+  );
   const [showSourceDropdown, setShowSourceDropdown] = useState<boolean>(false);
   const [showLayoutDropdown, setShowLayoutDropdown] = useState(false);
   const [questionsShuffled, setQuestionsShuffled] = useState<boolean>(false);
@@ -77,10 +85,18 @@ export const QuestionSelectorModal: React.FC<any> = ({
 
   useEffect(() => { updateLocalState(); }, []);
 
-  const processAndSave = (type: string, questions: any[], attempt: number, marks: number) => {
+  // When replaceSectionId is set, the given section is swapped out with the
+  // new questions/counts in place (used when editing an existing section)
+  // instead of appending a brand-new section. The section being replaced is
+  // excluded from its own cap check — otherwise its current questions would
+  // double-count against the layout limit it's about to be replaced under.
+  const processAndSave = (type: string, questions: any[], attempt: number, marks: number, replaceSectionId?: string) => {
     const limits = getLimitsForLayout(paperData.layout);
     const subjectName = currentSubject?.name || 'General';
     let finalQuestions = questions;
+    const sectionsForCapCheck = replaceSectionId
+      ? paperData.sections.filter((p: any) => p.id !== replaceSectionId)
+      : paperData.sections;
 
     if (paperData.layout === 'four_papers') {
       // four_papers: bucket by short/long classification (covers all
@@ -97,7 +113,7 @@ export const QuestionSelectorModal: React.FC<any> = ({
       }
 
       const cap = bucket === 'short' ? (limits as any).maxShort : (limits as any).maxLong;
-      const existingCount = paperData.sections
+      const existingCount = sectionsForCapCheck
         .filter((p: any) => p.subject === subjectName && getBucket(p.type) === bucket)
         .reduce((sum: number, p: any) => sum + p.questions.length, 0);
       const remaining = cap - existingCount;
@@ -117,7 +133,7 @@ export const QuestionSelectorModal: React.FC<any> = ({
       const cap = isMcq ? maxMcq : maxSubjective;
 
       if (cap > 0) {
-        const existingCount = paperData.sections
+        const existingCount = sectionsForCapCheck
           .filter((p: any) => p.subject === subjectName && (isMcq ? p.type === 'mcq' : p.type !== 'mcq'))
           .reduce((sum: number, p: any) => sum + p.questions.length, 0);
         const remaining = cap - existingCount;
@@ -133,19 +149,23 @@ export const QuestionSelectorModal: React.FC<any> = ({
       }
     }
 
-    const newSection = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+    const finalAttempt = Math.min(attempt, finalQuestions.length);
+    const sectionPayload = {
       type,
       questions: finalQuestions,
       totalQuestions: finalQuestions.length,
-      attemptCount: Math.min(attempt, finalQuestions.length),
+      attemptCount: finalAttempt,
       marksEach: marks,
-      totalMarks: Math.min(attempt, finalQuestions.length) * marks,
+      totalMarks: finalAttempt * marks,
       subject: subjectName,
       timestamp: new Date().toISOString()
     };
 
-    const updatedPaper = { ...paperData, sections: [...paperData.sections, newSection] };
+    const updatedSections = replaceSectionId
+      ? paperData.sections.map((s: any) => s.id === replaceSectionId ? { ...s, ...sectionPayload } : s)
+      : [...paperData.sections, { id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, ...sectionPayload }];
+
+    const updatedPaper = { ...paperData, sections: updatedSections };
     localStorage.setItem('questionPapers', JSON.stringify(updatedPaper));
     setPaperData(updatedPaper);
     return true;
@@ -182,11 +202,16 @@ export const QuestionSelectorModal: React.FC<any> = ({
           return toast.error('No questions found');
         }
 
-        if (processAndSave(selectedType, data, attemptCount, marksEach || 1)) {
+        if (processAndSave(selectedType, data, attemptCount, marksEach || 1, editingSection?.id)) {
           setSelectedQuestions({ [selectedType]: data });
           setManualSelectionComplete(true);
           setIsLoading(false);
-          toast.success('Questions added! 🎯');
+          if (editingSection) {
+            toast.success('Section updated! 🎯');
+            onClose();
+          } else {
+            toast.success('Questions added! 🎯');
+          }
         }
       } catch (err) {
         setIsLoading(false);
@@ -256,7 +281,12 @@ export const QuestionSelectorModal: React.FC<any> = ({
   const handleAddPaperManual = () => {
     const questions = selectedQuestions[selectedType] || [];
     if (questions.length === 0) return toast.error("Select questions first");
-    if (processAndSave(selectedType, questions, attemptCount, marksEach)) {
+    if (processAndSave(selectedType, questions, attemptCount, marksEach, editingSection?.id)) {
+      if (editingSection) {
+        toast.success("Section updated!");
+        onClose();
+        return;
+      }
       setSelectedQuestions({});
       setManualSelectionComplete(false);
       setSelectedType('');
@@ -313,12 +343,12 @@ export const QuestionSelectorModal: React.FC<any> = ({
             <div className="header-left">
               <div className="icon-badge"><Settings2 size={16} /></div>
               <div className="header-text">
-                <h3>Paper Configuration</h3>
+                <h3>{editingSection ? `Edit Section — ${editingSection.type.toUpperCase()}` : 'Paper Configuration'}</h3>
                 <p>
                   Class: <span className="subject-tag">{(currentClass?.name || 'General')} </span> | Subject: <span className="subject-tag">{(currentSubject?.name || 'General')}</span>
                   {paperData.sections.length > 0 && (
                     <span className="section-count">
-                      ({paperData.sections.length} sections added)
+                      {editingSection ? 'Changing this section\'s questions only' : `(${paperData.sections.length} sections added)`}
                     </span>
                   )}
                 </p>
@@ -401,7 +431,7 @@ export const QuestionSelectorModal: React.FC<any> = ({
               {/* Question Type */}
               <div className="tool-box">
                 <label><span className="full-lbl">Question Type</span><span className="short-lbl">Qs Type</span></label>
-                <select className="mini-input" style={{
+                <select className={`mini-input ${editingSection ? 'disabled-cfg' : ''}`} disabled={!!editingSection} style={{
   fontFamily:currentSubject?.name?.toLowerCase() === 'urdu'? "'JameelNoori', 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu'": 'inherit',
 }} value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
                   <option value=''>Select Type</option>
@@ -532,7 +562,11 @@ export const QuestionSelectorModal: React.FC<any> = ({
 
           <div className="app-modal-footer">
             <div className="footer-left">
-              <button className="btn-ghost" onClick={handleDiscard}>Discard</button>
+              {editingSection ? (
+                <button className="btn-ghost" style={{ color: '#64748b' }} onClick={onClose}>Cancel</button>
+              ) : (
+                <button className="btn-ghost" onClick={handleDiscard}>Discard</button>
+              )}
               <div className="v-divider"></div>
               <button className={`btn-icon-text ${questionsShuffled ? 'active-shuffle' : ''}`}
                 onClick={() => setManualShuffleTrigger(prev => prev + 1)}
@@ -549,8 +583,14 @@ export const QuestionSelectorModal: React.FC<any> = ({
             <div className="footer-right">
               {useManualSelection && manualSelectionComplete && (
                 <button className="btn btn-primary btn-save" onClick={handleAddPaperManual}>
-                  <span> <MousePointer2 size={14} /> Add</span>
-                  <span className="d-none d-sm-inline"> to Paper</span>
+                  {editingSection ? (
+                    <span><MousePointer2 size={14} /> Update Section</span>
+                  ) : (
+                    <>
+                      <span> <MousePointer2 size={14} /> Add</span>
+                      <span className="d-none d-sm-inline"> to Paper</span>
+                    </>
+                  )}
                 </button>
               )}
             </div>
