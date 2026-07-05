@@ -155,24 +155,24 @@ export default function Header() {
           .curtain-container {
             max-height: 0;
             opacity: 0;
-            overflow: hidden;
+            overflow-y: auto;
             transform: translateY(-12px);
             transition: max-height 0.5s cubic-bezier(0.16, 1, 0.3, 1),
                         opacity 0.4s ease,
                         transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
             display: none;
-            position: absolute;
-            top: 100%;
+            position: fixed;
+            top: var(--header-h, 64px);
             left: 0;
             right: 0;
             z-index: 999;
             background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
+            border-top: 1px solid var(--border-subtle);
             border-bottom: 1px solid var(--border-subtle);
             box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
-            border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-            padding: 0.5rem 0.75rem 1rem;
+            padding: 0.5rem 1rem 1rem;
           }
 
           .dark .curtain-container {
@@ -181,7 +181,7 @@ export default function Header() {
           }
 
           .curtain-container.open {
-            max-height: 600px;
+            max-height: calc(100vh - var(--header-h, 64px));
             opacity: 1;
             transform: translateY(0);
             display: block;
@@ -427,7 +427,7 @@ export default function Header() {
         .header-nav.scrolled { box-shadow: var(--shadow-md); }
       `}</style>
 
-      <header className={`header-nav ${scrolled ? 'scrolled' : ''}`} style={{ position: 'fixed', top: 0, width: '100%', zIndex: 1000 }}>
+      <header className={`header-nav ${(scrolled || open) ? 'scrolled' : ''}`} style={{ position: 'fixed', top: 0, width: '100%', zIndex: 1000 }}>
         <div className="container">
           <nav className="navbar navbar-expand-lg p-0" style={{ position: 'relative' }}>
 
