@@ -3,13 +3,11 @@
 import { useState, useEffect } from 'react';
 import AuthLayout from '@/components/AuthLayout';
 import { supabase } from '@/lib/supabaseClient';
-import { useRouter } from 'next/navigation';
 
 export default function ResetPassword() {
   const [password, setPassword] = useState('');
   const [ready, setReady] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const router = useRouter();
 
   useEffect(() => {
     // Supabase will set a session after clicking reset email link
@@ -28,7 +26,7 @@ export default function ResetPassword() {
     if (error) setMsg(error.message);
     else {
       setMsg('Password updated. Redirecting to login…');
-      setTimeout(()=> router.push('/auth/login'), 1400);
+      setTimeout(() => { window.location.href = '/auth/login'; }, 1400);
     }
   };
 

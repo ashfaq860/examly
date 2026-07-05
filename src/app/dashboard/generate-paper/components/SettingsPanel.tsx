@@ -1,7 +1,7 @@
 //generate-paper/components/SettingsPanel.tsx
 'use client';
 import React from 'react';
-import { X, Settings, Layout, List, FileText, Image as ImageIcon, FileQuestion, Lock, ShieldCheck } from 'lucide-react';
+import { X, Settings, Layout, List, FileText, Image as ImageIcon, FileQuestion, Lock, ShieldCheck, Circle } from 'lucide-react';
 import { PaperSettings } from '@/types/paper-builder';
 
 interface SettingsPanelProps {
@@ -10,6 +10,7 @@ interface SettingsPanelProps {
   settings: PaperSettings;
   onSettingChange: (key: keyof PaperSettings, value: number | string | boolean) => void;
   isPremium: boolean;
+  currentLayout: string;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -18,7 +19,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   settings,
   onSettingChange,
   isPremium,
+  currentLayout,
 }) => {
+  // Answer lines / MCQ bubble sheet only make sense on a full, single sheet
+  // per paper — the 2/3/4-papers-per-page layouts pack fixed, clipped
+  // mini-slots with no room to spare, so these controls are hidden there
+  // entirely rather than shown disabled. Kept in sync with the identical
+  // list in PaperLayoutRenderer's isSinglePaperLayout.
+  const isSinglePaperLayout = ['separate', 'same_page', 'same', 'combined'].includes(currentLayout);
+
   const titleFontFamilies = [
     { name: 'Classic Serif (Times)',        value: "'Times New Roman', serif" },
     { name: 'Modern Sans (Arial)',           value: "Arial, sans-serif" },
@@ -47,6 +56,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     { id: 'instructional',name: 'Technical (Instructional)' },
     { id: 'scorecard',    name: 'Grading Focused (ScoreCard)' },
     { id: 'databar',      name: 'Ultra Compact Bar' },
+  ];
+
+  const pageSizes = [
+    { id: 'a4',    name: 'A4 (210 × 297 mm)' },
+    { id: 'legal', name: 'Legal (215.9 × 355.6 mm)' },
   ];
 
   return (
@@ -93,6 +107,118 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
         {/* ── Scrollable Body ── */}
         <div className="px-2 py-2" style={{ paddingBottom: '60px' }}>
+
+          {/* ══ SECTION: PAGE SETUP ══ */}
+          <section className="mb-3">
+            <p className="text-uppercase text-primary fw-bold mb-2 d-flex align-items-center gap-1"
+              style={{ fontSize: '0.7rem', letterSpacing: '1px' }}>
+              <FileText size={13} /> Page Setup
+            </p>
+
+            <div className="rounded-3 bg-white border shadow-sm overflow-hidden">
+              {/* Page Size */}
+              <div className={`p-2${isSinglePaperLayout ? ' border-bottom' : ''}`}>
+                <label className="form-label x-small fw-bold text-muted mb-1">Page Size</label>
+                <select
+                  className="form-select form-select-sm border-0 bg-light shadow-sm"
+                  value={settings.pageSize || 'a4'}
+                  onChange={(e) => onSettingChange('pageSize', e.target.value)}
+                >
+                  {pageSizes.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Answer Writing Lines — single-sheet layouts only */}
+              {isSinglePaperLayout && (
+                <div className="p-2">
+                  <div className="d-flex align-items-center justify-content-between">
+                    <div>
+                      <span className="small fw-bold d-block">Answer Lines</span>
+                      <span className="text-muted" style={{ fontSize: '0.68rem' }}>Ruled lines under written answers</span>
+                    </div>
+                    <div className="form-check form-switch mb-0">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        checked={!!settings.showAnswerLines}
+                        onChange={(e) => onSettingChange('showAnswerLines', e.target.checked)}
+                      />
+                    </div>
+                  </div>
+
+                  {settings.showAnswerLines && (
+                    <div className="pt-2 border-top mt-2">
+                      <div className="row g-2 mb-2">
+                        <div className="col-6">
+                          <label className="form-label x-small text-muted mb-1">Short Qs</label>
+                          <input
+                            type="number"
+                            className="form-control form-control-sm border-0 bg-light"
+                            value={settings.answerLinesShort ?? 4}
+                            min="0" max="10"
+                            onChange={(e) => onSettingChange('answerLinesShort', parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                        <div className="col-6">
+                          <label className="form-label x-small text-muted mb-1">Long Qs</label>
+                          <input
+                            type="number"
+                            className="form-control form-control-sm border-0 bg-light"
+                            value={settings.answerLinesLong ?? 5}
+                            min="0" max="12"
+                            onChange={(e) => onSettingChange('answerLinesLong', parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                      </div>
+                      <div className="d-flex justify-content-between x-small text-muted mb-1">
+                        <span>Line Spacing</span>
+                        <span>{settings.answerLineGapMm ?? 6}mm</span>
+                      </div>
+                      <input
+                        type="range" className="form-range"
+                        min="4" max="14" step="0.5"
+                        value={settings.answerLineGapMm ?? 6}
+                        onChange={(e) => onSettingChange('answerLineGapMm', parseFloat(e.target.value))}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ══ SECTION: MCQ BUBBLE ANSWER SHEET — single-sheet layouts only ══ */}
+          {isSinglePaperLayout && (
+            <section className="mb-3">
+              <p className="text-uppercase text-primary fw-bold mb-2 d-flex align-items-center gap-1"
+                style={{ fontSize: '0.7rem', letterSpacing: '1px' }}>
+                <Circle size={13} /> MCQ Sheet
+              </p>
+
+              <div className="rounded-3 bg-white border shadow-sm overflow-hidden">
+                <div className="p-2">
+                  <div className="d-flex align-items-center justify-content-between">
+                    <div>
+                      <span className="small fw-bold d-block">Answer Bubble Grid</span>
+                      <span className="text-muted" style={{ fontSize: '0.68rem' }}>OMR grid before MCQs start</span>
+                    </div>
+                    <div className="form-check form-switch mb-0">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        checked={!!settings.showMcqBubbleSheet}
+                        onChange={(e) => onSettingChange('showMcqBubbleSheet', e.target.checked)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* ══ SECTION: WATERMARK (Premium) ══ */}
           <section className="mb-3">

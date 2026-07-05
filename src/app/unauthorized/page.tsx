@@ -1,20 +1,17 @@
 // app/unauthorized/page.tsx
 'use client';
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function Unauthorized() {
-  const router = useRouter();
-
   useEffect(() => {
     // Redirect to login after 3 seconds
     const timer = setTimeout(() => {
-      router.push('/auth/login');
+      window.location.href = '/auth/login';
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, [router]);
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">

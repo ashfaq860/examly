@@ -4,6 +4,7 @@ import { Printer, Settings as SettingsIcon, Save, ChevronLeft } from 'lucide-rea
 import { PaperLayoutRenderer } from '@/app/dashboard/generate-paper/components/PaperLayoutRenderer';
 import { SettingsPanel } from '@/app/dashboard/generate-paper/components/SettingsPanel';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { getPageSize } from '@/lib/paperPageSize';
 import { toast } from 'react-hot-toast';
 import { motion } from 'framer-motion';
 
@@ -20,6 +21,11 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
   const [currentSettings, setCurrentSettings] = useState(paper.settings || {});
   const [isSaving, setIsSaving] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
+
+  // Same page-size source of truth PaperBuilderApp uses — a saved paper made
+  // with the Legal size selected must preview at Legal dimensions here too,
+  // not always A4.
+  const pageSize = getPageSize(currentSettings.pageSize);
 
   // ─── Fetch profile on mount ───────────────────────────────────────────────
   useEffect(() => {
@@ -39,14 +45,13 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
   // ─── Mobile paper scale ───────────────────────────────────────────────────
   useEffect(() => {
     const computeScale = () => {
-      const PAPER_WIDTH_PX = 794;
       if (window.innerWidth <= 991) {
         const available = window.innerWidth - 16;
-        const scale = Math.min(available / PAPER_WIDTH_PX, 1);
+        const scale = Math.min(available / pageSize.widthPx, 1);
         document.documentElement.style.setProperty('--paper-scale', String(scale));
         document.documentElement.style.setProperty(
           '--paper-collapsed-margin',
-          `calc((${scale} - 1) * 297mm)`
+          `calc((${scale} - 1) * ${pageSize.heightMm}mm)`
         );
       } else {
         document.documentElement.style.setProperty('--paper-scale', '1');
@@ -56,7 +61,7 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
     computeScale();
     window.addEventListener('resize', computeScale);
     return () => window.removeEventListener('resize', computeScale);
-  }, []);
+  }, [pageSize.widthPx, pageSize.heightMm]);
 
   // ─── Premium check ────────────────────────────────────────────────────────
   const subStatus = userProfile?.profile?.subscription_status;
@@ -175,6 +180,7 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
             setCurrentSettings((p: any) => ({ ...p, [k]: v }))
           }
           isPremium={isUserPremium}
+          currentLayout={paper.layout}
         />
 
       </div>
@@ -253,8 +259,8 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
 
         .paper-canvas {
           background: white;
-          width: 210mm;
-          min-height: 297mm;
+          width: ${pageSize.widthMm}mm;
+          min-height: ${pageSize.heightMm}mm;
           border-radius: 4px;
           margin: 0 auto;
         }

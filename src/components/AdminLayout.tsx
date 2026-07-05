@@ -2,7 +2,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   LayoutDashboard, Users, ShoppingBag, Settings,
@@ -14,7 +14,6 @@ import {
 const supabase = createSupabaseBrowserClient();
 
 export default function AdminLayout({ children, activeTab }: { children: React.ReactNode; activeTab?: string }) {
-  const router = useRouter();
   const pathname = usePathname();
   const [showSidebar, setShowSidebar] = useState(false);
   const [openParents, setOpenParents] = useState<string[]>([]);
@@ -42,7 +41,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/auth/login');
+    window.location.href = '/auth/login';
   };
 
   const isItemActive = (id: string) => {

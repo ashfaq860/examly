@@ -1,12 +1,10 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Menu } from "lucide-react";
 
 const Header = ({ sidebarOpen, setSidebarOpen }: any) => {
-  const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [role, setRole] = useState<string>("user");
   const supabase = createSupabaseBrowserClient();
@@ -52,7 +50,7 @@ const Header = ({ sidebarOpen, setSidebarOpen }: any) => {
           className="btn btn-outline-danger btn-sm rounded-pill"
           onClick={async () => {
             await supabase.auth.signOut();
-            router.push("/auth/login");
+            window.location.href = "/auth/login";
           }}
         >
           <i className="bi bi-box-arrow-right me-1"></i> Logout

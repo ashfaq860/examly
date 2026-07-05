@@ -1,9 +1,20 @@
 import React, { useState, useMemo } from 'react';
 import { Calendar, ChevronRight, Trash2, Clock, AlertCircle, X, Check, BookOpen, Globe } from 'lucide-react';
 
+// Supabase/Postgres `timestamp` (no timezone) columns come back as a bare
+// "YYYY-MM-DDTHH:mm:ss[.sss]" string with no 'Z'/offset marker. The value
+// itself is still a UTC instant (the DB server clock is UTC), but new Date()
+// parses a timezone-less string as LOCAL time — silently shifting every
+// displayed date/time by the viewer's UTC offset. Appending 'Z' only when no
+// timezone marker is already present normalizes it to the UTC instant it
+// actually represents, so toLocaleDateString/toLocaleTimeString then convert
+// it to the viewer's real local time instead of double-offsetting it.
+const parseServerTimestamp = (ts: string): Date => {
+  const hasTimezone = /Z$|[+-]\d{2}:?\d{2}$/.test(ts);
+  return new Date(hasTimezone ? ts : `${ts}Z`);
+};
 
-
-export const ArchiveGrid: React.FC<ArchiveGridProps> = ({ 
+export const ArchiveGrid: React.FC<ArchiveGridProps> = ({
   papers, searchTerm, onOpen, onDelete, deletingId 
 }) => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -29,7 +40,7 @@ export const ArchiveGrid: React.FC<ArchiveGridProps> = ({
       {filteredPapers.map((paper) => {
         const isConfirming = confirmDeleteId === paper.id;
         const isDeleting = deletingId === paper.id;
-        const dateObj = new Date(paper.created_at);
+        const dateObj = parseServerTimestamp(paper.created_at);
 
         return (
           <div 

@@ -69,14 +69,6 @@ export default function AboutPage() {
 
         {/* ══ HERO ══════════════════════════════════════════ */}
         <section className="ab-hero">
-          <svg className="ab-grid" aria-hidden="true">
-            <defs>
-              <pattern id="abgrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M40 0L0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#abgrid)" />
-          </svg>
           <div className="ab-blob ab-ba" />
           <div className="ab-blob ab-bb" />
 
@@ -159,6 +151,11 @@ export default function AboutPage() {
         {/* ══ STORY ═════════════════════════════════════════ */}
         <section className="ab-section ab-brand">
           <svg className="ab-grid" aria-hidden="true">
+            <defs>
+              <pattern id="abgrid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M40 0L0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
+              </pattern>
+            </defs>
             <rect width="100%" height="100%" fill="url(#abgrid)" />
           </svg>
           <div className="ab-blob ab-ba" style={{ opacity: 0.12 }} />
@@ -271,13 +268,10 @@ export default function AboutPage() {
 
         {/* ══ CTA ═══════════════════════════════════════════ */}
         <section className="ab-cta">
-          <svg className="ab-grid" aria-hidden="true">
-            <rect width="100%" height="100%" fill="url(#abgrid)" />
-          </svg>
           <div className="ab-blob ab-ba" />
           <div className="ab-blob ab-bb" />
           <div className="ab-cta-inner">
-            <div className="ab-eyebrow" style={{ color: '#6ee7b7', background: 'rgba(110,231,183,0.1)', borderColor: 'rgba(110,231,183,0.28)' }}>Join Us</div>
+            <div className="ab-eyebrow" style={{ color: '#1ba699', background: 'rgba(27,166,153,0.12)', borderColor: 'rgba(27,166,153,0.35)' }}>Join Us</div>
             <h2 className="ab-cta-h2">Join the Examly community</h2>
             <p className="ab-cta-sub">Be part of Pakistan's fastest-growing EdTech platform. Start free — no card needed.</p>
             <div className="ab-cta-btns">
@@ -304,18 +298,18 @@ export default function AboutPage() {
         }
         .ab-grid { position:absolute;inset:0;width:100%;height:100%;pointer-events:none; }
         .ab-blob { position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none; }
-        .ab-ba { width:500px;height:500px;background:rgba(100,210,190,0.14);top:-150px;right:-80px; }
-        .ab-bb { width:380px;height:380px;background:rgba(30,79,166,0.18);bottom:-120px;left:-60px; }
+        .ab-ba { width:500px;height:500px;background:rgba(27,166,153,0.32);top:-150px;right:-80px; }
+        .ab-bb { width:380px;height:380px;background:rgba(7,62,140,0.24);bottom:-120px;left:-60px; }
 
         /* section head */
         .ab-sec-head { text-align:center;margin-bottom:3rem; }
         .ab-eyebrow {
           display:inline-flex;align-items:center;
           font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
-          color:#1e4fa6;background:rgba(30,79,166,0.08);border:1px solid rgba(30,79,166,0.2);
+          color:#1ba699;background:rgba(27,166,153,0.12);border:1px solid rgba(27,166,153,0.35);
           border-radius:999px;padding:4px 14px;margin-bottom:0.9rem;
         }
-        .ab-ey-dark { color:#1e4fa6; }
+        .ab-ey-dark { color:#1e4fa6;background:rgba(30,79,166,0.08);border-color:rgba(30,79,166,0.2); }
         .ab-h2 {
           font-size:clamp(1.7rem,3vw,2.4rem);font-weight:800;
           color:#0f172a;letter-spacing:-0.025em;margin-bottom:0.5rem;
@@ -324,7 +318,7 @@ export default function AboutPage() {
 
         /* ── hero ─────────────────────────────── */
         .ab-hero {
-          background:linear-gradient(145deg,#0f2452 0%,#1e4fa6 48%,#0d6b60 100%);
+          background:linear-gradient(135deg,#dbeafe 0%,#eef6ff 45%,#ccfbf1 100%);
           padding:5.5rem 1.5rem 4.5rem;position:relative;overflow:hidden;
         }
         .ab-hero-inner {
@@ -334,13 +328,13 @@ export default function AboutPage() {
         .ab-hero-copy { flex:1 1 55%; }
         .ab-hero-h1 {
           font-size:clamp(2.1rem,3.8vw,3.2rem);font-weight:800;
-          color:#e8eef8;line-height:1.13;letter-spacing:-0.03em;margin-bottom:1.1rem;
+          color:var(--text-main,#0f172a);line-height:1.13;letter-spacing:-0.03em;margin-bottom:1.1rem;
         }
         .ab-grad {
-          background:linear-gradient(90deg,#6ee7b7,#93c5fd);
+          background:linear-gradient(90deg,var(--brand-primary,#073e8c),var(--brand-accent,#1ba699));
           -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
         }
-        .ab-hero-sub { font-size:1rem;color:rgba(220,232,255,0.68);line-height:1.7;margin-bottom:2rem;max-width:500px; }
+        .ab-hero-sub { font-size:1rem;color:var(--text-secondary,#334155);line-height:1.7;margin-bottom:2rem;max-width:500px; }
         .ab-hero-ctas { display:flex;gap:1rem;flex-wrap:wrap; }
 
         /* stat grid */
@@ -349,33 +343,35 @@ export default function AboutPage() {
           display:grid;grid-template-columns:1fr 1fr;gap:1rem;
         }
         .ab-stat-card {
-          background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);
+          background:#fff;border:1px solid var(--border-subtle,#e2e8f0);
           border-radius:16px;padding:1.4rem 1.2rem;text-align:center;
-          backdrop-filter:blur(8px);
-          transition:background 0.2s;
+          box-shadow:var(--shadow-sm);
+          transition:box-shadow 0.2s,transform 0.2s;
         }
-        .ab-stat-card:hover { background:rgba(255,255,255,0.13); }
-        .ab-stat-val { font-size:1.9rem;font-weight:900;color:#fff;line-height:1;margin-bottom:4px; }
-        .ab-stat-lbl { font-size:0.72rem;font-weight:600;color:rgba(220,232,255,0.55);text-transform:uppercase;letter-spacing:0.06em; }
+        .ab-stat-card:hover { box-shadow:var(--shadow-md);transform:translateY(-2px); }
+        .ab-stat-val { font-size:1.9rem;font-weight:900;color:var(--text-main,#0f172a);line-height:1;margin-bottom:4px; }
+        .ab-stat-lbl { font-size:0.72rem;font-weight:600;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.06em; }
 
         /* ── buttons ──────────────────────────── */
-        .ab-btn-primary {
+        /* :global() is required — styled-jsx doesn't scope next/link's
+           rendered <a>, only native lowercase JSX elements. */
+        :global(.ab-btn-primary) {
           display:inline-flex;align-items:center;gap:8px;
-          background:linear-gradient(135deg,#fff,#e0f0ff);
-          color:#1e4fa6;font-weight:700;font-size:0.9rem;
+          background:linear-gradient(135deg,var(--brand-primary,#073e8c),var(--brand-accent,#1ba699));
+          color:#fff;font-weight:700;font-size:0.9rem;
           padding:0.72rem 1.5rem;border-radius:10px;border:none;
-          text-decoration:none;box-shadow:0 4px 18px rgba(0,0,0,0.16);
+          text-decoration:none;box-shadow:0 6px 18px -4px rgba(7,62,140,0.45);
           transition:transform 0.18s,box-shadow 0.18s;
         }
-        .ab-btn-primary:hover { transform:translateY(-2px);box-shadow:0 8px 26px rgba(0,0,0,0.2);color:#1e4fa6;text-decoration:none; }
-        .ab-btn-ghost {
+        :global(.ab-btn-primary):hover { transform:translateY(-2px);box-shadow:0 10px 26px -4px rgba(7,62,140,0.5);color:#fff;text-decoration:none; }
+        :global(.ab-btn-ghost) {
           display:inline-flex;align-items:center;gap:7px;
-          background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.25);
-          color:rgba(255,255,255,0.88);font-weight:600;font-size:0.9rem;
+          background:transparent;border:1.5px solid var(--border-medium,#cbd5e1);
+          color:var(--text-main,#0f172a);font-weight:600;font-size:0.9rem;
           padding:0.72rem 1.5rem;border-radius:10px;text-decoration:none;
-          transition:background 0.18s;
+          transition:background 0.18s,border-color 0.18s,color 0.18s;
         }
-        .ab-btn-ghost:hover { background:rgba(255,255,255,0.18);color:#fff;text-decoration:none; }
+        :global(.ab-btn-ghost):hover { background:var(--brand-primary-50,#eff6ff);border-color:var(--brand-primary,#073e8c);color:var(--brand-primary,#073e8c);text-decoration:none; }
 
         /* ── mission / vision ─────────────────── */
         .ab-mv-grid { display:grid;grid-template-columns:1fr 1fr;gap:1.5rem; }
@@ -467,15 +463,15 @@ export default function AboutPage() {
 
         /* ── cta ──────────────────────────────── */
         .ab-cta {
-          background:linear-gradient(145deg,#0f2452 0%,#1e4fa6 50%,#0d6b60 100%);
+          background:linear-gradient(135deg,#dbeafe 0%,#eef6ff 45%,#ccfbf1 100%);
           padding:5.5rem 1.5rem;text-align:center;position:relative;overflow:hidden;
         }
         .ab-cta-inner { position:relative;z-index:1;max-width:640px;margin:0 auto; }
         .ab-cta-h2 {
           font-size:clamp(1.8rem,3.5vw,2.8rem);font-weight:800;
-          color:#e8eef8;letter-spacing:-0.025em;margin-bottom:0.8rem;
+          color:var(--text-main,#0f172a);letter-spacing:-0.025em;margin-bottom:0.8rem;
         }
-        .ab-cta-sub { font-size:0.95rem;color:rgba(220,232,255,0.62);margin-bottom:2rem; }
+        .ab-cta-sub { font-size:0.95rem;color:var(--text-secondary,#334155);margin-bottom:2rem; }
         .ab-cta-btns { display:flex;gap:1rem;justify-content:center;flex-wrap:wrap; }
 
         /* ── responsive ───────────────────────── */

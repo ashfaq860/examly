@@ -21,7 +21,7 @@ export const checkAdminAccess = async (router?: any): Promise<boolean> => {
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      router?.push('/auth/login');
+      window.location.href = '/auth/login';
       return false;
     }
 

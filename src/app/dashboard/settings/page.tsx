@@ -57,7 +57,7 @@ export default function ProfileSettingsPage() {
         const { data: { session }, error: authError } = await supabase.auth.getSession();
 
         if (authError || !session) {
-          router.push('/auth/login');
+          window.location.href = '/auth/login';
           return;
         }
 
@@ -74,7 +74,7 @@ export default function ProfileSettingsPage() {
         setIsAuthorized(true);
       } catch (error) {
         console.error('Error checking auth:', error);
-        router.push('/auth/login');
+        window.location.href = '/auth/login';
       } finally {
         setAuthChecked(true);
       }
@@ -84,7 +84,7 @@ export default function ProfileSettingsPage() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
-        router.push('/auth/login');
+        window.location.href = '/auth/login';
       }
     });
 

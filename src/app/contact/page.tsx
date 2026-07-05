@@ -78,14 +78,6 @@ export default function ContactPage() {
 
         {/* ══ HERO ══════════════════════════════════════════ */}
         <section className="ct-hero">
-          <svg className="ct-grid" aria-hidden="true">
-            <defs>
-              <pattern id="ctgrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M40 0L0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#ctgrid)" />
-          </svg>
           <div className="ct-blob ct-ba" /><div className="ct-blob ct-bb" />
 
           <div className="ct-hero-inner">
@@ -261,12 +253,9 @@ export default function ContactPage() {
 
         {/* ══ BOTTOM CTA ════════════════════════════════════ */}
         <section className="ct-cta">
-          <svg className="ct-grid" aria-hidden="true">
-            <rect width="100%" height="100%" fill="url(#ctgrid)" />
-          </svg>
           <div className="ct-blob ct-ba" /><div className="ct-blob ct-bb" />
           <div className="ct-cta-inner">
-            <div className="ct-eyebrow" style={{ color:'#6ee7b7',background:'rgba(110,231,183,0.1)',borderColor:'rgba(110,231,183,0.28)' }}>Ready to Start?</div>
+            <div className="ct-eyebrow">Ready to Start?</div>
             <h2 className="ct-cta-h2">Join 5,000+ educators on Examly</h2>
             <p className="ct-cta-sub">3 months free — unlimited papers — no credit card needed.</p>
             <div className="ct-cta-btns">
@@ -289,13 +278,13 @@ export default function ContactPage() {
 
         /* ── hero ─────────────────────────────────── */
         .ct-hero {
-          background:linear-gradient(145deg,#0f2452 0%,#1e4fa6 48%,#0d6b60 100%);
+          background:linear-gradient(135deg,#dbeafe 0%,#eef6ff 45%,#ccfbf1 100%);
           padding:5.5rem 1.5rem 4.5rem;position:relative;overflow:hidden;
         }
         .ct-grid { position:absolute;inset:0;width:100%;height:100%;pointer-events:none; }
         .ct-blob { position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none; }
-        .ct-ba { width:500px;height:500px;background:rgba(100,210,190,0.14);top:-150px;right:-80px; }
-        .ct-bb { width:380px;height:380px;background:rgba(30,79,166,0.18);bottom:-120px;left:-60px; }
+        .ct-ba { width:500px;height:500px;background:rgba(27,166,153,0.32);top:-150px;right:-80px; }
+        .ct-bb { width:380px;height:380px;background:rgba(7,62,140,0.24);bottom:-120px;left:-60px; }
 
         .ct-hero-inner {
           max-width:1120px;margin:0 auto;
@@ -306,32 +295,32 @@ export default function ContactPage() {
         .ct-eyebrow {
           display:inline-flex;align-items:center;
           font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
-          color:#6ee7b7;background:rgba(110,231,183,0.1);border:1px solid rgba(110,231,183,0.28);
+          color:#1ba699;background:rgba(27,166,153,0.12);border:1px solid rgba(27,166,153,0.35);
           border-radius:999px;padding:4px 14px;margin-bottom:0.9rem;
         }
         .ct-ey-dark { color:#1e4fa6;background:rgba(30,79,166,0.08);border-color:rgba(30,79,166,0.2); }
 
         .ct-h1 {
-          font-size:clamp(2.1rem,3.8vw,3.2rem);font-weight:800;color:#e8eef8;
+          font-size:clamp(2.1rem,3.8vw,3.2rem);font-weight:800;color:var(--text-main,#0f172a);
           line-height:1.13;letter-spacing:-0.03em;margin-bottom:1.1rem;
         }
         .ct-grad {
-          background:linear-gradient(90deg,#6ee7b7,#93c5fd);
+          background:linear-gradient(90deg,var(--brand-primary,#073e8c),var(--brand-accent,#1ba699));
           -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
         }
-        .ct-hero-sub { font-size:1rem;color:rgba(220,232,255,0.68);line-height:1.7;margin-bottom:2rem;max-width:480px; }
+        .ct-hero-sub { font-size:1rem;color:var(--text-secondary,#334155);line-height:1.7;margin-bottom:2rem;max-width:480px; }
         .ct-hero-btns { display:flex;gap:1rem;flex-wrap:wrap; }
 
         /* hero quick-contact card */
         .ct-hero-card {
           flex:0 0 38%;
-          background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);
-          border-radius:20px;padding:1.6rem 1.5rem;backdrop-filter:blur(10px);
+          background:#fff;border:1px solid var(--border-subtle,#e2e8f0);
+          border-radius:20px;padding:1.6rem 1.5rem;box-shadow:var(--shadow-md);
         }
-        .ct-hc-title { font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(220,232,255,0.5);margin-bottom:1rem; }
+        .ct-hc-title { font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted,#64748b);margin-bottom:1rem; }
         .ct-hc-row {
           display:flex;align-items:center;gap:0.9rem;
-          padding:0.75rem 0;border-top:1px solid rgba(255,255,255,0.08);
+          padding:0.75rem 0;border-top:1px solid var(--border-subtle,#e2e8f0);
           text-decoration:none;transition:opacity 0.18s;
         }
         .ct-hc-row:hover { opacity:0.82; }
@@ -339,27 +328,29 @@ export default function ContactPage() {
           width:38px;height:38px;border-radius:10px;flex-shrink:0;
           display:flex;align-items:center;justify-content:center;
         }
-        .ct-hc-label { display:block;font-size:0.68rem;font-weight:600;color:rgba(220,232,255,0.55);text-transform:uppercase;letter-spacing:0.06em; }
-        .ct-hc-val   { display:block;font-size:0.88rem;font-weight:700;color:#e8eef8; }
+        .ct-hc-label { display:block;font-size:0.68rem;font-weight:600;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:0.06em; }
+        .ct-hc-val   { display:block;font-size:0.88rem;font-weight:700;color:var(--text-main,#0f172a); }
 
         /* ── buttons ──────────────────────────────── */
-        .ct-btn-primary {
+        /* :global() is required — styled-jsx doesn't scope next/link's
+           rendered <a>, only native lowercase JSX elements. */
+        :global(.ct-btn-primary) {
           display:inline-flex;align-items:center;gap:8px;
-          background:linear-gradient(135deg,#fff,#e0f0ff);
-          color:#1e4fa6;font-weight:700;font-size:0.9rem;
+          background:linear-gradient(135deg,var(--brand-primary,#073e8c),var(--brand-accent,#1ba699));
+          color:#fff;font-weight:700;font-size:0.9rem;
           padding:0.72rem 1.5rem;border-radius:10px;border:none;
-          text-decoration:none;box-shadow:0 4px 18px rgba(0,0,0,0.16);
+          text-decoration:none;box-shadow:0 6px 18px -4px rgba(7,62,140,0.45);
           transition:transform 0.18s,box-shadow 0.18s;cursor:pointer;
         }
-        .ct-btn-primary:hover { transform:translateY(-2px);box-shadow:0 8px 26px rgba(0,0,0,0.2);color:#1e4fa6;text-decoration:none; }
-        .ct-btn-ghost {
+        :global(.ct-btn-primary):hover { transform:translateY(-2px);box-shadow:0 10px 26px -4px rgba(7,62,140,0.5);color:#fff;text-decoration:none; }
+        :global(.ct-btn-ghost) {
           display:inline-flex;align-items:center;gap:8px;
-          background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.25);
-          color:rgba(255,255,255,0.88);font-weight:600;font-size:0.9rem;
+          background:transparent;border:1.5px solid var(--border-medium,#cbd5e1);
+          color:var(--text-main,#0f172a);font-weight:600;font-size:0.9rem;
           padding:0.72rem 1.5rem;border-radius:10px;text-decoration:none;
-          transition:background 0.18s;
+          transition:background 0.18s,border-color 0.18s,color 0.18s;
         }
-        .ct-btn-ghost:hover { background:rgba(255,255,255,0.18);color:#fff;text-decoration:none; }
+        :global(.ct-btn-ghost):hover { background:var(--brand-primary-50,#eff6ff);border-color:var(--brand-primary,#073e8c);color:var(--brand-primary,#073e8c);text-decoration:none; }
 
         /* ── methods grid ─────────────────────────── */
         .ct-sec-head { text-align:center;margin-bottom:3rem; }
@@ -473,12 +464,12 @@ export default function ContactPage() {
 
         /* ── cta ──────────────────────────────────── */
         .ct-cta {
-          background:linear-gradient(145deg,#0f2452 0%,#1e4fa6 50%,#0d6b60 100%);
+          background:linear-gradient(135deg,#dbeafe 0%,#eef6ff 45%,#ccfbf1 100%);
           padding:5.5rem 1.5rem;text-align:center;position:relative;overflow:hidden;
         }
         .ct-cta-inner { position:relative;z-index:1;max-width:600px;margin:0 auto; }
-        .ct-cta-h2 { font-size:clamp(1.8rem,3.5vw,2.7rem);font-weight:800;color:#e8eef8;letter-spacing:-0.025em;margin-bottom:0.8rem; }
-        .ct-cta-sub { font-size:0.95rem;color:rgba(220,232,255,0.62);margin-bottom:2rem; }
+        .ct-cta-h2 { font-size:clamp(1.8rem,3.5vw,2.7rem);font-weight:800;color:var(--text-main,#0f172a);letter-spacing:-0.025em;margin-bottom:0.8rem; }
+        .ct-cta-sub { font-size:0.95rem;color:var(--text-secondary,#334155);margin-bottom:2rem; }
         .ct-cta-btns { display:flex;gap:1rem;justify-content:center;flex-wrap:wrap; }
 
         /* ── responsive ───────────────────────────── */

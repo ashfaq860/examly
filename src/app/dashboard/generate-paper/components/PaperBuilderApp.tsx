@@ -14,6 +14,7 @@ import { BoardPatternService, LongQuestionGroup } from '@/services/boardPatternS
 import { PaperLayoutRenderer } from '@/app/dashboard/generate-paper/components/PaperLayoutRenderer';
 import Loading from '@/app/dashboard/generate-paper/loading';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { getPageSize } from '@/lib/paperPageSize';
 import { toast } from 'react-hot-toast';
 
 interface PaperBuilderAppProps {
@@ -179,7 +180,22 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
 
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Failed to save");
-      if (result.id) setCurrentPaperId(result.id);
+      // The paper is now safely persisted in Supabase, so the local
+      // autosave draft is no longer needed to recover it — clear it so a
+      // stale/already-saved draft doesn't get reloaded next time the builder
+      // opens. Keep lastSavedPaperDataRef in sync so refreshPaperData's
+      // change-detection doesn't mistake this for an external edit and wipe
+      // the paper a second time on its own.
+      localStorage.removeItem('questionPapers');
+      lastSavedPaperDataRef.current = '';
+      // Wipe the builder back to a blank slate — the paper is safely saved,
+      // so leaving it on screen (or leaving currentPaperId pointing at it)
+      // would make the next paper the user builds silently overwrite this
+      // one instead of being saved as new.
+      setPaperSections([]);
+      setCurrentPaperId(null);
+      setIsEditMode(false);
+      setPaperLanguage(currentLanguage);
       toast.success("Saved to Cloud successfully!");
     } catch (error: any) {
       console.error("Save Error:", error);
@@ -192,8 +208,7 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
   useEffect(() => {
     const syncLayout = () => {
       if (typeof window === 'undefined') return;
-      const PAPER_PX = 793.7;
-      const PAPER_H_PX = 1122.5;
+      const { widthPx: PAPER_PX, heightPx: PAPER_H_PX } = getPageSize(settings.pageSize);
       const vw = window.innerWidth;
       const scale = Math.min(1, (vw - 16) / PAPER_PX);
       const scaledW = PAPER_PX * scale;
@@ -222,7 +237,7 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
       window.removeEventListener('resize', syncLayout);
       resizeObserver?.disconnect();
     };
-  }, []);
+  }, [settings.pageSize]);
 
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
 
@@ -1128,6 +1143,7 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
   const isPremium = subStatus === 'active';
   const hasActivePackage = profile?.userPackages?.some((pkg: any) => pkg.is_active === true);
   const isUserPremium = isPremium || hasActivePackage;
+  const pageSize = getPageSize(settings.pageSize);
 
   // ─── The settings panel rendered via portal directly into document.body ───
   // This completely escapes ALL parent overflow/clip/stacking contexts
@@ -1138,6 +1154,7 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
           onClose={() => setShowSettings(false)}
           settings={settings}
           isPremium={isUserPremium}
+          currentLayout={currentLayout}
           onSettingChange={(key, value) => setSettings(prev => ({ ...prev, [key]: value }))}
         />,
         document.body
@@ -1188,7 +1205,7 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
             {paperSections.length === 0 ? (
               <div
                 className="empty-state d-flex flex-column align-items-center justify-content-start text-muted text-center p-3 pt-4 mt-3"
-                style={{ minHeight: '297mm' }}
+                style={{ minHeight: `${pageSize.heightMm}mm` }}
               >
                 <BookOpen size={56} className="mb-3 opacity-20" />
                 <h3 className="fw-light fs-5 fs-md-3">Paper Preview</h3>
@@ -1300,8 +1317,8 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
         @media screen {
           html, body { overflow-x: hidden; }
           .paper-canvas {
-            width: 210mm;
-            min-height: 297mm;
+            width: ${pageSize.widthMm}mm;
+            min-height: ${pageSize.heightMm}mm;
             margin: 20px auto;
             background: white;
             transform-origin: top center;
@@ -1328,7 +1345,7 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
 
         /* ── Print ── */
         @media print {
-          @page { size: A4 portrait; margin: 0 !important; }
+          @page { size: ${pageSize.cssName} portrait; margin: 0 !important; }
 
           html, body, #__next, .min-vh-100, main {
             margin: 0 !important;
@@ -1347,14 +1364,14 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
             position: absolute !important;
             top: 0 !important; left: 0 !important;
             margin: 0 !important; padding: 0 !important;
-            width: 210mm !important;
+            width: ${pageSize.widthMm}mm !important;
             box-shadow: none !important;
             transform: none !important;
             zoom: unset !important;
             min-height: auto !important;
             height: auto !important;
           }
-          .paper-canvas-wrapper { display: block !important; width: 210mm !important; overflow: visible !important; }
+          .paper-canvas-wrapper { display: block !important; width: ${pageSize.widthMm}mm !important; overflow: visible !important; }
 
           body * { visibility: hidden; }
           .paper-sheet, .paper-sheet * { visibility: visible; }
@@ -1368,7 +1385,7 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
             box-sizing: border-box !important;
             box-shadow: none !important;
             border: none !important;
-            width: 210mm !important;
+            width: ${pageSize.widthMm}mm !important;
             height: auto !important;
           }
         }
@@ -1449,11 +1466,11 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
             position: relative !important; left: 0 !important;
           }
           .paper-canvas {
-            width: 793.7px !important;
+            width: ${pageSize.widthPx}px !important;
             /* Flex items shrink below their specified width by default
                (flexbox's automatic minimum size falls back to the item's
                min-content size, which text content makes far smaller than
-               793.7px). That silently squeezed the whole A4 layout — tables,
+               the sheet width). That silently squeezed the whole page layout — tables,
                bilingual columns, headers — into a narrower box than it was
                designed for, reading as "cut off" content. flex-shrink: 0
                keeps the canvas at its true width so the transform below

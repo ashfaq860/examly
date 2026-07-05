@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import Script from 'next/script';
 import { UserProvider } from './context/userContext';
 import ClientLayoutWrapper from "./ClientLayoutWrapper";
+import ChunkErrorReload from '@/components/ChunkErrorReload';
 
 import 'katex/dist/katex.min.css';
 // @ts-ignore
@@ -64,6 +65,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
 
       <body>
+        <ChunkErrorReload />
         {/* Only the admin question bank / manual question selection screens
             use MathJax — load it off the critical path everywhere else so
             it doesn't block first paint on marketing/dashboard pages. */}

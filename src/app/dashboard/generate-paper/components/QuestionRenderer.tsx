@@ -44,6 +44,14 @@ interface QuestionRendererProps {
   // this and renders exactly as before. When present, the row's w-100
   // is relaxed so the extra label doesn't force a wrap onto its own line.
   inlineLabel?: React.ReactNode;
+  // Blank answer-writing lines under short/long questions (ignored for MCQ).
+  // `showAnswerLines` is the on/off flag; `answerLinesShort`/`answerLinesLong`
+  // (both user-configurable in Settings) supply the actual count, and this
+  // component picks the right one based on its own already-computed `isLong`.
+  showAnswerLines?: boolean;
+  answerLinesShort?: number;
+  answerLinesLong?: number;
+  answerLineGapMm?: number;
 }
 
 interface BilingualProps {
@@ -88,7 +96,7 @@ interface RichTextProps {
   style?: React.CSSProperties;
 }
 
-const RichText: React.FC<RichTextProps> = ({ html, style }) => {
+export const RichText: React.FC<RichTextProps> = ({ html, style }) => {
   if (!html) return null;
   return (
     <span
@@ -113,6 +121,14 @@ const PRINT_CSS = `
   .editable-content:hover { background-color: rgba(0,0,0,0.02); }
   .editable-content:focus { background-color: #fff !important; border: 1px solid #007bff !important; }
   .urdu-text .editable-content { direction: rtl; text-align: right; }
+
+  /* Editable fields (edit mode) don't declare their own touch-action, so
+     mobile browsers default to treating a finger-drag starting on them as
+     a text-selection/cursor gesture instead of the page's pinch-zoom-pan —
+     that's what blocked panning around a zoomed paper specifically while
+     edit mode was on. Explicitly allowing the same gestures as the paper's
+     scroll container here restores panning over editable text too. */
+  [contenteditable] { touch-action: pan-x pan-y pinch-zoom; }
 
   @media print {
     .question-wrapper, .question-wrapper *,
@@ -396,6 +412,10 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   hasSubGroups,
   onTextChange,
   inlineLabel,
+  showAnswerLines,
+  answerLinesShort,
+  answerLinesLong,
+  answerLineGapMm,
 }) => {
 
   useEffect(() => { injectPrintStyles(); }, []);
@@ -515,6 +535,8 @@ const showNumber = !isSecondPartOfOr && !suppressNumbering && index !== -1;
               hasSubGroups={hasSubGroups}
               sectionType={sectionType}
               headingFontSize={headingFontSize ?? 18}
+              answerLines={showAnswerLines ? (isLong ? (answerLinesLong ?? 5) : (answerLinesShort ?? 4)) : 0}
+              answerLineGapMm={answerLineGapMm}
             />
           )}
         </div>
@@ -659,6 +681,11 @@ interface SubjectiveRendererProps {
   sectionType: string;
   hasSubGroups?: boolean;
   onTextChange: (sid: string, qid: string, field: string, val: string) => void;
+  /** Number of blank ruled lines to print under the question for students
+   *  to write their answer. 0/undefined renders nothing. */
+  answerLines?: number;
+  /** Height (mm) of each ruled line's writing space. Defaults to 6mm. */
+  answerLineGapMm?: number;
 }
 
 const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
@@ -677,9 +704,11 @@ const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
   hasSubGroups,
   sectionType,
   onTextChange,
+  answerLines,
+  answerLineGapMm,
 }) => (
   <>
-  
+
   <BilingualTextDisplay
     sectionId={sectionId}
     questionId={question.id}
@@ -700,5 +729,12 @@ const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
     sectionType={sectionType}
     onTextChange={onTextChange}
   />
+  {!!answerLines && answerLines > 0 && (
+    <div className="answer-lines" aria-hidden="true" style={{ marginTop: '2mm' }}>
+      {Array.from({ length: answerLines }).map((_, i) => (
+        <div key={i} style={{ height: `${answerLineGapMm ?? 6}mm`, borderBottom: '0.3mm solid #94a3b8' }} />
+      ))}
+    </div>
+  )}
   </>
 );

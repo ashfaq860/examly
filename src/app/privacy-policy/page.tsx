@@ -28,14 +28,6 @@ export default function PrivacyPolicy() {
 
         {/* ══ HERO ══════════════════════════════════════════ */}
         <section className="pp-hero">
-          <svg className="pp-grid" aria-hidden="true">
-            <defs>
-              <pattern id="ppgrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M40 0L0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#ppgrid)" />
-          </svg>
           <div className="pp-blob pp-ba" /><div className="pp-blob pp-bb" />
 
           <div className="pp-hero-inner">
@@ -281,32 +273,33 @@ export default function PrivacyPolicy() {
 
         /* ── hero ─────────────────────────────────── */
         .pp-hero {
-          background:linear-gradient(145deg,#0f2452 0%,#1e4fa6 48%,#0d6b60 100%);
+          background:linear-gradient(135deg,#dbeafe 0%,#eef6ff 45%,#ccfbf1 100%);
           padding:5rem 1.5rem 4rem;text-align:center;position:relative;overflow:hidden;
         }
         .pp-grid { position:absolute;inset:0;width:100%;height:100%;pointer-events:none; }
         .pp-blob { position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none; }
-        .pp-ba { width:450px;height:450px;background:rgba(100,210,190,0.14);top:-130px;right:-80px; }
-        .pp-bb { width:350px;height:350px;background:rgba(30,79,166,0.18);bottom:-100px;left:-60px; }
+        .pp-ba { width:450px;height:450px;background:rgba(27,166,153,0.32);top:-130px;right:-80px; }
+        .pp-bb { width:350px;height:350px;background:rgba(7,62,140,0.24);bottom:-100px;left:-60px; }
 
         .pp-hero-inner { position:relative;z-index:1;max-width:680px;margin:0 auto; }
         .pp-eyebrow {
           display:inline-flex;align-items:center;
           font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
-          color:#6ee7b7;background:rgba(110,231,183,0.1);border:1px solid rgba(110,231,183,0.28);
+          color:#1ba699;background:rgba(27,166,153,0.12);border:1px solid rgba(27,166,153,0.35);
           border-radius:999px;padding:4px 14px;margin-bottom:0.9rem;
         }
         .pp-h1 {
-          font-size:clamp(2rem,4vw,3rem);font-weight:800;color:#e8eef8;
+          font-size:clamp(2rem,4vw,3rem);font-weight:800;color:var(--text-main,#0f172a);
           letter-spacing:-0.025em;margin-bottom:0.9rem;
         }
-        .pp-hero-sub { font-size:1rem;color:rgba(220,232,255,0.68);line-height:1.7;margin-bottom:1.5rem; }
+        .pp-hero-sub { font-size:1rem;color:var(--text-secondary,#334155);line-height:1.7;margin-bottom:1.5rem; }
         .pp-hero-meta { display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap; }
         .pp-meta-pill {
           display:inline-flex;align-items:center;gap:6px;
-          background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);
+          background:#fff;border:1px solid var(--border-subtle,#e2e8f0);
           border-radius:999px;padding:5px 14px;
-          font-size:0.78rem;font-weight:600;color:rgba(220,232,255,0.78);
+          font-size:0.78rem;font-weight:600;color:var(--text-secondary,#334155);
+          box-shadow:var(--shadow-xs);
         }
 
         /* ── body layout ──────────────────────────── */
@@ -390,11 +383,13 @@ export default function PrivacyPolicy() {
         .pp-contact-link:hover { opacity:0.82; }
         .pp-cl-email { background:#eff6ff;color:#1e4fa6;border:1px solid #bfdbfe; }
         .pp-cl-phone { background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0; }
-        .pp-contact-cta {
+        /* :global() is required — styled-jsx doesn't scope next/link's
+           rendered <a>, only native lowercase JSX elements. */
+        :global(.pp-contact-cta) {
           display:inline-flex;align-items:center;gap:6px;
           font-size:0.86rem;font-weight:700;color:#1e4fa6;text-decoration:none;
         }
-        .pp-contact-cta:hover { text-decoration:underline; }
+        :global(.pp-contact-cta):hover { text-decoration:underline; }
 
         /* ── responsive ───────────────────────────── */
         @media(max-width:820px) {

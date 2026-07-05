@@ -18,17 +18,20 @@ export default function TermsAndConditions() {
       <main className="terms-page">
 
         {/* Hero Section */}
-        <section className="hero-section bg-primary text-white py-5">
+        <section
+          className="hero-section py-5"
+          style={{ background: 'linear-gradient(135deg,#dbeafe 0%,#eef6ff 45%,#ccfbf1 100%)' }}
+        >
           <div className="container">
             <div className="row justify-content-center text-center py-5">
               <div className="col-lg-8">
-                <h1 className="display-5 fw-bold mb-3">
+                <h1 className="display-5 fw-bold mb-3" style={{ color: 'var(--text-main)' }}>
                   Terms & Conditions
                 </h1>
-                <p className="lead opacity-75">
+                <p className="lead text-muted">
                   Please read these terms carefully before using Examly.pk
                 </p>
-                <small className="opacity-75">
+                <small className="text-muted">
                   Effective Date: {new Date().toLocaleDateString()}
                 </small>
               </div>

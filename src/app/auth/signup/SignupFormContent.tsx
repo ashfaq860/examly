@@ -105,7 +105,7 @@ useEffect(() => {
       toast.success(data.message || 'Signup successful!');
 
       // Redirect to login after 2s
-      setTimeout(() => router.push('/auth/login'), 2000);
+      setTimeout(() => { window.location.href = '/auth/login'; }, 2000);
     } catch (err: any) {
       console.error('Unexpected signup error', err);
       toast.error(err.message || 'Unexpected signup error');

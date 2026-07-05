@@ -27,8 +27,28 @@ export default function ClassesOverviewPage() {
   return (
     <>
       <Header />
-      <main className="container py-5 pt-header">
+      <div className="container pt-header pb-2">
         <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Classes' }]} />
+      </div>
+      <div style={{ background: 'linear-gradient(135deg,#dbeafe 0%,#eef6ff 45%,#ccfbf1 100%)' }}>
+        <div className="container py-5 text-center">
+          <span
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'rgba(27,166,153,0.12)', border: '1px solid rgba(27,166,153,0.35)',
+              color: '#1ba699', borderRadius: 999, padding: '4px 14px',
+              fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.1em',
+              textTransform: 'uppercase', marginBottom: '0.9rem',
+            }}
+          >
+            Browse by Class
+          </span>
+          <h1 className="fw-bold mb-0" style={{ color: 'var(--text-main)', fontSize: 'clamp(1.6rem,3.5vw,2.4rem)' }}>
+            All Classes &amp; Job Preparation
+          </h1>
+        </div>
+      </div>
+      <main className="container py-5">
         <button
           type="button"
           className="btn btn-link mb-4"
@@ -37,13 +57,12 @@ export default function ClassesOverviewPage() {
         >
           &larr; Back
         </button>
-        <h2 className="mb-4 text-center">All Classes & Job Preparation</h2>
         <div className="row g-4 justify-content-center">
           {classes.map(({ id, label }) => (
             <div key={id} className="col-6 col-md-4 col-lg-3">
               <Link
                 href={`/classes/${id}`}
-                className="card shadow-sm text-center text-decoration-none p-4"
+                className="card shadow-sm text-center text-decoration-none p-4 hover-lift"
                 style={{ borderRadius: 12 }}
               >
                 <h3 className="mb-0">{label}</h3>

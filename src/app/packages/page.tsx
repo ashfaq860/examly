@@ -75,14 +75,6 @@ export default function PackagesPage() {
 
         {/* ══ HERO ══════════════════════════════════════ */}
         <section className="pkg-hero">
-          <svg className="pkg-grid" aria-hidden="true">
-            <defs>
-              <pattern id="pgrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M40 0L0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#pgrid)" />
-          </svg>
           <div className="pkg-blob pkg-ba" />
           <div className="pkg-blob pkg-bb" />
 
@@ -259,9 +251,6 @@ export default function PackagesPage() {
         <section className="pkg-cta">
           <div className="pkg-blob pkg-ba" />
           <div className="pkg-blob pkg-bb" />
-          <svg className="pkg-grid" aria-hidden="true">
-            <rect width="100%" height="100%" fill="url(#pgrid)" />
-          </svg>
           <div className="pkg-cta-inner">
             <h2 className="pkg-cta-h2">Still deciding? Start free.</h2>
             <p className="pkg-cta-sub">3 months, unlimited papers, zero cost — no card needed.</p>
@@ -283,40 +272,41 @@ export default function PackagesPage() {
 
         /* ── hero ─────────────────────────── */
         .pkg-hero {
-          background: linear-gradient(145deg,#0f2452 0%,#1e4fa6 48%,#0d6b60 100%);
+          background: linear-gradient(135deg,#dbeafe 0%,#eef6ff 45%,#ccfbf1 100%);
           padding: 5.5rem 1.5rem 4rem;
           position: relative; overflow: hidden; text-align: center;
         }
         .pkg-grid { position:absolute;inset:0;width:100%;height:100%;pointer-events:none; }
         .pkg-blob { position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none; }
-        .pkg-ba { width:500px;height:500px;background:rgba(100,210,190,0.13);top:-150px;right:-80px; }
-        .pkg-bb { width:380px;height:380px;background:rgba(30,79,166,0.18);bottom:-120px;left:-60px; }
+        .pkg-ba { width:500px;height:500px;background:rgba(27,166,153,0.32);top:-150px;right:-80px; }
+        .pkg-bb { width:380px;height:380px;background:rgba(7,62,140,0.24);bottom:-120px;left:-60px; }
 
         .pkg-hero-inner { position:relative;z-index:1;max-width:700px;margin:0 auto; }
         .pkg-eyebrow {
           display:inline-flex;align-items:center;
           font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
-          color:#6ee7b7;background:rgba(110,231,183,0.1);border:1px solid rgba(110,231,183,0.28);
+          color:#1ba699;background:rgba(27,166,153,0.12);border:1px solid rgba(27,166,153,0.35);
           border-radius:999px;padding:4px 14px;margin-bottom:1rem;
         }
         .pkg-hero-h1 {
-          font-size:clamp(2rem,4vw,3rem);font-weight:800;color:#e8eef8;
+          font-size:clamp(2rem,4vw,3rem);font-weight:800;color:var(--text-main,#0f172a);
           line-height:1.15;letter-spacing:-0.025em;margin-bottom:1rem;
         }
         .pkg-grad {
-          background:linear-gradient(90deg,#6ee7b7,#93c5fd);
+          background:linear-gradient(90deg,var(--brand-primary,#073e8c),var(--brand-accent,#1ba699));
           -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
         }
-        .pkg-hero-sub { font-size:1rem;color:rgba(220,232,255,0.68);margin-bottom:2rem; }
+        .pkg-hero-sub { font-size:1rem;color:var(--text-secondary,#334155);margin-bottom:2rem; }
 
         .pkg-trust-row {
           display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;
         }
         .pkg-trust-pill {
           display:inline-flex;align-items:center;gap:6px;
-          background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);
+          background:#fff;border:1px solid var(--border-subtle,#e2e8f0);
           border-radius:999px;padding:5px 14px;
-          font-size:0.78rem;font-weight:600;color:rgba(220,232,255,0.82);
+          font-size:0.78rem;font-weight:600;color:var(--text-secondary,#334155);
+          box-shadow:var(--shadow-xs);
         }
 
         /* ── trial bar ────────────────────── */
@@ -328,12 +318,14 @@ export default function PackagesPage() {
           font-size:0.88rem;color:#78350f;
         }
         .pkg-trial-icon { font-size:1.2rem; }
-        .pkg-trial-btn {
+        /* :global() is required — styled-jsx doesn't scope next/link's
+           rendered <a>, only native lowercase JSX elements. */
+        :global(.pkg-trial-btn) {
           background:#1e4fa6;color:#fff;font-weight:700;font-size:0.82rem;
           padding:5px 16px;border-radius:999px;text-decoration:none;
           transition:opacity 0.18s;flex-shrink:0;
         }
-        .pkg-trial-btn:hover { opacity:0.88;color:#fff;text-decoration:none; }
+        :global(.pkg-trial-btn):hover { opacity:0.88;color:#fff;text-decoration:none; }
 
         /* ── cards section ────────────────── */
         .pkg-section { padding:4rem 0 5rem;background:#f5f7fb; }
@@ -402,14 +394,14 @@ export default function PackagesPage() {
           font-size:0.84rem;color:#374151;
         }
 
-        .pkg-card-btn {
+        :global(.pkg-card-btn) {
           display:flex;align-items:center;justify-content:center;gap:7px;
           width:100%;padding:0.72rem 1rem;border-radius:11px;
           font-weight:700;font-size:0.9rem;text-decoration:none;
           transition:transform 0.18s,box-shadow 0.18s,opacity 0.18s;
           box-shadow:0 2px 8px rgba(0,0,0,0.1);
         }
-        .pkg-card-btn:hover { transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.15);text-decoration:none; }
+        :global(.pkg-card-btn):hover { transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.15);text-decoration:none; }
 
         .pkg-note {
           text-align:center;font-size:0.72rem;color:#94a3b8;margin:0.7rem 0 0;
@@ -434,24 +426,26 @@ export default function PackagesPage() {
         .pkg-empty p { color:#64748b;margin-bottom:1.5rem; }
 
         /* ── buttons ──────────────────────── */
-        .pkg-btn-primary {
+        /* :global() is required — styled-jsx doesn't scope next/link's
+           rendered <a>, only native lowercase JSX elements. */
+        :global(.pkg-btn-primary) {
           display:inline-flex;align-items:center;gap:8px;
-          background:linear-gradient(135deg,#fff,#e0f0ff);
-          color:#1e4fa6;font-weight:700;font-size:0.9rem;
+          background:linear-gradient(135deg,var(--brand-primary,#073e8c),var(--brand-accent,#1ba699));
+          color:#fff;font-weight:700;font-size:0.9rem;
           padding:0.75rem 1.8rem;border-radius:10px;
-          text-decoration:none;box-shadow:0 4px 18px rgba(0,0,0,0.16);
+          text-decoration:none;box-shadow:0 6px 18px -4px rgba(7,62,140,0.45);
           transition:transform 0.18s,box-shadow 0.18s;
         }
-        .pkg-btn-primary:hover { transform:translateY(-2px);box-shadow:0 8px 26px rgba(0,0,0,0.2);color:#1e4fa6;text-decoration:none; }
+        :global(.pkg-btn-primary):hover { transform:translateY(-2px);box-shadow:0 10px 26px -4px rgba(7,62,140,0.5);color:#fff;text-decoration:none; }
 
-        .pkg-btn-ghost {
+        :global(.pkg-btn-ghost) {
           display:inline-flex;align-items:center;gap:7px;
-          background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.25);
-          color:rgba(255,255,255,0.88);font-weight:600;font-size:0.9rem;
+          background:transparent;border:1.5px solid var(--border-medium,#cbd5e1);
+          color:var(--text-main,#0f172a);font-weight:600;font-size:0.9rem;
           padding:0.75rem 1.8rem;border-radius:10px;text-decoration:none;
-          transition:background 0.18s;
+          transition:background 0.18s,border-color 0.18s,color 0.18s;
         }
-        .pkg-btn-ghost:hover { background:rgba(255,255,255,0.18);color:#fff;text-decoration:none; }
+        :global(.pkg-btn-ghost):hover { background:var(--brand-primary-50,#eff6ff);border-color:var(--brand-primary,#073e8c);color:var(--brand-primary,#073e8c);text-decoration:none; }
 
         /* ── how it works strip ───────────── */
         .pkg-how {
@@ -474,16 +468,16 @@ export default function PackagesPage() {
 
         /* ── bottom cta ───────────────────── */
         .pkg-cta {
-          background:linear-gradient(145deg,#0f2452 0%,#1e4fa6 50%,#0d6b60 100%);
+          background:linear-gradient(135deg,#dbeafe 0%,#eef6ff 45%,#ccfbf1 100%);
           padding:5rem 1.5rem;text-align:center;
           position:relative;overflow:hidden;
         }
         .pkg-cta-inner { position:relative;z-index:1;max-width:560px;margin:0 auto; }
         .pkg-cta-h2 {
           font-size:clamp(1.7rem,3.5vw,2.5rem);font-weight:800;
-          color:#e8eef8;letter-spacing:-0.025em;margin-bottom:0.7rem;
+          color:var(--text-main,#0f172a);letter-spacing:-0.025em;margin-bottom:0.7rem;
         }
-        .pkg-cta-sub { font-size:0.95rem;color:rgba(220,232,255,0.62);margin-bottom:2rem; }
+        .pkg-cta-sub { font-size:0.95rem;color:var(--text-secondary,#334155);margin-bottom:2rem; }
         .pkg-cta-btns { display:flex;gap:1rem;justify-content:center;flex-wrap:wrap; }
 
         /* ── responsive ───────────────────── */

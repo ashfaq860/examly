@@ -95,14 +95,14 @@ export default function AcademyDashboard() {
             setIsAuthorized(true);
             setIsLoading(false);
             supabase.auth.getUser().then(({ data: { user } }) => {
-              if (!user) router.push('/auth/login');
+              if (!user) window.location.href = '/auth/login';
             });
             return;
           }
         }
 
         const { data: { user }, error } = await supabase.auth.getUser();
-        if (error || !user) { router.push('/auth/login'); return; }
+        if (error || !user) { window.location.href = '/auth/login'; return; }
 
         const { data: role } = await supabase.rpc('get_user_role', { user_id: user.id });
         if (role !== 'teacher') { router.push('/'); return; }
@@ -129,7 +129,7 @@ export default function AcademyDashboard() {
         localStorage.setItem(CACHE_KEY, JSON.stringify({ data: freshData, timestamp: Date.now() }));
       } catch (err) {
         console.error('Dashboard error:', err);
-        router.push('/auth/login');
+        window.location.href = '/auth/login';
       } finally {
         setIsLoading(false);
         hasFetched.current = true;

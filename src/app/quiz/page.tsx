@@ -38,15 +38,15 @@ export default function QuizHome() {
       <Header />
       <div className="container pt-header pb-2"><BreadcrumbAuto /></div>
       {/* Hero */}
-      <div style={{ background: "linear-gradient(135deg,#073e8c 0%,#0e7a71 100%)", paddingTop: 40 }}>
-        <div className="container text-center text-white py-5">
-          <div style={{ display:"inline-flex", alignItems:"center", gap:10, background:"rgba(255,255,255,0.12)", borderRadius:999, padding:"6px 18px", fontSize:"0.8rem", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:20, border:"1px solid rgba(255,255,255,0.2)" }}>
+      <div style={{ background: "linear-gradient(135deg,#dbeafe 0%,#eef6ff 45%,#ccfbf1 100%)", paddingTop: 40 }}>
+        <div className="container text-center py-5">
+          <div style={{ display:"inline-flex", alignItems:"center", gap:10, background:"rgba(27,166,153,0.12)", borderRadius:999, padding:"6px 18px", fontSize:"0.8rem", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:20, border:"1px solid rgba(27,166,153,0.35)", color:"#1ba699" }}>
             📝 Online Quiz System
           </div>
-          <h1 style={{ fontSize:"clamp(2rem,5vw,3.2rem)", fontWeight:800, marginBottom:12, letterSpacing:"-0.02em" }}>
+          <h1 style={{ fontSize:"clamp(2rem,5vw,3.2rem)", fontWeight:800, marginBottom:12, letterSpacing:"-0.02em", color:"var(--text-main)" }}>
             Practice Smarter, Score Higher
           </h1>
-          <p style={{ fontSize:"1.1rem", opacity:0.85, maxWidth:520, margin:"0 auto 0" }}>
+          <p style={{ fontSize:"1.1rem", maxWidth:520, margin:"0 auto 0", color:"var(--text-secondary)" }}>
             Chapter-wise quizzes &amp; full subject tests for classes 5 to 12 — BISE pattern, instant results.
           </p>
         </div>

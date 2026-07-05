@@ -93,6 +93,7 @@ export default function HomeClientWrapper() {
                 href="/auth/login"
                 ctaLabel="Start Creating"
                 delay={0}
+                theme="teal"
               />
               <FeatureCard
                 img="/1monthfree.jpg"
@@ -108,6 +109,7 @@ export default function HomeClientWrapper() {
                 href="/auth/signup"
                 ctaLabel="Claim Free Access"
                 delay={150}
+                theme="amber"
                 highlight
               />
               <FeatureCard
@@ -119,19 +121,22 @@ export default function HomeClientWrapper() {
                   'Papers exactly in official BISE board format',
                   'Auto generation by syllabus and chapters',
                   'Manual customization available',
-                  'Instant download — print-ready A4 format',
+                  'Instant download — print-ready A4,Legal format',
                 ]}
                 href="/auth/login"
                 ctaLabel="Try Board Pattern"
                 delay={300}
+                theme="blue"
               />
             </div>
           </div>
         </section>
 
         {/* ═══ PAPER LAYOUTS SECTION ═══ */}
-        <section data-animate className="scroll-animate" style={{ padding: '5rem 0', background: 'var(--surface-muted)' }}>
-          <div className="container">
+        <section data-animate className="scroll-animate paper-layouts-section" style={{ padding: '5rem 0', background: 'var(--surface-muted)', position: 'relative', overflow: 'hidden' }}>
+          <div className="section-blob section-blob-1" aria-hidden="true" />
+          <div className="section-blob section-blob-2" aria-hidden="true" />
+          <div className="container" style={{ position: 'relative' }}>
             <div style={{ textAlign: 'center', marginBottom: '3rem' }} data-animate>
               <span className="section-eyebrow">Paper Layouts</span>
               <h2 className="section-title" style={{ marginTop: '0.6rem', marginBottom: '1rem' }}>
@@ -148,24 +153,28 @@ export default function HomeClientWrapper() {
                 description="Distinct MCQ sheet and subjective paper — ideal for board-style exams."
                 youtubeId="YOUTUBE_ID_1"
                 delay={0}
+                theme="blue"
               />
               <PaperLayoutCard
                 title="Combined Single Paper"
                 description="MCQs and subjective questions on one sheet for streamlined exams."
                 youtubeId="YOUTUBE_ID_2"
                 delay={150}
+                theme="teal"
               />
               <PaperLayoutCard
                 title="Two Per Page"
                 description="Front page MCQs + back page subjective — saves paper, perfect for class tests."
                 youtubeId="YOUTUBE_ID_3"
                 delay={300}
+                theme="amber"
               />
               <PaperLayoutCard
                 title="Three Per Page"
                 description="Three mini-papers per page for quick assessments and save on printing."
                 youtubeId="YOUTUBE_ID_4"
                 delay={450}
+                theme="skyblue"
               />
             </div>
           </div>
@@ -193,6 +202,7 @@ export default function HomeClientWrapper() {
                 btn="Start Practice"
                 link="/quiz"
                 delay={0}
+                theme="teal"
               />
               <StudentCard
                 img="/mockTest.jpg"
@@ -201,6 +211,7 @@ export default function HomeClientWrapper() {
                 description="Full-length mock exams to simulate real BISE conditions. Track performance and boost your score."
                 btn="Try Mock Test"
                 delay={150}
+                theme="amber"
               />
               <StudentCard
                 img="/checkPerformance.jpg"
@@ -209,6 +220,7 @@ export default function HomeClientWrapper() {
                 description="Detailed analytics to identify weak areas, track progress, and improve results before the final exam."
                 btn="View Analytics"
                 delay={300}
+                theme="blue"
               />
             </div>
           </div>
@@ -216,6 +228,16 @@ export default function HomeClientWrapper() {
       </main>
 
       <style jsx>{`
+        .section-blob {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(80px);
+          pointer-events: none;
+          z-index: 0;
+        }
+        .section-blob-1 { width: 420px; height: 420px; top: -160px; right: -100px; background: rgba(27,166,153,0.10); }
+        .section-blob-2 { width: 380px; height: 380px; bottom: -160px; left: -100px; background: rgba(7,62,140,0.08); }
+
         .feature-card-inner {
           background: #fff;
           border: 1px solid var(--border-subtle);
@@ -230,11 +252,11 @@ export default function HomeClientWrapper() {
           box-shadow: var(--shadow-lg);
         }
         .feature-card-inner.highlight {
-          border-color: rgba(27,166,153,0.3);
-          box-shadow: 0 0 0 3px rgba(27,166,153,0.08), var(--shadow-sm);
+          border-color: var(--card-ring-border, rgba(27,166,153,0.3));
+          box-shadow: 0 0 0 3px var(--card-ring-glow, rgba(27,166,153,0.08)), var(--shadow-sm);
         }
         .feature-card-inner.highlight:hover {
-          box-shadow: 0 0 0 3px rgba(27,166,153,0.12), var(--shadow-lg);
+          box-shadow: 0 0 0 3px var(--card-ring-glow-hover, rgba(27,166,153,0.12)), var(--shadow-lg);
         }
 
         .paper-card-inner {
@@ -249,7 +271,7 @@ export default function HomeClientWrapper() {
         .paper-card-inner:hover {
           transform: translateY(-4px);
           box-shadow: var(--shadow-md);
-          border-color: var(--brand-accent);
+          border-color: var(--card-hover-border, var(--brand-accent));
         }
 
         .student-card-inner {
@@ -272,9 +294,43 @@ export default function HomeClientWrapper() {
 
 /* ═══ REUSABLE COMPONENTS ═══ */
 
+/* Shared accent themes — mirrors the hero slider's per-slide colors
+   (teal/amber/sky-blue) so the palette reads as one system across the page. */
+const THEMES: Record<string, { solid: string; gradient: string; ringBorder: string; ringGlow: string; ringGlowHover: string }> = {
+  teal: {
+    solid: '#1ba699',
+    gradient: 'linear-gradient(135deg, #1ba699, #0e7a71)',
+    ringBorder: 'rgba(27,166,153,0.3)',
+    ringGlow: 'rgba(27,166,153,0.08)',
+    ringGlowHover: 'rgba(27,166,153,0.12)',
+  },
+  amber: {
+    solid: '#f59e0b',
+    gradient: 'linear-gradient(135deg, #f59e0b, #d97706)',
+    ringBorder: 'rgba(245,158,11,0.3)',
+    ringGlow: 'rgba(245,158,11,0.08)',
+    ringGlowHover: 'rgba(245,158,11,0.12)',
+  },
+  blue: {
+    solid: 'var(--brand-primary)',
+    gradient: 'linear-gradient(135deg, var(--brand-primary), #0a51b5)',
+    ringBorder: 'rgba(7,62,140,0.25)',
+    ringGlow: 'rgba(7,62,140,0.07)',
+    ringGlowHover: 'rgba(7,62,140,0.11)',
+  },
+  skyblue: {
+    solid: '#2aa7ff',
+    gradient: 'linear-gradient(135deg, #2aa7ff, #0369a1)',
+    ringBorder: 'rgba(42,167,255,0.3)',
+    ringGlow: 'rgba(42,167,255,0.08)',
+    ringGlowHover: 'rgba(42,167,255,0.12)',
+  },
+};
+
 const FeatureCard = memo(function FeatureCard({
-  img, eyebrow, title, subtitle, list, href, ctaLabel, delay, highlight,
+  img, eyebrow, title, subtitle, list, href, ctaLabel, delay, highlight, theme = 'blue',
 }: any) {
+  const t = THEMES[theme] || THEMES.blue;
   return (
     <div className="col-md-4">
       <div
@@ -282,7 +338,15 @@ const FeatureCard = memo(function FeatureCard({
         style={{ transitionDelay: `${delay}ms`, height: '100%' }}
         className="scroll-animate zoom-in"
       >
-        <div className={`feature-card-inner ${highlight ? 'highlight' : ''}`}>
+        <div
+          className={`feature-card-inner ${highlight ? 'highlight' : ''}`}
+          style={{
+            '--card-ring-border': t.ringBorder,
+            '--card-ring-glow': t.ringGlow,
+            '--card-ring-glow-hover': t.ringGlowHover,
+          } as React.CSSProperties}
+        >
+          <div style={{ height: 4, background: t.gradient }} />
           <div style={{ position: 'relative', overflow: 'hidden', aspectRatio: '1 / 1' }}>
             <Image
               src={img}
@@ -298,7 +362,7 @@ const FeatureCard = memo(function FeatureCard({
             {highlight && (
               <div style={{
                 position: 'absolute', top: 12, right: 12,
-                background: 'linear-gradient(135deg, #1ba699, #0e7a71)',
+                background: t.gradient,
                 color: '#fff', fontSize: '0.7rem', fontWeight: 700,
                 padding: '3px 10px', borderRadius: 99,
                 letterSpacing: '0.04em',
@@ -308,7 +372,7 @@ const FeatureCard = memo(function FeatureCard({
             )}
           </div>
           <div style={{ padding: '1.4rem' }}>
-            <span className="section-eyebrow" style={{ display: 'block', marginBottom: 6 }}>{eyebrow}</span>
+            <span className="section-eyebrow" style={{ display: 'block', marginBottom: 6, color: t.solid }}>{eyebrow}</span>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 4, color: 'var(--text-main)' }}>{title}</h3>
             <p style={{ fontSize: '0.82rem', color: 'var(--brand-primary)', fontWeight: 600, marginBottom: '0.85rem' }}>{subtitle}</p>
             <ul style={{ paddingLeft: '1.1rem', marginBottom: '1.25rem', color: 'var(--text-muted)' }}>
@@ -322,9 +386,7 @@ const FeatureCard = memo(function FeatureCard({
                 display: 'block', textAlign: 'center',
                 padding: '0.6rem 1rem', borderRadius: 'var(--radius-md)',
                 fontWeight: 700, fontSize: '0.875rem', textDecoration: 'none',
-                background: highlight
-                  ? 'linear-gradient(135deg, #1ba699, #0e7a71)'
-                  : 'linear-gradient(135deg, var(--brand-primary), #0a51b5)',
+                background: t.gradient,
                 color: '#fff',
                 transition: 'opacity 0.2s, transform 0.2s',
                 boxShadow: '0 2px 8px rgba(7,62,140,0.2)',
@@ -381,7 +443,8 @@ const LazyYoutubeEmbed = memo(function LazyYoutubeEmbed({ youtubeId, title }: an
   );
 });
 
-const PaperLayoutCard = memo(function PaperLayoutCard({ title, description, youtubeId, delay }: any) {
+const PaperLayoutCard = memo(function PaperLayoutCard({ title, description, youtubeId, delay, theme = 'blue' }: any) {
+  const t = THEMES[theme] || THEMES.blue;
   return (
     <div className="col-md-6 col-lg-3">
       <div
@@ -389,7 +452,8 @@ const PaperLayoutCard = memo(function PaperLayoutCard({ title, description, yout
         style={{ transitionDelay: `${delay}ms`, height: '100%' }}
         className="scroll-animate zoom-in"
       >
-        <div className="paper-card-inner">
+        <div className="paper-card-inner" style={{ '--card-hover-border': t.solid } as React.CSSProperties}>
+          <div style={{ height: 4, background: t.gradient }} />
           <LazyYoutubeEmbed youtubeId={youtubeId} title={title} />
           <div style={{ padding: '1rem 1.1rem 1.25rem' }}>
             <h5 style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 6, color: 'var(--text-main)' }}>{title}</h5>
@@ -401,8 +465,9 @@ const PaperLayoutCard = memo(function PaperLayoutCard({ title, description, yout
   );
 });
 
-const StudentCard = memo(function StudentCard({ img, eyebrow, title, description, btn, delay, link = null }: any) {
+const StudentCard = memo(function StudentCard({ img, eyebrow, title, description, btn, delay, link = null, theme = 'teal' }: any) {
   const router = useRouter();
+  const t = THEMES[theme] || THEMES.teal;
   const handleClick = useCallback(() => {
     if (link) router.push(link);
     else toast.success('Coming soon!');
@@ -416,6 +481,7 @@ const StudentCard = memo(function StudentCard({ img, eyebrow, title, description
         className="scroll-animate fade-up"
       >
         <div className="student-card-inner">
+          <div style={{ height: 4, background: t.gradient }} />
           <Image
             src={img}
             alt={title}
@@ -427,7 +493,7 @@ const StudentCard = memo(function StudentCard({ img, eyebrow, title, description
             style={{ width: '100%', height: 'auto', display: 'block' }}
           />
           <div style={{ padding: '1.4rem' }}>
-            <span className="section-eyebrow" style={{ display: 'block', marginBottom: 6 }}>{eyebrow}</span>
+            <span className="section-eyebrow" style={{ display: 'block', marginBottom: 6, color: t.solid }}>{eyebrow}</span>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.6rem', color: 'var(--text-main)' }}>{title}</h3>
             <p style={{ fontSize: '0.83rem', color: 'var(--text-muted)', lineHeight: 1.65, marginBottom: '1.1rem' }}>{description}</p>
             <button
@@ -435,7 +501,7 @@ const StudentCard = memo(function StudentCard({ img, eyebrow, title, description
               style={{
                 padding: '0.55rem 1.2rem', border: 'none',
                 borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                background: 'linear-gradient(135deg, var(--brand-accent), var(--brand-accent-600))',
+                background: t.gradient,
                 color: '#fff', fontWeight: 700, fontSize: '0.85rem',
                 fontFamily: 'inherit',
                 transition: 'opacity 0.2s, transform 0.2s',

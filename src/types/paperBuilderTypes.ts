@@ -31,6 +31,25 @@ export interface PaperSettings {
   watermarkWidth?: number;
   watermarkHeight?: number;
   watermarkOpacity?: number;
+  /** Physical page size for the generated sheet(s). Defaults to 'a4'. */
+  pageSize?: 'a4' | 'legal';
+  /** Blank ruled lines under short/long questions for students to write answers.
+   *  Only applied on single-paper-per-sheet layouts (separate/same_page) — the
+   *  2/3/4-papers-per-page layouts use fixed-height slots with no room to spare. */
+  showAnswerLines?: boolean;
+  /** Number of ruled answer lines under a short-type question. Defaults to 4. */
+  answerLinesShort?: number;
+  /** Number of ruled answer lines under a long-type question. Defaults to 5. */
+  answerLinesLong?: number;
+  /** Height (mm) of each ruled answer line's writing space. Defaults to 6. */
+  answerLineGapMm?: number;
+  /** Standalone OMR answer-bubble sheet for MCQs — one row per question
+   *  number, each with horizontal (A)(B)(C)(D) bubbles to shade, sitting
+   *  right after the paper header and before the MCQ questions start. Only
+   *  applied on single-paper-per-sheet layouts (separate/same_page), same
+   *  reasoning as showAnswerLines — the 2/3/4-papers-per-page mini-slots
+   *  have no room. */
+  showMcqBubbleSheet?: boolean;
 }
 
 export interface LanguageConfig {

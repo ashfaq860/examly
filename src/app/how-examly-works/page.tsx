@@ -71,15 +71,6 @@ export default function HowItWorks() {
 
         {/* ══ HERO ══════════════════════════════════════════ */}
         <section className="hiw-hero">
-          {/* background grid */}
-          <svg className="hiw-hero-grid" aria-hidden="true">
-            <defs>
-              <pattern id="hgrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M40 0L0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#hgrid)" />
-          </svg>
           <div className="hiw-blob hiw-ba" />
           <div className="hiw-blob hiw-bb" />
 
@@ -232,6 +223,11 @@ export default function HowItWorks() {
         {/* ══ REFERRAL ══════════════════════════════════════ */}
         <section className="hiw-section hiw-sec-brand">
           <svg className="hiw-hero-grid" aria-hidden="true">
+            <defs>
+              <pattern id="hgrid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M40 0L0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
+              </pattern>
+            </defs>
             <rect width="100%" height="100%" fill="url(#hgrid)" />
           </svg>
           <div className="hiw-blob hiw-ba" style={{ opacity: 0.12 }} />
@@ -298,11 +294,8 @@ export default function HowItWorks() {
         <section className="hiw-final">
           <div className="hiw-blob hiw-ba" />
           <div className="hiw-blob hiw-bb" />
-          <svg className="hiw-hero-grid" aria-hidden="true">
-            <rect width="100%" height="100%" fill="url(#hgrid)" />
-          </svg>
           <div className="hiw-final-inner">
-            <div className="hiw-eyebrow" style={{ color: '#6ee7b7', borderColor: 'rgba(110,231,183,0.3)', background: 'rgba(110,231,183,0.1)' }}>
+            <div className="hiw-eyebrow">
               Start Today
             </div>
             <h2 className="hiw-final-h2">Join 5,000+ educators already<br />using Examly</h2>
@@ -338,13 +331,13 @@ export default function HowItWorks() {
           display: inline-flex; align-items: center;
           font-size: 0.7rem; font-weight: 700;
           letter-spacing: 0.1em; text-transform: uppercase;
-          color: #1e4fa6;
-          background: rgba(30,79,166,0.08);
-          border: 1px solid rgba(30,79,166,0.2);
+          color: #1ba699;
+          background: rgba(27,166,153,0.12);
+          border: 1px solid rgba(27,166,153,0.35);
           border-radius: 999px; padding: 4px 14px;
           margin-bottom: 1rem;
         }
-        .hiw-ey-dark { color: #1e4fa6; }
+        .hiw-ey-dark { color: #1e4fa6; background: rgba(30,79,166,0.08); border-color: rgba(30,79,166,0.2); }
         .hiw-h2 {
           font-size: clamp(1.7rem, 3vw, 2.4rem);
           font-weight: 800; color: #0f172a;
@@ -354,7 +347,7 @@ export default function HowItWorks() {
 
         /* ── hero ─────────────────────────────────── */
         .hiw-hero {
-          background: linear-gradient(145deg, #0f2452 0%, #1e4fa6 48%, #0d6b60 100%);
+          background: linear-gradient(135deg, #dbeafe 0%, #eef6ff 45%, #ccfbf1 100%);
           position: relative; overflow: hidden;
           padding: 6rem 1.5rem 5rem;
         }
@@ -365,8 +358,8 @@ export default function HowItWorks() {
         .hiw-blob {
           position: absolute; border-radius: 50%; filter: blur(90px); pointer-events: none;
         }
-        .hiw-ba { width:500px; height:500px; background:rgba(100,210,190,0.15); top:-150px; right:-100px; }
-        .hiw-bb { width:380px; height:380px; background:rgba(30,79,166,0.2); bottom:-120px; left:-80px; }
+        .hiw-ba { width:500px; height:500px; background:rgba(27,166,153,0.32); top:-150px; right:-100px; }
+        .hiw-bb { width:380px; height:380px; background:rgba(7,62,140,0.24); bottom:-120px; left:-80px; }
 
         .hiw-hero-inner {
           max-width: 1120px; margin: 0 auto;
@@ -378,67 +371,70 @@ export default function HowItWorks() {
 
         .hiw-hero-h1 {
           font-size: clamp(2.2rem, 4vw, 3.4rem);
-          font-weight: 800; color: #e8eef8;
+          font-weight: 800; color: var(--text-main, #0f172a);
           line-height: 1.12; letter-spacing: -0.03em;
           margin-bottom: 1.2rem;
         }
         .hiw-grad-text {
-          background: linear-gradient(90deg, #6ee7b7, #93c5fd);
+          background: linear-gradient(90deg, var(--brand-primary, #073e8c), var(--brand-accent, #1ba699));
           -webkit-background-clip: text; -webkit-text-fill-color: transparent;
           background-clip: text;
         }
         .hiw-hero-sub {
-          font-size: 1rem; color: rgba(220,232,255,0.7);
+          font-size: 1rem; color: var(--text-secondary, #334155);
           line-height: 1.7; margin-bottom: 2rem; max-width: 480px;
         }
 
         /* stat row */
         .hiw-stat-row {
           display: flex; gap: 0; margin-bottom: 2.2rem;
-          background: rgba(255,255,255,0.08);
-          border: 1px solid rgba(255,255,255,0.12);
+          background: #fff;
+          border: 1px solid var(--border-subtle, #e2e8f0);
           border-radius: 14px; overflow: hidden;
           max-width: 420px;
+          box-shadow: var(--shadow-sm);
         }
         .hiw-stat-pill {
           flex: 1; text-align: center; padding: 0.8rem 0.5rem;
-          border-right: 1px solid rgba(255,255,255,0.1);
+          border-right: 1px solid var(--border-subtle, #e2e8f0);
           display: flex; flex-direction: column; gap: 2px;
         }
         .hiw-stat-pill:last-child { border-right: none; }
-        .hiw-stat-v { font-size: 1.3rem; font-weight: 800; color: #fff; }
-        .hiw-stat-l { font-size: 0.62rem; font-weight: 600; color: rgba(220,232,255,0.55); text-transform: uppercase; letter-spacing: 0.06em; }
+        .hiw-stat-v { font-size: 1.3rem; font-weight: 800; color: var(--text-main, #0f172a); }
+        .hiw-stat-l { font-size: 0.62rem; font-weight: 600; color: var(--text-muted, #64748b); text-transform: uppercase; letter-spacing: 0.06em; }
 
         /* ctas */
         .hiw-hero-ctas { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
-        .hiw-fine { font-size: 0.75rem; color: rgba(220,232,255,0.45); margin: 0; }
+        .hiw-fine { font-size: 0.75rem; color: var(--text-faint, #94a3b8); margin: 0; }
 
         /* ── buttons ──────────────────────────────── */
-        .hiw-btn-primary {
+        /* :global() is required — styled-jsx doesn't scope next/link's
+           rendered <a>, only native lowercase JSX elements. */
+        :global(.hiw-btn-primary) {
           display: inline-flex; align-items: center; gap: 8px;
-          background: linear-gradient(135deg, #fff 0%, #e0f0ff 100%);
-          color: #1e4fa6; font-weight: 700; font-size: 0.9rem;
+          background: linear-gradient(135deg, var(--brand-primary, #073e8c), var(--brand-accent, #1ba699));
+          color: #fff; font-weight: 700; font-size: 0.9rem;
           padding: 0.7rem 1.5rem; border-radius: 10px; border: none;
           text-decoration: none; cursor: pointer;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+          box-shadow: 0 6px 20px -4px rgba(7,62,140,0.45);
           transition: transform 0.18s, box-shadow 0.18s;
         }
-        .hiw-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,0.22); color: #1e4fa6; text-decoration: none; }
-        .hiw-btn-lg { font-size: 1rem; padding: 0.85rem 2rem; }
+        :global(.hiw-btn-primary):hover { transform: translateY(-2px); box-shadow: 0 10px 28px -4px rgba(7,62,140,0.5); color: #fff; text-decoration: none; }
+        :global(.hiw-btn-lg) { font-size: 1rem; padding: 0.85rem 2rem; }
 
-        .hiw-btn-ghost {
+        :global(.hiw-btn-ghost) {
           display: inline-flex; align-items: center; gap: 7px;
-          background: rgba(255,255,255,0.1);
-          border: 1.5px solid rgba(255,255,255,0.25);
-          color: rgba(255,255,255,0.88); font-weight: 600; font-size: 0.9rem;
+          background: transparent;
+          border: 1.5px solid var(--border-medium, #cbd5e1);
+          color: var(--text-main, #0f172a); font-weight: 600; font-size: 0.9rem;
           padding: 0.7rem 1.5rem; border-radius: 10px;
           text-decoration: none; cursor: pointer;
-          transition: background 0.18s, border-color 0.18s;
+          transition: background 0.18s, border-color 0.18s, color 0.18s;
         }
-        .hiw-btn-ghost:hover { background: rgba(255,255,255,0.18); color: #fff; text-decoration: none; }
-        .hiw-btn-ghost.hiw-btn-lg { font-size: 1rem; padding: 0.85rem 2rem; }
+        :global(.hiw-btn-ghost):hover { background: var(--brand-primary-50, #eff6ff); border-color: var(--brand-primary, #073e8c); color: var(--brand-primary, #073e8c); text-decoration: none; }
+        :global(.hiw-btn-ghost.hiw-btn-lg) { font-size: 1rem; padding: 0.85rem 2rem; }
 
-        .hiw-btn-outline {
+        :global(.hiw-btn-outline) {
           display: inline-flex; align-items: center; gap: 7px;
           background: #fff; border: 1.5px solid #e2e8f0;
           color: #1e4fa6; font-weight: 600; font-size: 0.9rem;
@@ -446,7 +442,7 @@ export default function HowItWorks() {
           text-decoration: none; cursor: pointer;
           transition: border-color 0.18s, box-shadow 0.18s;
         }
-        .hiw-btn-outline:hover { border-color: #1e4fa6; box-shadow: 0 2px 8px rgba(30,79,166,0.12); color: #1e4fa6; text-decoration: none; }
+        :global(.hiw-btn-outline):hover { border-color: #1e4fa6; box-shadow: 0 2px 8px rgba(30,79,166,0.12); color: #1e4fa6; text-decoration: none; }
 
         /* ── paper mockup ─────────────────────────── */
         .hiw-paper {
@@ -596,17 +592,17 @@ export default function HowItWorks() {
 
         /* ── final cta ────────────────────────────── */
         .hiw-final {
-          background: linear-gradient(145deg,#0f2452 0%,#1e4fa6 50%,#0d6b60 100%);
+          background: linear-gradient(135deg,#dbeafe 0%,#eef6ff 45%,#ccfbf1 100%);
           padding: 6rem 1.5rem; text-align: center;
           position: relative; overflow: hidden;
         }
         .hiw-final-inner { position: relative; z-index: 1; max-width: 680px; margin: 0 auto; }
         .hiw-final-h2 {
           font-size: clamp(1.8rem, 3.5vw, 2.8rem);
-          font-weight: 800; color: #e8eef8;
+          font-weight: 800; color: var(--text-main, #0f172a);
           line-height: 1.2; letter-spacing: -0.025em; margin-bottom: 1rem;
         }
-        .hiw-final-sub { font-size: 0.92rem; color: rgba(220,232,255,0.6); margin-bottom: 2.2rem; }
+        .hiw-final-sub { font-size: 0.92rem; color: var(--text-secondary, #334155); margin-bottom: 2.2rem; }
         .hiw-final-btns { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
 
         /* ── responsive ───────────────────────────── */

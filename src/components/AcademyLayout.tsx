@@ -2,7 +2,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   LayoutDashboard, FilePlus, Archive, Gem, UserCircle,
@@ -19,7 +19,6 @@ let cachedUser: any = null;
 
 export default function AcademyLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<any>(cachedUser);
@@ -48,7 +47,7 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
     cachedUser = null;
     hasFetchedUser.current = false;
     await supabase.auth.signOut();
-    router.push("/auth/login");
+    window.location.href = "/auth/login";
   };
 
   const sidebarLinks = useMemo(() => [

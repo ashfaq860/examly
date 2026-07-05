@@ -15,10 +15,10 @@ const PANELS = {
     ],
     offer: null,
     features: [
-      { color: '#6ee7b7', text: 'AI-powered question selection' },
-      { color: '#93c5fd', text: 'Full-book, half-book & chapter-wise' },
-      { color: '#c4b5fd', text: 'BISE aligned — PTB syllabus' },
-      { color: '#fda4af', text: 'Instant PDF & Word download' },
+      { color: '#1ba699', text: 'AI-powered question selection' },
+      { color: '#2aa7ff', text: 'Full-book, half-book & chapter-wise' },
+      { color: '#7c3aed', text: 'BISE aligned — PTB syllabus' },
+      { color: '#db6c1e', text: 'Instant PDF download' },
     ],
     testimonial: {
       quote: '"I used to spend 2 hours on one paper. Examly does it in 3 minutes."',
@@ -42,10 +42,10 @@ const PANELS = {
     offer: {
       title: 'Everything included free',
       points: [
-        { color: '#6ee7b7', text: 'Unlimited paper generation' },
-        { color: '#6ee7b7', text: 'All classes & PTB subjects'  },
-        { color: '#6ee7b7', text: 'PDF + Word instant download' },
-        { color: '#fde68a', text: 'Refer friends → earn extra months' },
+        { color: '#1ba699', text: 'Unlimited paper generation' },
+        { color: '#1ba699', text: 'All classes & PTB subjects'  },
+        { color: '#1ba699', text: 'PDF instant download' },
+        { color: '#f59e0b', text: 'Refer friends → earn extra months' },
       ],
     },
     features: null,
@@ -66,14 +66,6 @@ export default function AuthLayout({ children, title, subtitle, mode = 'login' }
 
         {/* ══════ LEFT ══════ */}
         <div className="al-left">
-          <svg className="al-pattern" aria-hidden="true">
-            <defs>
-              <pattern id="aldots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-                <circle cx="1.5" cy="1.5" r="1" fill="rgba(255,255,255,0.06)" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#aldots)" />
-          </svg>
           <div className="al-blob al-blob-a" />
           <div className="al-blob al-blob-b" />
 
@@ -188,16 +180,9 @@ export default function AuthLayout({ children, title, subtitle, mode = 'login' }
           flex: 1 1 50%;
           position: relative;
           overflow: hidden;
-          background: linear-gradient(148deg,
-            #1c3565 0%,
-            #1e4fa6 42%,
-            #126f63 100%);
+          background: linear-gradient(135deg,#dbeafe 0%,#eef6ff 45%,#ccfbf1 100%);
           display: flex;
           align-items: center;
-        }
-        .al-pattern {
-          position: absolute; inset: 0; width: 100%; height: 100%;
-          pointer-events: none;
         }
         .al-blob {
           position: absolute; border-radius: 50%;
@@ -205,12 +190,12 @@ export default function AuthLayout({ children, title, subtitle, mode = 'login' }
         }
         .al-blob-a {
           width: 380px; height: 380px;
-          background: rgba(99,210,190,0.14);
+          background: rgba(27,166,153,0.32);
           top: -100px; right: -80px;
         }
         .al-blob-b {
           width: 300px; height: 300px;
-          background: rgba(30,79,166,0.2);
+          background: rgba(7,62,140,0.24);
           bottom: -80px; left: -50px;
         }
 
@@ -226,21 +211,21 @@ export default function AuthLayout({ children, title, subtitle, mode = 'login' }
           display: inline-flex; align-items: center; gap: 5px;
           font-size: 0.7rem; font-weight: 700;
           letter-spacing: 0.09em; text-transform: uppercase;
-          color: #6ee7b7;
-          background: rgba(110,231,183,0.1);
-          border: 1px solid rgba(110,231,183,0.28);
+          color: #1ba699;
+          background: rgba(27,166,153,0.12);
+          border: 1px solid rgba(27,166,153,0.35);
           border-radius: 999px; padding: 3px 11px;
           margin-bottom: 0.85rem;
         }
 
         .al-headline {
           font-size: clamp(1.7rem, 2.6vw, 2.2rem);
-          font-weight: 800; color: #e8eef8;
+          font-weight: 800; color: var(--text-main, #0f172a);
           line-height: 1.18; letter-spacing: -0.025em;
           margin-bottom: 0.7rem;
         }
         .al-hl {
-          background: linear-gradient(90deg,#6ee7b7,#93c5fd);
+          background: linear-gradient(90deg,var(--brand-primary,#073e8c),var(--brand-accent,#1ba699));
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
@@ -248,7 +233,7 @@ export default function AuthLayout({ children, title, subtitle, mode = 'login' }
 
         .al-sub {
           font-size: 0.87rem;
-          color: rgba(220,232,255,0.68);
+          color: var(--text-secondary, #334155);
           line-height: 1.65; margin-bottom: 1.2rem;
           max-width: 400px;
         }
@@ -257,36 +242,37 @@ export default function AuthLayout({ children, title, subtitle, mode = 'login' }
         .al-stats {
           display: flex; gap: 0;
           margin-bottom: 1.2rem;
-          background: rgba(255,255,255,0.07);
-          border: 1px solid rgba(255,255,255,0.12);
+          background: #fff;
+          border: 1px solid var(--border-subtle, #e2e8f0);
           border-radius: 12px; overflow: hidden;
+          box-shadow: var(--shadow-sm);
         }
         .al-stat {
           flex: 1; text-align: center; padding: 0.7rem 0.4rem;
-          border-right: 1px solid rgba(255,255,255,0.1);
+          border-right: 1px solid var(--border-subtle, #e2e8f0);
         }
         .al-stat:last-child { border-right: none; }
         .al-stat-val {
           font-size: 1.25rem; font-weight: 800;
-          color: #e8eef8; line-height: 1; margin-bottom: 2px;
+          color: var(--text-main, #0f172a); line-height: 1; margin-bottom: 2px;
         }
         .al-stat-lbl {
           font-size: 0.62rem; font-weight: 600;
-          color: rgba(220,232,255,0.5);
+          color: var(--text-muted, #64748b);
           text-transform: uppercase; letter-spacing: 0.06em;
         }
 
         /* offer */
         .al-offer-box {
-          background: rgba(251,191,36,0.07);
-          border: 1px solid rgba(251,191,36,0.24);
+          background: #fff8ec;
+          border: 1px solid rgba(245,158,11,0.35);
           border-radius: 12px; padding: 0.9rem 1.1rem;
           margin-bottom: 1.2rem;
         }
         .al-offer-title {
           font-size: 0.7rem; font-weight: 700;
           letter-spacing: 0.08em; text-transform: uppercase;
-          color: #fbbf24; margin-bottom: 8px;
+          color: #b45309; margin-bottom: 8px;
         }
         .al-offer-list {
           list-style: none; padding: 0; margin: 0;
@@ -294,7 +280,7 @@ export default function AuthLayout({ children, title, subtitle, mode = 'login' }
         }
         .al-offer-list li {
           display: flex; align-items: center; gap: 7px;
-          font-size: 0.83rem; color: rgba(220,232,255,0.82);
+          font-size: 0.83rem; color: var(--text-secondary, #334155);
         }
 
         /* features */
@@ -304,7 +290,7 @@ export default function AuthLayout({ children, title, subtitle, mode = 'login' }
         }
         .al-features li {
           display: flex; align-items: center; gap: 9px;
-          font-size: 0.83rem; color: rgba(220,232,255,0.8);
+          font-size: 0.83rem; color: var(--text-secondary, #334155);
         }
         .al-dot {
           width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
@@ -312,29 +298,30 @@ export default function AuthLayout({ children, title, subtitle, mode = 'login' }
 
         /* testimonial */
         .al-testi {
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.1);
+          background: #fff;
+          border: 1px solid var(--border-subtle, #e2e8f0);
           border-radius: 12px; padding: 0.9rem 1.1rem;
           margin-bottom: 1.2rem;
+          box-shadow: var(--shadow-sm);
         }
         .al-quote {
-          font-size: 0.83rem; color: rgba(220,232,255,0.82);
+          font-size: 0.83rem; color: var(--text-secondary, #334155);
           line-height: 1.6; margin: 0 0 10px; font-style: italic;
         }
         .al-author { display: flex; align-items: center; gap: 9px; }
         .al-avatar {
           width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
-          background: linear-gradient(135deg,#1ba699,#1e4fa6);
+          background: linear-gradient(135deg,#1ba699,#073e8c);
           color: #fff; font-weight: 700; font-size: 0.82rem;
           display: flex; align-items: center; justify-content: center;
         }
-        .al-aname { font-size: 0.79rem; font-weight: 700; color: #e8eef8; }
-        .al-arole { font-size: 0.7rem; color: rgba(220,232,255,0.48); }
+        .al-aname { font-size: 0.79rem; font-weight: 700; color: var(--text-main, #0f172a); }
+        .al-arole { font-size: 0.7rem; color: var(--text-muted, #64748b); }
 
         /* switch */
-        .al-switch { font-size: 0.79rem; color: rgba(220,232,255,0.45); }
-        .al-switch-link { color: #6ee7b7; font-weight: 600; text-decoration: none; }
-        .al-switch-link:hover { color: #a7f3d0; }
+        .al-switch { font-size: 0.79rem; color: var(--text-muted, #64748b); }
+        .al-switch-link { color: #1ba699; font-weight: 600; text-decoration: none; }
+        .al-switch-link:hover { color: #0e7a71; }
 
         /* ── RIGHT ────────────────────────── */
         .al-right {

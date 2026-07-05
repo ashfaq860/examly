@@ -15,9 +15,9 @@ const defaultSlides = [
     secondaryLink: "/how-examly-works",
     badge: "For Educators",
     accent: "#1ba699",
-    gradient: "linear-gradient(140deg,#073e8c 0%,#0e5c8a 45%,#0e7a71 100%)",
-    blob1: "rgba(27,166,153,0.18)",
-    blob2: "rgba(7,62,140,0.25)",
+    gradient: "linear-gradient(135deg,#dbeafe 0%,#eef6ff 38%,#ccfbf1 100%)",
+    blob1: "rgba(27,166,153,0.38)",
+    blob2: "rgba(7,62,140,0.30)",
     chipTop:    { icon: "✓", label: "BISE Standard" },
     chipBottom: { icon: "⚡", label: "Instant Download" },
   },
@@ -33,9 +33,9 @@ const defaultSlides = [
     secondaryLink: "/packages",
     badge: "🎁 Limited Offer",
     accent: "#f59e0b",
-    gradient: "linear-gradient(140deg,#0f766e 0%,#065f46 45%,#073e8c 100%)",
-    blob1: "rgba(245,158,11,0.15)",
-    blob2: "rgba(15,118,110,0.25)",
+    gradient: "linear-gradient(135deg,#fef3c7 0%,#fff8ec 38%,#a7f3d0 100%)",
+    blob1: "rgba(245,158,11,0.36)",
+    blob2: "rgba(15,118,110,0.30)",
     chipTop:    { icon: "🎁", label: "3 Months Free" },
     chipBottom: { icon: "🚫", label: "No Credit Card" },
   },
@@ -51,9 +51,9 @@ const defaultSlides = [
     secondaryLink: "/how-examly-works",
     badge: "For Students",
     accent: "#2aa7ff",
-    gradient: "linear-gradient(140deg,#073e8c 0%,#0369a1 45%,#0e7490 100%)",
-    blob1: "rgba(42,167,255,0.18)",
-    blob2: "rgba(14,116,144,0.22)",
+    gradient: "linear-gradient(135deg,#dbeafe 0%,#eff6ff 38%,#bfe6ff 100%)",
+    blob1: "rgba(42,167,255,0.36)",
+    blob2: "rgba(7,62,140,0.32)",
     chipTop:    { icon: "📚", label: "Chapter-wise Tests" },
     chipBottom: { icon: "📊", label: "Instant Results" },
   },
@@ -161,13 +161,15 @@ export default function CubeSlider({ slides = defaultSlides }) {
             {/* Background blobs */}
             <div className="hs-blob hs-blob-1" style={{ background: slide.blob1 }} />
             <div className="hs-blob hs-blob-2" style={{ background: slide.blob2 }} />
-            <div className="hs-blob hs-blob-3" />
-            <div className="hs-grid-overlay" />
 
             <div className="container h-100">
               <div className="hs-inner">
                 {/* ── Text column ── */}
                 <div className={`hs-text-col ${isActive ? "hs-text-in" : ""}`}>
+                  <span
+                    className="hs-deco-dot"
+                    style={{ background: slide.accent, boxShadow: `0 0 0 6px ${slide.accent}1f` }}
+                  />
                   <span className="hs-badge" style={{ borderColor: `${slide.accent}60`, color: slide.accent, background: `${slide.accent}18` }}>
                     {slide.badge}
                   </span>
@@ -183,7 +185,7 @@ export default function CubeSlider({ slides = defaultSlides }) {
                     >
                       <span className="hs-btn-shimmer" />
                       {slide.cta}
-                      <svg className="hs-btn-arrow-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                      <svg className="hs-btn-arrow-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </Link>
                     <Link
                       href={slide.secondaryLink}
@@ -201,23 +203,25 @@ export default function CubeSlider({ slides = defaultSlides }) {
                 <div className={`hs-img-col ${isActive ? "hs-img-in" : ""}`}>
                   <div className="hs-img-frame">
                     <div className="hs-img-glow" style={{ background: slide.accent }} />
-                    <img
-                      src={slide.image}
-                      alt={slide.shortDescription}
-                      className="hs-img"
-                      loading={i === 0 ? "eager" : "lazy"}
-                      width={520}
-                      height={420}
-                    />
+                    <div className="hs-img-card">
+                      <img
+                        src={slide.image}
+                        alt={slide.shortDescription}
+                        className="hs-img"
+                        loading={i === 0 ? "eager" : "lazy"}
+                        width={520}
+                        height={420}
+                      />
+                    </div>
                     {/* Floating accent chips — per-slide */}
                     {slide.chipTop && (
-                      <div className="hs-float hs-float-tl" style={{ borderColor: `${slide.accent}40` }}>
-                        <span style={{ color: slide.accent }}>{slide.chipTop.icon}</span> {slide.chipTop.label}
+                      <div className="hs-float hs-float-tl">
+                        <span className="hs-float-icon" style={{ background: `${slide.accent}18`, color: slide.accent }}>{slide.chipTop.icon}</span> {slide.chipTop.label}
                       </div>
                     )}
                     {slide.chipBottom && (
-                      <div className="hs-float hs-float-br" style={{ borderColor: `${slide.accent}40` }}>
-                        <span style={{ color: slide.accent }}>{slide.chipBottom.icon}</span> {slide.chipBottom.label}
+                      <div className="hs-float hs-float-br">
+                        <span className="hs-float-icon" style={{ background: `${slide.accent}18`, color: slide.accent }}>{slide.chipBottom.icon}</span> {slide.chipBottom.label}
                       </div>
                     )}
                   </div>
@@ -228,6 +232,14 @@ export default function CubeSlider({ slides = defaultSlides }) {
         );
       })}
 
+      {/* ── Bottom wave — eases the hero's brand-color wash into the white section below ── */}
+      <svg className="hs-wave" viewBox="0 0 1440 100" preserveAspectRatio="none" aria-hidden="true">
+        <path
+          d="M0,48 C240,90 480,10 720,28 C960,46 1200,88 1440,44 L1440,100 L0,100 Z"
+          style={{ fill: 'var(--surface, #ffffff)' }}
+        />
+      </svg>
+
       {/* ── Nav arrows ── */}
       <button className="hs-nav hs-nav-prev" onClick={handlePrev} aria-label="Previous slide" disabled={animating}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>
@@ -236,7 +248,7 @@ export default function CubeSlider({ slides = defaultSlides }) {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
       </button>
 
-      {/* ── Dot indicators ── */}
+      {/* ── Dot indicators (vertical rail) ── */}
       <div className="hs-dots">
         {slides.map((slide, i) => (
           <button
@@ -246,7 +258,15 @@ export default function CubeSlider({ slides = defaultSlides }) {
             aria-label={`Go to slide ${i + 1}`}
           >
             {active === i && (
-              <span className="hs-dot-fill" style={{ width: `${progress}%`, background: slide.accent }} />
+              <>
+                <span
+                  className="hs-dot-ring"
+                  style={{
+                    background: `conic-gradient(${slide.accent} ${progress}%, rgba(15,23,42,0.14) 0)`,
+                  }}
+                />
+                <span className="hs-dot-core" style={{ background: slide.accent }} />
+              </>
             )}
           </button>
         ))}
@@ -256,9 +276,9 @@ export default function CubeSlider({ slides = defaultSlides }) {
         /* ── Root ── */
         .hs-root {
           position: relative;
-          height: 620px;
+          height: 640px;
           overflow: hidden;
-          background: #000;
+          background: linear-gradient(135deg, #dbeafe 0%, #eef6ff 45%, #ccfbf1 100%);
           margin-top: 0;
         }
 
@@ -275,41 +295,25 @@ export default function CubeSlider({ slides = defaultSlides }) {
         .hs-blob {
           position: absolute;
           border-radius: 50%;
-          filter: blur(80px);
+          filter: blur(64px);
           pointer-events: none;
         }
-        .hs-blob-1 { width: 500px; height: 500px; top: -120px; right: -80px; }
-        .hs-blob-2 { width: 400px; height: 400px; bottom: -100px; left: -60px; }
-        .hs-blob-3 {
-          width: 300px; height: 300px;
-          top: 50%; left: 50%;
-          transform: translate(-50%, -50%);
-          background: rgba(255,255,255,0.04);
-          filter: blur(60px);
-        }
-        .hs-grid-overlay {
-          position: absolute;
-          inset: 0;
-          background-image:
-            linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-          background-size: 48px 48px;
-          pointer-events: none;
-        }
+        .hs-blob-1 { width: 480px; height: 480px; top: -150px; right: -60px; }
+        .hs-blob-2 { width: 460px; height: 460px; bottom: -160px; left: -90px; }
 
         /* ── Layout ── */
         .hs-inner {
           display: flex;
           align-items: center;
-          height: 620px;
+          height: 640px;
           gap: 3rem;
           padding-top: 70px;
         }
 
         /* ── Text column ── */
         .hs-text-col {
-          flex: 0 0 52%;
-          color: #fff;
+          flex: 0 0 50%;
+          color: var(--text-main, #0f172a);
           opacity: 0;
           transform: translateY(28px);
           transition: opacity 0.65s ease 0.1s, transform 0.65s ease 0.1s;
@@ -317,6 +321,14 @@ export default function CubeSlider({ slides = defaultSlides }) {
         .hs-text-in {
           opacity: 1;
           transform: translateY(0);
+        }
+
+        .hs-deco-dot {
+          display: block;
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          margin-bottom: 1.4rem;
         }
 
         .hs-badge {
@@ -327,26 +339,26 @@ export default function CubeSlider({ slides = defaultSlides }) {
           border: 1px solid;
           border-radius: 999px;
           font-size: 0.78rem;
-          font-weight: 600;
+          font-weight: 700;
           letter-spacing: 0.04em;
           text-transform: uppercase;
-          margin-bottom: 1.1rem;
+          margin-bottom: 1.2rem;
         }
 
         .hs-title {
-          font-size: clamp(1.75rem, 3.5vw, 2.8rem);
+          font-size: clamp(1.9rem, 3.6vw, 3.15rem);
           font-weight: 800;
-          line-height: 1.18;
-          margin-bottom: 1.1rem;
-          letter-spacing: -0.02em;
-          text-shadow: 0 2px 20px rgba(0,0,0,0.2);
+          line-height: 1.12;
+          margin-bottom: 1.15rem;
+          letter-spacing: -0.025em;
+          color: var(--text-main, #0f172a);
         }
 
         .hs-desc {
           font-size: 1.05rem;
           line-height: 1.7;
-          color: rgba(255,255,255,0.82);
-          margin-bottom: 1.8rem;
+          color: var(--text-muted, #64748b);
+          margin-bottom: 1.9rem;
           max-width: 480px;
         }
         .mobile-desc { display: none; }
@@ -354,25 +366,32 @@ export default function CubeSlider({ slides = defaultSlides }) {
         .hs-actions {
           display: flex;
           align-items: center;
-          gap: 1rem;
+          gap: 1.6rem;
           flex-wrap: wrap;
         }
 
-        /* ── Primary CTA ── */
-        .hs-btn-primary {
+        /* ── Primary CTA ──
+           :global() is required here because styled-jsx only
+           auto-scopes native lowercase tags — it never injects its
+           scope class into a custom component like next/link's
+           <Link>, so an unscoped selector is the only way these
+           rules can match the rendered <a>. */
+        :global(.hs-btn-primary) {
           position: relative;
           display: inline-flex;
           align-items: center;
           gap: 9px;
-          padding: 0.78rem 1.55rem;
-          border-radius: 12px;
+          padding: 0.85rem 1.7rem;
+          border-radius: var(--radius-md, 10px);
           font-weight: 700;
-          font-size: 0.95rem;
+          font-size: 0.85rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
           color: #fff;
           text-decoration: none;
           overflow: hidden;
           background: var(--btn-accent, #1ba699);
-          box-shadow: 0 4px 20px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.22);
+          box-shadow: 0 8px 20px -6px var(--btn-accent, #1ba699);
           transition: transform 0.22s ease, box-shadow 0.22s ease, color 0s;
           white-space: nowrap;
           line-height: 1;
@@ -382,7 +401,7 @@ export default function CubeSlider({ slides = defaultSlides }) {
           position: absolute;
           inset: 0;
           background: linear-gradient(105deg,
-            transparent 30%, rgba(255,255,255,0.26) 50%, transparent 70%);
+            transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%);
           transform: translateX(-120%);
           transition: transform 0.55s ease;
           pointer-events: none;
@@ -393,30 +412,29 @@ export default function CubeSlider({ slides = defaultSlides }) {
           transition: transform 0.22s ease;
         }
 
-        .hs-btn-primary:hover {
+        :global(.hs-btn-primary):hover {
           transform: translateY(-3px) scale(1.03);
-          box-shadow: 0 10px 32px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.25);
+          box-shadow: 0 12px 26px -6px var(--btn-accent, #1ba699);
           color: #fff;
         }
-        .hs-btn-primary:hover .hs-btn-shimmer    { transform: translateX(120%); }
-        .hs-btn-primary:hover .hs-btn-arrow-icon  { transform: translateX(5px); }
+        :global(.hs-btn-primary):hover .hs-btn-shimmer    { transform: translateX(120%); }
+        :global(.hs-btn-primary):hover .hs-btn-arrow-icon  { transform: translateX(5px); }
 
-        /* ── Secondary CTA ── */
-        .hs-btn-secondary {
+        /* ── Secondary CTA (ghost link) ── */
+        :global(.hs-btn-secondary) {
           position: relative;
           display: inline-flex;
           align-items: center;
           gap: 7px;
-          padding: 0.78rem 1.45rem;
-          border-radius: 12px;
+          padding: 0.5rem 0;
           font-weight: 700;
           font-size: 0.95rem;
-          color: var(--btn-accent, #073e8c);
+          color: var(--text-main, #0f172a);
           text-decoration: none;
           border: none;
-          background: #fff;
-          box-shadow: 0 4px 16px rgba(0,0,0,0.22);
-          transition: transform 0.22s ease, box-shadow 0.22s ease, color 0s;
+          border-bottom: 2px solid var(--border-medium, #cbd5e1);
+          background: transparent;
+          transition: color 0.2s ease, border-color 0.2s ease;
           white-space: nowrap;
           line-height: 1;
         }
@@ -427,12 +445,11 @@ export default function CubeSlider({ slides = defaultSlides }) {
           transition: transform 0.22s ease, opacity 0.22s ease;
         }
 
-        .hs-btn-secondary:hover {
+        :global(.hs-btn-secondary):hover {
           color: var(--btn-accent, #073e8c);
-          transform: translateY(-3px) scale(1.03);
-          box-shadow: 0 10px 28px rgba(0,0,0,0.3);
+          border-color: var(--btn-accent, #073e8c);
         }
-        .hs-btn-secondary:hover .hs-sec-arrow { transform: translateX(4px); opacity: 1; }
+        :global(.hs-btn-secondary):hover .hs-sec-arrow { transform: translateX(4px); opacity: 1; }
 
         /* ── Image column ── */
         .hs-img-col {
@@ -452,27 +469,33 @@ export default function CubeSlider({ slides = defaultSlides }) {
         .hs-img-frame {
           position: relative;
           width: 100%;
-          max-width: 480px;
+          max-width: 460px;
         }
 
         .hs-img-glow {
           position: absolute;
-          inset: -20px;
-          border-radius: 28px;
-          filter: blur(50px);
-          opacity: 0.35;
+          inset: -30px;
+          border-radius: 50%;
+          filter: blur(70px);
+          opacity: 0.3;
           z-index: 0;
         }
 
-        .hs-img {
+        .hs-img-card {
           position: relative;
           z-index: 2;
+          background: #fff;
+          border-radius: 26px;
+          padding: 14px;
+          box-shadow:
+            0 24px 48px -12px rgba(15, 23, 42, 0.18),
+            0 4px 14px rgba(15, 23, 42, 0.06);
+        }
+
+        .hs-img {
           width: 100%;
           height: auto;
-          border-radius: 20px;
-          box-shadow:
-            0 0 0 1px rgba(255,255,255,0.12),
-            0 30px 60px rgba(0,0,0,0.5);
+          border-radius: 16px;
           display: block;
         }
 
@@ -480,21 +503,42 @@ export default function CubeSlider({ slides = defaultSlides }) {
         .hs-float {
           position: absolute;
           z-index: 3;
-          background: rgba(255,255,255,0.12);
-          backdrop-filter: blur(12px);
-          border: 1px solid;
+          background: #fff;
+          border: 1px solid var(--border-subtle, #e2e8f0);
           border-radius: 999px;
-          padding: 6px 14px;
-          font-size: 0.76rem;
-          font-weight: 600;
-          color: rgba(255,255,255,0.92);
+          padding: 7px 15px 7px 7px;
+          font-size: 0.78rem;
+          font-weight: 700;
+          color: var(--text-main, #0f172a);
           display: flex;
           align-items: center;
-          gap: 5px;
+          gap: 8px;
           white-space: nowrap;
+          box-shadow: var(--shadow-md, 0 4px 12px rgba(15,23,42,0.08));
         }
-        .hs-float-tl { top: -14px; left: 16px; }
-        .hs-float-br { bottom: -14px; right: 16px; }
+        .hs-float-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          font-size: 0.85rem;
+        }
+        .hs-float-tl { top: -16px; left: 20px; }
+        .hs-float-br { bottom: -16px; right: 20px; }
+
+        /* ── Bottom wave ── */
+        .hs-wave {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: -1px;
+          width: 100%;
+          height: 56px;
+          z-index: 5;
+          pointer-events: none;
+        }
 
         /* ── Nav arrows ── */
         .hs-nav {
@@ -505,79 +549,96 @@ export default function CubeSlider({ slides = defaultSlides }) {
           width: 44px;
           height: 44px;
           border-radius: 50%;
-          border: 1.5px solid rgba(255,255,255,0.22);
-          background: rgba(255,255,255,0.1);
-          backdrop-filter: blur(12px);
-          color: #fff;
+          border: 1px solid var(--border-subtle, #e2e8f0);
+          background: #fff;
+          color: var(--text-main, #0f172a);
+          box-shadow: var(--shadow-md, 0 4px 12px rgba(15,23,42,0.08));
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
           opacity: 0;
-          transition: opacity 0.25s, background 0.2s, transform 0.2s;
+          transition: opacity 0.25s, background 0.2s, color 0.2s, transform 0.2s;
         }
         .hs-root:hover .hs-nav { opacity: 1; }
-        .hs-nav:hover { background: rgba(255,255,255,0.22); transform: translateY(-50%) scale(1.08); }
+        .hs-nav:hover { background: var(--brand-primary, #073e8c); color: #fff; border-color: var(--brand-primary, #073e8c); transform: translateY(-50%) scale(1.08); }
         .hs-nav:disabled { opacity: 0.3; cursor: not-allowed; }
         .hs-nav-prev { left: 1.25rem; }
-        .hs-nav-next { right: 1.25rem; }
+        .hs-nav-next { right: 4.5rem; }
 
-        /* ── Dot indicators ── */
+        /* ── Dot indicators (vertical rail) ── */
         .hs-dots {
           position: absolute;
-          bottom: 1.6rem;
-          left: 50%;
-          transform: translateX(-50%);
+          top: 50%;
+          right: 1.6rem;
+          transform: translateY(-50%);
           z-index: 30;
           display: flex;
-          gap: 10px;
+          flex-direction: column;
+          gap: 16px;
           align-items: center;
         }
 
         .hs-dot {
           position: relative;
-          width: 36px;
-          height: 4px;
-          border-radius: 999px;
-          background: rgba(255,255,255,0.28);
-          border: none;
-          cursor: pointer;
-          overflow: hidden;
+          width: 11px;
+          height: 11px;
+          border-radius: 50%;
+          background: transparent;
+          border: 2px solid rgba(15, 23, 42, 0.22);
           padding: 0;
-          transition: width 0.25s ease, background 0.25s ease;
+          cursor: pointer;
+          transition: transform 0.25s ease, border-color 0.25s ease;
         }
+        .hs-dot:hover { border-color: rgba(15, 23, 42, 0.45); transform: scale(1.15); }
         .hs-dot-active {
-          width: 64px;
-          background: rgba(255,255,255,0.2);
+          border-color: transparent;
         }
-        .hs-dot-fill {
+        .hs-dot-ring {
           position: absolute;
-          left: 0; top: 0; bottom: 0;
-          border-radius: 999px;
-          transition: none;
+          inset: -6px;
+          border-radius: 50%;
+          -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+        }
+        .hs-dot-core {
+          position: absolute;
+          inset: 0;
+          margin: auto;
+          border-radius: 50%;
         }
 
         /* ── Responsive ── */
         @media (max-width: 991px) {
-          .hs-root { height: 420px; }
+          .hs-root { height: 460px; }
           .hs-inner {
             flex-direction: column;
             height: 100%;
-            padding: 84px 0 56px;
+            padding: 84px 0 64px;
             gap: 1.4rem;
             justify-content: center;
           }
           .hs-text-col { flex: none; width: 100%; text-align: center; }
+          .hs-deco-dot { margin-left: auto; margin-right: auto; }
           .hs-desc { margin-left: auto; margin-right: auto; margin-bottom: 0; }
           .hs-actions { justify-content: center; }
           .hs-img-col { display: none; }
-          .hs-float { display: none; }
+          .hs-nav-next { right: 1.25rem; }
+          .hs-dots {
+            top: auto;
+            bottom: 1.4rem;
+            right: 50%;
+            transform: translateX(50%);
+            flex-direction: row;
+          }
+          .hs-wave { height: 28px; }
         }
 
         @media (max-width: 768px) {
-          .hs-root { height: 380px; }
-          .hs-inner { padding: 80px 0 52px; }
-          .hs-title { font-size: 1.65rem; margin-bottom: 0.8rem; }
+          .hs-nav { opacity: 1; }
+          .hs-root { height: 420px; }
+          .hs-inner { padding: 80px 0 56px; }
+          .hs-title { font-size: 1.7rem; margin-bottom: 0.8rem; }
           .hs-desc { font-size: 0.92rem; }
           .desktop-desc { display: none; }
           .mobile-desc { display: block !important; }
@@ -585,12 +646,12 @@ export default function CubeSlider({ slides = defaultSlides }) {
         }
 
         @media (max-width: 576px) {
-          .hs-root { height: 340px; }
-          .hs-inner { padding: 72px 0 48px; gap: 1.1rem; }
-          .hs-title { font-size: 1.42rem; }
-          .hs-actions { gap: 0.65rem; }
-          .hs-btn-primary { font-size: 0.85rem; padding: 0.65rem 1.2rem; gap: 6px; }
-          .hs-btn-secondary { font-size: 0.85rem; padding: 0.65rem 1.05rem; gap: 5px; }
+          .hs-root { height: 400px; }
+          .hs-inner { padding: 72px 0 52px; gap: 1.1rem; }
+          .hs-title { font-size: 1.45rem; }
+          .hs-actions { gap: 1rem; }
+          .hs-btn-primary { font-size: 0.78rem; padding: 0.7rem 1.3rem; gap: 6px; }
+          .hs-btn-secondary { font-size: 0.85rem; }
           .hs-nav { width: 36px; height: 36px; }
         }
       `}</style>

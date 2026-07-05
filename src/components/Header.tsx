@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter, usePathname } from 'next/navigation';
+import { User, LogOut } from 'lucide-react';
 
 export default function Header() {
   const [open, setOpen] = useState(false);
@@ -268,6 +269,10 @@ export default function Header() {
             padding: 0;
           }
 
+          .navbar-nav { flex-wrap: nowrap; }
+
+          .navbar-nav .nav-item { flex-shrink: 0; }
+
           .navbar-nav .nav-link {
             padding: 0.42rem 0.85rem !important;
             border-radius: var(--radius-md);
@@ -275,6 +280,7 @@ export default function Header() {
             font-weight: 500;
             color: var(--text-secondary) !important;
             text-decoration: none !important;
+            white-space: nowrap;
             transition: background 0.18s ease, color 0.18s ease;
           }
 
@@ -329,12 +335,91 @@ export default function Header() {
           background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(226,232,240,0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2.2' d='M6 6L24 24M6 24L24 6'/%3e%3c/svg%3e");
         }
 
-        /* ── User email truncation on desktop ── */
-        .user-email-btn {
-          max-width: 180px;
+        /* ── User account cluster ── */
+        .user-cluster {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .user-chip {
+          display: flex;
+          align-items: center;
+          gap: 0.45rem;
+          border: 1px solid var(--border-subtle);
+          background: var(--surface-muted);
+          border-radius: var(--radius-pill, 999px);
+          padding: 0.3rem 0.85rem 0.3rem 0.4rem;
+          font-size: 0.85rem;
+          font-weight: 500;
+          color: var(--text-secondary) !important;
+          line-height: 1.2;
+          transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+        }
+
+        .user-chip:hover,
+        .user-chip.active {
+          background: var(--brand-primary-50);
+          border-color: var(--brand-primary-400);
+          color: var(--brand-primary) !important;
+        }
+
+        .user-chip-avatar {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background: var(--brand-primary-50);
+          color: var(--brand-primary);
+          flex-shrink: 0;
+        }
+
+        .user-chip.active .user-chip-avatar,
+        .user-chip:hover .user-chip-avatar {
+          background: #fff;
+        }
+
+        .user-email-text {
+          max-width: 160px;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+        }
+
+        .signout-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.35rem;
+          background: var(--brand-danger);
+          color: #fff;
+          border: none;
+          border-radius: var(--radius-pill, 999px);
+          font-size: 0.82rem;
+          font-weight: 600;
+          padding: 0.42rem 0.95rem;
+          white-space: nowrap;
+          flex-shrink: 0;
+          transition: background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .signout-btn:hover {
+          background: #dc2626;
+          box-shadow: var(--shadow-sm);
+          color: #fff;
+        }
+
+        .signout-btn:active { transform: scale(0.97); }
+
+        @media (max-width: 991px) {
+          .user-cluster {
+            width: 100%;
+            justify-content: space-between;
+          }
+
+          .user-chip { flex: 1 1 auto; min-width: 0; }
         }
 
         /* ── Header scroll shadow ── */
@@ -353,7 +438,7 @@ export default function Header() {
               onClick={handleLinkClick}
             >
               <img
-                src="/examly.jpg"
+                src="/examly.png"
                 alt="Examly Logo"
                 height="38"
                 width="140"
@@ -407,29 +492,23 @@ export default function Header() {
                 <li className="nav-item d-lg-none"><div className="mobile-divider" /></li>
 
                 {user ? (
-                  <li className="nav-item">
-                    <div className="d-flex align-items-center gap-2 flex-column flex-lg-row">
+                  <li className="nav-item w-100 w-lg-auto">
+                    <div className="user-cluster">
                       <button
                         onClick={() => { handleUserClick(); handleLinkClick(); }}
-                        className={`nav-link user-email-btn ${isUserLinkActive() ? 'active' : ''}`}
+                        className={`user-chip ${isUserLinkActive() ? 'active' : ''}`}
                         title={user.email}
                       >
-                        {user.email}
+                        <span className="user-chip-avatar">
+                          <User size={14} strokeWidth={2.25} />
+                        </span>
+                        <span className="user-email-text">{user.email}</span>
                       </button>
                       <button
                         onClick={() => { handleLogout(); handleLinkClick(); }}
-                        className="btn btn-sm d-flex align-items-center gap-1 w-100 w-lg-auto"
-                        style={{
-                          background: 'var(--brand-danger)',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: 'var(--radius-md)',
-                          fontSize: '0.82rem',
-                          fontWeight: 600,
-                          padding: '0.4rem 0.9rem',
-                          whiteSpace: 'nowrap',
-                        }}
+                        className="signout-btn"
                       >
+                        <LogOut size={14} strokeWidth={2.25} />
                         Sign out
                       </button>
                     </div>
