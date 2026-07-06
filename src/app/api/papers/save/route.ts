@@ -13,7 +13,6 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    console.log("Received Paper Save Request:", body);
     // Extract everything sent from the frontend payload
     const { 
       paperId, 

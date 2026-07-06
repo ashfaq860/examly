@@ -120,7 +120,7 @@ input.urdu-text {
 html, body, #root { height: 100%; }
 
 body {
-  font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto,
+  font-family: var(--font-poppins), system-ui, -apple-system, "Segoe UI", Roboto,
                "Helvetica Neue", Arial, sans-serif !important;
   background: var(--surface-muted);
   color: var(--text-main);

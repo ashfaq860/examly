@@ -345,7 +345,9 @@ export const QuestionSelectorModal: React.FC<any> = ({
               <div className="header-text">
                 <h3>{editingSection ? `Edit Section — ${editingSection.type.toUpperCase()}` : 'Paper Configuration'}</h3>
                 <p>
-                  Class: <span className="subject-tag">{(currentClass?.name || 'General')} </span> | Subject: <span className="subject-tag">{(currentSubject?.name || 'General')}</span>
+                  <span className="meta-item">Class: <span className="subject-tag">{(currentClass?.name || 'General')}</span></span>
+                  <span className="p-divider">|</span>
+                  <span className="meta-item">Subject: <span className="subject-tag">{(currentSubject?.name || 'General')}</span></span>
                   {paperData.sections.length > 0 && (
                     <span className="section-count">
                       {editingSection ? 'Changing this section\'s questions only' : `(${paperData.sections.length} sections added)`}
@@ -606,14 +608,17 @@ export const QuestionSelectorModal: React.FC<any> = ({
         backface-visibility: hidden;
         will-change: transform;
         }
-        .app-modal-header { padding: 12px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #fff; }
-        .header-left { display: flex; align-items: center; gap: 12px; }
-        .icon-badge { padding: 8px; background: #f1f5f9; border-radius: 8px; color: #64748b; }
-        .header-text h3 { margin: 0; font-size: 15px; font-weight: 800; color: #1e293b; }
-        .header-text p { margin: 0; font-size: 11px; color: #64748b; display: flex; align-items: center; }
-        .section-count { font-size: 10px; color: #10b981; margin-left: 8px; font-weight: 700; }
+        .app-modal-header { padding: 12px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; background: #fff; }
+        .header-left { display: flex; align-items: flex-start; gap: 12px; min-width: 0; flex: 1 1 auto; }
+        .icon-badge { padding: 8px; background: #f1f5f9; border-radius: 8px; color: #64748b; flex-shrink: 0; }
+        .header-text { min-width: 0; flex: 1 1 auto; }
+        .header-text h3 { margin: 0; font-size: 15px; font-weight: 800; color: #1e293b; word-break: break-word; }
+        .header-text p { margin: 4px 0 0; font-size: 11px; color: #64748b; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+        .meta-item { white-space: nowrap; }
+        .p-divider { color: #cbd5e1; }
+        .section-count { font-size: 10px; color: #10b981; font-weight: 700; white-space: nowrap; }
         .subject-tag { color: #2563eb; font-weight: 700; margin-left: 4px; }
-        .close-ghost-btn { background: none; border: none; color: #94a3b8; cursor: pointer; }
+        .close-ghost-btn { background: none; border: none; color: #94a3b8; cursor: pointer; flex-shrink: 0; }
         .app-toolbar { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
         .toolbar-row-top { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 12px 20px; }
         .tool-box { display: flex; flex-direction: column; gap: 4px; position: relative; }

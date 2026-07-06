@@ -16,9 +16,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getSessionFromRequest } from '@/lib/api-auth';
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await getSessionFromRequest();
+    if (auth.error) return auth.error;
+
     const supabase = await createSupabaseServerClient();
 
     const { subjectId, chapterIds, questionTypes } = await request.json();

@@ -90,8 +90,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
+      // Escape PostgREST filter meta-characters (comma separates filters,
+      // parentheses group them) so search text can't inject extra clauses
+      // into this raw `.or()` string.
+      const safeSearch = search.replace(/[,()]/g, '');
       q = q.or(
-        `question_text.ilike.%${search}%,question_text_ur.ilike.%${search}%`
+        `question_text.ilike.%${safeSearch}%,question_text_ur.ilike.%${safeSearch}%`
       );
     }
 

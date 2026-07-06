@@ -43,6 +43,12 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const disableContextMenu = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener("contextmenu", disableContextMenu);
+    return () => document.removeEventListener("contextmenu", disableContextMenu);
+  }, []);
+
   const handleLogout = async () => {
     cachedUser = null;
     hasFetchedUser.current = false;

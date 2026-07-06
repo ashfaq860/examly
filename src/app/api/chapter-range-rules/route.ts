@@ -1,15 +1,15 @@
 // app/api/chapter-range-rules/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import { getSessionFromRequest, requireRole } from '@/lib/api-auth';
 
 const TABLE = 'chapter_question_rules';
 
-async function requireSession(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    return { session: null, error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  }
-  return { session, error: null };
+// class_id is interpolated directly into a raw PostgREST `.or()` filter
+// string below — must be validated as a UUID first so it can't be used to
+// inject extra filter clauses.
+function isValidUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 function normalizeCategoryId(value: unknown): string | null {
@@ -55,6 +55,9 @@ async function findOverlappingRules(
   }
 
   if (params.class_id) {
+    if (!isValidUuid(params.class_id)) {
+      throw new Error('Invalid class_id');
+    }
     query = query.or(`class_id.eq.${params.class_id},class_id.is.null`);
   } else {
     query = query.is('class_id', null);
@@ -69,8 +72,7 @@ async function findOverlappingRules(
 
 export async function GET(request: NextRequest) {
   try {
-    const userClient = await createSupabaseServerClient();
-    const auth = await requireSession(userClient);
+    const auth = await getSessionFromRequest();
     if (auth.error) return auth.error;
 
     const adminClient = await createSupabaseAdminClient();
@@ -81,6 +83,10 @@ export async function GET(request: NextRequest) {
 
     if (!subjectId) {
       return NextResponse.json({ error: 'Subject ID is required' }, { status: 400 });
+    }
+
+    if (classId && !isValidUuid(classId)) {
+      return NextResponse.json({ error: 'Invalid classId' }, { status: 400 });
     }
 
     let query = adminClient
@@ -122,8 +128,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const userClient = await createSupabaseServerClient();
-    const auth = await requireSession(userClient);
+    const auth = await requireRole(['admin', 'super_admin']);
     if (auth.error) return auth.error;
 
     const adminClient = await createSupabaseAdminClient();
@@ -156,6 +161,10 @@ export async function POST(request: NextRequest) {
       min_questions == null
     ) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    if (class_id && !isValidUuid(class_id)) {
+      return NextResponse.json({ error: 'Invalid class_id' }, { status: 400 });
     }
 
     if (Number(chapter_start) > Number(chapter_end)) {
@@ -224,7 +233,7 @@ export async function POST(request: NextRequest) {
         group_key: normalizeNullableText(group_key),
         is_paired: Boolean(is_paired),
         is_alternative: Boolean(is_alternative),
-        created_by: auth.session!.user.id,
+        created_by: auth.user.id,
         updated_at: new Date().toISOString(),
       }])
       .select()
@@ -247,8 +256,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const userClient = await createSupabaseServerClient();
-    const auth = await requireSession(userClient);
+    const auth = await requireRole(['admin', 'super_admin']);
     if (auth.error) return auth.error;
 
     const adminClient = await createSupabaseAdminClient();
@@ -278,6 +286,10 @@ export async function PUT(request: NextRequest) {
       is_paired,
       is_alternative,
     } = body;
+
+    if (class_id && !isValidUuid(class_id)) {
+      return NextResponse.json({ error: 'Invalid class_id' }, { status: 400 });
+    }
 
     if (Number(chapter_start) > Number(chapter_end)) {
       return NextResponse.json(
@@ -361,8 +373,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const userClient = await createSupabaseServerClient();
-    const auth = await requireSession(userClient);
+    const auth = await requireRole(['admin', 'super_admin']);
     if (auth.error) return auth.error;
 
     const adminClient = await createSupabaseAdminClient();

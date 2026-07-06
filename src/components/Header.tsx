@@ -1,6 +1,7 @@
 // src/components/Header.tsx
 'use client';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter, usePathname } from 'next/navigation';
@@ -437,11 +438,12 @@ export default function Header() {
               href="/"
               onClick={handleLinkClick}
             >
-              <img
+              <Image
                 src="/examly.png"
                 alt="Examly Logo"
-                height="38"
-                width="140"
+                height={38}
+                width={140}
+                priority
                 style={{ height: '38px', width: 'auto' }}
               />
             </Link>

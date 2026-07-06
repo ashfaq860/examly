@@ -5,13 +5,17 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { Toaster } from 'react-hot-toast';
 import type { ReactNode } from 'react';
 import Script from 'next/script';
+import { Poppins } from 'next/font/google';
 import { UserProvider } from './context/userContext';
 import ClientLayoutWrapper from "./ClientLayoutWrapper";
 import ChunkErrorReload from '@/components/ChunkErrorReload';
 
-import 'katex/dist/katex.min.css';
-// @ts-ignore
-import { InlineMath, BlockMath } from 'react-katex';
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['300', '400', '600', '700'],
+  variable: '--font-poppins',
+  display: 'swap',
+});
 
 
 export const metadata = {
@@ -41,27 +45,17 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={poppins.variable}>
       <head>
         <meta
   name="viewport"
   content="width=device-width, initial-scale=1"
 />
-        {/* Preconnect to external font resources */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-  rel="preload"
-  href="/fonts/JameelNooriNastaleeqRegular.woff2"
-  as="font"
-  type="font/woff2"
-  crossOrigin="anonymous"
-/>
-        {/* Load only necessary font weights for better performance */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap"
-          rel="stylesheet"
-        />
+        {/* Note: the JameelNoori Urdu font (~5.4MB) is intentionally NOT preloaded
+            here — it's only used on Urdu question/paper screens, and preloading it
+            sitewide was forcing a huge high-priority download on every page load
+            (including this marketing homepage), which tanked LCP. It still loads
+            on-demand via @font-face + font-display: swap wherever `.urdu-text` is used. */}
       </head>
 
       <body>

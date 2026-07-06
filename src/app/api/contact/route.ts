@@ -44,21 +44,6 @@ export async function POST(request: NextRequest) {
       hour12: true
     });
 
-    console.log('🚀 NEW CONTACT FORM SUBMISSION RECEIVED');
-    console.log('════════════════════════════════════════');
-    console.log(`📅 Timestamp: ${timestamp}`);
-    console.log(`👤 Name: ${name}`);
-    console.log(`📧 Email: ${email}`);
-    console.log(`📞 Phone: ${phone || 'Not provided'}`);
-    console.log(`🎯 User Type: ${userType}`);
-    console.log(`📋 Subject: ${subject}`);
-    console.log(`💬 Message: ${message}`);
-    console.log('════════════════════════════════════════');
-    console.log('✅ ACTION REQUIRED: Contact this person within 24 hours!');
-    console.log(`   📧 Email: ${email}`);
-    console.log(`   📞 Phone: ${phone || 'Use email'}`);
-    console.log('════════════════════════════════════════\n');
-
     // Save to JSON file for persistence
     try {
       const submissionsDir = join(process.cwd(), 'contact-submissions');
@@ -66,7 +51,6 @@ export async function POST(request: NextRequest) {
       // Create directory if it doesn't exist
       if (!existsSync(submissionsDir)) {
         mkdirSync(submissionsDir, { recursive: true });
-        console.log('📁 Created contact-submissions directory');
       }
       
       // Create filename with timestamp — strip anything but alphanumerics/
@@ -92,10 +76,8 @@ export async function POST(request: NextRequest) {
       
       // Write to file
       writeFileSync(filepath, JSON.stringify(submissionData, null, 2));
-      console.log(`💾 Submission saved to: contact-submissions/${filename}`);
-      
     } catch (fileError) {
-      console.log('⚠️ Could not save to file, but submission was logged to console');
+      // Submission still succeeds even if file persistence fails.
     }
 
     // Also log to a simple text file for easy reading
@@ -117,10 +99,8 @@ ${message}
       
       const logPath = join(process.cwd(), 'contact-submissions', 'contact-log.txt');
       writeFileSync(logPath, logEntry, { flag: 'a' }); // Append mode
-      console.log('📝 Added to contact-log.txt');
-      
     } catch (logError) {
-      console.log('⚠️ Could not write to log file');
+      // Submission still succeeds even if log persistence fails.
     }
 
     // Return success response
@@ -135,17 +115,9 @@ ${message}
     );
 
   } catch (error) {
-    console.error('❌ Error processing contact form:', error);
-    
-    // Even if there's an error, try to log what we have
-    try {
-      const errorData = await request.json();
-      console.log('📝 Partial form data received before error:', errorData);
-    } catch (e) {
-      console.log('📝 No form data could be extracted');
-    }
-    
-    // Still return success to user, but log the error
+    console.error('Error processing contact form:', error);
+
+    // Still return success to user despite the error
     return NextResponse.json(
       { 
         success: true,

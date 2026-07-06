@@ -1,6 +1,7 @@
 // src/app/api/subject-rules/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { requireRole } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,9 +16,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const subjectId = searchParams.get('subjectId');
     const classSubjectId = searchParams.get('classSubjectId');
-    
-    console.log('Fetching rules for subject:', subjectId);
-    
+
     if (!subjectId) {
       return NextResponse.json(
         { error: 'Subject ID is required' },
@@ -111,17 +110,12 @@ export async function GET(request: NextRequest) {
 // Update the POST method too
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient();
-    
-    // Check authentication
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
+    const auth = await requireRole(['admin', 'super_admin']);
+    if (auth.error) return auth.error;
+    const { supabase, user } = auth;
+
     const body = await request.json();
-    console.log('POST request body:', body);
-    
+
     // Validate required fields
     if (!body.subject_id || !body.chapter_id) {
       return NextResponse.json(
@@ -135,7 +129,7 @@ export async function POST(request: NextRequest) {
       subject_id: body.subject_id,
       chapter_id: body.chapter_id,
       class_subject_id: body.class_subject_id || null,
-      created_by: session.user.id,
+      created_by: user.id,
       updated_at: new Date().toISOString(),
       created_at: new Date().toISOString()
     };
@@ -182,8 +176,6 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log('Inserting rule data:', ruleData);
-    
     const { data, error } = await supabase
       .from('subject_chapter_rules')
       .insert([ruleData])
@@ -225,17 +217,12 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient();
-    
-    // Check authentication
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
+    const auth = await requireRole(['admin', 'super_admin']);
+    if (auth.error) return auth.error;
+    const { supabase } = auth;
+
     const body = await request.json();
-    console.log('PUT request body:', body);
-    
+
     if (!body.id) {
       return NextResponse.json({ error: 'Rule ID is required' }, { status: 400 });
     }
@@ -287,8 +274,6 @@ export async function PUT(request: NextRequest) {
       );
     }
     
-    console.log('Updating rule with data:', updateData);
-    
     const { data, error } = await supabase
       .from('subject_chapter_rules')
       .update(updateData)
@@ -319,14 +304,10 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient();
-    
-    // Check authentication
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
+    const auth = await requireRole(['admin', 'super_admin']);
+    if (auth.error) return auth.error;
+    const { supabase } = auth;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     

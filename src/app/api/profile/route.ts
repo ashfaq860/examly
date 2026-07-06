@@ -7,8 +7,6 @@ import { cookies } from 'next/headers';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  console.log('✅ API /api/profile was accessed');
-
   try {
     const cookieStore = await cookies();
     const supabase = createServerClient(
@@ -48,7 +46,6 @@ export async function GET(request: NextRequest) {
       profileError = result.error;
       if (!profileError) break;
       if (attempt < 3) {
-        console.log(`Profile fetch attempt ${attempt} failed, retrying...`);
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
     }
@@ -70,7 +67,6 @@ export async function GET(request: NextRequest) {
       packagesError = result.error;
       if (!packagesError) break;
       if (attempt < 3) {
-        console.log(`Packages fetch attempt ${attempt} failed, retrying...`);
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
     }

@@ -72,6 +72,48 @@ const loadMathJax = (): Promise<void> => {
   });
 };
 
+// ─── Chapter/topic grouping ───────────────────────────────────────────────────
+interface TopicGroup { topicName: string; questions: QuestionWithOptions[]; }
+interface ChapterGroup { chapterNo?: string | number; chapterName: string; topics: TopicGroup[]; }
+
+const groupByChapterAndTopic = (questions: QuestionWithOptions[]): ChapterGroup[] => {
+  const chapterMap = new Map<string, { chapterNo?: string | number; chapterName: string; topics: Map<string, QuestionWithOptions[]> }>();
+
+  questions.forEach((q: any) => {
+    const chapterKey = String(q.chapterNo ?? q.chapterName ?? 'unassigned');
+    if (!chapterMap.has(chapterKey)) {
+      chapterMap.set(chapterKey, {
+        chapterNo: q.chapterNo,
+        chapterName: q.chapterName || (q.chapterNo ? `Chapter ${q.chapterNo}` : 'Unassigned Chapter'),
+        topics: new Map(),
+      });
+    }
+    const chapterEntry = chapterMap.get(chapterKey)!;
+    const topicKey = q.topicName || 'General';
+    if (!chapterEntry.topics.has(topicKey)) chapterEntry.topics.set(topicKey, []);
+    chapterEntry.topics.get(topicKey)!.push(q);
+  });
+
+  const chapters: ChapterGroup[] = Array.from(chapterMap.values()).map((c) => ({
+    chapterNo: c.chapterNo,
+    chapterName: c.chapterName,
+    topics: Array.from(c.topics.entries())
+      .map(([topicName, qs]) => ({ topicName, questions: qs }))
+      .sort((a, b) => a.topicName.localeCompare(b.topicName, undefined, { numeric: true, sensitivity: 'base' })),
+  }));
+
+  chapters.sort((a, b) => {
+    const an = Number(a.chapterNo);
+    const bn = Number(b.chapterNo);
+    if (!isNaN(an) && !isNaN(bn)) return an - bn;
+    if (!isNaN(an)) return -1;
+    if (!isNaN(bn)) return 1;
+    return a.chapterName.localeCompare(b.chapterName);
+  });
+
+  return chapters;
+};
+
 // ─── LaTeX helpers ────────────────────────────────────────────────────────────
 const hasLatex = (content: string): boolean => {
   if (!content) return false;
@@ -279,6 +321,9 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
     ? displayedQuestions.filter(q => selectedIds.includes(q.id))
     : displayedQuestions;
 
+  const groupedQuestions = groupByChapterAndTopic(finalQuestions);
+  const questionOrderMap = new Map(finalQuestions.map((q, i) => [q.id, i]));
+
   const toggleSelection = (id: string) => {
     if (!currentType || !typeKey) return;
     const limit = currentType.required;
@@ -318,24 +363,43 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                 </div>
               )}
 
-              {finalQuestions.map((q, idx) => {
-                const isSelected = selectedIds.includes(q.id);
-                const isUrdu = language === 'urdu';
-                const isBilingual = language === 'bilingual';
-                const isMcq = typeKey === 'mcq';
+              {groupedQuestions.map((chapter, cIdx) => (
+                <div key={`chapter-${chapter.chapterNo ?? 'x'}-${cIdx}`} className="chapter-group">
+                  <div className="chapter-heading">
+                    <span className="chapter-badge">Ch {chapter.chapterNo ?? '—'}</span>
+                    <span className="chapter-title">{chapter.chapterName}</span>
+                    <span className="chapter-count">
+                      {chapter.topics.reduce((sum, t) => sum + t.questions.length, 0)} Qs
+                    </span>
+                  </div>
 
-                return (
-                  <div
-                    key={q.id}
-                    className={`paper-row ${isSelected ? 'selected' : ''} ${isUrdu ? 'urdu-mode' : ''}`}
-                    onClick={() => toggleSelection(q.id)}
-                  >
-                    <div className="q-num">
-                      {isUrdu
-                        ? <span className="num-urdu">.{idx + 1}</span>
-                        : <span>{idx + 1}.</span>
-                      }
-                    </div>
+                  {chapter.topics.map((topic, tIdx) => (
+                    <div key={`topic-${cIdx}-${tIdx}`} className="topic-group">
+                      <div className="topic-heading">
+                        <span className="topic-number">{chapter.chapterNo ?? cIdx + 1}.{tIdx + 1}</span>
+                        <span className="topic-title">{topic.topicName}</span>
+                        <span className="topic-count">{topic.questions.length} {topic.questions.length === 1 ? 'Q' : 'Qs'}</span>
+                      </div>
+
+                      {topic.questions.map((q) => {
+                        const idx = questionOrderMap.get(q.id) ?? 0;
+                        const isSelected = selectedIds.includes(q.id);
+                        const isUrdu = language === 'urdu';
+                        const isBilingual = language === 'bilingual';
+                        const isMcq = typeKey === 'mcq';
+
+                        return (
+                          <div
+                            key={q.id}
+                            className={`paper-row ${isSelected ? 'selected' : ''} ${isUrdu ? 'urdu-mode' : ''}`}
+                            onClick={() => toggleSelection(q.id)}
+                          >
+                            <div className="q-num">
+                              {isUrdu
+                                ? <span className="num-urdu">.{idx + 1}</span>
+                                : <span>{idx + 1}.</span>
+                              }
+                            </div>
 
                     <div className="q-body">
                       {isBilingual ? (
@@ -397,18 +461,18 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                         </>
                       )}
 
-                      <div className={`q-meta ${isUrdu ? 'q-meta-rtl' : ''}`}>
-                        <span>Ch:{q.chapterNo || 'N/A'} <span className="d-none d-md-inline">{q.chapterName || ''}</span></span>
-                        <span className="dot">•</span>
-                        <span>Topic: {q.topicName || 'N/A'}</span>
-                        <span className="dot">•</span>
-                        <span className="src-tag">{q.source_type || 'book'}</span>
-                        {isSelected && <span className="chk">✓</span>}
-                      </div>
-                    </div>
+                            <div className={`q-meta ${isUrdu ? 'q-meta-rtl' : ''}`}>
+                              <span className="src-tag">Source Type: {q.source_type || 'book'}</span>
+                              {isSelected && <span className="chk">✓</span>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                ))}
+                </div>
+              ))}
             </>
           )}
         </div>
@@ -417,6 +481,88 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
       <style jsx global>{`
         .paper-container { background: #fff; width: 100%; position: relative; min-height: 250px; }
         .paper-body { contain: layout style; width: 100%; }
+
+        /* ── Chapter / topic groups ── */
+        .chapter-group { margin-top: 10px; }
+        .chapter-group:first-child { margin-top: 0; }
+        .chapter-heading {
+          display: flex;
+          flex-wrap: nowrap;
+          align-items: center;
+          gap: 8px;
+          padding: 7px 8px;
+          margin-bottom: 2px;
+          background: #eff6ff;
+          border-radius: 6px;
+        }
+        .chapter-badge {
+          background: #2563eb;
+          color: #fff;
+          font-size: 10px;
+          font-weight: 800;
+          padding: 2px 8px;
+          border-radius: 999px;
+          flex-shrink: 0;
+          white-space: nowrap;
+        }
+        .chapter-title {
+          font-size: 13px;
+          font-weight: 800;
+          color: #1e293b;
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .chapter-count { font-size: 10px; font-weight: 700; color: #64748b; flex-shrink: 0; white-space: nowrap; }
+
+        .topic-group { margin: 6px 0 6px 10px; border-left: 2px solid #e2e8f0; padding-left: 8px; }
+        .topic-heading {
+          display: flex;
+          flex-wrap: nowrap;
+          align-items: center;
+          gap: 8px;
+          padding: 4px 10px;
+          margin-bottom: 3px;
+          background: #f8fafc;
+          border: 1px solid #eef2f7;
+          border-radius: 6px;
+        }
+        .topic-number {
+          background: #eef2ff;
+          color: #4338ca;
+          border: 1px solid #e0e7ff;
+          font-size: 10.5px;
+          font-weight: 800;
+          padding: 1px 7px;
+          border-radius: 999px;
+          flex-shrink: 0;
+          white-space: nowrap;
+          font-variant-numeric: tabular-nums;
+        }
+        .topic-title {
+          flex: 1;
+          min-width: 0;
+          font-size: 11.5px;
+          font-weight: 700;
+          color: #475569;
+          letter-spacing: 0.01em;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .topic-count {
+          flex-shrink: 0;
+          background: #fff;
+          border: 1px solid #e2e8f0;
+          color: #94a3b8;
+          font-weight: 700;
+          font-size: 10px;
+          padding: 1px 8px;
+          border-radius: 999px;
+          white-space: nowrap;
+        }
 
         /* ── Row ── */
         .paper-row {
@@ -538,7 +684,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         .q-meta {
           display: flex;
           align-items: center;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
           gap: 2px;
           font-size: 8px;
           color: #94a3b8;
@@ -548,8 +694,8 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
         }
         .q-meta-rtl { direction: rtl; justify-content: flex-end; }
         .dot { color: #cbd5e1; }
-        .src-tag { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 0 5px; font-size: 9px; color: #64748b; }
-        .chk { color: #10b981; font-weight: 700; margin-left: auto; }
+        .src-tag { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 0 5px; font-size: 9px; color: #64748b; white-space: nowrap; }
+        .chk { color: #10b981; font-weight: 700; margin-left: auto; flex-shrink: 0; }
 
         /* ── Loading / Empty ── */
         .loading-state-overlay { display: flex; align-items: center; justify-content: center; padding: 80px 0; width: 100%; }

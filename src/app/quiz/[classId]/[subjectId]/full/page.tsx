@@ -9,6 +9,7 @@ import QuizModeSelector from "@/components/QuizModeSelector";
 import SwimmerGame from "@/components/SwimmerGame";
 import { toSlug } from "@/lib/slugUtils";
 import { renderHtmlWithMath } from "@/lib/renderHtmlWithMath";
+import 'katex/dist/katex.min.css';
 
 export default function FullSubjectQuizPage() {
   const supabase = createSupabaseBrowserClient();

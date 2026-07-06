@@ -3,8 +3,6 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
-  console.log("✅ API /api/instituteName was accessed");
-
   try {
     const supabase = await createSupabaseServerClient()
     
@@ -29,7 +27,6 @@ export async function GET(request: NextRequest) {
       profileError = result.error;
       if (!profileError) break;
       if (attempt < 2) {
-        console.log(`Institute name fetch attempt ${attempt} failed, retrying...`);
         await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // Exponential backoff
       }
     }

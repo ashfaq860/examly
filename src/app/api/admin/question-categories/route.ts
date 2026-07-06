@@ -7,6 +7,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
+// class_id/subject_id are interpolated directly into a raw PostgREST `.or()`
+// filter string below — must be validated as a UUID first so they can't be
+// used to inject extra filter clauses.
+function isValidUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireRole(['admin', 'super_admin']);
   if (auth.error) return auth.error;
@@ -15,6 +22,13 @@ export async function GET(req: NextRequest) {
   const questionType = searchParams.get('question_type');
   const classId      = searchParams.get('class_id');
   const subjectId    = searchParams.get('subject_id');
+
+  if (classId && !isValidUuid(classId)) {
+    return NextResponse.json({ error: 'Invalid class_id' }, { status: 400 });
+  }
+  if (subjectId && !isValidUuid(subjectId)) {
+    return NextResponse.json({ error: 'Invalid subject_id' }, { status: 400 });
+  }
 
   let query = supabase
     .from('question_categories')
