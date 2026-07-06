@@ -94,6 +94,7 @@ export default function HomeClientWrapper() {
                 ctaLabel="Start Creating"
                 delay={0}
                 theme="teal"
+                priority
               />
               <FeatureCard
                 img="/1monthfree.jpg"
@@ -328,7 +329,7 @@ const THEMES: Record<string, { solid: string; gradient: string; ringBorder: stri
 };
 
 const FeatureCard = memo(function FeatureCard({
-  img, eyebrow, title, subtitle, list, href, ctaLabel, delay, highlight, theme = 'blue',
+  img, eyebrow, title, subtitle, list, href, ctaLabel, delay, highlight, theme = 'blue', priority = false,
 }: any) {
   const t = THEMES[theme] || THEMES.blue;
   return (
@@ -354,7 +355,8 @@ const FeatureCard = memo(function FeatureCard({
               width={400}
               height={400}
               className="card-img-top"
-              loading="lazy"
+              loading={priority ? undefined : 'lazy'}
+              priority={priority}
               quality={60}
               sizes="(max-width: 768px) 100vw, 33vw"
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
