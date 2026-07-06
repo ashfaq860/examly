@@ -4,7 +4,6 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 //import '../styles/nprogress.css';
 import { Toaster } from 'react-hot-toast';
 import type { ReactNode } from 'react';
-import Script from 'next/script';
 import { Poppins } from 'next/font/google';
 import { UserProvider } from './context/userContext';
 import ClientLayoutWrapper from "./ClientLayoutWrapper";
@@ -60,13 +59,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 
       <body>
         <ChunkErrorReload />
-        {/* Only the admin question bank / manual question selection screens
-            use MathJax — load it off the critical path everywhere else so
-            it doesn't block first paint on marketing/dashboard pages. */}
-        <Script
-          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
-          strategy="lazyOnload"
-        />
+        {/* MathJax is NOT loaded here — it was previously loaded globally
+            (tex-mml-chtml.js, ~250KB) on every single page even though it's
+            only needed on the admin question bank / manual question selection
+            screens, which already load their own copy (tex-svg.js) on demand
+            via ManualQuestionSelection.tsx and admin/management/questions.
+            The global copy was pure dead weight (100% unused JS) everywhere else. */}
         <Toaster
   position="top-center" 
   reverseOrder={false} 

@@ -637,7 +637,15 @@ body {
    SCROLL ANIMATIONS
    ============================================================ */
 .scroll-progress-bar  { position: fixed; top: 62px; width: 100%; height: 3px; z-index: 999; background: rgba(255,255,255,0.1); }
-.scroll-progress-fill { height: 100%; background: linear-gradient(90deg, var(--brand-accent), var(--brand-primary-400)); transition: width 0.1s linear; }
+.scroll-progress-fill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--brand-accent), var(--brand-primary-400));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.1s linear;
+  will-change: transform;
+}
 
 .scroll-animate {
   opacity: 0;
@@ -648,23 +656,6 @@ body {
 .zoom-in          { transform: scale(0.94); transition: transform 0.6s var(--ease-out), opacity 0.6s var(--ease-out); }
 .zoom-in.in-view  { transform: scale(1); }
 .feature-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
-
-/* ============================================================
-   TICKER
-   ============================================================ */
-.ticker-wrapper { overflow: hidden; white-space: nowrap; padding: 10px 0; }
-.ticker {
-  display: inline-flex; align-items: center; gap: 24px;
-  animation: tickerMove 16s linear infinite;
-}
-.ticker-item      { font-size: 0.875rem; }
-.ticker-separator { opacity: 0.5; }
-.ticker-wrapper:hover .ticker { animation-play-state: paused; }
-
-@keyframes tickerMove {
-  0%   { transform: translateX(100%); }
-  100% { transform: translateX(-100%); }
-}
 
 /* ============================================================
    PAPER PREVIEW EDIT MODE

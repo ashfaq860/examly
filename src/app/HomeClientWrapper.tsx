@@ -52,7 +52,7 @@ export default function HomeClientWrapper() {
     <>
       {/* Scroll Progress */}
       <div className="scroll-progress-bar">
-        <div className="scroll-progress-fill" style={{ width: `${scrollProgress}%` }} />
+        <div className="scroll-progress-fill" style={{ transform: `scaleX(${scrollProgress / 100})` }} />
       </div>
 
       <CubeSlider />
@@ -355,7 +355,7 @@ const FeatureCard = memo(function FeatureCard({
               height={400}
               className="card-img-top"
               loading="lazy"
-              quality={75}
+              quality={60}
               sizes="(max-width: 768px) 100vw, 33vw"
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             />
@@ -488,7 +488,7 @@ const StudentCard = memo(function StudentCard({ img, eyebrow, title, description
             width={600}
             height={400}
             loading="lazy"
-            quality={75}
+            quality={60}
             sizes="(max-width: 768px) 100vw, 33vw"
             style={{ width: '100%', height: 'auto', display: 'block' }}
           />
