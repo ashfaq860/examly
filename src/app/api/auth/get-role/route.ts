@@ -36,13 +36,18 @@ export async function GET() {
 
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('role')
+      .select('role, is_disabled')
       .eq('id', user.id)
       .maybeSingle();
 
     if (profileError) {
       console.error('[get-role] DB error:', profileError);
       return NextResponse.json({ error: 'Failed to fetch role' }, { status: 500 });
+    }
+
+    if (profile?.is_disabled) {
+      await supabase.auth.signOut();
+      return NextResponse.json({ error: 'account_disabled' }, { status: 403 });
     }
 
     if (!profile) {

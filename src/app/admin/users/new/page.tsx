@@ -2,10 +2,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/AdminLayout";
+import { ArrowLeft, UserPlus } from "lucide-react";
+import toast from "react-hot-toast";
+import '../users.css';
 
 export default function NewUserPage() {
   const router = useRouter();
-  const [packages, setPackages] = useState([]);
+  const [packages, setPackages] = useState<any[]>([]);
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -13,8 +16,6 @@ export default function NewUserPage() {
     role: "student",
     subscription_status: "inactive",
     package_id: "",
-
-    // extra profile fields
     institution: "",
     subjects: "",
     cellno: "",
@@ -23,7 +24,6 @@ export default function NewUserPage() {
   });
   const [loading, setLoading] = useState(false);
 
-  // Fetch packages
   useEffect(() => {
     async function fetchPackages() {
       const res = await fetch("/api/admin/packages");
@@ -33,21 +33,19 @@ export default function NewUserPage() {
     fetchPackages();
   }, []);
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    const toastId = toast.loading("Creating user...");
 
     try {
-      // Convert the comma-separated subjects field into an array.
       const payload = {
         ...form,
-        subjects: form.subjects
-          ? form.subjects.split(",").map((s) => s.trim())
-          : [],
+        subjects: form.subjects ? form.subjects.split(",").map((s) => s.trim()) : [],
       };
 
       const res = await fetch("/api/admin/profiles", {
@@ -58,200 +56,114 @@ export default function NewUserPage() {
 
       if (!res.ok) throw new Error("Failed to create user");
 
+      toast.success("User created successfully", { id: toastId });
       router.push("/admin/users");
-    } catch (err) {
-      alert(err.message);
+    } catch (err: any) {
+      toast.error(err.message || "Create failed", { id: toastId });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <AdminLayout>
-      <div className="container mt-4">
-        <div className="card shadow-sm border-0">
-          <div className="card-header bg-primary text-white">
-            <h4 className="mb-0">Create New User</h4>
-          </div>
-          <div className="card-body p-4">
-            <form onSubmit={handleSubmit}>
-              <div className="row g-3">
-                {/* Left column */}
-                <div className="col-md-6">
-                  <div className="mb-3">
-                    <label className="form-label fw-bold">Full Name</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      name="full_name"
-                      value={form.full_name}
-                      onChange={handleChange}
-                      required
-                      placeholder="John Doe"
-                    />
-                  </div>
+    <AdminLayout activeTab="users">
+      <div className="usr">
+        <button className="usr-back" onClick={() => router.push("/admin/users")}>
+          <ArrowLeft size={15} /> Back to users
+        </button>
 
-                  <div className="mb-3">
-                    <label className="form-label fw-bold">Email</label>
-                    <input
-                      type="email"
-                      className="form-control"
-                      name="email"
-                      value={form.email}
-                      onChange={handleChange}
-                      required
-                      placeholder="user@example.com"
-                    />
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label fw-bold">Password</label>
-                    <input
-                      type="password"
-                      className="form-control"
-                      name="password"
-                      value={form.password}
-                      onChange={handleChange}
-                      required
-                      placeholder="********"
-                    />
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label fw-bold">Cell No</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      name="cellno"
-                      value={form.cellno}
-                      onChange={handleChange}
-                      placeholder="+92 300 1234567"
-                    />
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label fw-bold">Institution</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      name="institution"
-                      value={form.institution}
-                      onChange={handleChange}
-                      placeholder="School/Academy Name"
-                    />
-                  </div>
-                </div>
-
-                {/* Right column */}
-                <div className="col-md-6">
-                  <div className="mb-3">
-                    <label className="form-label fw-bold">Role</label>
-                    <select
-                      className="form-select"
-                      name="role"
-                      value={form.role}
-                      onChange={handleChange}
-                    >
-                      <option value="student">Student</option>
-                      <option value="teacher">Teacher</option>
-                      <option value="academy">Academy</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label fw-bold">
-                      Subscription Status
-                    </label>
-                    <select
-                      className="form-select"
-                      name="subscription_status"
-                      value={form.subscription_status}
-                      onChange={handleChange}
-                    >
-                      <option value="inactive">Inactive</option>
-                      <option value="active">Active</option>
-                      <option value="trial">Trial</option>
-                      <option value="canceled">Canceled</option>
-                    </select>
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label fw-bold">Activate Package</label>
-                    <select
-                      className="form-select"
-                      name="package_id"
-                      value={form.package_id}
-                      onChange={handleChange}
-                    >
-                      <option value="">-- No Package --</option>
-                      {packages.map((pkg) => (
-                        <option key={pkg.id} value={pkg.id}>
-                          {pkg.name} ({pkg.price} {pkg.currency})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label fw-bold">Subjects</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      name="subjects"
-                      value={form.subjects}
-                      onChange={handleChange}
-                      placeholder="Math, Physics, Chemistry"
-                    />
-                    <div className="form-text">
-                      Separate multiple subjects with commas
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label fw-bold">Logo URL</label>
-                    <input
-                      type="url"
-                      className="form-control"
-                      name="logo"
-                      value={form.logo}
-                      onChange={handleChange}
-                      placeholder="https://example.com/logo.png"
-                    />
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label fw-bold">Trial Ends At</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      name="trial_ends_at"
-                      value={form.trial_ends_at}
-                      onChange={handleChange}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 d-flex justify-content-end">
-                <button
-                  type="submit"
-                  className="btn btn-success px-4"
-                  disabled={loading}
-                >
-                  {loading ? "Creating..." : "Create User"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary ms-2 px-4"
-                  onClick={() => router.push("/admin/users")}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+        <div className="usr-hd">
+          <div>
+            <div className="usr-eyebrow"><span className="usr-eyebrow-dot" />User management</div>
+            <h1><UserPlus size={20} style={{ verticalAlign: -3, marginRight: 6 }} />Create new user</h1>
+            <p>Add a teacher, academy, or student account and optionally activate a package.</p>
           </div>
         </div>
+
+        <form onSubmit={handleSubmit} className="usr-form-card">
+          <div className="usr-form-grid">
+            <div className="usr-field">
+              <label>Full name</label>
+              <input type="text" name="full_name" value={form.full_name} onChange={handleChange} required placeholder="John Doe" />
+            </div>
+
+            <div className="usr-field">
+              <label>Role</label>
+              <select name="role" value={form.role} onChange={handleChange}>
+                <option value="student">Student</option>
+                <option value="teacher">Teacher</option>
+                <option value="academy">Academy</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            <div className="usr-field">
+              <label>Email</label>
+              <input type="email" name="email" value={form.email} onChange={handleChange} required placeholder="user@example.com" />
+            </div>
+
+            <div className="usr-field">
+              <label>Subscription status</label>
+              <select name="subscription_status" value={form.subscription_status} onChange={handleChange}>
+                <option value="inactive">Inactive</option>
+                <option value="active">Active</option>
+                <option value="trial">Trial</option>
+                <option value="canceled">Canceled</option>
+              </select>
+            </div>
+
+            <div className="usr-field">
+              <label>Password</label>
+              <input type="password" name="password" value={form.password} onChange={handleChange} required placeholder="********" />
+            </div>
+
+            <div className="usr-field">
+              <label>Activate package</label>
+              <select name="package_id" value={form.package_id} onChange={handleChange}>
+                <option value="">— No package —</option>
+                {packages.map((pkg) => (
+                  <option key={pkg.id} value={pkg.id}>{pkg.name} ({pkg.price} {pkg.currency})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="usr-field">
+              <label>Cell no</label>
+              <input type="text" name="cellno" value={form.cellno} onChange={handleChange} placeholder="+92 300 1234567" />
+            </div>
+
+            <div className="usr-field">
+              <label>Subjects</label>
+              <input type="text" name="subjects" value={form.subjects} onChange={handleChange} placeholder="Math, Physics, Chemistry" />
+              <span className="usr-hint">Separate multiple subjects with commas</span>
+            </div>
+
+            <div className="usr-field">
+              <label>Institution</label>
+              <input type="text" name="institution" value={form.institution} onChange={handleChange} placeholder="School/Academy name" />
+            </div>
+
+            <div className="usr-field">
+              <label>Trial ends at</label>
+              <input type="date" name="trial_ends_at" value={form.trial_ends_at} onChange={handleChange} />
+            </div>
+
+            <div className="usr-field usr-field-full">
+              <label>Logo URL</label>
+              <input type="url" name="logo" value={form.logo} onChange={handleChange} placeholder="https://example.com/logo.png" />
+              {form.logo && <img src={form.logo} alt="Logo" className="usr-logo-preview" />}
+            </div>
+          </div>
+
+          <div className="usr-form-actions">
+            <button type="button" className="usr-btn usr-btn-ghost" onClick={() => router.push("/admin/users")}>
+              Cancel
+            </button>
+            <button type="submit" className="usr-btn usr-btn-primary" disabled={loading}>
+              <UserPlus size={15} /> {loading ? "Creating…" : "Create user"}
+            </button>
+          </div>
+        </form>
       </div>
     </AdminLayout>
   );

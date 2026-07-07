@@ -71,7 +71,15 @@ export async function GET(request: Request) {
 
   await ensureProfile(user);
 
-  const role = await getRole(user.id);
+  const profile = await getProfile(user.id);
+  if (profile?.is_disabled) {
+    // Session tokens only live in-memory at this point (persisted cookies
+    // are set below) — not writing them anywhere below is enough to keep
+    // this account signed out.
+    return NextResponse.redirect(`${origin}/auth/login?error=account_disabled`);
+  }
+
+  const role = profile?.role ?? null;
   if (!role || !ALLOWED_ROLES.includes(role as UserRole)) {
     return NextResponse.redirect(`${origin}/auth/login?error=unauthorized_role`);
   }
@@ -118,10 +126,10 @@ response.cookies.set('role', role, {
   return response;
 }
 
-async function getRole(userId: string): Promise<string | null> {
+async function getProfile(userId: string): Promise<{ role: string | null; is_disabled: boolean } | null> {
   const { data } = await supabaseAdmin
-    .from('profiles').select('role').eq('id', userId).maybeSingle();
-  return data?.role ?? null;
+    .from('profiles').select('role, is_disabled').eq('id', userId).maybeSingle();
+  return data ?? null;
 }
 
 async function ensureProfile(user: any) {

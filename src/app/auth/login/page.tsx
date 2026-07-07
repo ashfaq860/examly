@@ -10,6 +10,14 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 const ALLOWED_ROLES = ['teacher', 'admin', 'super_admin', 'academy'] as const;
 type UserRole = (typeof ALLOWED_ROLES)[number];
 
+const ACCOUNT_DISABLED_MESSAGE =
+  'Your account has been disabled due to a violation of our Terms & Conditions. Please contact support if you believe this is a mistake.';
+
+type RoleResolution =
+  | { status: 'ok'; role: UserRole }
+  | { status: 'disabled' }
+  | { status: 'denied' };
+
 function isAllowedRole(role: string): role is UserRole {
   return ALLOWED_ROLES.includes(role as UserRole);
 }
@@ -27,15 +35,16 @@ function getCallbackUrl(): string {
   return `${base}/auth/callback`;
 }
 
-async function fetchRoleFromApi(): Promise<UserRole | null> {
+async function fetchRoleFromApi(): Promise<RoleResolution | null> {
   try {
     const res = await fetch('/api/auth/get-role', { method: 'GET' });
     const contentType = res.headers.get('content-type') ?? '';
     if (!contentType.includes('application/json')) return null;
     const body = await res.json();
+    if (body?.error === 'account_disabled') return { status: 'disabled' };
     if (!res.ok || !body.role) return null;
     if (!isAllowedRole(body.role)) return null;
-    return body.role as UserRole;
+    return { status: 'ok', role: body.role as UserRole };
   } catch {
     return null;
   }
@@ -44,15 +53,16 @@ async function fetchRoleFromApi(): Promise<UserRole | null> {
 async function fetchRoleFromClient(
   supabase: ReturnType<typeof createSupabaseBrowserClient>,
   userId: string
-): Promise<UserRole | null> {
+): Promise<RoleResolution | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, is_disabled')
     .eq('id', userId)
     .maybeSingle();
-  if (error || !data?.role) return null;
-  if (!isAllowedRole(data.role)) return null;
-  return data.role as UserRole;
+  if (error || !data) return null;
+  if (data.is_disabled) return { status: 'disabled' };
+  if (!data.role || !isAllowedRole(data.role)) return null;
+  return { status: 'ok', role: data.role as UserRole };
 }
 
 export default function LoginPage() {
@@ -68,10 +78,11 @@ export default function LoginPage() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   const resolveRole = useCallback(
-    async (userId: string): Promise<UserRole | null> => {
-      const apiRole = await fetchRoleFromApi();
-      if (apiRole) return apiRole;
-      return fetchRoleFromClient(supabase, userId);
+    async (userId: string): Promise<RoleResolution> => {
+      const apiResult = await fetchRoleFromApi();
+      if (apiResult) return apiResult;
+      const clientResult = await fetchRoleFromClient(supabase, userId);
+      return clientResult ?? { status: 'denied' };
     },
     [supabase]
   );
@@ -86,6 +97,7 @@ export default function LoginPage() {
           auth_failed: 'Authentication failed. Please try again.',
           profile_creation_failed: 'Could not create your profile. Please contact support.',
           unauthorized_role: 'Your account does not have access to this portal.',
+          account_disabled: ACCOUNT_DISABLED_MESSAGE,
         };
         setErr(messages[callbackError] ?? `Login error: ${callbackError.replace(/_/g, ' ')}`);
         setChecking(false);
@@ -95,11 +107,21 @@ export default function LoginPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) { setChecking(false); return; }
 
-      const role = await resolveRole(session.user.id);
-      if (!role) { await supabase.auth.signOut(); setChecking(false); return; }
+      const result = await resolveRole(session.user.id);
+      if (result.status === 'disabled') {
+        await supabase.auth.signOut();
+        setErr(ACCOUNT_DISABLED_MESSAGE);
+        setChecking(false);
+        return;
+      }
+      if (result.status === 'denied') {
+        await supabase.auth.signOut();
+        setChecking(false);
+        return;
+      }
 
-      Cookies.set('role', role, { expires: 7, path: '/' });
-      router.replace(getRedirectPath(role));
+      Cookies.set('role', result.role, { expires: 7, path: '/' });
+      router.replace(getRedirectPath(result.role));
     } catch (e) {
       console.error('Session check error:', e);
       setChecking(false);
@@ -121,15 +143,20 @@ export default function LoginPage() {
       const userId = data.user?.id;
       if (!userId) { setErr('Login failed. Please try again.'); return; }
 
-      const role = await resolveRole(userId);
-      if (!role) {
+      const result = await resolveRole(userId);
+      if (result.status === 'disabled') {
+        setErr(ACCOUNT_DISABLED_MESSAGE);
+        await supabase.auth.signOut();
+        return;
+      }
+      if (result.status === 'denied') {
         setErr('Unable to verify your role. Please contact support.');
         await supabase.auth.signOut();
         return;
       }
 
-      Cookies.set('role', role, { expires: 7, path: '/' });
-      router.push(getRedirectPath(role));
+      Cookies.set('role', result.role, { expires: 7, path: '/' });
+      router.push(getRedirectPath(result.role));
     } catch (e) {
       console.error('Unexpected login error:', e);
       setErr('An unexpected error occurred. Please try again.');

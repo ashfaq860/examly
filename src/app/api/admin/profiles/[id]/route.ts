@@ -18,7 +18,24 @@ export async function GET(
     .single();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
-  return Response.json(data);
+
+  // Breakdown of generated papers by class + subject, e.g. Class 9 - Mathematics: 5
+  const { data: papers } = await supabaseAdmin
+    .from("papers")
+    .select("class_name, subject_name")
+    .eq("created_by", id);
+
+  const subjectCounts: Record<string, { class_name: string; subject_name: string; count: number }> = {};
+  (papers || []).forEach((p) => {
+    const className = p.class_name || "Unspecified class";
+    const subjectName = p.subject_name || "Unspecified subject";
+    const key = `${className}::${subjectName}`;
+    if (!subjectCounts[key]) subjectCounts[key] = { class_name: className, subject_name: subjectName, count: 0 };
+    subjectCounts[key].count += 1;
+  });
+  const papersBySubject = Object.values(subjectCounts).sort((a, b) => b.count - a.count);
+
+  return Response.json({ ...data, papersBySubject, totalPapersGenerated: papers?.length ?? 0 });
 }
 
 // ✅ UPDATE profile
@@ -33,11 +50,16 @@ export async function PUT(
   const body = await req.json();
 
   // Allowlist fields — never let the request body set arbitrary columns
-  const { full_name, role, institution, subscription_status, trial_ends_at, cellno, logo, subjects } = body;
+  const { full_name, role, institution, subscription_status, trial_ends_at, cellno, logo, subjects, is_disabled } = body;
+
+  const updatePayload: Record<string, unknown> = {
+    full_name, role, institution, subscription_status, trial_ends_at, cellno, logo, subjects,
+  };
+  if (typeof is_disabled === "boolean") updatePayload.is_disabled = is_disabled;
 
   const { data, error } = await supabaseAdmin
     .from("profiles")
-    .update({ full_name, role, institution, subscription_status, trial_ends_at, cellno, logo, subjects })
+    .update(updatePayload)
     .eq("id", id)
     .select()
     .single();

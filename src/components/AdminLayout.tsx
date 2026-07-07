@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, ShoppingBag, Settings,
   Layers, Grid, BookOpen, FilePlus, Book,
   ChevronRight, Menu, X, LogOut,
-  ShieldCheck, Sparkles
+  ShieldCheck, Sparkles, BarChart3
 } from 'lucide-react';
 
 const supabase = createSupabaseBrowserClient();
@@ -21,6 +21,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
 
   const navItems = [
     { id: '', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+    { id: 'analytics', label: 'Analytics', icon: <BarChart3 size={18} /> },
     { id: 'users', label: 'User Management', icon: <Users size={18} /> },
     { id: 'orders', label: 'Order Management', icon: <ShoppingBag size={18} /> },
     {
