@@ -1,8 +1,17 @@
 // src/app/api/auth/signup/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import nodemailer from 'nodemailer';
 import { isRateLimited, getClientIp } from '@/lib/rateLimit';
+
+// Plain anon-key client (no cookie/session persistence needed for a one-shot
+// signup request) - used only so Supabase's own Auth service sends the
+// confirmation email itself, the same way it would for a client-side signUp.
+const supabaseAnon = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
 
 /* -------------------- helpers -------------------- */
 
@@ -14,6 +23,8 @@ const generateReferralCode = () => {
   }
   return code;
 };
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /* -------------------- route -------------------- */
 
@@ -30,17 +41,50 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
     }
 
-    /* -------------------- 1. Create auth user -------------------- */
-    const { data: authData, error: authError } =
-      await supabaseAdmin.auth.admin.createUser({
-        email: email.trim(),
-        password: password.trim(),
-        email_confirm: false,
-        user_metadata: { name: name.trim() },
-      });
+    if (!EMAIL_REGEX.test(String(email).trim())) {
+      return NextResponse.json({ error: 'Please enter a valid email address.' }, { status: 400 });
+    }
+
+    /* -------------------- 1. Create auth user --------------------
+       Uses the public signUp() (not the admin API) so Supabase's own Auth
+       service sends the confirmation email itself - via whatever mailer is
+       configured in the Supabase dashboard (default, or Custom SMTP). No
+       manual link generation or nodemailer needed. */
+    const { data: authData, error: authError } = await supabaseAnon.auth.signUp({
+      email: email.trim(),
+      password: password.trim(),
+      options: {
+        data: { name: name.trim() },
+        emailRedirectTo: process.env.CONFIRM_EMAIL || 'http://localhost:3000/auth/login',
+      },
+    });
 
     if (authError || !authData.user) {
-      return NextResponse.json({ error: authError?.message || 'Auth failed' }, { status: 400 });
+      console.error('Supabase signUp failed:', authError);
+      // Retryable/5xx errors from Supabase (e.g. its mailer choking while
+      // trying to send the confirmation email as part of the signup request)
+      // carry an unhelpful or empty message - don't leak that raw text to
+      // the user, give them something actionable instead.
+      const isTransient = authError?.name === 'AuthRetryableFetchError' || (authError as any)?.status >= 500;
+      const isWeakPassword = (authError as any)?.code === 'weak_password' || authError?.name === 'AuthWeakPasswordError';
+      const message = isTransient
+        ? 'Our signup service is temporarily unavailable. Please try again in a moment.'
+        : isWeakPassword
+        ? 'Password must include at least one lowercase letter, one uppercase letter, and one number.'
+        : authError?.message || 'Auth failed';
+      return NextResponse.json({ error: message }, { status: isTransient ? 503 : 400 });
+    }
+
+    // Supabase deliberately returns a "successful" response with no error
+    // for an email that's already registered (anti-enumeration behavior) -
+    // it just comes back with an empty `identities` array instead. Without
+    // this check we'd fall through and overwrite the existing account's
+    // profile (referral code, subscription status, paper counts, etc.).
+    if (authData.user.identities && authData.user.identities.length === 0) {
+      return NextResponse.json(
+        { error: 'This email is already registered. Please log in instead.' },
+        { status: 409 }
+      );
     }
 
     const userId = authData.user.id;
@@ -80,46 +124,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: profileError.message }, { status: 500 });
     }
 
-    /* -------------------- 4. Generate signup confirmation link -------------------- */
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'signup',
-      email: email.trim(),
-      redirectTo: process.env.CONFIRM_EMAIL || 'http://localhost:3000/auth/login',
-    });
-
-    if (linkError || !linkData?.properties?.action_link) {
-      return NextResponse.json({ error: 'Failed to generate signup link' }, { status: 500 });
-    }
-
-    /* -------------------- 5. Send confirmation email -------------------- */
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: 'muhmdashfaq@gmail.com',
-        pass: process.env.GOOGLE_APP_PASSWORD,
-      },
-    });
-
-    await transporter.sendMail({
-      from: `"Examly.pk" <muhmdashfaq@gmail.com>`,
-      to: email,
-      subject: 'Confirm your Examly account',
-      html: `<p>Hello ${name},</p>
-             <p>Click the link below to confirm your email and activate your account:</p>
-             <a href="${linkData.properties.action_link}">Confirm Email</a>
-             <p>If you didn’t request this, ignore this email.</p>`,
-    });
-
-    /* -------------------- 6. Success -------------------- */
+    /* -------------------- 4. Success --------------------
+       Supabase already sent the confirmation email as part of signUp() above. */
     return NextResponse.json({
-      message: 'Account created successfully. Confirmation email sent!',
+      message: 'Account created successfully. Please check your email to confirm your account.',
       email,
     });
 
   } catch (err: any) {
     console.error('Signup error:', err);
-    return NextResponse.json({ error: err.message || 'Unexpected server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong while creating your account. Please try again shortly.' }, { status: 500 });
   }
 }

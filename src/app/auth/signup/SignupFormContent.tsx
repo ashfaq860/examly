@@ -10,6 +10,12 @@ import { Eye, EyeOff } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import Cookies from 'js-cookie';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Mirrors the password policy configured in Supabase (Authentication > Providers
+// > Email): at least one lowercase letter, one uppercase letter, and one number.
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+const PASSWORD_HINT = 'Password must be at least 6 characters and include a lowercase letter, an uppercase letter, and a number.';
+
 export default function SignupForm() {
   const search = useSearchParams();
   const router = useRouter();
@@ -23,6 +29,8 @@ export default function SignupForm() {
   const [referralCode, setReferralCode] = useState(referralCodeFromUrl);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   // ✅ Redirect logged-in users
  /* useEffect(() => {
@@ -79,8 +87,47 @@ useEffect(() => {
 
   const togglePasswordVisibility = () => setShowPassword(!showPassword);
 
+  const validateEmail = (value: string) => {
+    if (!EMAIL_REGEX.test(value.trim())) {
+      setEmailError('Please enter a valid email address.');
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEmail(e.target.value);
+    if (emailError) validateEmail(e.target.value);
+  };
+
+  const validatePassword = (value: string) => {
+    if (value.length < 6 || !PASSWORD_REGEX.test(value)) {
+      setPasswordError(PASSWORD_HINT);
+      return false;
+    }
+    setPasswordError('');
+    return true;
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+    if (passwordError) validatePassword(e.target.value);
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!validateEmail(email)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
+
+    if (!validatePassword(password)) {
+      toast.error(PASSWORD_HINT);
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch('/api/auth/signup', {
@@ -136,11 +183,13 @@ useEffect(() => {
           <input
             required
             type="email"
-            className="form-control"
+            className={`form-control ${emailError ? 'is-invalid' : ''}`}
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={handleEmailChange}
+            onBlur={(e) => validateEmail(e.target.value)}
             placeholder="Enter your email address"
           />
+          {emailError && <div className="invalid-feedback d-block">{emailError}</div>}
         </div>
 
         {/* Referral Code (optional, hidden) */}
@@ -165,9 +214,10 @@ useEffect(() => {
               required
               minLength={6}
               type={showPassword ? 'text' : 'password'}
-              className="form-control"
+              className={`form-control ${passwordError ? 'is-invalid' : ''}`}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={handlePasswordChange}
+              onBlur={(e) => validatePassword(e.target.value)}
               placeholder="At least 6 characters"
             />
             <button
@@ -179,6 +229,7 @@ useEffect(() => {
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
+          {passwordError && <div className="invalid-feedback d-block">{passwordError}</div>}
         </div>
 
         <button className="btn btn-primary w-100 mb-3" disabled={loading}>
