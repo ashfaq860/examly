@@ -142,6 +142,7 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
     mcqLineHeight: 1.2,
     logoWidth: 120,
     logoHeight: 60,
+    mcqLayoutStyle: 'simple',
   });
 
   const supabase = createSupabaseBrowserClient();
@@ -488,6 +489,9 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
       setPaperLanguage(autoLanguage);
       setValue('language', autoLanguage);
       setValue('mcqPlacement', 'separate');
+      // Board Pattern papers always start out with the bordered MCQ table —
+      // the user can still switch to Table/Simple afterwards in Paper Style.
+      setSettings(prev => ({ ...prev, mcqLayoutStyle: 'bordered' }));
 
       const boardRules: BoardRule[] = await BoardPatternService.fetchBoardRules(watchedSubjectId, watchedClassId);
 
@@ -1222,7 +1226,7 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
                     {isGeneratingBoardPattern
                       ? <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
                       : <i className="bi bi-magic" />}
-                    Generate Board Pattern Paper
+                    Generate Board Pattern Paper-Full Book
                   </button>
                   <button
                     className="btn btn-outline-dark btn-lg px-3 d-flex align-items-center justify-content-center gap-2"

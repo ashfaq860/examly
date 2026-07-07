@@ -55,6 +55,12 @@ export const QuestionSelectorModal: React.FC<any> = ({
   // Disable layout/lang if any sections exist
   const isGlobalConfigDisabled = paperData.sections.length > 0;
 
+  // Urdu/English subjects are single-language by nature — lock the
+  // Language dropdown to that language, matching the same subject-name
+  // check PaperBuilderApp already uses to force `currentLanguage`.
+  const isUrduSubject = currentSubject?.name === 'Urdu';
+  const isEnglishSubject = currentSubject?.name === 'English';
+
   // --- Layout & Limits Logic ---
   // NOTE: four_papers uses maxShort/maxLong (bucketed caps) instead of
   // maxMcq/maxSubjective, since short and long types have different,
@@ -278,6 +284,19 @@ export const QuestionSelectorModal: React.FC<any> = ({
     setCurrentLanguage(val);
   };
 
+  // Urdu/English subjects are single-language by nature. If the language
+  // ever comes in mismatched (e.g. a stale value restored from the
+  // 'questionPapers' localStorage snapshot in updateLocalState above),
+  // force it back to the one language the dropdown now allows.
+  useEffect(() => {
+    if (isUrduSubject && paperData.language !== 'urdu') {
+      handleLanguageChange('urdu');
+    } else if (isEnglishSubject && paperData.language !== 'english') {
+      handleLanguageChange('english');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUrduSubject, isEnglishSubject, paperData.language]);
+
   const handleAddPaperManual = () => {
     const questions = selectedQuestions[selectedType] || [];
     if (questions.length === 0) return toast.error("Select questions first");
@@ -456,9 +475,17 @@ export const QuestionSelectorModal: React.FC<any> = ({
                   disabled={isGlobalConfigDisabled}
                   onChange={(e) => handleLanguageChange(e.target.value)}
                 >
-                  <option value="english">Eng</option>
-                  <option value="urdu">Urdu</option>
-                  <option value="bilingual">Both</option>
+                  {isUrduSubject ? (
+                    <option value="urdu">Urdu</option>
+                  ) : isEnglishSubject ? (
+                    <option value="english">Eng</option>
+                  ) : (
+                    <>
+                      <option value="english">Eng</option>
+                      <option value="urdu">Urdu</option>
+                      <option value="bilingual">Both</option>
+                    </>
+                  )}
                 </select>
               </div>
             </div>

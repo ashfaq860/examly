@@ -50,6 +50,16 @@ export interface PaperSettings {
    *  reasoning as showAnswerLines — the 2/3/4-papers-per-page mini-slots
    *  have no room. */
   showMcqBubbleSheet?: boolean;
+  /** How each MCQ row is laid out. Toggled as a single on/off switch in
+   *  Paper Style ("Bordered Table"). 'bordered' = Q.No sits in its own
+   *  bordered column beside the question, with a divider line between
+   *  every question (used by default for Board Pattern papers, matching a
+   *  standard printed answer sheet). 'simple' = default, Q.No inline with
+   *  the question in a plain row, no table. 'table' is a legacy value
+   *  (same two-column table, no visible border lines) kept only so old
+   *  saved papers that stored it keep rendering the same way; the UI no
+   *  longer exposes it. Defaults to 'simple' when unset. */
+  mcqLayoutStyle?: 'bordered' | 'table' | 'simple';
 }
 
 export interface LanguageConfig {

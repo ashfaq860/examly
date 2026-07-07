@@ -433,6 +433,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <label className="form-label x-small fw-bold text-dark d-flex align-items-center gap-1 mb-2">
                   <List size={13} className="text-muted" /> MCQ Part Style
                 </label>
+
+                <div className="d-flex align-items-center justify-content-between mb-2">
+                  <div>
+                    <span className="small fw-bold d-block">Bordered Table</span>
+                    <span className="text-muted" style={{ fontSize: '0.68rem' }}>Q.No + options in a bordered table</span>
+                  </div>
+                  <div className="form-check form-switch mb-0">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      role="switch"
+                      checked={settings.mcqLayoutStyle === 'bordered'}
+                      onChange={(e) => onSettingChange('mcqLayoutStyle', e.target.checked ? 'bordered' : 'simple')}
+                    />
+                  </div>
+                </div>
+
                 <div className="d-flex justify-content-between x-small text-muted mb-1">
                   <span>Font Size</span>
                   <span>{settings.mcqFontSize || 12}px</span>

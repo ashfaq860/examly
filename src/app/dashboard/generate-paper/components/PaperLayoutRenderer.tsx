@@ -1424,57 +1424,140 @@ const renderPairedQuestions = () => {
    // const subgroups: any[] | undefined = (section as any).subgroups;
     //const hasSubgroups = Array.isArray(subgroups) && subgroups.length > 1;
 
-    const renderQuestionsList = (qs: any[], baseOffset: number, suppressNum = false) => (
-      <div
-        className="questions-list row g-2 mx-0"
-        style={{ direction: sectionType === 'translate_english' ? 'rtl' : '' as any }}
-      >
-        {qs.map((q, qIdx) => {
-          const finalIndex = isLongType
-            ? (paperLanguage === 'urdu' ? startNum : startNum + baseOffset + qIdx)
-            : getQuestionDisplayIndex(baseOffset + qIdx);
-          return (
-            <div
-              key={`${q.id}-${baseOffset}-${qIdx}`}
-              ref={el => onQuestionRef?.(q.id, baseOffset + qIdx, el)}
-              className={`${getDynamicColClass(q)} px-2 mt-1`}
-            >
-              <QuestionRenderer
-                question={q}
-                index={finalIndex}
-                qIdx={baseOffset + qIdx}
-                sectionType={section.type}
-                sectionId={section.id}
-                paperLanguage={paperLanguage}
-                isEditMode={isEditMode}
-                config={config}
-                fontSize={settings.fontSize}
-                metaFontSize={settings.metaFontSize}
-                questionFontFamily={settings.fontFamily}
-                questionLineSpacing={settings.lineHeight}
-                mcqFontSize={settings.mcqFontSize ?? 12}
-                mcqLineHeight={settings.mcqLineHeight ?? 1.2}
-                onTextChange={onTextChange}
-                marks={q.marks || section.marksEach}
-                isUrduSubject={isUrduOrEnglish}
-                isLast={baseOffset + qIdx === questions.length - 1}
-                headingFontSize={settings.headingFontSize}
-                suppressNumbering={suppressNum}
-                shouldShowOr={
-                  isLongType && isUrduOrEnglish &&
-                  section.totalQuestions === 2 && section.attemptCount === 1
-                }
-                renderInlineBilingual={renderInlineBilingual}
-                showAnswerLines={answerLinesAllowed && sectionType !== 'mcq'}
-                answerLinesShort={settings.answerLinesShort}
-                answerLinesLong={settings.answerLinesLong}
-                answerLineGapMm={settings.answerLineGapMm}
-              />
-            </div>
-          );
-        })}
-      </div>
-    );
+    // MCQ Table/Bordered layout renders the whole list as a real HTML
+    // <table> — one <tr> per question, Q.No in its own <td>, question+options
+    // in the other — instead of the normal flex/grid bucketing by option
+    // length. A genuine table (not a CSS display:table div) is what
+    // reliably keeps its grid lines through print/PDF export.
+    const isMcqBoxedSection    = sectionType === 'mcq' && !!settings.mcqLayoutStyle && settings.mcqLayoutStyle !== 'simple';
+    const isMcqBorderedSection = sectionType === 'mcq' && settings.mcqLayoutStyle === 'bordered';
+    const mcqCellBorder        = isMcqBorderedSection ? '2px solid #000' : 'none';
+
+    // Plain Q.No label for the dedicated number column — mirrors
+    // QuestionRenderer's own MCQ number rendering, which is bypassed here
+    // via suppressNumbering since the number now lives in its own <td>.
+    const renderMcqNumberCell = (displayIndex: number) => {
+      const label = `${displayIndex + 1}.`;
+      const numFontSize = settings.mcqFontSize ?? 12;
+      return paperLanguage === 'urdu' ? (
+        <span style={{ fontSize: `${numFontSize}px`, fontFamily: URDU_FONT, direction: 'ltr', unicodeBidi: 'embed' as any }}>
+          {label}
+        </span>
+      ) : (
+        <span style={{ fontSize: `${numFontSize}px`, fontFamily: settings.fontFamily }}>
+          {label}
+        </span>
+      );
+    };
+
+    const renderQuestionsList = (qs: any[], baseOffset: number, suppressNum = false) => {
+      if (isMcqBoxedSection) {
+        return (
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', marginTop: '2px' }}>
+            <colgroup>
+              <col style={{ width: '32px' }} />
+              <col />
+            </colgroup>
+            <tbody>
+              {qs.map((q, qIdx) => {
+                const finalIndex = getQuestionDisplayIndex(baseOffset + qIdx);
+                return (
+                  <tr
+                    key={`${q.id}-${baseOffset}-${qIdx}`}
+                    ref={el => onQuestionRef?.(q.id, baseOffset + qIdx, el as unknown as HTMLDivElement)}
+                  >
+                    <td style={{ border: mcqCellBorder, width: '32px', verticalAlign: 'top', padding: '3px 6px' }}>
+                      {renderMcqNumberCell(finalIndex)}
+                    </td>
+                    <td style={{ border: mcqCellBorder, verticalAlign: 'top', padding: '3px 6px' }}>
+                      <QuestionRenderer
+                        question={q}
+                        index={finalIndex}
+                        qIdx={baseOffset + qIdx}
+                        sectionType={section.type}
+                        sectionId={section.id}
+                        paperLanguage={paperLanguage}
+                        isEditMode={isEditMode}
+                        config={config}
+                        fontSize={settings.fontSize}
+                        metaFontSize={settings.metaFontSize}
+                        questionFontFamily={settings.fontFamily}
+                        questionLineSpacing={settings.lineHeight}
+                        mcqFontSize={settings.mcqFontSize ?? 12}
+                        mcqLineHeight={settings.mcqLineHeight ?? 1.2}
+                        onTextChange={onTextChange}
+                        marks={q.marks || section.marksEach}
+                        isUrduSubject={isUrduOrEnglish}
+                        isLast={baseOffset + qIdx === questions.length - 1}
+                        headingFontSize={settings.headingFontSize}
+                        suppressNumbering={true}
+                        renderInlineBilingual={renderInlineBilingual}
+                        showAnswerLines={false}
+                        answerLinesShort={settings.answerLinesShort}
+                        answerLinesLong={settings.answerLinesLong}
+                        answerLineGapMm={settings.answerLineGapMm}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        );
+      }
+
+      return (
+        <div
+          className="questions-list row g-2 mx-0"
+          style={{ direction: sectionType === 'translate_english' ? 'rtl' : '' as any }}
+        >
+          {qs.map((q, qIdx) => {
+            const finalIndex = isLongType
+              ? (paperLanguage === 'urdu' ? startNum : startNum + baseOffset + qIdx)
+              : getQuestionDisplayIndex(baseOffset + qIdx);
+            return (
+              <div
+                key={`${q.id}-${baseOffset}-${qIdx}`}
+                ref={el => onQuestionRef?.(q.id, baseOffset + qIdx, el)}
+                className={`${getDynamicColClass(q)} px-2 mt-1`}
+              >
+                <QuestionRenderer
+                  question={q}
+                  index={finalIndex}
+                  qIdx={baseOffset + qIdx}
+                  sectionType={section.type}
+                  sectionId={section.id}
+                  paperLanguage={paperLanguage}
+                  isEditMode={isEditMode}
+                  config={config}
+                  fontSize={settings.fontSize}
+                  metaFontSize={settings.metaFontSize}
+                  questionFontFamily={settings.fontFamily}
+                  questionLineSpacing={settings.lineHeight}
+                  mcqFontSize={settings.mcqFontSize ?? 12}
+                  mcqLineHeight={settings.mcqLineHeight ?? 1.2}
+                  onTextChange={onTextChange}
+                  marks={q.marks || section.marksEach}
+                  isUrduSubject={isUrduOrEnglish}
+                  isLast={baseOffset + qIdx === questions.length - 1}
+                  headingFontSize={settings.headingFontSize}
+                  suppressNumbering={suppressNum}
+                  shouldShowOr={
+                    isLongType && isUrduOrEnglish &&
+                    section.totalQuestions === 2 && section.attemptCount === 1
+                  }
+                  renderInlineBilingual={renderInlineBilingual}
+                  showAnswerLines={answerLinesAllowed && sectionType !== 'mcq'}
+                  answerLinesShort={settings.answerLinesShort}
+                  answerLinesLong={settings.answerLinesLong}
+                  answerLineGapMm={settings.answerLineGapMm}
+                />
+              </div>
+            );
+          })}
+        </div>
+      );
+    };
 
     return (
       <div
@@ -1591,6 +1674,105 @@ const renderPairedQuestions = () => {
   (() => {
     let offset = 0;
     const totalSubgroupMarks = subgroups!.reduce((sum, sg) => sum + (sg.attemptCount || 0) * (sg.marksEach || 0), 0);
+
+    // MCQ Table/Bordered layout merges ALL subgroups into ONE continuous
+    // table — a subgroup only gets its own heading row (not a separate
+    // table) when it actually carries a label from the backend (e.g. "Choose
+    // the correct form of Verb."). Label-less rule-based subgroups (the
+    // common case for board-pattern MCQs with no category grouping, e.g.
+    // Physics) just flow straight into the same table with no visual break.
+    if (isMcqBoxedSection) {
+      const isBilingualMcq = paperLanguage === 'bilingual';
+      const isUrduLangMcq  = paperLanguage === 'urdu';
+      return (
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', marginTop: '2px' }}>
+          <colgroup>
+            <col style={{ width: '32px' }} />
+            <col />
+          </colgroup>
+          <tbody>
+            {subgroups!.map((sg, sgIdx) => {
+              const sgQuestions = Array.isArray(sg.questions) ? sg.questions : [];
+              const thisOffset  = offset;
+              offset += sgQuestions.length;
+              if (sgQuestions.length === 0) return null;
+
+              const labelText = sg.qLabel || sg.categoryLabel || '';
+              const urLabel   = sg.qLabelUr || sg.categoryLabelUr || '';
+
+              return (
+                <React.Fragment key={`subgroup-${section.id}-${sgIdx}`}>
+                  {labelText && (
+                    <tr>
+                      <td
+                        colSpan={2}
+                        style={{
+                          padding: '4px 6px',
+                          fontWeight: 700,
+                          fontSize: `${settings.fontSize}px`,
+                          fontFamily: isUrduLangMcq ? URDU_FONT : settings.fontFamily,
+                          textAlign: isUrduLangMcq ? 'right' : 'left',
+                          direction: isUrduLangMcq ? 'rtl' : 'ltr',
+                          borderBottom: mcqCellBorder,
+                        }}
+                      >
+                        {isBilingualMcq ? (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+                            <span>{labelText}</span>
+                            <span dir="rtl" lang="ur" style={{ fontFamily: URDU_FONT, fontSize: `${settings.fontSize + 2}px` }}>
+                              {urLabel || labelText}
+                            </span>
+                          </div>
+                        ) : isUrduLangMcq ? (urLabel || labelText) : labelText}
+                      </td>
+                    </tr>
+                  )}
+                  {sgQuestions.map((q: any, qIdx: number) => {
+                    const finalIndex = getQuestionDisplayIndex(thisOffset + qIdx);
+                    return (
+                      <tr key={`${q.id}-${thisOffset}-${qIdx}`}>
+                        <td style={{ border: mcqCellBorder, width: '32px', verticalAlign: 'top', padding: '3px 6px' }}>
+                          {renderMcqNumberCell(finalIndex)}
+                        </td>
+                        <td style={{ border: mcqCellBorder, verticalAlign: 'top', padding: '3px 6px' }}>
+                          <QuestionRenderer
+                            question={q}
+                            index={finalIndex}
+                            qIdx={thisOffset + qIdx}
+                            sectionType={section.type}
+                            sectionId={section.id}
+                            paperLanguage={paperLanguage}
+                            isEditMode={isEditMode}
+                            config={config}
+                            fontSize={settings.fontSize}
+                            metaFontSize={settings.metaFontSize}
+                            questionFontFamily={settings.fontFamily}
+                            questionLineSpacing={settings.lineHeight}
+                            mcqFontSize={settings.mcqFontSize ?? 12}
+                            mcqLineHeight={settings.mcqLineHeight ?? 1.2}
+                            onTextChange={onTextChange}
+                            marks={q.marks || section.marksEach}
+                            isUrduSubject={isUrduOrEnglish}
+                            isLast={thisOffset + qIdx === questions.length - 1}
+                            headingFontSize={settings.headingFontSize}
+                            suppressNumbering={true}
+                            renderInlineBilingual={renderInlineBilingual}
+                            showAnswerLines={false}
+                            answerLinesShort={settings.answerLinesShort}
+                            answerLinesLong={settings.answerLinesLong}
+                            answerLineGapMm={settings.answerLineGapMm}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      );
+    }
 
     return subgroups!.map((sg, sgIdx) => {
       const sgQuestions = Array.isArray(sg.questions) ? sg.questions : [];
@@ -1720,15 +1902,19 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
   })()
 )}
 
-          {/* ── Questions List ── */}
-  
+          {/* ── Questions List ──
+              (MCQ Table/Bordered sections never reach this per-subgroup
+              body — they're rendered as one merged <table> above, before
+              this .map() even starts. This div-grid path is only for
+              non-MCQ subgroups and MCQ sections using the Simple style.) */}
+
           <div className="questions-list row g-2 mx-0"
         style={{ [paddingSide]: indent }}
           >
             {sgQuestions.map((q: any, qIdx: number) => {
               // Suppress index ONLY if it's a single question AND NOT an MCQ
               const suppressIndex = isNotMCQ && sgQuestions.length === 1;
-              
+
               const finalIndex = isLongType
                 ? (paperLanguage === 'urdu' ? startNum : startNum + thisOffset + qIdx)
                 : getQuestionDisplayIndex(thisOffset + qIdx);
