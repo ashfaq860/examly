@@ -758,7 +758,7 @@ export default function QuestionForm({
             specific = { question_text: formData.summary_text, question_text_ur: null, answer_text: formData.answer_text, answer_text_ur: null, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
           case 'essay':
             specific = { question_text: formData.question_text, question_text_ur: null, answer_text: formData.answer_text, answer_text_ur: null, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
-          case 'application': case 'letter': case 'punctuation': case 'pair_of_words':
+          case 'application': case 'letter': case 'punctuation': case 'pair_of_words': case 'mokalma':
             specific = { question_text: formData.question_text, question_text_ur: null, answer_text: formData.answer_text, answer_text_ur: null, option_a: null, option_b: null, option_c: null, option_d: null, option_a_ur: null, option_b_ur: null, option_c_ur: null, option_d_ur: null, correct_option: null }; break;
           case 'story':
             specific = {
@@ -873,6 +873,7 @@ export default function QuestionForm({
       { value: 'pair_of_words', label: 'Pair of Words' },
       { value: 'story', label: 'Story Writing' },
       { value: 'stanza_explanation', label: 'Stanza Explanation' },
+      { value: 'mokalma', label: 'Dialogue (Mukalma)' },
     ];
     if (isUrduSubject()) return [
       // ✅ All labels in English
@@ -1161,7 +1162,8 @@ export default function QuestionForm({
               {shouldShowQuestionTextField() && (
                 <div className="col-12 qfm-field-group">
                   <label className="qfm-label">
-                    {formData.question_type === 'stanza_explanation' ? 'Stanza Text *' : 'Question Text (English) *'}
+                    {formData.question_type === 'stanza_explanation' ? 'Stanza Text *' :
+                     formData.question_type === 'mokalma' ? 'Dialogue Text (English) *' : 'Question Text (English) *'}
                   </label>
                   <Editor tinymceScriptSrc={TINYMCE_SCRIPT_SRC} value={formData.question_text} onEditorChange={c => handleEditorChange(c, 'question_text')} init={englishEditorConfig} />
                   <PreviewBox html={formData.question_text} label="Preview" />

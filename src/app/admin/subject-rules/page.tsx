@@ -338,7 +338,7 @@ export default function SubjectRulesPage() {
         ...baseTypes,
         ...['translate_urdu', 'translate_english', 'idiom_phrases', 'passage',
             'directInDirect', 'activePassive', 'summary', 'application',
-            'letter', 'punctuation', 'pair_of_words', 'essay', 'stanza_explanation','story']
+            'letter', 'punctuation', 'pair_of_words', 'essay', 'stanza_explanation','story', 'mokalma']
           .map(key => ALL_QUESTION_TYPES.find(t => t.key === key)!)
           .filter(Boolean),
       ];

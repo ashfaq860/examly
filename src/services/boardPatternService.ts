@@ -157,16 +157,16 @@ export class BoardPatternService {
         total: 10
       },
       {
-        name: 'darkhwast_khat',
-        label: 'Darkhwast Khat',
-        count: 2,
+        name: 'application',
+        label: 'darkhawast/application',
+        count: 1,
         attempt: 1,
         marks:10,
         total: 10
       },{
-        name: 'kahani_makalma',
-        label: 'Kahani Makalma',
-        count: 2,
+        name: 'mokalma',
+        label: 'Mokalma/Dialogue',
+        count: 1,
         attempt: 1,
         marks: 5,
         total: 5
@@ -287,7 +287,24 @@ export class BoardPatternService {
         attempt: 5,
         marks: 1,
         total: 5
-      });
+      },
+    {
+        name: 'activePassive',
+        label: 'Active/Passive',
+        count: 5,
+        attempt: 5,
+        marks: 1,
+        total: 5
+      },
+       {
+        name: 'mokalma',
+        label: 'Mokalma/Dialogue',
+        count: 1,
+        attempt: 1,
+        marks: 5,
+        total: 5
+      },
+    );
     } else if (className === '10') {
       details.additionalTypes.push({
         name: 'translate_english',
@@ -296,29 +313,18 @@ export class BoardPatternService {
         attempt: 1,
         marks: 5,
         total: 5
-      });
-    }
-
-    // 8. activePassive or directInDirect
-    if (className === '9') {
-      details.additionalTypes.push({
-        name: 'activePassive',
-        label: 'Active/Passive',
+      },
+    {
+        name: 'directInDirect',
+        label: 'Direct/Indirect',
         count: 5,
         attempt: 5,
         marks: 1,
         total: 5
       });
-    } else if (className === '10') {
-      details.additionalTypes.push({
-        name: 'directInDirect',
-        label: 'Direct/Indirect',
-        count: 6,
-        attempt: 5,
-        marks: 1,
-        total: 5
-      });
     }
+
+   
   }
 
   private static applyBoardRules(details: BoardPatternDetails, rules: any[]) {

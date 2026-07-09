@@ -129,7 +129,7 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
   const [isMounted, setIsMounted] = useState(false);
 
   const [settings, setSettings] = useState<PaperSettings>({
-    fontFamily: "Arial, sans-serif",
+    fontFamily: "'Times New Roman', serif",
     fontSize: 12,
     lineHeight: 1.5,
     titleFontFamily: "'Times New Roman', serif",
@@ -364,7 +364,11 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
       params: {
         subjectId: watchedSubjectId,
         classId: watchedClassId,
-        questionType: rule.question_type.toLowerCase(),
+        // NOT .toLowerCase() — the DB's question_type CHECK constraint (and every
+        // stored row) uses exact camelCase for 'directInDirect'/'activePassive',
+        // and /api/questions does an exact .eq() match, so lowercasing here made
+        // those two types silently fetch zero questions.
+        questionType: rule.question_type,
         chapterIds,
         limit,
         random: true,
@@ -589,7 +593,10 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
       );
       pendingSections.push({
         minSortOrder: Math.min(...sortedBlocks.map(b => b.rule.sort_order ?? 0)),
-        type: sortedBlocks[0].rule.question_type.toLowerCase(),
+        // Keep original casing — section.type feeds SectionHeader's
+        // defaultInstructions lookup, which is keyed on the exact camelCase
+        // 'directInDirect'/'activePassive', not the lowercased form.
+        type: sortedBlocks[0].rule.question_type,
         groupKey,
         blocks: sortedBlocks,
       });
@@ -598,7 +605,7 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
     for (const block of standaloneBlocks) {
       pendingSections.push({
         minSortOrder: block.rule.sort_order ?? 0,
-        type: block.rule.question_type.toLowerCase(),
+        type: block.rule.question_type,
         groupKey: null,
         blocks: [block],
       });
@@ -801,16 +808,28 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
     continue;
   }
 }
-      // ── ALTERNATIVE GROUP (is_alternative=true on every member) ──
+      // ── ALTERNATIVE GROUP (is_alternative=true on any member) ──
       // e.g. "Application OR Letter": every rule in the group_key is kept
       // (resolveRuleBlocks no longer drops siblings), each fetches its own
       // question(s) independently, and ALL of them render together under
       // ONE Q.No separated by "OR" dividers — the student picks one at
       // exam time. Each alternative keeps its OWN full marks (e.g. 10),
       // not a split/shared value like the is_paired a/b case.
+      //
+      // Triggered by ANY block in the group having is_alternative=true, not
+      // requiring EVERY block to — a group is only ever meant as "compulsory
+      // sub-parts" or "OR alternatives", never a mix, so one flagged member
+      // implies the whole group is alternatives. Requiring all of them was a
+      // silent trap: adding a new rule to an existing OR group (e.g. a
+      // stanza_explanation option added alongside an existing summary rule)
+      // and forgetting to also tick "OR-choice within group" on it made the
+      // WHOLE group fall through to the compulsory-sum path below instead —
+      // which still renders fine as two options, but silently SUMS both
+      // marks into the paper's total (5+5=10) instead of counting the
+      // student's one pick (5), inflating "Maximum Marks" with no warning.
       const alternativeBlocksInGroup = ps.blocks.filter(b => b.rule.is_alternative);
-      if (alternativeBlocksInGroup.length > 0 && alternativeBlocksInGroup.length === ps.blocks.length && ps.blocks.length > 1) {
-        const sortedAltBlocks = [...alternativeBlocksInGroup].sort(
+      if (alternativeBlocksInGroup.length > 0 && ps.blocks.length > 1) {
+        const sortedAltBlocks = [...ps.blocks].sort(
           (a, b) => (a.rule.sort_order ?? 0) - (b.rule.sort_order ?? 0)
         );
 
@@ -818,11 +837,33 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
         // alternative is "one whole option", not a list to attempt
         // several from — matching the real board pattern's "Q.5 Letter
         // OR Application" shape, one question per side of the OR).
+        // Only these "explanation"-style academic types conventionally carry
+        // a meaningful instructional label above the question (e.g. "Paraphrase
+        // the following lines..." above a stanza). Essay-style alternatives
+        // (letter/application/story/kahani_makalma/mokalma/etc.) almost
+        // never need one — admins commonly link SOME category to those
+        // rules just to set marks/attempt config, and that category's own
+        // name (however it was typed in, e.g. "Q6 Ninth class letter") isn't
+        // meant to print on the paper. Scoping by type here means the
+        // Subject Rules data itself doesn't have to be curated per-rule just
+        // to keep an unwanted label off the printed page.
+        // Within an eligible type, the rule's own q_label (the specific
+        // instruction the admin typed for THIS alternative, e.g. "Paraphrase
+        // the following lines into simple English with reference to the
+        // context:") takes priority over the linked category's generic name
+        // (e.g. "Stanza Explanation") — q_label is the more precise,
+        // per-rule text when the admin has actually set one.
+        const LABEL_ELIGIBLE_TYPES = new Set([
+          'stanza_explanation', 'poetry_explanation', 'prose_explanation', 'gazal',
+        ]);
         const alternatives = sortedAltBlocks
           .map(b => ({
             question: b.questions[0],
             marks: resolveMarksForRule(b.rule, expectedPattern),
             questionType: b.rule.question_type,
+            categoryLabel: LABEL_ELIGIBLE_TYPES.has((b.rule.question_type || '').toLowerCase())
+              ? (b.rule.q_label || b.categoryLabel || null)
+              : null,
           }))
           .filter(alt => alt.question); // drop any side with no question found
 
@@ -853,6 +894,11 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
           // alternative's own marks value next to it, since they can
           // legitimately differ (e.g. Letter=10, Application=8).
           alternativeMarks: alternatives.map(a => a.marks),
+          // Same index-aligned pattern for each alternative's own Question
+          // Category label (e.g. a stanza_explanation alternative whose
+          // rule uses the "Stanza Explanation" category), so it prints
+          // right above that specific option.
+          alternativeLabels: alternatives.map(a => a.categoryLabel || null),
         } as any);
         qNum++;
         continue;
@@ -887,6 +933,14 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
       // NOT just multiply totalAttempt x one shared inferredMarksEach.
       const totalMarks = subgroups.reduce((sum, g) => sum + (g.attemptCount || 0) * (g.marksEach || 0), 0);
 
+      // Stanza/punctuation/pair-of-words rules carry their subject-rules
+      // q_label/category label even when standalone (not grouped with other
+      // rules) — a single labeled block still needs its label rendered, not
+      // just multi-block groups.
+      const isLabelCarryingType = ['stanza_explanation', 'punctuation', 'pair_of_words']
+        .some(t => ps.type.toLowerCase().includes(t));
+      const hasAnyLabel = subgroups.some(g => g.qLabel || g.categoryLabel);
+
       const instructionLabel = isMcq
         ? `Q. No. ${qNum}: Choose the correct answer.`
         : ps.groupKey
@@ -909,8 +963,10 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
         // subgroups carries per-rule category labels + sub-part letters so
         // the renderer can print "(A) Synonyms ... (B) MCQs from the Book ..."
         // in the exact configured order. Renderer falls back to flat
-        // rendering if it doesn't (yet) know about `subgroups`.
-        subgroups: subgroups.length > 1 ? subgroups : undefined,
+        // rendering if it doesn't (yet) know about `subgroups`. Also kept for
+        // a single labeled stanza/punctuation/pair_of_words block so its
+        // q_label still renders even when it isn't grouped with other rules.
+        subgroups: (subgroups.length > 1 || (isLabelCarryingType && hasAnyLabel)) ? subgroups : undefined,
       } as any);
       qNum++;
     }

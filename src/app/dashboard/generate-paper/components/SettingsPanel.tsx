@@ -44,7 +44,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const questionFontFamilies = [
     { name: 'Standard Exam (Arial)',    value: "Arial, sans-serif" },
     { name: 'Cambridge Style (Calibri)',value: "'Calibri', sans-serif" },
-    { name: 'Formal Reading (Times)',   value: "'Times New Roman', serif" },
+    { name: 'Times New Roman',          value: "'Times New Roman', serif" },
     { name: 'Modern (Inter/Roboto)',    value: "'Inter', sans-serif" },
     { name: 'High Legibility (Verdana)',value: "Verdana, sans-serif" },
   ];

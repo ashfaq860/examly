@@ -78,6 +78,11 @@ interface BilingualProps {
   sectionType?: string;
   fontWeight?: string;
   onTextChange: (sid: string, qid: string, field: string, val: string) => void;
+  /** Marks value, rendered inline right after the question text (not in its
+   *  own column) so it sits close to the text instead of far off at the
+   *  row's edge. Only long-type questions pass this. */
+  marks?: number | string;
+  marksFontSize?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -243,8 +248,9 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
   sectionType,
   fontWeight = 'normal',
   onTextChange,
+  marks,
+  marksFontSize,
 }) => {
-  console.log("section types", sectionType)
   const isTranslate = question?.question_type === 'translate_english';
   const urduLH = isOption ? lineSpacing : Math.max(1.0, lineSpacing - 0.3);
 
@@ -342,7 +348,11 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
                   {urduNumberLabel}
                 </span>
               )}
-            <span style={{
+            {/* alt-question-inline: TinyMCE wraps question text in a block-level
+                <p>, which would otherwise force the marks number onto its own
+                line — this class (see PaperLayoutRenderer's global style) makes
+                that <p> render inline so marks stays on the same line. */}
+            <span className="alt-question-inline" style={{
               display: 'block',
               flex: '1 1 0',
               minWidth: 0,
@@ -352,6 +362,14 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
               fontFamily: URDU_FONT,
             }}>
               <RichText html={urValue || ''} />
+              {marks !== undefined && (
+                <>
+                  {'  '}
+                  <span className="fw-bold text-nowrap" style={{ fontSize: `${marksFontSize ?? fontSize}px`, direction: 'ltr', unicodeBidi: 'embed' as any }}>
+                    {marks}
+                  </span>
+                </>
+              )}
             </span>
             </span>
           )}
@@ -361,7 +379,7 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
       {/* ── English / translation block ── */}
       {isEnglish && (
         <div
-          className={`${isTranslate ? 'urdu-text' : 'english-text'} question-lh-scope flex-grow-1`}
+          className={`${isTranslate ? 'urdu-text' : 'english-text'} question-lh-scope flex-grow-1 alt-question-inline`}
           dir={isTranslate ? 'rtl' : 'ltr'}
           lang={isTranslate ? 'ur' : 'en'}
           style={{
@@ -380,6 +398,14 @@ const BilingualTextDisplay: React.FC<BilingualProps> = ({
             />
           ) : (
             <RichText html={engValue} />
+          )}
+          {marks !== undefined && (
+            <>
+              {'  '}
+              <span className="fw-bold text-nowrap" style={{ fontSize: `${marksFontSize ?? fontSize}px` }}>
+                {marks}
+              </span>
+            </>
           )}
         </div>
       )}
@@ -439,7 +465,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   const typeKey = sectionType.toLowerCase();
   const isLong  =
     typeKey.includes('long') || typeKey.includes('summary') ||
-    typeKey.includes('darkhwast_khat') || typeKey.includes('kahani_makalma');
+    typeKey.includes('darkhwast_khat') || typeKey.includes('kahani_makalma') ||
+    typeKey.includes('essay');
 
   const isSecondPartOfOr = shouldShowOr
     ? isLong ? (qIdx || 0) % 2 !== 0 : index % 2 !== 0
@@ -502,8 +529,10 @@ const showNumber = !isSecondPartOfOr && !suppressNumbering && index !== -1;
           </div>
         )}
 
-        {/* ── 2. Question text ── */}
-        <div className={`${isUrduSubject && isLong ? 'flex-grow-0' : 'flex-grow-1'}`}>
+        {/* ── 2. Question text (+ inline marks for isLong, appended within
+               SubjectiveRenderer so it sits right after the text instead of
+               in its own column) ── */}
+        <div className="flex-grow-1">
           {isMCQ ? (
             <MCQRenderer
               question={question}
@@ -537,25 +566,18 @@ const showNumber = !isSecondPartOfOr && !suppressNumbering && index !== -1;
               headingFontSize={headingFontSize ?? 18}
               answerLines={showAnswerLines ? (isLong ? (answerLinesLong ?? 5) : (answerLinesShort ?? 4)) : 0}
               answerLineGapMm={answerLineGapMm}
+              marks={isLong && isUrduSubject ? marks : undefined}
+              marksFontSize={numberFontSize - 2}
             />
           )}
         </div>
 
-        {/* ── 3. Marks ── */}
-        {isLong && isUrduSubject && marks !== undefined && (
-          <div
-            className="fw-bold text-nowrap"
-            style={{ fontSize: `${numberFontSize - 2}px`, fontFamily: isUrdu ? URDU_FONT : 'inherit', minWidth: '35px', textAlign: paperLanguage === 'urdu' ? 'left' : 'right', paddingTop: '2px' }}
-          >
-            ({marks})
-          </div>
-        )}
       </div>
 
       {/* ── 4. OR / یا separator ── */}
       {shouldShowOr && isPaperUrduOrEng && !isLast &&
         ((isLong && qIdx === 0) || (!isLong && index % 2 === 0)) && (
-        <div className="text-center w-100 fw-bold" style={{ fontSize: `${fontSize + 2}px`, fontFamily: isUrdu ? URDU_FONT : questionFontFamily }}>
+        <div className="text-center w-100" style={{ fontWeight: 600, fontSize: `${fontSize}px`, fontFamily: isUrdu ? URDU_FONT : questionFontFamily }}>
           {paperLanguage === 'urdu' ? 'یا' : 'OR'}
         </div>
       )}
@@ -686,6 +708,9 @@ interface SubjectiveRendererProps {
   answerLines?: number;
   /** Height (mm) of each ruled line's writing space. Defaults to 6mm. */
   answerLineGapMm?: number;
+  /** Marks, rendered inline right after the question text. */
+  marks?: number | string;
+  marksFontSize?: number;
 }
 
 const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
@@ -706,6 +731,8 @@ const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
   onTextChange,
   answerLines,
   answerLineGapMm,
+  marks,
+  marksFontSize,
 }) => (
   <>
 
@@ -728,6 +755,8 @@ const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
     hasSubGroups={hasSubGroups}
     sectionType={sectionType}
     onTextChange={onTextChange}
+    marks={marks}
+    marksFontSize={marksFontSize}
   />
   {!!answerLines && answerLines > 0 && (
     <div className="answer-lines" aria-hidden="true" style={{ marginTop: '2mm' }}>

@@ -127,16 +127,56 @@ const OMRAnswerGrid = ({ questionCount }: { questionCount: number }) => {
 // unmount/remount (losing its measured page plan) constantly instead of
 // only when the content actually changes.
 //
-// A section is "atomic" (never split mid-section) when it's a paired-long
-// pair, an OR-alternative group, or a mixed sub-part block — splitting any
-// of those partway through would break numbering/labels that only make
-// sense as a whole. Every other section (plain MCQ/short/long lists) is
-// split at question boundaries when it doesn't fit the remaining space.
-const isAtomicSection = (section: PaperSection): boolean => {
+// A section is "atomic" (never split mid-section, measured as one whole
+// block via sectionBlockHeights) when:
+//  - it's a paired-long pair, an OR-alternative group, or a mixed sub-part
+//    block — splitting any of those partway through would break
+//    numbering/labels that only make sense as a whole, OR
+//  - at least one of its questions would render narrower than col-12 (see
+//    getDynamicColClass below — anything under ~120 chars gets col-3/4/6),
+//    i.e. it packs multiple short items per row instead of one-per-row. The
+//    per-question packing loop further down sums each question's OWN
+//    measured height as if every question stacked vertically one-per-row;
+//    for a grid that wraps 3-4 short items (idioms, pair-of-words, one-line
+//    translate sentences, activePassive/directInDirect items, etc.) per
+//    row, that sum overcounts the section's real height by roughly the
+//    column count (~4x for col-3), making the packer break the page far
+//    earlier than the content actually needs — leaving large blank gaps
+//    (reported as "text pushed to next page while the page still has
+//    room"). Measuring the whole grid as one block sidesteps the row-wrap
+//    math entirely and gets its true rendered height directly from the DOM.
+//    Checked against the actual question text (mirroring
+//    getDynamicColClass's own heuristic) rather than section.type alone —
+//    a type-only check would also catch genuinely long-form sections (e.g.
+//    a translate_urdu section whose paragraphs are long enough to already
+//    render col-12) and needlessly force those atomic too, risking a
+//    single overlong block that itself doesn't fit one page.
+// Every other section (full-width MCQ/short/long/summary/essay lists, or
+// any section whose questions all render col-12 anyway) is still split at
+// question boundaries when it doesn't fit the remaining space.
+const FULL_WIDTH_SECTION_TYPES = new Set(['mcq', 'long', 'summary', 'essay']);
+const sectionHasGridFlowQuestion = (section: PaperSection, subject: string): boolean => {
+  const t = (section.type || '').toLowerCase();
+  if (FULL_WIDTH_SECTION_TYPES.has(t)) return false;
+  if (t.includes('darkhwast_khat') || t.includes('kahani_makalma')) return false;
+  if (t === 'short') {
+    if (subject.toLowerCase() !== 'urdu') return false;
+    return Array.isArray(section.questions) && section.questions.length > 0; // short+urdu is always col-6
+  }
+  const questions = Array.isArray(section.questions) ? section.questions : [];
+  return questions.some((q: any) => {
+    const engText = q?.question_text || q?.question || '';
+    const urText  = q?.question_text_ur || '';
+    const len = engText.length + urText.length * 1.5;
+    return len < 120; // matches getDynamicColClass: col-3/col-4/col-6, i.e. not full width
+  });
+};
+const isAtomicSection = (section: PaperSection, subject: string): boolean => {
   const subgroups = (section as any).subgroups;
   return Boolean((section as any).isPairedLong) ||
     Boolean((section as any).isAlternativeGroup) ||
-    (Array.isArray(subgroups) && subgroups.length > 1);
+    (Array.isArray(subgroups) && subgroups.length > 1) ||
+    sectionHasGridFlowQuestion(section, subject);
 };
 
 type PageEntry =
@@ -306,7 +346,7 @@ const PaginatedPaperGroup: React.FC<PaginatedPaperGroupProps> = ({
     };
 
     for (const section of group) {
-      if (isAtomicSection(section)) {
+      if (isAtomicSection(section, subject)) {
         const h = sectionBlockHeights[section.id] ?? 0;
         if (used > 0 && used + h > budget) newPage();
         plan[pageIdx].push({ section, atomic: true });
@@ -411,7 +451,7 @@ const PaginatedPaperGroup: React.FC<PaginatedPaperGroupProps> = ({
     >
       <div ref={headerMeasureRef}>{headerNode}{bubbleNode}</div>
       {group.map(section => (
-        isAtomicSection(section) ? (
+        isAtomicSection(section, subject) ? (
           <div key={section.id} data-measure-section-block={section.id}>
             {renderSectionBlock(section)}
           </div>
@@ -713,7 +753,7 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
 
     const getDynamicColClass = (q: any) => {
       if (
-        section.type === 'mcq' || section.type === 'long' || section.type === 'summary' ||
+        section.type === 'mcq' || section.type === 'long' || section.type === 'summary' || section.type === 'essay' ||
         (section.type === 'short' && subject.toLowerCase() !== 'urdu') ||
         sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma')
       ) return 'col-12';
@@ -724,17 +764,29 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
       return len < 50 ? 'col-3' : len < 60 ? 'col-4' : len < 120 ? 'col-6' : 'col-12';
     };
 const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation') || sectionType.includes('punctuation')|| sectionType.includes('pair_of_words')
+    // 'essay' is treated as long-form: a standalone essay question gets its own
+    // "Q.N" number (like long/summary questions) instead of a separate "ESSAY"
+    // section header plus a "(i)" sub-label on the question itself.
     const isLongType = sectionType.includes('long') || sectionType.includes('summary') ||
-  
-    sectionType.includes('darkhwast') || sectionType.includes('makalma');
+
+    sectionType.includes('darkhwast') || sectionType.includes('makalma') || sectionType.includes('essay');
     const isSingleAttemptLong = isLongType && section.totalQuestions <= 2 && section.attemptCount === 1;
     const isPairedLong = Boolean((section as any).isPairedLong);
     const isAlternativeGroup = Boolean((section as any).isAlternativeGroup);
     const subgroups: any[] | undefined = (section as any).subgroups;
-    const hasSubgroups = Array.isArray(subgroups) && subgroups.length > 1;
+    // >= 1, not > 1 — PaperBuilderApp now also sends a single-item subgroups
+    // array for a standalone stanza/punctuation/pair_of_words rule that
+    // carries a q_label, so its label still renders (see subgroups comment
+    // there). Every other section type only ever gets subgroups when there
+    // are 2+, so this widening is a no-op for them.
+    const hasSubgroups = Array.isArray(subgroups) && subgroups.length >= 1;
     const suppressNumberingSection = Boolean((section as any).suppressNumbering);
     const singleItemMarksOnly      = Boolean((section as any).singleItemMarksOnly);
     const isSingleTranslateSection = (sectionType === 'translate_urdu' || sectionType === 'translate_english') && questions.length === 1;
+    // Passage sections with only one passage don't need a "(i)" sub-label or
+    // the "(1 x N = N)" marks breakdown — same treatment as single-item
+    // translate sections above.
+    const isSinglePassageSection = sectionType === 'passage' && questions.length === 1;
     const hideHeader = isPairedLong || isAlternativeGroup || (hasSubgroups&&isStanzaPunctuationPairWords)  ||
       (isUrduOrEnglish && isSingleAttemptLong && !isPoetry && !isGazal && !isCorrection && isCompletion);
 
@@ -742,6 +794,7 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
     const sharedAttemptCount: number | null = (section as any).sharedAttemptCount ?? null;
     const sharedTotalPairs: number | null   = (section as any).sharedTotalPairs   ?? null;
     const alternativeMarks: number[] | null = (section as any).alternativeMarks   || null;
+    const alternativeLabels: (string | null)[] | null = (section as any).alternativeLabels || null;
 
     const urduPairLabels: Record<string, string> = { a: 'الف', b: 'ب', c: 'ج', d: 'د', e: 'ه' };
 
@@ -764,19 +817,16 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
       const altQuestionFontSize   = settings.headingFontSize;
       const altQuestionFontSizeUr = settings.headingFontSize + 2;
       const altQuestionFontFamily = settings.headingFontFamily;
-      // Only the "Q.N" number label (its own separate fw-bold span) should
-      // be bold — the question sentence itself should render at normal
-      // weight, matching every other layout in this app (QuestionRenderer
-      // defaults question content to fontWeight: 'normal'). This was
-      // wrongly set to 'bold' and applied to the question text too, making
-      // the whole alternative-question sentence render bold in board papers.
-      const altQuestionFontWeight = 'normal';
+      // Both the "Q.N" label and the alternative's own sentence render bold,
+      // so each OR-option reads as its own heading line (e.g. "Q.6 Write a
+      // story with the moral...").
+      const altQuestionFontWeight = 'bold';
 
       const OrDivider = () => (
         <div
           style={{
-            width: '100%', textAlign: 'center', fontWeight: 700,
-            fontSize: `${settings.fontSize + 2}px`,
+            width: '100%', textAlign: 'center', fontWeight: 600,
+            fontSize: `${settings.fontSize}px`,
             fontFamily: isUrduLang ? URDU_FONT : settings.fontFamily,
             margin: '0px 0',
           }}
@@ -790,11 +840,22 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
           <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
             {questions.map((q, qIdx) => {
               const qMarks = alternativeMarks?.[qIdx] ?? q.marks ?? section.marksEach;
+              const qLabel = alternativeLabels?.[qIdx] || null;
               const isFirstRow = qIdx === 0;
 
               if (isBilingualLang) {
                 return (
                   <React.Fragment key={`${q.id}-${qIdx}`}>
+                    {qLabel && (
+                      <div style={{ display: 'flex', width: '100%', gap: '12px' }}>
+                        <div style={{ flex: 1, paddingLeft: qNoColWidthEn, fontWeight: 700, fontSize: `${settings.fontSize}px`, fontFamily: settings.fontFamily }}>
+                          {qLabel}
+                        </div>
+                        <div style={{ flex: 1, paddingRight: qNoColWidthUr, textAlign: 'right', direction: 'rtl', fontWeight: 700, fontSize: `${settings.fontSize + 2}px`, fontFamily: URDU_FONT }}>
+                          {qLabel}
+                        </div>
+                      </div>
+                    )}
                     <div style={{ display: 'flex', width: '100%', gap: '12px', alignItems: 'flex-start' }}>
                       {/* LEFT — English */}
                       <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start' }}>
@@ -808,24 +869,27 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
                             </span>
                           )}
                         </div>
-                        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
-                          <div style={{
-                            flex: 1, minWidth: 0,
-                            fontSize: `${altQuestionFontSize}px`,
-                            fontFamily: altQuestionFontFamily,
-                            fontWeight: altQuestionFontWeight,
-                            lineHeight: settings.lineHeight,
-                          }}>
-                            {isEditMode ? (
-                              <EditableText
-                                value={q.question_text || q.question || ''}
-                                onChange={(v: string) => onTextChange(section.id, q.id, 'question_text', v)}
-                              />
-                            ) : (
-                              <RichText html={q.question_text || q.question || ''} />
-                            )}
-                          </div>
-                          <span className="fw-bold text-nowrap" style={{ fontSize: `${altMarksFs}px`, flexShrink: 0 }}>
+                        {/* Marks render inline right after the question text
+                            instead of in their own flex column, so they sit
+                            close to the text rather than stretched to the
+                            row's far edge. */}
+                        <div className="alt-question-inline" style={{
+                          flex: 1, minWidth: 0,
+                          fontSize: `${altQuestionFontSize}px`,
+                          fontFamily: altQuestionFontFamily,
+                          fontWeight: altQuestionFontWeight,
+                          lineHeight: settings.lineHeight,
+                        }}>
+                          {isEditMode ? (
+                            <EditableText
+                              value={q.question_text || q.question || ''}
+                              onChange={(v: string) => onTextChange(section.id, q.id, 'question_text', v)}
+                            />
+                          ) : (
+                            <RichText html={q.question_text || q.question || ''} />
+                          )}
+                          {'  '}
+                          <span className="fw-bold text-nowrap" style={{ fontSize: `${altMarksFs}px` }}>
                             {qMarks}
                           </span>
                         </div>
@@ -842,31 +906,29 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
                             </span>
                           )}
                         </div>
-                        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'row-reverse', alignItems: 'flex-start', gap: '4px' }}>
-                          <span className="fw-bold text-nowrap" style={{
-                            fontSize: `${altMarksFs}px`, flexShrink: 0, direction: 'ltr', unicodeBidi: 'embed' as any,
-                          }}>
+                        <div
+                          dir="rtl" lang="ur"
+                          className="alt-question-inline"
+                          style={{
+                            flex: 1, minWidth: 0, direction: 'rtl', textAlign: 'right',
+                            fontFamily: URDU_FONT,
+                            fontSize: `${altQuestionFontSizeUr}px`,
+                            fontWeight: altQuestionFontWeight,
+                            lineHeight: settings.lineHeight, unicodeBidi: 'embed' as any,
+                          }}
+                        >
+                          {isEditMode ? (
+                            <EditableText
+                              value={q.question_text_ur || ''}
+                              onChange={(v: string) => onTextChange(section.id, q.id, 'question_text_ur', v)}
+                            />
+                          ) : (
+                            <RichText html={q.question_text_ur || ''} />
+                          )}
+                          {'  '}
+                          <span className="fw-bold text-nowrap" style={{ fontSize: `${altMarksFs}px`, direction: 'ltr', unicodeBidi: 'embed' as any }}>
                             {qMarks}
                           </span>
-                          <div
-                            dir="rtl" lang="ur"
-                            style={{
-                              flex: 1, minWidth: 0, direction: 'rtl', textAlign: 'right',
-                              fontFamily: URDU_FONT,
-                              fontSize: `${altQuestionFontSizeUr}px`,
-                              fontWeight: altQuestionFontWeight,
-                              lineHeight: settings.lineHeight, unicodeBidi: 'embed' as any,
-                            }}
-                          >
-                            {isEditMode ? (
-                              <EditableText
-                                value={q.question_text_ur || ''}
-                                onChange={(v: string) => onTextChange(section.id, q.id, 'question_text_ur', v)}
-                              />
-                            ) : (
-                              <RichText html={q.question_text_ur || ''} />
-                            )}
-                          </div>
                         </div>
                       </div>
                     </div>
@@ -878,6 +940,11 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
               if (isUrduLang) {
                 return (
                   <React.Fragment key={`${q.id}-${qIdx}`}>
+                    {qLabel && (
+                      <div style={{ width: '100%', paddingRight: qNoColWidthUr, textAlign: 'right', direction: 'rtl', fontWeight: 700, fontSize: `${settings.fontSize + 2}px`, fontFamily: URDU_FONT }}>
+                        {qLabel}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', flexDirection: 'row-reverse', width: '100%', alignItems: 'flex-start' }}>
                       <div style={{ flexShrink: 0, width: qNoColWidthUr, textAlign: 'right' }}>
                         {isFirstRow && (
@@ -889,31 +956,34 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
                           </span>
                         )}
                       </div>
-                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'row-reverse', alignItems: 'flex-start', gap: '4px' }}>
-                        <span className="fw-bold text-nowrap" style={{
-                          fontSize: `${altMarksFs}px`, flexShrink: 0, direction: 'ltr', unicodeBidi: 'embed' as any,
-                        }}>
+                      {/* Marks render inline right after the question text
+                          (not in its own flex column) so they sit close to
+                          the text instead of stretched to the row's far
+                          edge — RTL source order puts them at the visual end
+                          of the last line, immediately following the text. */}
+                      <div
+                        dir="rtl" lang="ur"
+                        className="alt-question-inline"
+                        style={{
+                          flex: 1, minWidth: 0, direction: 'rtl', textAlign: 'right',
+                          fontFamily: URDU_FONT,
+                          fontSize: `${altQuestionFontSizeUr}px`,
+                          fontWeight: altQuestionFontWeight,
+                          lineHeight: settings.lineHeight, unicodeBidi: 'embed' as any,
+                        }}
+                      >
+                        {isEditMode ? (
+                          <EditableText
+                            value={q.question_text_ur || q.question_text || ''}
+                            onChange={(v: string) => onTextChange(section.id, q.id, 'question_text_ur', v)}
+                          />
+                        ) : (
+                          <RichText html={q.question_text_ur || q.question_text || ''} />
+                        )}
+                        {'  '}
+                        <span className="fw-bold text-nowrap" style={{ fontSize: `${altMarksFs}px`, direction: 'ltr', unicodeBidi: 'embed' as any }}>
                           {qMarks}
                         </span>
-                        <div
-                          dir="rtl" lang="ur"
-                          style={{
-                            flex: 1, minWidth: 0, direction: 'rtl', textAlign: 'right',
-                            fontFamily: URDU_FONT,
-                            fontSize: `${altQuestionFontSizeUr}px`,
-                            fontWeight: altQuestionFontWeight,
-                            lineHeight: settings.lineHeight, unicodeBidi: 'embed' as any,
-                          }}
-                        >
-                          {isEditMode ? (
-                            <EditableText
-                              value={q.question_text_ur || q.question_text || ''}
-                              onChange={(v: string) => onTextChange(section.id, q.id, 'question_text_ur', v)}
-                            />
-                          ) : (
-                            <RichText html={q.question_text_ur || q.question_text || ''} />
-                          )}
-                        </div>
                       </div>
                     </div>
                     {qIdx < questions.length - 1 && <OrDivider />}
@@ -924,6 +994,11 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
               // English-only branch
               return (
                 <React.Fragment key={`${q.id}-${qIdx}`}>
+                  {qLabel && (
+                    <div style={{ width: '100%', paddingLeft: qNoColWidthEn, fontWeight: 700, fontSize: `${settings.fontSize}px`, fontFamily: settings.fontFamily }}>
+                      {qLabel}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', width: '100%', alignItems: 'flex-start' }}>
                     <div style={{ flexShrink: 0, width: qNoColWidthEn }}>
                       {isFirstRow && (
@@ -935,24 +1010,27 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
                         </span>
                       )}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
-                      <div style={{
-                        flex: 1, minWidth: 0,
-                        fontSize: `${altQuestionFontSize}px`,
-                        fontFamily: altQuestionFontFamily,
-                        fontWeight: altQuestionFontWeight,
-                        lineHeight: settings.lineHeight,
-                      }}>
-                        {isEditMode ? (
-                          <EditableText
-                            value={q.question_text || q.question || ''}
-                            onChange={(v: string) => onTextChange(section.id, q.id, 'question_text', v)}
-                          />
-                        ) : (
-                          <RichText html={q.question_text || q.question || ''} />
-                        )}
-                      </div>
-                      <span className="fw-bold text-nowrap" style={{ fontSize: `${altMarksFs}px`, flexShrink: 0 }}>
+                    {/* Marks render inline right after the question text (not in
+                        its own flex column) so they sit close to the text —
+                        "question text 5" — instead of stretched to the row's
+                        far edge. */}
+                    <div className="alt-question-inline" style={{
+                      flex: 1, minWidth: 0,
+                      fontSize: `${altQuestionFontSize}px`,
+                      fontFamily: altQuestionFontFamily,
+                      fontWeight: altQuestionFontWeight,
+                      lineHeight: settings.lineHeight,
+                    }}>
+                      {isEditMode ? (
+                        <EditableText
+                          value={q.question_text || q.question || ''}
+                          onChange={(v: string) => onTextChange(section.id, q.id, 'question_text', v)}
+                        />
+                      ) : (
+                        <RichText html={q.question_text || q.question || ''} />
+                      )}
+                      {'  '}
+                      <span className="fw-bold text-nowrap" style={{ fontSize: `${altMarksFs}px` }}>
                         {qMarks}
                       </span>
                     </div>
@@ -1519,7 +1597,12 @@ const renderPairedQuestions = () => {
               <div
                 key={`${q.id}-${baseOffset}-${qIdx}`}
                 ref={el => onQuestionRef?.(q.id, baseOffset + qIdx, el)}
-                className={`${getDynamicColClass(q)} px-2 mt-1`}
+                // isLongType rows print their own "Q.N" label inline (via
+                // QuestionRenderer) instead of through SectionHeader, which
+                // uses zero horizontal padding — ps-0 here keeps that "Q.N"
+                // flush with SectionHeader's, instead of sitting 8px further
+                // right than every other section's own Q.N.
+                className={`${getDynamicColClass(q)} ${isLongType ? 'ps-0 pe-2' : 'px-2'} mt-1`}
               >
                 <QuestionRenderer
                   question={q}
@@ -1660,7 +1743,7 @@ const renderPairedQuestions = () => {
                 customUrHeader={(section as any).customUrHeader}
                 onHeaderChange={handleHeaderChange}
                 isEditMode={isEditMode}
-                singleItemMarksOnly={singleItemMarksOnly || isSingleTranslateSection}
+                singleItemMarksOnly={singleItemMarksOnly || isSingleTranslateSection || isSinglePassageSection}
               />
             )}
           </div>
@@ -1920,7 +2003,7 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
                 : getQuestionDisplayIndex(thisOffset + qIdx);
 
               return (
-                <div key={`${q.id}-${thisOffset}-${qIdx}`} className={`${getDynamicColClass(q)} px-2 mt-1`}>
+                <div key={`${q.id}-${thisOffset}-${qIdx}`} className={`${getDynamicColClass(q)} ${isLongType ? 'ps-0 pe-2' : 'px-2'} mt-1`}>
                   <QuestionRenderer
                     question={q}
                     index={suppressIndex ? -1 : finalIndex}  // Falls back to normal index tracking if it's an MCQ
@@ -1964,7 +2047,7 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
           renderQuestionsList(
             questionSlice ? questions.slice(questionSlice.start, questionSlice.end) : questions,
             questionSlice ? questionSlice.start : 0,
-            suppressNumberingSection || isSingleTranslateSection
+            suppressNumberingSection || isSingleTranslateSection || isSinglePassageSection
           )
         )}
       </div>
@@ -2158,6 +2241,18 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
     // having to remember to wrap this component in a direction-aware div.
     <div className="paper-builder-renderer bg-secondary-subtle" style={{ direction: config.direction as any }}>
       <style>{`
+        /* TinyMCE wraps question text in <p> by default, which is
+           block-level — that forces a line break before whatever follows
+           it, which is why the marks number ended up on its own line under
+           the text. A multi-line stanza/poem is stored as one <p> PER LINE
+           (TinyMCE's default Enter behaviour), so making every <p> inline
+           collapsed the whole stanza onto a single line — only the LAST
+           paragraph needs to go inline, so the trailing marks number
+           attaches to the final line while earlier lines still break
+           normally, exactly as typed in the editor. */
+        .alt-question-inline p { margin: 0; }
+        .alt-question-inline p:last-child { display: inline; }
+
         /* ── Screen: visual frame around each paper sheet ── */
         @media screen {
           .paper-sheet {

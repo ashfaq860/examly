@@ -1,9 +1,9 @@
 'use client';
 import React, { useState, useMemo, useCallback } from 'react';
 import { Chapter, Topic } from '@/types/types';
-import { 
-  CheckCircle2, BookOpen, Layers, LayoutGrid, 
-  ArrowRight, X, Check 
+import {
+  CheckCircle2, BookOpen, Layers, LayoutGrid,
+  ArrowRight, X, Check, Circle
 } from 'lucide-react';
 import { UseFormSetValue } from 'react-hook-form';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -139,6 +139,29 @@ export const ChapterSelectionStep: React.FC<ChapterSelectionStepProps> = ({
     setValue('selectedTopics', current);
   };
 
+  // Natural/numeric-aware ordering so "1.2" < "1.9" < "1.10" (plain string sort gets this wrong)
+  const sortedTopics = useMemo(() => {
+    const topics = activeChapterForPopup?.topics || [];
+    return [...topics].sort((a: Topic, b: Topic) =>
+      (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' })
+    );
+  }, [activeChapterForPopup]);
+
+  const selectedInPopupCount = useMemo(
+    () => sortedTopics.filter(t => watchedTopicsSet.has(t.id)).length,
+    [sortedTopics, watchedTopicsSet]
+  );
+
+  const handleSelectAllPopupTopics = () => {
+    const ids = sortedTopics.map(t => t.id);
+    setValue('selectedTopics', Array.from(new Set([...watchedTopicsArr, ...ids])));
+  };
+
+  const handleClearAllPopupTopics = () => {
+    const ids = new Set(sortedTopics.map(t => t.id));
+    setValue('selectedTopics', watchedTopicsArr.filter(id => !ids.has(id)));
+  };
+
   return (
     <div className="container py-4">
     
@@ -262,7 +285,10 @@ export const ChapterSelectionStep: React.FC<ChapterSelectionStepProps> = ({
         }
 
         /* ── Topic popup ── */
-        .popup-overlay {
+        /* :global — these classes live on framer-motion's <motion.div>, and styled-jsx's
+           scope-hash class is only auto-injected onto plain intrinsic elements, not
+           JSX member-expression components like motion.div. */
+        :global(.popup-overlay) {
           position: fixed;
           inset: 0;
           background: rgba(15, 23, 42, 0.6);
@@ -271,22 +297,81 @@ export const ChapterSelectionStep: React.FC<ChapterSelectionStepProps> = ({
           justify-content: center;
           z-index: 9999;
           backdrop-filter: blur(4px);
+          padding: 16px;
         }
-        .popup-content {
+        :global(.popup-content) {
           background: white;
-          width: 92%;
-          max-width: 450px;
+          width: 100%;
+          max-width: 460px;
+          max-height: 82vh;
           border-radius: 24px;
-          padding: 24px;
-          max-height: 80vh;
-          overflow-y: auto;
+          padding: 22px;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.35);
         }
+        .popup-header-icon {
+          width: 42px;
+          height: 42px;
+          border-radius: 14px;
+          background: #eff6ff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .popup-close-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          border: none;
+          background: #f1f5f9;
+          color: #64748b;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: background 0.2s ease, color 0.2s ease;
+        }
+        .popup-close-btn:hover { background: #e2e8f0; color: #0f172a; }
+        .badge-count {
+          font-size: 11px;
+          font-weight: 700;
+          color: #0d6efd;
+          background: #eff6ff;
+          border: 1px solid #bfdbfe;
+          padding: 4px 10px;
+          border-radius: 999px;
+          white-space: nowrap;
+        }
+        .quick-action-btn {
+          font-size: 10.5px;
+          font-weight: 700;
+          color: #475569;
+          padding: 5px 10px;
+          border-radius: 8px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          white-space: nowrap;
+          transition: all 0.2s ease;
+        }
+        .quick-action-btn:hover { background: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
+        .popup-list {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          padding-right: 4px;
+          margin-right: -4px;
+        }
+        .popup-list::-webkit-scrollbar { width: 6px; }
+        .popup-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 999px; }
         .topic-item {
           cursor: pointer;
           border: 1.5px solid #f1f5f9;
           border-radius: 16px;
           transition: all 0.2s ease;
         }
+        .topic-item:hover { border-color: #e2e8f0; background: #f8fafc; }
         .topic-item.selected { border-color: #0d6efd; background: #f0f7ff; }
         .skip-btn-small {
           font-size: 10px;
@@ -368,29 +453,71 @@ export const ChapterSelectionStep: React.FC<ChapterSelectionStepProps> = ({
       </AnimatePresence>
 
       {/* Topic Selection Modal */}
-      {activeChapterForPopup && (
-        <div className="popup-overlay" onClick={() => setActiveChapterForPopup(null)}>
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="popup-content" onClick={e => e.stopPropagation()}>
-            <div className="d-flex justify-content-between mb-4">
-              <h5 className="fw-bold m-0">Topic Management</h5>
-              <button className="btn-close" onClick={() => setActiveChapterForPopup(null)} />
-            </div>
-
-            <div className="d-flex flex-column gap-2">
-              {activeChapterForPopup.topics?.map((topic: any) => {
-                const isSelected = watchedTopicsSet.has(topic.id);
-                return (
-                  <div key={topic.id} className={`topic-item p-3 d-flex align-items-center justify-content-between ${isSelected ? 'selected' : 'opacity-50'}`} onClick={() => handleTopicToggle(topic.id)}>
-                    <span className={`fw-semibold ${isUrduMedium ? 'urdu-font-style' : ''}`}>{topic.name}</span>
-                    {isSelected ? <CheckCircle2 size={18} className="text-primary" /> : <X size={18} className="text-muted" />}
+      <AnimatePresence>
+        {activeChapterForPopup && (
+          <motion.div
+            className="popup-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setActiveChapterForPopup(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 12 }}
+              transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+              className="popup-content"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="d-flex align-items-start justify-content-between mb-3">
+                <div className="d-flex align-items-center gap-3">
+                  <div className="popup-header-icon">
+                    <Layers size={20} className="text-primary" />
                   </div>
-                );
-              })}
-            </div>
-            <button className="btn btn-primary w-100 mt-4 py-3 rounded-4 fw-bold" onClick={() => setActiveChapterForPopup(null)}>Done</button>
+                  <div>
+                    <h5 className="fw-bold m-0">Manage Topics</h5>
+                    <span className="text-muted text-truncate d-block" style={{ fontSize: '12px', maxWidth: '220px' }}>
+                      Ch. {activeChapterForPopup.chapterNo} · {activeChapterForPopup.name}
+                    </span>
+                  </div>
+                </div>
+                <button className="popup-close-btn" onClick={() => setActiveChapterForPopup(null)}>
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="d-flex align-items-center justify-content-between mb-3">
+                <span className="badge-count">{selectedInPopupCount}/{sortedTopics.length} Selected</span>
+                <div className="d-flex gap-2">
+                  <button className="quick-action-btn" onClick={handleSelectAllPopupTopics}>Select All</button>
+                  <button className="quick-action-btn" onClick={handleClearAllPopupTopics}>Clear All</button>
+                </div>
+              </div>
+
+              <div className="d-flex flex-column gap-2 popup-list">
+                {sortedTopics.map((topic) => {
+                  const isSelected = watchedTopicsSet.has(topic.id);
+                  return (
+                    <div key={topic.id} className={`topic-item p-3 d-flex align-items-center gap-3 ${isSelected ? 'selected' : ''}`} onClick={() => handleTopicToggle(topic.id)}>
+                      {isSelected
+                        ? <CheckCircle2 size={20} className="text-primary flex-shrink-0" />
+                        : <Circle size={20} className="text-muted flex-shrink-0" style={{ opacity: 0.35 }} />}
+                      <span className={`fw-semibold flex-grow-1 ${isUrduMedium ? 'urdu-font-style' : ''} ${isSelected ? 'text-dark' : 'text-muted'}`}>
+                        {topic.name}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <button className="btn btn-primary w-100 mt-3 py-3 rounded-4 fw-bold" onClick={() => setActiveChapterForPopup(null)}>
+                Done
+              </button>
+            </motion.div>
           </motion.div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 };
