@@ -52,7 +52,8 @@ export interface PaperHeaderProps {
 // Main Component - Ensuring it is exported as a default export
 export const PaperHeader: React.FC<PaperHeaderProps> = (props) => {
   const { settings, paperLanguage, currentLayout, currentClass, profile } = props;
-  const isRTL = paperLanguage === 'urdu';
+  // Header layout direction is always RTL, independent of paper language.
+  const isRTL = true;
   const isCompact = currentLayout && (currentLayout.startsWith('two') || currentLayout.startsWith('three'));
   const textAlign = isRTL ? 'text-end' : 'text-start';
 
@@ -63,7 +64,7 @@ export const PaperHeader: React.FC<PaperHeaderProps> = (props) => {
       {(() => {
         // 1. Four-papers layout always uses SmartHeader
         if (currentLayout === 'four_papers')
-          return <SmartHeader {...props} isRTL={isRTL} currentClass={currentClass} profile={profile} />;
+          return <SmartHeader {...props} isRTL={isRTL} directionClass={textAlign} currentClass={currentClass} profile={profile} />;
 
         // 2. Force Compact for two/three paper layouts
         if (isCompact)

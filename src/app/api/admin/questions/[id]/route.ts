@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireRole } from '@/lib/api-auth';
 import { sanitizeRichTextFields } from '@/lib/sanitizeHtml';
+import { invalidateQuestionPoolCache } from '@/lib/questionPoolCache';
 
 const RICH_TEXT_FIELDS = [
   'question_text', 'question_text_ur',
@@ -84,6 +85,7 @@ export async function DELETE(
     const { id } = await params;
     const { error } = await supabase.from('questions').delete().eq('id', id);
     if (error) throw error;
+    invalidateQuestionPoolCache();
     return NextResponse.json({ deleted: id });
   } catch (err: any) {
     console.error('[DELETE /api/admin/questions/:id]', err);
@@ -109,6 +111,7 @@ export async function PUT(
       .select()
       .single();
     if (error) throw error;
+    invalidateQuestionPoolCache();
     return NextResponse.json({ data });
   } catch (err: any) {
     console.error('[PUT /api/admin/questions/:id]', err);

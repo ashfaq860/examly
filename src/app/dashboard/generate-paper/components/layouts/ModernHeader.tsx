@@ -30,9 +30,9 @@ const ModernHeader: React.FC<ModernHeaderProps> = ({
   profile
 }) => {
  // console.log('Current Class:', profile);
-  const direction = isRTL ? 'ltr' : 'ltr';
-  const textAlign = isRTL ? 'text-start' : 'text-start';
-  const accentBorder = isRTL ? 'border-start' : 'border-start';
+  const direction = isRTL ? 'rtl' : 'ltr';
+  const textAlign = isRTL ? 'text-end' : 'text-start';
+  const accentBorder = isRTL ? 'border-end' : 'border-start';
 //console.log(profile?.logoUrl, 'Profile Logo URL');
  const classNameDisplay = typeof currentClass === 'object' ? currentClass?.name : currentClass;
   return (
@@ -86,7 +86,7 @@ const ModernHeader: React.FC<ModernHeaderProps> = ({
           </div>
 
           {/* Subject Badge */}
-          <div className="col text-end">
+          <div className={`col ${isRTL ? 'text-start' : 'text-end'}`}>
              <div className="small text-uppercase text-muted  mb-1">Subject</div>
              <h5 className="text-secondary  m-0">{subject}</h5>
           </div>

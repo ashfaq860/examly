@@ -18,6 +18,7 @@ interface SmartHeaderProps {
   subject: string;
   isRTL: boolean;
   directionClass: string;
+  paperLanguage?: 'english' | 'urdu' | 'bilingual';
   currentClass: {
     name?: string;
   };
@@ -33,9 +34,12 @@ const SmartHeader: React.FC<SmartHeaderProps> = ({
   subject,
   isRTL,
   directionClass,
+  paperLanguage,
   currentClass,
   profile,
 }) => {
+  // Label wording follows the actual paper language, independent of the forced RTL layout direction.
+  const showUrduLabels = paperLanguage === 'urdu';
   console.log(profile?.logo, 'Profile Logo URL'); // Debug log to verify logo URL is being passed correctly
   // Safe directional spacing based on layout direction
   const marginSpacingClass = isRTL ? 'me-1' : 'ms-1';
@@ -63,9 +67,10 @@ const SmartHeader: React.FC<SmartHeaderProps> = ({
   };
 
   return (
-    <div 
-      className={`container-fluid mb-0 p-0 exam-print-header-container ${directionClass}`} 
+    <div
+      className={`container-fluid mb-0 p-0 exam-print-header-container ${directionClass}`}
       style={containerStyle}
+      dir={isRTL ? 'rtl' : 'ltr'}
     >
       {/* Header Row: Title, Logo and Marks */}
 <div className="d-flex justify-content-center align-items-center mb-0" style={{ width: '100%', gap: '15px' }}>
@@ -94,7 +99,7 @@ const SmartHeader: React.FC<SmartHeaderProps> = ({
   </div>
 
   <div className="fw-bold text-nowrap" style={{ fontSize: "11px", minWidth: "85px", textAlign: isRTL ? "left" : "right" }}>
-    {isRTL ? 'نمبر:' : 'MARKS:'} {totalMarks}
+    {showUrduLabels ? 'نمبر:' : 'MARKS:'} {totalMarks}
   </div>
 </div>
 
@@ -113,27 +118,27 @@ const SmartHeader: React.FC<SmartHeaderProps> = ({
         }}
       >
         <div className="d-flex align-items-end">
-          <span className="text-nowrap">{isRTL ? 'نام' : 'NAME:'}</span>
+          <span className="text-nowrap">{showUrduLabels ? 'نام' : 'NAME:'}</span>
           <div className={`flex-grow-1 ${marginSpacingClass}`} style={lineStyle}></div>
         </div>
 
         <div className="d-flex align-items-end">
-          <span className="text-nowrap">{isRTL ? 'مضمون' : 'SUB:'}</span>
+          <span className="text-nowrap">{showUrduLabels ? 'مضمون' : 'SUB:'}</span>
           <div className={`flex-grow-1 ${marginSpacingClass} text-center`} style={lineStyle}>{subject}</div>
         </div>
 
         <div className="d-flex align-items-end">
-          <span className="text-nowrap">{isRTL ? 'کلاس' : 'CLASS:'}</span>
+          <span className="text-nowrap">{showUrduLabels ? 'کلاس' : 'CLASS:'}</span>
           <div className={`flex-grow-1 ${marginSpacingClass} text-center`} style={lineStyle}>{currentClass?.name || '___'}</div>
         </div>
 
         <div className="d-flex align-items-end">
-          <span className="text-nowrap">{isRTL ? 'سیکشن' : 'SEC:'}</span>
+          <span className="text-nowrap">{showUrduLabels ? 'سیکشن' : 'SEC:'}</span>
           <div className={`flex-grow-1 ${marginSpacingClass}`} style={lineStyle}></div>
         </div>
 
         <div className="d-flex align-items-end">
-          <span className="text-nowrap">{isRTL ? 'تاریخ' : 'DATE:'}</span>
+          <span className="text-nowrap">{showUrduLabels ? 'تاریخ' : 'DATE:'}</span>
           <div className={`flex-grow-1 ${marginSpacingClass}`} style={lineStyle}></div>
         </div>
       </div>

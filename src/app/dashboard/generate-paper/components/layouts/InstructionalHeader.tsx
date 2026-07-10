@@ -34,9 +34,9 @@ const DataBarHeader: React.FC<DataBarHeaderProps> = ({
   currentClass,
   profile,
 }) => {
-  const alignmentClass = isRTL ? 'text-start' : 'text-start';
-  const borderClass = isRTL ? 'border-start ps-2' : 'border-start ps-2';
-  const marginClass = isRTL ? 'me-3' : 'me-3';
+  const alignmentClass = isRTL ? 'text-end' : 'text-start';
+  const borderClass = isRTL ? 'border-end pe-2' : 'border-start ps-2';
+  const marginClass = isRTL ? 'ms-3' : 'me-3';
 
   // Normalize class name display
   const classNameDisplay = typeof currentClass === 'object' ? currentClass?.name : currentClass;
@@ -50,7 +50,7 @@ const DataBarHeader: React.FC<DataBarHeaderProps> = ({
         WebkitPrintColorAdjust: 'exact',
         printColorAdjust: 'exact'
       }}
-      dir={isRTL ? 'ltr' : 'ltr'}
+      dir={isRTL ? 'rtl' : 'ltr'}
     >
       {/* Top Row: Institutional Branding */}
       <div className="d-flex justify-content-between align-items-center border-bottom border-dark pb-2 mb-2">
@@ -91,7 +91,7 @@ const DataBarHeader: React.FC<DataBarHeaderProps> = ({
           </div>
         </div>
         
-        <div className="text-end">
+        <div className={isRTL ? 'text-start' : 'text-end'}>
           <span className="p-2 badge  text-dark fw-normal">
             Date:___________
           </span>

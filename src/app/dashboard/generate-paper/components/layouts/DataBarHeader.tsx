@@ -34,9 +34,9 @@ const DataBarHeader: React.FC<DataBarHeaderProps> = ({
   currentClass,
   profile,
 }) => {
-  const alignmentClass = isRTL ? 'text-start' : 'text-start';
-  const borderClass = isRTL ? 'border-start ps-3' : 'border-start ps-3';
-  const marginClass = isRTL ? 'me-3' : 'me-3';
+  const alignmentClass = isRTL ? 'text-end' : 'text-start';
+  const borderClass = isRTL ? 'border-end pe-3' : 'border-start ps-3';
+  const marginClass = isRTL ? 'ms-3' : 'me-3';
 
   // Normalize class name display
   const classNameDisplay = typeof currentClass === 'object' ? currentClass?.name : currentClass;
@@ -50,7 +50,7 @@ const DataBarHeader: React.FC<DataBarHeaderProps> = ({
         WebkitPrintColorAdjust: 'exact',
         printColorAdjust: 'exact'
       }}
-      dir={isRTL ? 'ltr' : 'ltr'}
+      dir={isRTL ? 'rtl' : 'ltr'}
     >
       {/* Top Row: Logo, Title and Session */}
       <div className="d-flex justify-content-between align-items-center border-bottom border-dark pb-1 mb-1">

@@ -38,7 +38,7 @@ console.log('Profile in BilingualHeader:', profile.logo);
   return (
     <div
       className="border border-dark bg-white text-dark p-1 mb-4"
-      style={{ 
+      style={{
         fontFamily: settings.headingFontFamily,
         WebkitPrintColorAdjust: 'exact',
         printColorAdjust: 'exact'

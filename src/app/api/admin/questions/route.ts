@@ -12,6 +12,7 @@ import type { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireRole } from '@/lib/api-auth';
 import { sanitizeRichTextFields } from '@/lib/sanitizeHtml';
+import { invalidateQuestionPoolCache } from '@/lib/questionPoolCache';
 
 const QUESTION_SELECT = `
   *,
@@ -150,6 +151,7 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
+    invalidateQuestionPoolCache();
     return NextResponse.json({ inserted: data?.length || 0 });
 
   } catch (error: any) {

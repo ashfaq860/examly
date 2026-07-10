@@ -921,7 +921,13 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
 
       const subgroups = ps.blocks.map(b => ({
         qLabel: b.rule.q_label || null,
-        categoryLabel: b.categoryLabel,
+        // MCQ's linked question_category exists to resolve marks/eligibility,
+        // not to print as a heading — falling back to it here (like the
+        // label-carrying types below do) split one continuous MCQ table
+        // into a table per category name (e.g. "Nith Nasar" / "Nith Nazam")
+        // whenever a group_key'd rule had no explicit q_label. Grouped MCQs
+        // with no q_label should render as a single, consistent table.
+        categoryLabel: isMcq ? null : b.categoryLabel,
         attemptCount: b.rule.attempt_count ?? b.questions.length,
         marksEach: resolveMarksForRule(b.rule, expectedPattern),
         questions: b.questions,

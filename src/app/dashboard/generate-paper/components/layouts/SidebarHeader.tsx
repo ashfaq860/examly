@@ -35,7 +35,7 @@ const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   currentClass,
   profile,
 }) => {
-  const alignmentClass = isRTL ? 'text-start flex-row-reverse-disable' : 'text-start';
+  const alignmentClass = isRTL ? 'text-end' : 'text-start';
   
   // Extracting class name safely
   const classNameDisplay = typeof currentClass === 'object' ? currentClass?.name : currentClass;
@@ -50,7 +50,7 @@ const SidebarHeader: React.FC<SidebarHeaderProps> = ({
         borderTopRightRadius: '2.5rem',
         borderTopLeftRadius: '2.5rem',
       }}
-      dir={isRTL ? 'ltr' : 'ltr'}
+      dir={isRTL ? 'rtl' : 'ltr'}
     >
       {/* Dark Sidebar Section (30%) */}
       <div

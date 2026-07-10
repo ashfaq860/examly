@@ -1514,8 +1514,12 @@ const renderPairedQuestions = () => {
     // Plain Q.No label for the dedicated number column — mirrors
     // QuestionRenderer's own MCQ number rendering, which is bypassed here
     // via suppressNumbering since the number now lives in its own <td>.
+    // For Urdu papers the dot goes BEFORE the digit (".2" not "2.") — the
+    // number cell itself stays on the row's right edge (RTL position), only
+    // the dot's placement relative to the digit flips.
     const renderMcqNumberCell = (displayIndex: number) => {
-      const label = `${displayIndex + 1}.`;
+      const n = displayIndex + 1;
+      const label = paperLanguage === 'urdu' ? `.${n}` : `${n}.`;
       const numFontSize = settings.mcqFontSize ?? 12;
       return paperLanguage === 'urdu' ? (
         <span style={{ fontSize: `${numFontSize}px`, fontFamily: URDU_FONT, direction: 'ltr', unicodeBidi: 'embed' as any }}>

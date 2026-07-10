@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { getSessionFromRequest } from '@/lib/api-auth';
+import { buildPoolCacheKey, getCachedPool, setCachedPool } from '@/lib/questionPoolCache';
 
 const flattenQuestion = (q: any) => ({
   ...q,
@@ -13,8 +14,88 @@ const flattenQuestion = (q: any) => ({
   source: q.source_type || 'book'
 });
 
-const fetchForSource = async (
-  source: string,
+// Same sampling `fetchForSource` used to do per chapter via a dedicated
+// query: shuffle within each chapter bucket, take a fair share from each,
+// combine, shuffle again, slice to targetCount. `numChapterBuckets === 1`
+// (topic-based lookups have no chapter subdivision) degrades this to a
+// plain shuffle-and-slice over the whole set, matching the old PATH A.
+function pickFairShareByChapter(rows: any[], numChapterBuckets: number, targetCount: number): any[] {
+  if (numChapterBuckets <= 1) {
+    return [...rows].sort(() => Math.random() - 0.5).slice(0, targetCount);
+  }
+  const fairSharePerChapter = Math.ceil(targetCount / numChapterBuckets);
+  const byChapter = new Map<string, any[]>();
+  for (const row of rows) {
+    const key = row.topics?.chapter_id ?? 'null';
+    const bucket = byChapter.get(key);
+    if (bucket) bucket.push(row); else byChapter.set(key, [row]);
+  }
+  const picked = Array.from(byChapter.values()).flatMap(bucket =>
+    [...bucket].sort(() => Math.random() - 0.5).slice(0, fairSharePerChapter)
+  );
+  return [...picked].sort(() => Math.random() - 0.5).slice(0, targetCount);
+}
+
+// Reconstructs the same two-phase per-source quota algorithm the route used
+// to run as up to 10 sequential network round trips (5 sources x 2 passes),
+// now computed in memory against one already-fetched pool: every source
+// gets an initial fair share (itself chapter-fair-shared), then any deficit
+// against totalTarget is backfilled from sources that had surplus rows.
+function distributeAcrossSourcesAndChapters(
+  rows: any[],
+  sourcesToQuery: string[],
+  numChapterBuckets: number,
+  totalTarget: number,
+): any[] {
+  const bySource = new Map<string, any[]>();
+  for (const source of sourcesToQuery) bySource.set(source, []);
+  for (const row of rows) {
+    const bucket = bySource.get(row.source_type);
+    if (bucket) bucket.push(row);
+  }
+
+  const initialPerSource = Math.ceil(totalTarget / sourcesToQuery.length);
+  const picked = new Map<string, any[]>();
+  for (const source of sourcesToQuery) {
+    picked.set(source, pickFairShareByChapter(bySource.get(source) || [], numChapterBuckets, initialPerSource));
+  }
+
+  const totalFetched = Array.from(picked.values()).reduce((sum, r) => sum + r.length, 0);
+  const deficit = totalTarget - totalFetched;
+
+  if (deficit > 0) {
+    const sourcesWithSurplus = sourcesToQuery.filter(
+      s => (bySource.get(s)?.length || 0) >= initialPerSource
+    );
+    if (sourcesWithSurplus.length > 0) {
+      const extraPerSource = Math.ceil(deficit / sourcesWithSurplus.length);
+      const newLimit = initialPerSource + extraPerSource;
+      for (const source of sourcesWithSurplus) {
+        picked.set(source, pickFairShareByChapter(bySource.get(source) || [], numChapterBuckets, newLimit));
+      }
+    }
+  }
+
+  return Array.from(picked.values()).flat();
+}
+
+// Flat cap for the raw pool fetch, independent of any one caller's
+// totalTarget — this is what gets cached, so it's sized for the largest
+// realistic ask (the manual browser's default 500) rather than the
+// smallest (a single board-pattern rule wanting 3 questions), so every
+// caller's distribution step below has enough rows to work with regardless
+// of which one happened to trigger the cache fill.
+const POOL_FETCH_LIMIT = 1500;
+
+// One round trip for the WHOLE rule — every source and every chapter in
+// range at once — instead of a query per source (and, before that, a query
+// per chapter per source). Cached by filter signature (see
+// questionPoolCache) since paper generation re-requests the same
+// subject/class/chapter/type/source combo repeatedly (regenerate, multiple
+// rules sharing a subject) — only the DB round trip is cached; the
+// fairness distribution below still runs fresh on every call.
+const fetchRawPool = async (
+  sourcesToQuery: string[],
   questionType: string,
   classId: string | null,
   subjectId: string | null,
@@ -22,81 +103,77 @@ const fetchForSource = async (
   requestedTopicIds: string[],
   language: string | null,
   difficulty: string | null,
-  fetchLimit: number,
   categoryId: string | null,
 ): Promise<any[]> => {
+  const cacheKey = buildPoolCacheKey({
+    questionType, sources: sourcesToQuery, classId, subjectId,
+    chapterIds: resolvedChapterIds, topicIds: requestedTopicIds,
+    categoryId, language, difficulty,
+  });
+  const cached = getCachedPool(cacheKey);
+  if (cached) return cached;
 
-  // --- PATH A: Topic-based ---
-  if (requestedTopicIds.length > 0) {
-    let q = supabaseAdmin
-      .from('questions')
-      .select(`
-        *,
-        topics!inner (
-          id, name, chapter_id,
-          chapters!inner (
-            id, name, "chapterNo",
-            class_subjects!inner ( class_id, subject_id )
-          )
+  const isTopicBased = requestedTopicIds.length > 0;
+
+  let q = supabaseAdmin
+    .from('questions')
+    .select(`
+      *,
+      topics!inner (
+        id, name, chapter_id,
+        chapters!inner (
+          id, name, "chapterNo",
+          class_subjects!inner ( class_id, subject_id )
         )
-      `)
-      .eq('question_type', questionType)
-      .eq('source_type', source)
-      .in('topic_id', requestedTopicIds);
+      )
+    `)
+    .eq('question_type', questionType)
+    .in('source_type', sourcesToQuery);
 
-    if (classId)  q = q.eq('topics.chapters.class_subjects.class_id', classId);
-    if (subjectId) q = q.eq('topics.chapters.class_subjects.subject_id', subjectId);
-    if (categoryId) q = q.eq('question_category_id', categoryId);
-    if (language === 'urdu') q = q.not('question_text_ur', 'is', null);
-    if (difficulty && difficulty !== 'any') q = q.eq('difficulty', difficulty);
-
-    const { data, error } = await q;
-    if (error) { console.error(`[${source}] topic error:`, error.message); return []; }
-    return [...(data || [])].sort(() => Math.random() - 0.5).slice(0, fetchLimit);
+  if (isTopicBased) {
+    q = q.in('topic_id', requestedTopicIds);
+  } else if (resolvedChapterIds.length > 0) {
+    q = q.in('topics.chapter_id', resolvedChapterIds);
   }
 
-  // --- PATH B: Chapter-based ---
-  const chaptersToQuery = resolvedChapterIds.length > 0 ? resolvedChapterIds : [null];
-  const fairSharePerChapter = Math.ceil(fetchLimit / chaptersToQuery.length);
-  const perChapterFetchLimit = fairSharePerChapter * 3;
+  if (classId)   q = q.eq('topics.chapters.class_subjects.class_id', classId);
+  if (subjectId) q = q.eq('topics.chapters.class_subjects.subject_id', subjectId);
+  if (categoryId) q = q.eq('question_category_id', categoryId);
+  if (language === 'urdu') q = q.not('question_text_ur', 'is', null);
+  if (difficulty && difficulty !== 'any') q = q.eq('difficulty', difficulty);
 
-  const chapterBuckets = await Promise.all(
-    chaptersToQuery.map(async (chapterId) => {
-      let q = supabaseAdmin
-        .from('questions')
-        .select(`
-          *,
-          topics!inner (
-            id, name, chapter_id,
-            chapters!inner (
-              id, name, "chapterNo",
-              class_subjects!inner ( class_id, subject_id )
-            )
-          )
-        `)
-        .eq('question_type', questionType)
-        .eq('source_type', source);
+  q = q.limit(POOL_FETCH_LIMIT);
 
-      if (classId)   q = q.eq('topics.chapters.class_subjects.class_id', classId);
-      if (subjectId) q = q.eq('topics.chapters.class_subjects.subject_id', subjectId);
-      if (chapterId) q = q.eq('topics.chapter_id', chapterId);
-      if (categoryId) q = q.eq('question_category_id', categoryId);
-      if (language === 'urdu') q = q.not('question_text_ur', 'is', null);
-      if (difficulty && difficulty !== 'any') q = q.eq('difficulty', difficulty);
+  const { data, error } = await q;
+  if (error) { console.error('questions pool error:', error.message); return []; }
 
-      q = q.limit(perChapterFetchLimit);
+  const rows = data || [];
+  setCachedPool(cacheKey, rows);
+  return rows;
+};
 
-      const { data, error } = await q;
-      if (error) { console.error(`[${source}][ch:${chapterId}] error:`, error.message); return []; }
-      return data || [];
-    })
+const fetchQuestionPool = async (
+  sourcesToQuery: string[],
+  questionType: string,
+  classId: string | null,
+  subjectId: string | null,
+  resolvedChapterIds: string[],
+  requestedTopicIds: string[],
+  language: string | null,
+  difficulty: string | null,
+  categoryId: string | null,
+  totalTarget: number,
+): Promise<any[]> => {
+  const numChapterBuckets = requestedTopicIds.length > 0
+    ? 1
+    : (resolvedChapterIds.length > 0 ? resolvedChapterIds.length : 1);
+
+  const rows = await fetchRawPool(
+    sourcesToQuery, questionType, classId, subjectId,
+    resolvedChapterIds, requestedTopicIds, language, difficulty, categoryId,
   );
 
-  const picked = chapterBuckets.flatMap(bucket =>
-    [...bucket].sort(() => Math.random() - 0.5).slice(0, fairSharePerChapter)
-  );
-
-  return [...picked].sort(() => Math.random() - 0.5).slice(0, fetchLimit);
+  return distributeAcrossSourcesAndChapters(rows, sourcesToQuery, numChapterBuckets, totalTarget);
 };
 
 export async function GET(request: NextRequest) {
@@ -116,6 +193,8 @@ export async function GET(request: NextRequest) {
     const language        = searchParams.get('language');
     const sourceTypeParam = searchParams.get('source_type');
     const categoryId      = searchParams.get('categoryId');
+    const limitParam      = searchParams.get('limit');
+    const requestedLimit  = limitParam ? parseInt(limitParam, 10) : null;
 
     // --- CASE A: Fetch by specific IDs ---
     if (questionIdsParam) {
@@ -150,10 +229,16 @@ export async function GET(request: NextRequest) {
       : sourceTypeParam.split(',').map(s => s.trim()).filter(Boolean);
 
     // When filtering by a specific category, a smaller, tighter target avoids
-    // over-fetching across 5 sources for what's usually a narrow pool of
-    // category-tagged questions (e.g. "Synonyms" bank for chapters 1-14).
-    const TOTAL_TARGET = categoryId ? 150 : 500;
-    const initialPerSource = Math.ceil(TOTAL_TARGET / sourcesToQuery.length);
+    // over-fetching for what's usually a narrow pool of category-tagged
+    // questions (e.g. "Synonyms" bank for chapters 1-14).
+    // Callers that know how many questions they actually need (paper
+    // generation) pass `limit` — honor it instead of always pulling the
+    // full 500/150-row browse target just to slice it down client-side.
+    // Callers that omit it (the manual question browser) keep the wide
+    // default pool unchanged.
+    const TOTAL_TARGET = requestedLimit && requestedLimit > 0
+      ? requestedLimit
+      : (categoryId ? 150 : 500);
 
     // 2. Resolve chapters & topics
     const requestedTopicIds: string[] = topicIdsParam
@@ -183,49 +268,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 3. First pass — fetch initialPerSource from each source
-    const firstPassResults: Record<string, any[]> = {};
-    await Promise.all(
-      sourcesToQuery.map(async (source) => {
-        firstPassResults[source] = await fetchForSource(
-          source, questionType, classId, subjectId,
-          resolvedChapterIds, requestedTopicIds,
-          language, difficulty, initialPerSource,
-          categoryId
-        );
-      })
+    // 3. One round trip for every source + every chapter in range, then
+    // reconstruct source/chapter fairness in memory (see fetchQuestionPool).
+    const picked = await fetchQuestionPool(
+      sourcesToQuery, questionType, classId, subjectId,
+      resolvedChapterIds, requestedTopicIds,
+      language, difficulty, categoryId, TOTAL_TARGET
     );
 
-    // 4. Redistribute quota from under-performing sources to others
-    let totalFetched = Object.values(firstPassResults).reduce((sum, r) => sum + r.length, 0);
-    let deficit = TOTAL_TARGET - totalFetched;
+    if (picked.length === 0) return NextResponse.json([]);
 
-    if (deficit > 0) {
-      const sourcesWithData = sourcesToQuery.filter(
-        s => firstPassResults[s].length >= initialPerSource
-      );
-
-      if (sourcesWithData.length > 0) {
-        const extraPerSource = Math.ceil(deficit / sourcesWithData.length);
-
-        await Promise.all(
-          sourcesWithData.map(async (source) => {
-            const newLimit = initialPerSource + extraPerSource;
-            firstPassResults[source] = await fetchForSource(
-              source, questionType, classId, subjectId,
-              resolvedChapterIds, requestedTopicIds,
-              language, difficulty, newLimit, categoryId
-            );
-          })
-        );
-      }
-    }
-
-    // 5. Combine & shuffle
-    const combined = Object.values(firstPassResults).flat();
-    if (combined.length === 0) return NextResponse.json([]);
-
-    const finalResult = [...combined].sort(() => Math.random() - 0.5);
+    // 4. Final shuffle
+    const finalResult = [...picked].sort(() => Math.random() - 0.5);
 
     return NextResponse.json(finalResult.map(flattenQuestion));
 

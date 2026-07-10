@@ -34,9 +34,9 @@ const ScorecardHeader: React.FC<ScorecardHeaderProps> = ({
   currentClass,
   profile,
 }) => {
-  const alignmentClass = isRTL ? 'text-start' : 'text-start';
-  const borderEndClass = isRTL ? 'border-end' : 'border-end';
-  const marginClass = isRTL ? 'me-3' : 'me-3';
+  const alignmentClass = isRTL ? 'text-end' : 'text-start';
+  const borderEndClass = isRTL ? 'border-start' : 'border-end';
+  const marginClass = isRTL ? 'ms-3' : 'me-3';
   
   const classNameDisplay = typeof currentClass === 'object' ? currentClass?.name : currentClass;
 
@@ -49,7 +49,7 @@ const ScorecardHeader: React.FC<ScorecardHeaderProps> = ({
         WebkitPrintColorAdjust: 'exact',
         printColorAdjust: 'exact'
       }}
-      dir={isRTL ? 'ltr' : 'ltr'}
+      dir={isRTL ? 'rtl' : 'ltr'}
     >
       {/* Cyan Accent Top Bar */}
       <div 

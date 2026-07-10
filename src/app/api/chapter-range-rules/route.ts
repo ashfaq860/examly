@@ -5,6 +5,18 @@ import { getSessionFromRequest, requireRole } from '@/lib/api-auth';
 
 const TABLE = 'chapter_question_rules';
 
+// Rules are admin-configured and change rarely, but every single "Generate
+// Board Pattern" click re-fetches them — cache the GET result per
+// subjectId+classId and clear the whole cache on any write below (writes
+// here are infrequent admin actions, so a full clear is simpler and safer
+// than trying to invalidate just the affected subject/class).
+const RULES_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const rulesCache = new Map<string, { data: any[]; expiresAt: number }>();
+
+function invalidateRulesCache(): void {
+  rulesCache.clear();
+}
+
 // class_id is interpolated directly into a raw PostgREST `.or()` filter
 // string below — must be validated as a UUID first so it can't be used to
 // inject extra filter clauses.
@@ -89,6 +101,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid classId' }, { status: 400 });
     }
 
+    const cacheKey = `${subjectId}|${classId || ''}`;
+    const cached = rulesCache.get(cacheKey);
+    if (cached && Date.now() <= cached.expiresAt) {
+      return NextResponse.json(cached.data);
+    }
+
     let query = adminClient
       .from(TABLE)
       .select(`
@@ -119,6 +137,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    rulesCache.set(cacheKey, { data: rules || [], expiresAt: Date.now() + RULES_TTL_MS });
     return NextResponse.json(rules || []);
   } catch (error: any) {
     console.error('Error in GET:', error);
@@ -247,6 +266,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    invalidateRulesCache();
     return NextResponse.json(data, { status: 201 });
   } catch (error: any) {
     console.error('Error in POST:', error);
@@ -364,6 +384,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    invalidateRulesCache();
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('Error in PUT:', error);
@@ -397,6 +418,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    invalidateRulesCache();
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error in DELETE:', error);

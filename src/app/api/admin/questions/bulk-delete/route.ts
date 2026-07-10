@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireRole } from '@/lib/api-auth';
+import { invalidateQuestionPoolCache } from '@/lib/questionPoolCache';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
     }
     const { error } = await supabase.from('questions').delete().in('id', ids);
     if (error) throw error;
+    invalidateQuestionPoolCache();
     return NextResponse.json({ deleted: ids.length });
   } catch (err: any) {
     console.error('[POST /api/questions/bulk-delete]', err);

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireRole } from '@/lib/api-auth';
 import { sanitizeRichText } from '@/lib/sanitizeHtml';
+import { invalidateQuestionPoolCache } from '@/lib/questionPoolCache';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    invalidateQuestionPoolCache();
     return NextResponse.json({
       inserted: data?.length ?? 0,
       message: `Successfully imported ${data?.length} questions`,

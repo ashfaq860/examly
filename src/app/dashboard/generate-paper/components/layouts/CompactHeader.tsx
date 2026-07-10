@@ -63,9 +63,10 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
   };
 
   return (
-    <div 
-      className={`container-fluid mb-0 p-0 exam-print-header-container ${directionClass}`} 
+    <div
+      className={`container-fluid mb-0 p-0 exam-print-header-container ${directionClass}`}
       style={containerStyle}
+      dir={isRTL ? 'rtl' : 'ltr'}
     >
       {/* Header Row: Title, Logo and Marks */}
 <div className="d-flex justify-content-center align-items-center mb-0" style={{ width: '100%', gap: '15px' }}>
