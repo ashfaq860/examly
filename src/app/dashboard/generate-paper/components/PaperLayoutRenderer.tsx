@@ -755,9 +755,22 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
       if (
         section.type === 'mcq' || section.type === 'long' || section.type === 'summary' || section.type === 'essay' ||
         (section.type === 'short' && subject.toLowerCase() !== 'urdu') ||
-        sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma')
+        sectionType.includes('darkhwast_khat') || sectionType.includes('kahani_makalma') ||
+        // Poetry/gazal verses must always be full-width and consistently
+        // sized — the length-based heuristic below (meant for MCQ option
+        // widths) would otherwise give different verses different column
+        // widths depending on their text length, breaking the couplet's
+        // two-hemistich alignment from line to line.
+        sectionType.includes('poetry_explanation') || sectionType.includes('gazal')
       ) return 'col-12';
       if (section.type === 'short' && subject.toLowerCase() === 'urdu') return 'col-6';
+      // Sentence correction/completion always print 4-per-row, matching
+      // regardless of which of the two sub-types a given item belongs to —
+      // completion items run longer ("...جملے کو مکمل کریں: ... ------")
+      // than correction ones, so the length heuristic below would otherwise
+      // give them a narrower 2-per-row column, breaking the grid alignment
+      // across a merged Q.No that mixes both sub-types.
+      if (sectionType.includes('sentence_correction') || sectionType.includes('sentence_completion')) return 'col-3';
       const engText = q.question_text || q.question || '';
       const urText  = q.question_text_ur || '';
       const len = engText.length + urText.length * 1.5;
@@ -787,7 +800,16 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
     // the "(1 x N = N)" marks breakdown — same treatment as single-item
     // translate sections above.
     const isSinglePassageSection = sectionType === 'passage' && questions.length === 1;
-    const hideHeader = isPairedLong || isAlternativeGroup || (hasSubgroups&&isStanzaPunctuationPairWords)  ||
+    // "Choose ANY ONE lesson to summarize" rules (Nasarkhulasa/markziKhyal):
+    // each question IS just the lesson's short title, not full question text
+    // — so instead of stacking each title in its own block with its own
+    // answer-line set (renderQuestionsList's normal per-question layout),
+    // they print inline as "(الف) Title1 (ب) Title2" on the SAME line as
+    // the section's instruction, with one shared set of answer lines below.
+    const isTitleChoiceSection =
+      (sectionType.includes('nasarkhulasa') || sectionType.includes('markzikhyal')) &&
+      !hasSubgroups && questions.length > 1;
+    const hideHeader = isPairedLong || isAlternativeGroup || isTitleChoiceSection || (hasSubgroups&&isStanzaPunctuationPairWords)  ||
       (isUrduOrEnglish && isSingleAttemptLong && !isPoetry && !isGazal && !isCorrection && isCompletion);
 
     const sharedAttemptNote: string | null  = (section as any).sharedAttemptNote  || null;
@@ -835,10 +857,62 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
         </div>
       );
 
+      // Urdu-only OR-alternatives print as ONE line — "Q.N [option A] یا
+      // [option B] marks" — instead of each option in its own stacked block
+      // separated by a centered "یا" divider. The whole row inherits
+      // direction:'rtl' from the printable-paper ancestor (see
+      // PaperBuilderApp's languageConfigs.urdu.direction), so it must NOT
+      // also set flexDirection:'row-reverse' — that combination cancels
+      // back out to an LTR-like layout, which was pushing "Q.N" to the left
+      // edge instead of the right.
+      const sharedAltMarks = section.marksEach ?? Math.max(
+        ...questions.map((q, qIdx) => Number(alternativeMarks?.[qIdx] ?? q.marks ?? 0)),
+      );
+
       return (
         <div className="alternative-group-block">
           <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-            {questions.map((q, qIdx) => {
+            {isUrduLang ? (
+              <div style={{ display: 'flex', width: '100%', alignItems: 'flex-start' }}>
+                <div style={{ flexShrink: 0, width: qNoColWidthUr, textAlign: 'right' }}>
+                  <span className="fw-bold" dir="rtl" style={{
+                    fontSize: `${qNoFontPx}px`, fontFamily: URDU_FONT, lineHeight: 1.3,
+                    display: 'block', textAlign: 'right', direction: 'rtl', unicodeBidi: 'embed' as any,
+                  }}>
+                    {urLabelText}
+                  </span>
+                </div>
+                <div
+                  dir="rtl" lang="ur"
+                  className="alt-question-inline"
+                  style={{
+                    flex: 1, minWidth: 0, direction: 'rtl', textAlign: 'right',
+                    fontFamily: URDU_FONT,
+                    fontSize: `${altQuestionFontSizeUr}px`,
+                    fontWeight: altQuestionFontWeight,
+                    lineHeight: settings.lineHeight, unicodeBidi: 'embed' as any,
+                  }}
+                >
+                  {questions.map((q, qIdx) => (
+                    <React.Fragment key={`${q.id}-${qIdx}`}>
+                      {qIdx > 0 && <span style={{ fontWeight: 600, display: 'inline-block', paddingLeft: '10px', paddingRight: '10px' }}>یا</span>}
+                      {isEditMode ? (
+                        <EditableText
+                          value={q.question_text_ur || q.question_text || ''}
+                          onChange={(v: string) => onTextChange(section.id, q.id, 'question_text_ur', v)}
+                        />
+                      ) : (
+                        <RichText html={q.question_text_ur || q.question_text || ''} />
+                      )}
+                    </React.Fragment>
+                  ))}
+                  {'  '}
+                  <span className="fw-bold text-nowrap" style={{ fontSize: `${altMarksFs}px`, direction: 'ltr', unicodeBidi: 'embed' as any }}>
+                    {sharedAltMarks}
+                  </span>
+                </div>
+              </div>
+            ) : questions.map((q, qIdx) => {
               const qMarks = alternativeMarks?.[qIdx] ?? q.marks ?? section.marksEach;
               const qLabel = alternativeLabels?.[qIdx] || null;
               const isFirstRow = qIdx === 0;
@@ -937,60 +1011,6 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
                 );
               }
 
-              if (isUrduLang) {
-                return (
-                  <React.Fragment key={`${q.id}-${qIdx}`}>
-                    {qLabel && (
-                      <div style={{ width: '100%', paddingRight: qNoColWidthUr, textAlign: 'right', direction: 'rtl', fontWeight: 700, fontSize: `${settings.fontSize + 2}px`, fontFamily: URDU_FONT }}>
-                        {qLabel}
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', flexDirection: 'row-reverse', width: '100%', alignItems: 'flex-start' }}>
-                      <div style={{ flexShrink: 0, width: qNoColWidthUr, textAlign: 'right' }}>
-                        {isFirstRow && (
-                          <span className="fw-bold" dir="rtl" style={{
-                            fontSize: `${qNoFontPx}px`, fontFamily: URDU_FONT, lineHeight: 1.3,
-                            display: 'block', textAlign: 'right', direction: 'rtl', unicodeBidi: 'embed' as any,
-                          }}>
-                            {urLabelText}
-                          </span>
-                        )}
-                      </div>
-                      {/* Marks render inline right after the question text
-                          (not in its own flex column) so they sit close to
-                          the text instead of stretched to the row's far
-                          edge — RTL source order puts them at the visual end
-                          of the last line, immediately following the text. */}
-                      <div
-                        dir="rtl" lang="ur"
-                        className="alt-question-inline"
-                        style={{
-                          flex: 1, minWidth: 0, direction: 'rtl', textAlign: 'right',
-                          fontFamily: URDU_FONT,
-                          fontSize: `${altQuestionFontSizeUr}px`,
-                          fontWeight: altQuestionFontWeight,
-                          lineHeight: settings.lineHeight, unicodeBidi: 'embed' as any,
-                        }}
-                      >
-                        {isEditMode ? (
-                          <EditableText
-                            value={q.question_text_ur || q.question_text || ''}
-                            onChange={(v: string) => onTextChange(section.id, q.id, 'question_text_ur', v)}
-                          />
-                        ) : (
-                          <RichText html={q.question_text_ur || q.question_text || ''} />
-                        )}
-                        {'  '}
-                        <span className="fw-bold text-nowrap" style={{ fontSize: `${altMarksFs}px`, direction: 'ltr', unicodeBidi: 'embed' as any }}>
-                          {qMarks}
-                        </span>
-                      </div>
-                    </div>
-                    {qIdx < questions.length - 1 && <OrDivider />}
-                  </React.Fragment>
-                );
-              }
-
               // English-only branch
               return (
                 <React.Fragment key={`${q.id}-${qIdx}`}>
@@ -1047,6 +1067,109 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
               ))}
             </div>
           )}
+        </div>
+      );
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // renderTitleChoiceSection — "choose any ONE lesson to summarize"
+    // (Nasarkhulasa/markziKhyal). Each question is just the lesson's short
+    // title, not full question text, so instead of stacking each title in
+    // its own block (renderQuestionsList's normal per-question layout),
+    // they print inline — "(الف) Title1 (ب) Title2" — right after the
+    // section's own instruction, on the SAME line, with one shared set of
+    // answer lines below (not one set per title).
+    // ─────────────────────────────────────────────────────────────
+    const renderTitleChoiceSection = () => {
+      const isUrduLang = paperLanguage === 'urdu';
+      const urLabelText = `Q.${startNum}`;
+      const enLabelText = `Q.${startNum}`;
+      const qNoFontPx = settings.headingFontSize + 2;
+      const estimateLabelWidth = (text: string, fontPx: number) =>
+        Math.ceil(text.length * fontPx * 0.62);
+      const qNoColWidthUr = `${estimateLabelWidth(urLabelText, qNoFontPx) + 6}px`;
+      const qNoColWidthEn = `${estimateLabelWidth(enLabelText, qNoFontPx) + 6}px`;
+
+      const abjadLetters = ['الف', 'ب', 'ج', 'د', 'ه', 'و', 'ز', 'ح', 'ط', 'ی'];
+      const instructionUr = (section as any).customUrHeader || 'مندرجہ ذیل میں سے کسی ایک کا انتخاب کیجیے:';
+      const instructionEn = (section as any).customEnHeader || 'Choose any one of the following:';
+      const marksValue = section.marksEach;
+      const answerLineCount = settings.answerLinesLong ?? 5;
+
+      const AnswerLines = () => (
+        answerLinesAllowed ? (
+          <div aria-hidden="true" style={{ marginTop: '2mm' }}>
+            {Array.from({ length: answerLineCount }).map((_, i) => (
+              <div key={i} style={{ height: `${settings.answerLineGapMm ?? 6}mm`, borderBottom: '0.3mm solid #94a3b8' }} />
+            ))}
+          </div>
+        ) : null
+      );
+
+      if (isUrduLang) {
+        return (
+          <div className="title-choice-block">
+            <div style={{ display: 'flex', width: '100%', alignItems: 'flex-start' }}>
+              <div style={{ flexShrink: 0, width: qNoColWidthUr, textAlign: 'right' }}>
+                <span className="fw-bold" dir="rtl" style={{
+                  fontSize: `${qNoFontPx}px`, fontFamily: URDU_FONT, lineHeight: 1.3,
+                  display: 'block', textAlign: 'right', direction: 'rtl', unicodeBidi: 'embed' as any,
+                }}>
+                  {urLabelText}
+                </span>
+              </div>
+              <div
+                dir="rtl" lang="ur"
+                className="alt-question-inline"
+                style={{
+                  flex: 1, minWidth: 0, direction: 'rtl', textAlign: 'right',
+                  fontFamily: URDU_FONT, fontWeight: 600,
+                  fontSize: `${settings.fontSize + 2}px`, lineHeight: settings.lineHeight,
+                  unicodeBidi: 'embed' as any,
+                }}
+              >
+                {instructionUr}
+                <span style={{ display: 'inline-block', width: '10px' }} />
+                {questions.map((q, qIdx) => (
+                  <span key={q.id} style={{ fontWeight: 700, marginInlineStart: qIdx > 0 ? '18px' : 0 }}>
+                    ({abjadLetters[qIdx] || qIdx + 1}){' '}
+                    <RichText html={q.question_text_ur || q.question_text || ''} />
+                  </span>
+                ))}
+                <span style={{ display: 'inline-block', width: '10px' }} />
+                <span style={{ fontWeight: 700, direction: 'ltr', unicodeBidi: 'embed' as any, fontSize: `${settings.fontSize}px` }}>
+                  {marksValue}
+                </span>
+              </div>
+            </div>
+            <AnswerLines />
+          </div>
+        );
+      }
+
+      // Bilingual / English-only fallback — same idea, LTR-safe.
+      return (
+        <div className="title-choice-block">
+          <div style={{ display: 'flex', width: '100%', alignItems: 'flex-start' }}>
+            <div style={{ flexShrink: 0, width: qNoColWidthEn }}>
+              <span className="fw-bold" style={{ fontSize: `${qNoFontPx}px`, fontFamily: settings.headingFontFamily, lineHeight: 1.3, display: 'block' }}>
+                {enLabelText}
+              </span>
+            </div>
+            <div className="alt-question-inline" style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: `${settings.fontSize}px`, fontFamily: settings.fontFamily, lineHeight: settings.lineHeight }}>
+              {instructionEn}
+                <span style={{ display: 'inline-block', width: '10px' }} />
+                {questions.map((q, qIdx) => (
+                <span key={q.id} style={{ fontWeight: 700, marginInlineStart: qIdx > 0 ? '18px' : 0 }}>
+                  ({String.fromCharCode(97 + qIdx)}){' '}
+                  <RichText html={q.question_text || q.question_text_ur || ''} />
+                </span>
+              ))}
+                <span style={{ display: 'inline-block', width: '10px' }} />
+                <span style={{ fontWeight: 700 }}>{marksValue}</span>
+            </div>
+          </div>
+          <AnswerLines />
         </div>
       );
     };
@@ -1338,12 +1461,16 @@ const renderPairedQuestions = () => {
             );
           }
 
-          /* ── URDU-ONLY QUESTION ROW ── */
+          /* ── URDU-ONLY QUESTION ROW ──
+              No flexDirection:'row-reverse' here — this row inherits
+              direction:'rtl' from the printable-paper ancestor for Urdu
+              papers, and combining that with row-reverse cancels back out
+              to an LTR-like layout (the "Q.No pushed to the left" bug). */
           if (isUrduLang) {
             return (
               <div
                 key={`${q.id}-${qIdx}`}
-                style={{ display: 'flex', flexDirection: 'row-reverse', width: '100%', alignItems: 'flex-start' }}
+                style={{ display: 'flex', width: '100%', alignItems: 'flex-start' }}
               >
                 <div style={{ flexShrink: 0, width: qNoColWidthUr, textAlign: 'right' }}>
                   {qIdx === 0 && (
@@ -1367,7 +1494,6 @@ const renderPairedQuestions = () => {
                 <div style={{
                   flex: 1, minWidth: 0,
                   display: 'flex',
-                  flexDirection: 'row-reverse',
                   alignItems: 'flex-start',
                   gap: '4px',
                 }}>
@@ -1729,7 +1855,13 @@ const renderPairedQuestions = () => {
               marginTop: '0px', marginBottom: '4px',
             }}
           >
-            {isPoetry ? 'حصہ نظم:' : isGazal ? 'حصہ غزل:' : ''}
+            {/* hasSubgroups means this section merges more than one rule
+                (e.g. poetry_explanation + gazal under one Q.No) — isPoetry/
+                isGazal only reflect the section's single lead type, so this
+                auto-label would show "حصہ نظم" even when Gazal questions
+                are ALSO in this section. Each subgroup below prints its own
+                correct label per its own type instead. */}
+            {!hasSubgroups && (isPoetry ? 'حصہ نظم:' : isGazal ? 'حصہ غزل:' : '')}
 
             {!isPoetry && !isGazal && !isFirstPartOfPair && !isSecondPartOfPair &&
              (!isLongType || !isUrduOrEnglish) && (
@@ -1757,6 +1889,8 @@ const renderPairedQuestions = () => {
           renderPairedQuestions()
         ) : isAlternativeGroup ? (
           renderAlternativeGroup()
+        ) : isTitleChoiceSection ? (
+          renderTitleChoiceSection()
         ) : hasSubgroups ? (
   (() => {
     let offset = 0;
@@ -1861,7 +1995,49 @@ const renderPairedQuestions = () => {
       );
     }
 
-    return subgroups!.map((sg, sgIdx) => {
+    // A merged poetry_explanation + gazal Q.No gets ONE combined instruction
+    // line (with the total marks for both parts together) instead of each
+    // subgroup showing its own partial marks (e.g. 6 + 4 instead of one 10) —
+    // matches how this exact scenario already renders correctly elsewhere
+    // in this file for the separate-adjacent-sections case (see
+    // combinedPoetryInstruction above), just adapted to pull attempt counts
+    // from `subgroups` instead of `nextSection`.
+    const nazamSg = subgroups!.find(sg => (sg.questionType || '').toLowerCase().includes('poetry_explanation'));
+    const gazalSg = subgroups!.find(sg => (sg.questionType || '').toLowerCase().includes('gazal'));
+    const hasNazamGazalPair = Boolean(nazamSg && gazalSg);
+    const combinedNazamGazalInstruction = hasNazamGazalPair
+      ? `درج ذیل نظم و غزل کے اشعار کی تشریح کیجیے۔ (حصہ نظم سے ${nazamSg!.attemptCount || 0} اور حصہ غزل سے ${gazalSg!.attemptCount || 0} اشعار منتخب کیجیے)`
+      : '';
+    const isUrduPaper = paperLanguage === 'urdu';
+
+    return (
+      <>
+      {hasNazamGazalPair && section.type !== 'mcq' && (
+        <div style={{ display: 'flex', width: '100%', alignItems: 'baseline', gap: '6px', marginBottom: '4px', direction: isUrduPaper ? 'rtl' : 'ltr' }}>
+          <span style={{
+            fontWeight: 700, flexShrink: 0, direction: 'ltr',
+            fontFamily: isUrduPaper ? URDU_FONT : settings.headingFontFamily,
+            fontSize: `${settings.headingFontSize + (isUrduPaper ? 2 : 0)}px`,
+          }}>
+            Q.{startNum}
+          </span>
+          {/* Marks render inline right after the instruction text (not in
+              their own flex:1-pushed column) so they sit close to the text
+              instead of stretched to the row's far edge. */}
+          <span dir={isUrduPaper ? 'rtl' : 'ltr'} lang={isUrduPaper ? 'ur' : undefined} style={{
+            fontWeight: 600,
+            fontFamily: isUrduPaper ? URDU_FONT : settings.fontFamily,
+            fontSize: `${settings.fontSize + (isUrduPaper ? 2 : 0)}px`,
+          }}>
+            {combinedNazamGazalInstruction}
+            {'  '}
+            <span style={{ fontWeight: 700, direction: 'ltr', unicodeBidi: 'embed' as any, fontSize: `${settings.fontSize}px` }}>
+              {totalSubgroupMarks}
+            </span>
+          </span>
+        </div>
+      )}
+      {subgroups!.map((sg, sgIdx) => {
       const sgQuestions = Array.isArray(sg.questions) ? sg.questions : [];
       const thisOffset  = offset;
       offset += sgQuestions.length;
@@ -1871,7 +2047,23 @@ const renderPairedQuestions = () => {
       const sgMarks   = sg.marksEach != null ? sg.marksEach : 0;
       const sgAttempt = sg.attemptCount != null ? sg.attemptCount : sgQuestions.length;
       */
-     const labelText = sg.qLabel || sg.categoryLabel || '';
+     // Each subgroup falls back to its OWN type's built-in convention
+     // (e.g. poetry_explanation/gazal's "حصہ نظم"/"حصہ غزل") rather than
+     // the section's single isPoetry/isGazal, which only reflects the lead
+     // block's type and can't represent a merged poetry+gazal Q.No.
+     const sgTypeLower = (sg.questionType || '').toLowerCase();
+     const sgIsPoetry  = sgTypeLower.includes('poetry_explanation');
+     const sgIsGazal   = sgTypeLower.includes('gazal');
+     const sgAutoEn    = sgIsPoetry ? 'Poetry' : sgIsGazal ? 'Gazal' : '';
+     const sgAutoUr    = sgIsPoetry ? 'حصہ نظم:' : sgIsGazal ? 'حصہ غزل:' : '';
+     // For poetry_explanation/gazal, the auto-convention ALWAYS wins over
+     // qLabel/categoryLabel — those rules' q_label(_ur) fields hold the
+     // combined "Q.2 ..." instruction sentence (shown once above, outside
+     // this loop), not a per-subgroup label. Using them here duplicated
+     // that whole sentence under each subgroup instead of the short
+     // "حصہ نظم"/"حصہ غزل" heading.
+     const isPoetryOrGazalSg = sgIsPoetry || sgIsGazal;
+     const labelText = isPoetryOrGazalSg ? sgAutoEn : (sg.qLabel || sg.categoryLabel || sgAutoEn);
 const sgMarksEach = sg.marksEach != null ? sg.marksEach : 0;
 const sgAttempt   = sg.attemptCount != null ? sg.attemptCount : sgQuestions.length;
 // For pair_of_words (and any type where attempt < total questions),
@@ -1879,11 +2071,21 @@ const sgAttempt   = sg.attemptCount != null ? sg.attemptCount : sgQuestions.leng
 const sgMarks = sgAttempt > 1 ? sgAttempt * sgMarksEach : sgMarksEach;
       // Check if the current section is NOT an MCQ
       const isNotMCQ = section.type !== 'mcq';
-        
+
+      // Below, "Q.{startNum}" and the per-subgroup marks number are only
+      // shown when hideHeader is true — i.e. when nothing OUTSIDE this loop
+      // is already showing them. hideHeader is true for stanza_explanation/
+      // punctuation/pair_of_words groups (their subgroups ARE the only
+      // place Q.No+marks appear), but false whenever an outer header also
+      // renders one (the standard SectionHeader for e.g. a merged "short"
+      // group like نثر/نظم/غزل sub-parts, or the custom combined
+      // Nazam+Gazal header above) — showing it again per subgroup there
+      // just duplicated "Q.N" and repeated marks that were already totalled
+      // once outside the loop.
             // Inside the subgroup mapping, after the label div
 const isRtl = paperLanguage === 'urdu';
 const paddingSide = isRtl ? 'paddingRight' : 'paddingLeft';
-const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only indent if there is a labe
+const indent = labelText && (isStanzaPunctuationPairWords || isPoetryOrGazalSg) ? '35px' : '0';   // only indent if there is a labe
           
       return (
         <div key={`subgroup-${section.id}-${sgIdx}`} className="subgroup-block" style={{ marginTop: sgIdx > 0 ? '6px' : '0px' }}>
@@ -1892,35 +2094,41 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
   (() => {
     const isBilingual = paperLanguage === 'bilingual';
     const isUrduLang  = paperLanguage === 'urdu';
-    // Urdu label: prefer qLabelUr, then categoryLabelUr, then labelText if RTL
-    const urLabel = sg.qLabelUr || sg.categoryLabelUr || '';
-    const enLabel = sg.qLabel || sg.categoryLabel || '';
+    // Urdu label: for poetry/gazal the auto-convention always wins (see
+    // labelText above for why) — otherwise prefer qLabelUr, then
+    // categoryLabelUr, then the auto-convention as a last-resort fallback.
+    const urLabel = isPoetryOrGazalSg ? sgAutoUr : (sg.qLabelUr || sg.categoryLabelUr || sgAutoUr);
+    const enLabel = isPoetryOrGazalSg ? sgAutoEn : (sg.qLabel || sg.categoryLabel || sgAutoEn);
 
     if (isBilingual) {
       return (
         <div style={{ display: 'flex', width: '100%', gap: '12px', alignItems: 'flex-start', marginBottom: '3px' }}>
           {/* LEFT — English */}
           <div style={{ flex: 1, display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            {sgIdx === 0 && isNotMCQ && (
+            {sgIdx === 0 && isNotMCQ && hideHeader && (
               <span style={{ fontWeight: 700, fontFamily: settings.headingFontFamily, fontSize: `${settings.headingFontSize}px`, flexShrink: 0 }}>
                 Q.{startNum}
               </span>
             )}
-            {sgIdx > 0 && isNotMCQ && (
+            {sgIdx > 0 && isNotMCQ && hideHeader && (
               <span style={{ display: 'inline-block', width: `${(String(startNum).length + 2) * (settings.headingFontSize * 0.6)}px` }} />
             )}
             <span style={{ fontWeight: 600, fontSize: `${settings.fontSize}px`, fontFamily: settings.fontFamily }}>
               {enLabel}
             </span>
-            {sgMarks > 0 && isNotMCQ && (
+            {sgMarks > 0 && isNotMCQ && hideHeader && (
               <span style={{ fontWeight: 700, flexShrink: 0, marginLeft: 'auto', fontSize: `${settings.fontSize}px` }}>
                 {sgMarks}
               </span>
             )}
           </div>
-          {/* RIGHT — Urdu */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'row-reverse', alignItems: 'baseline', gap: '6px', direction: 'rtl' }}>
-            {sgIdx === 0 && isNotMCQ && (
+          {/* RIGHT — Urdu. flexDirection:'row-reverse' combined with
+              direction:'rtl' cancels out (double reversal) — that's what
+              was pushing "Q.2" to the left edge instead of the right.
+              direction:'rtl' alone already puts the DOM-first child (Q.2)
+              on the right, which is what we want. */}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'baseline', gap: '6px', direction: 'rtl' }}>
+            {sgIdx === 0 && isNotMCQ && hideHeader && (
               <span style={{ fontWeight: 700, fontFamily: URDU_FONT, fontSize: `${settings.headingFontSize + 2}px`, flexShrink: 0, direction: 'ltr' }}>
                 Q.{startNum}
               </span>
@@ -1934,7 +2142,7 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
                 {enLabel /* fallback: show EN label on Urdu side if no Urdu translation */ }
               </span>
             )}
-            {sgMarks > 0 && isNotMCQ && (
+            {sgMarks > 0 && isNotMCQ && hideHeader && (
               <span style={{ fontWeight: 700, flexShrink: 0, marginRight: 'auto', fontSize: `${settings.fontSize}px`, direction: 'ltr' }}>
                 {sgMarks}
               </span>
@@ -1944,11 +2152,14 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
       );
     }
 
-    // Urdu-only
+    // Urdu-only. Same double-reversal fix as the bilingual Urdu column
+    // above: direction:'rtl' alone already puts the DOM-first child (Q.2)
+    // on the right; flexDirection:'row-reverse' on top of that cancelled
+    // it back out, which is what put "Q.2" on the left.
     if (isUrduLang) {
       return (
-        <div style={{ display: 'flex', flexDirection: 'row-reverse', width: '100%', alignItems: 'baseline', gap: '6px', marginBottom: '3px', direction: 'rtl' }}>
-          {sgIdx === 0 && isNotMCQ && (
+        <div style={{ display: 'flex', width: '100%', alignItems: 'baseline', gap: '6px', marginBottom: '3px', direction: 'rtl' }}>
+          {sgIdx === 0 && isNotMCQ && hideHeader && (
             <span style={{ fontWeight: 700, fontFamily: URDU_FONT, fontSize: `${settings.headingFontSize + 2}px`, flexShrink: 0, direction: 'ltr' }}>
               Q.{startNum}
             </span>
@@ -1956,7 +2167,7 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
           <span dir="rtl" lang="ur" style={{ fontWeight: 600, fontSize: `${settings.fontSize + 2}px`, fontFamily: URDU_FONT, flex: 1 }}>
             {urLabel || enLabel}
           </span>
-          {sgMarks > 0 && isNotMCQ && (
+          {sgMarks > 0 && isNotMCQ && hideHeader && (
             <span style={{ fontWeight: 700, flexShrink: 0, marginRight: 'auto', fontSize: `${settings.fontSize}px`, direction: 'ltr' }}>
               {sgMarks}
             </span>
@@ -1969,17 +2180,17 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
     return (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontWeight: 600, fontSize: `${settings.fontSize}px`, fontFamily: settings.fontFamily, marginBottom: '3px' }}>
         <span>
-          {sgIdx === 0 && isNotMCQ && (
+          {sgIdx === 0 && isNotMCQ && hideHeader && (
             <span style={{ fontWeight: 700, fontFamily: settings.headingFontFamily, fontSize: `${settings.headingFontSize}px`, marginRight: '6px' }}>
               Q.{startNum}
             </span>
           )}
-          {sgIdx > 0 && isNotMCQ && (
+          {sgIdx > 0 && isNotMCQ && hideHeader && (
             <span style={{ display: 'inline-block', width: `${(String(startNum).length + 2) * (settings.headingFontSize * 0.6)}px` }} />
           )}
           {enLabel}
         </span>
-        {sgMarks > 0 && isNotMCQ && (
+        {sgMarks > 0 && isNotMCQ && hideHeader && (
           <span style={{ fontWeight: 700, flexShrink: 0, marginLeft: '8px', fontSize: `${settings.fontSize}px` }}>
             {sgMarks}
           </span>
@@ -2034,6 +2245,7 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
                     }
                     renderInlineBilingual={renderInlineBilingual}
                     suppressNumbering={suppressIndex}
+                    hasSubGroups={true}
                     showAnswerLines={answerLinesAllowed && isNotMCQ}
                     answerLinesShort={settings.answerLinesShort}
                     answerLinesLong={settings.answerLinesLong}
@@ -2045,7 +2257,9 @@ const indent = labelText&&isStanzaPunctuationPairWords ? '35px' : '0';   // only
           </div>
         </div>
       );
-    });
+    })}
+      </>
+    );
   })()
 )  : (
           renderQuestionsList(

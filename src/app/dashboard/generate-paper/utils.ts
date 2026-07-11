@@ -46,15 +46,31 @@ export const englishTypes = [
   { value: 'activePassive', label: 'Active Voice / Passive Voice', fieldPrefix: 'activePassive' },
 ];
 
+// Kept in sync with QuestionForm.tsx's getAvailableQuestionTypes() Urdu
+// branch — that form is the source of truth for which question_type values
+// actually get created/stored. This list used to only have 8 of those 17
+// types, so the manual-selection modal's "Question Type" dropdown could
+// never offer Nasarkhulasa/markziKhyal/application/letter/story/mokalma/
+// essay/passage/stanza_explanation — making those types impossible to
+// browse manually even though board-pattern generation already used them.
 export const urduTypes = [
   { value: 'mcq', label: 'MCQ (اردو)', fieldPrefix: 'mcq' },
   { value: 'poetry_explanation', label: 'اشعار کی تشریح', fieldPrefix: 'poetryExplanation' },
+  { value: 'stanza_explanation', label: 'بند کی تشریح', fieldPrefix: 'stanzaExplanation' },
   { value: 'prose_explanation', label: 'نثرپاروں کی تشریح', fieldPrefix: 'proseExplanation' },
   { value: 'gazal', label: 'غزل', fieldPrefix: 'gazal' },
   { value: 'short', label: 'مختصر سوالات', fieldPrefix: 'short' },
   { value: 'long', label: 'تفصیلی جوابات', fieldPrefix: 'long' },
   { value: 'sentence_correction', label: 'جملوں کی درستگی', fieldPrefix: 'sentenceCorrection' },
   { value: 'sentence_completion', label: 'جملوں کی تکمیل', fieldPrefix: 'sentenceCompletion' },
+  { value: 'passage', label: 'عبارت اور سوالات', fieldPrefix: 'passage' },
+  { value: 'mokalma', label: 'مکالمہ', fieldPrefix: 'mokalma' },
+  { value: 'Nasarkhulasa', label: 'نثر خلاصہ', fieldPrefix: 'nasarKhulasa' },
+  { value: 'markziKhyal', label: 'مرکزی خیال', fieldPrefix: 'markziKhyal' },
+  { value: 'application', label: 'درخواست', fieldPrefix: 'application' },
+  { value: 'letter', label: 'خط', fieldPrefix: 'letter' },
+  { value: 'essay', label: 'مضمون', fieldPrefix: 'essay' },
+  { value: 'story', label: 'کہانی', fieldPrefix: 'story' },
 ];
 
 // debounce hook exported separately if needed

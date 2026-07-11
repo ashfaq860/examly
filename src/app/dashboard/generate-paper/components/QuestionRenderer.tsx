@@ -215,6 +215,11 @@ const toRoman = (n: number): string => {
   return r;
 };
 
+// Urdu abjad letters used to enumerate choices within a Urdu-language
+// question (e.g. "(الف)"/"(ب)") instead of roman numerals.
+const URDU_ABJAD = ['الف', 'ب', 'ج', 'د', 'ه', 'و', 'ز', 'ح', 'ط', 'ی'];
+const toUrduAbjad = (n: number): string => URDU_ABJAD[n - 1] || String(n);
+
 
 const resolveLH = (val: number | undefined, fallback: number): number =>
   typeof val === 'number' && val > 0 ? val : fallback;
@@ -478,6 +483,7 @@ const showNumber = !isSecondPartOfOr && !suppressNumbering && index !== -1;
   if (showNumber) {
     if (isLong)     indexDisplay = `Q.${index}`;
     else if (isMCQ) indexDisplay = `${index + 1}.`;
+    else if (paperLanguage === 'urdu' && !hasSubGroups) indexDisplay = `(${toUrduAbjad(index + 1)})`;
     else             indexDisplay = `(${toRoman(index + 1)})`;
   }
 

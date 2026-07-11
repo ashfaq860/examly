@@ -82,6 +82,8 @@ export async function POST(req: NextRequest) {
       source_year:      q.source_year        || null,
       answer_text:      q.answer_text        ? sanitizeRichText(q.answer_text) : null,
       answer_text_ur:   q.answer_text_ur     ? sanitizeRichText(q.answer_text_ur) : null,
+      diagram:            q.diagram            || null,
+      question_category_id: q.question_category_id || null,
     }));
 
     const { data, error } = await supabase

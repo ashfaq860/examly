@@ -51,9 +51,12 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
   const toUrduDigits = (num: number | string) => num;
 
   // ── Marks display string ──
-  // singleItemMarksOnly → plain number, e.g. "15"
-  // otherwise          → calculation, e.g. "(1 x 15 = 15)"
-  const marksDisplay = singleItemMarksOnly
+  // Plain number (e.g. "10") whenever only 1 is actually being attempted —
+  // "(1 x 10 = 10)" is redundant when there's no real choice being made,
+  // regardless of how many total questions/passages were offered. Only
+  // once attemptCount > 1 does the "(N x M = Total)" breakdown add real
+  // information (e.g. "(2 x 10 = 20)").
+  const marksDisplay = (singleItemMarksOnly || attemptCount === 1)
     ? `${totalMarks}`
     : `(${attemptCount} x ${marksPerQuestion} = ${totalMarks})`;
 

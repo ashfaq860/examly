@@ -17,6 +17,17 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { getPageSize } from '@/lib/paperPageSize';
 import { toast } from 'react-hot-toast';
 
+// Types whose linked question_category name is actually meant to print as a
+// heading (e.g. "Stanza Explanation", "حصہ نظم"). For every other type
+// (mcq, short, long, ...) the category exists only to resolve marks/
+// eligibility — printing it as a fallback heading leaked bookkeeping names
+// like "Nith Nasar" or "نثر" onto the paper wherever a group_key'd rule had
+// no explicit q_label. Shared between the is_alternative branch and the
+// grouped-subgroups branch below so both agree on the same set of types.
+const LABEL_ELIGIBLE_TYPES = new Set([
+  'stanza_explanation', 'poetry_explanation', 'prose_explanation', 'gazal',
+]);
+
 interface PaperBuilderAppProps {
   watch: any;
   setValue: UseFormSetValue<any>;
@@ -853,9 +864,6 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
         // context:") takes priority over the linked category's generic name
         // (e.g. "Stanza Explanation") — q_label is the more precise,
         // per-rule text when the admin has actually set one.
-        const LABEL_ELIGIBLE_TYPES = new Set([
-          'stanza_explanation', 'poetry_explanation', 'prose_explanation', 'gazal',
-        ]);
         const alternatives = sortedAltBlocks
           .map(b => ({
             question: b.questions[0],
@@ -921,13 +929,27 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
 
       const subgroups = ps.blocks.map(b => ({
         qLabel: b.rule.q_label || null,
-        // MCQ's linked question_category exists to resolve marks/eligibility,
-        // not to print as a heading — falling back to it here (like the
-        // label-carrying types below do) split one continuous MCQ table
-        // into a table per category name (e.g. "Nith Nasar" / "Nith Nazam")
-        // whenever a group_key'd rule had no explicit q_label. Grouped MCQs
-        // with no q_label should render as a single, consistent table.
-        categoryLabel: isMcq ? null : b.categoryLabel,
+        // The Urdu counterpart was never carried through here even though
+        // the renderer has always known how to prefer it for Urdu papers —
+        // every subgroup label silently printed its English q_label/category
+        // instead of the admin's actual q_label_ur (e.g. "Nazam 6" — the
+        // category's bookkeeping name — instead of "حصہ نظم").
+        qLabelUr: b.rule.q_label_ur || null,
+        // Only types in LABEL_ELIGIBLE_TYPES actually mean their category
+        // name to print as a heading — everything else (mcq, short, long,
+        // ...) only links a category for marks/eligibility. Falling back to
+        // it unconditionally leaked bookkeeping category names onto the
+        // paper (e.g. "Nith Nasar" for MCQ, "نثر"/"نظم"/"غزل" for a grouped
+        // "short" Q.No) whenever a group_key'd rule had no explicit q_label.
+        categoryLabel: LABEL_ELIGIBLE_TYPES.has((b.rule.question_type || '').toLowerCase()) ? b.categoryLabel : null,
+        categoryLabelUr: LABEL_ELIGIBLE_TYPES.has((b.rule.question_type || '').toLowerCase())
+          ? (b.rule.question_category?.label_ur || null)
+          : null,
+        // Lets the renderer apply a per-block fallback (e.g. the built-in
+        // "حصہ نظم"/"حصہ غزل" convention for poetry/gazal) instead of only
+        // the single section-level type, which can't represent more than
+        // one type once rules of different types are merged under one Q.No.
+        questionType: b.rule.question_type || null,
         attemptCount: b.rule.attempt_count ?? b.questions.length,
         marksEach: resolveMarksForRule(b.rule, expectedPattern),
         questions: b.questions,
@@ -973,6 +995,19 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
         // a single labeled stanza/punctuation/pair_of_words block so its
         // q_label still renders even when it isn't grouped with other rules.
         subgroups: (subgroups.length > 1 || (isLabelCarryingType && hasAnyLabel)) ? subgroups : undefined,
+        // The section-level instruction (shown once, above every sub-part)
+        // prefers the admin's own Subject Rules q_label/q_label_ur — set on
+        // the group's first rule (by sort_order) — over SectionHeader's
+        // built-in per-type default text. This matters whenever a rule's
+        // own question_type doesn't exactly match a defaultInstructions key
+        // (e.g. a standalone "Nasarkhulasa" rule falling through to the
+        // generic fallback instead of "Nasarkhulasa_markziKhyal"'s text) or
+        // when a group merges two different sub-types under one Q.No (e.g.
+        // sentence_correction + sentence_completion) and only the type-based
+        // default for the FIRST sub-type would otherwise show, silently
+        // dropping the second sub-type's instruction.
+        customEnHeader: ps.blocks[0].rule.q_label || undefined,
+        customUrHeader: ps.blocks[0].rule.q_label_ur || undefined,
       } as any);
       qNum++;
     }
