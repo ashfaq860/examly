@@ -57,7 +57,7 @@ interface Question {
   question_type: string;
   answer_text?:    string | null;
   answer_text_ur?: string | null;
-  source_type: 'book' | 'past_paper' | 'model_paper' | 'custom' | 'conceptual';
+  source_type: ('book' | 'past_paper' | 'model_paper' | 'custom' | 'conceptual')[];
   source_year?: number | null;
   created_at: string;
   topic_id?: string | null;
@@ -148,6 +148,12 @@ const DIFF: Record<string, { cls: string; label: string }> = {
 };
 
 const getTypeLabel = (v: string) => QUESTION_TYPES.find(t => t.value === v)?.label || v;
+
+// source_type is a text[] column — a question can carry more than one
+// source tag (e.g. book + past_paper). Formats the array (or, defensively,
+// a legacy scalar) into a single display string for the badge.
+const formatSourceTypes = (v: string[] | string | null | undefined) =>
+  (Array.isArray(v) ? v : v ? [v] : []).map(s => s.replace(/_/g, ' ')).join(', ');
 
 /* ═══════════════════════════ QuestionCell ═══════════════════════════════════*/
 function QuestionCell({ en, ur }: { en?: string | null; ur?: string | null }) {
@@ -457,7 +463,7 @@ export default function QuestionBank() {
           Topic:               q.topic?.name        || '',
           Difficulty:          q.difficulty,
           'Question Type':     q.question_type,
-          'Source Type':       q.source_type,
+          'Source Type':       Array.isArray(q.source_type) ? q.source_type.join(';') : (q.source_type || ''),
           'Source Year':       q.source_year        || '',
           Answer:              q.answer_text        || '',
           'Answer (Urdu)':     q.answer_text_ur     || '',
@@ -587,7 +593,11 @@ export default function QuestionBank() {
           topic_id:      topicId,
           difficulty:    (row['Difficulty']    || 'easy').toString().toLowerCase().trim(),
           question_type: (row['Question Type'] || 'mcq').toString().toLowerCase().trim(),
-          source_type:   (row['Source Type']   || 'custom').toString().toLowerCase().trim(),
+          // A cell may list more than one source separated by ';' (matches
+          // the export mapping above) — e.g. "book;past_paper" for a
+          // question that's in both.
+          source_type:   (row['Source Type'] || 'custom').toString().toLowerCase()
+                            .split(';').map((s: string) => s.trim()).filter(Boolean),
           source_year:   row['Source Year'] ? parseInt(row['Source Year']) : null,
           answer_text:   row['Answer'] || row['Answer Text'] || null,
           answer_text_ur: row['Answer (Urdu)'] || row['Answer Text (Urdu)'] || null,
@@ -1186,7 +1196,7 @@ export default function QuestionBank() {
                           <td><span className={`qb-badge ${diff.cls}`}>{diff.label}</span></td>
                           <td>
                             <div className="qb-meta">
-                              <span className="qb-badge qb-b-source">{q?.source_type?.replace(/_/g,' ')}</span>
+                              <span className="qb-badge qb-b-source">{formatSourceTypes(q?.source_type)}</span>
                               {q?.source_year && <span className="qb-meta-sub">{q.source_year}</span>}
                             </div>
                           </td>
@@ -1258,7 +1268,7 @@ export default function QuestionBank() {
                       {q?.question_category_rel && (
                         <span className="qb-badge qb-b-category">{q.question_category_rel.label_en}</span>
                       )}
-                      <span className="qb-badge qb-b-source">{q?.source_type?.replace(/_/g, ' ')}{q?.source_year ? ` · ${q.source_year}` : ''}</span>
+                      <span className="qb-badge qb-b-source">{formatSourceTypes(q?.source_type)}{q?.source_year ? ` · ${q.source_year}` : ''}</span>
                     </div>
 
                     <div className="qb-rowcard-metarow">

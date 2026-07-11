@@ -74,9 +74,9 @@ export async function POST(req: NextRequest) {
       query = query.in('topics.chapter_id', targetChapterIds);
     }
 
-    // 4. Filter by Source
+    // 4. Filter by Source — source_type is a text[] column
     if (sourceTypes.length > 0 && !sourceTypes.includes('all')) {
-      query = query.in('source_type', sourceTypes);
+      query = query.overlaps('source_type', sourceTypes);
     }
 
     // Over-fetch to allow for better randomization

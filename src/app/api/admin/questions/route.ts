@@ -85,9 +85,10 @@ export async function GET(request: NextRequest) {
     if (questionCategoryId)    q = q.eq('question_category_id', questionCategoryId);
 
     if (sourceType) {
+      // source_type is a text[] column — match rows tagged with ANY of the
+      // requested sources (a question can carry more than one tag).
       const sources = sourceType.split(',').map(s => s.trim()).filter(Boolean);
-      if (sources.length === 1) q = q.eq('source_type', sources[0]);
-      else if (sources.length > 1) q = q.in('source_type', sources);
+      if (sources.length > 0) q = q.overlaps('source_type', sources);
     }
 
     if (search) {

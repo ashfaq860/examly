@@ -199,7 +199,7 @@ export interface Question {
   chapter_id: string;
   subject_id: string;
   class_id: string;
-  source_type?: string;
+  source_type?: string[];
   options?: {
     option_a?: string;
     option_b?: string;

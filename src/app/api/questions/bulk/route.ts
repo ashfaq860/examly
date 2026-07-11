@@ -38,9 +38,9 @@ export async function POST(request: NextRequest) {
       .eq('class_id', classId)
       .in('chapter_id', chapterIds);
 
-    // Add source type filter if specified
+    // Add source type filter if specified — source_type is a text[] column
     if (sourceType !== 'all') {
-      query = query.eq('source_type', sourceType);
+      query = query.overlaps('source_type', [sourceType]);
     }
 
     // Fetch questions for each type

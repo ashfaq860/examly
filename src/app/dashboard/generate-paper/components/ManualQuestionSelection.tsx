@@ -30,7 +30,7 @@ interface QuestionWithOptions extends Question {
   chapter_no?: string | number;
   chapter_name?: string;
   topic_name?: string;
-  source_type?: string;
+  source_type?: string[];
 }
 
 // ─── MathJax loader (loads once globally) ────────────────────────────────────
@@ -462,7 +462,7 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                       )}
 
                             <div className={`q-meta ${isUrdu ? 'q-meta-rtl' : ''}`}>
-                              <span className="src-tag">Source Type: {q.source_type || 'book'}</span>
+                              <span className="src-tag">Source Type: {Array.isArray(q.source_type) && q.source_type.length > 0 ? q.source_type.join(', ') : 'book'}</span>
                               {isSelected && <span className="chk">✓</span>}
                             </div>
                           </div>

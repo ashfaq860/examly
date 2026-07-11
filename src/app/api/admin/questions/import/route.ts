@@ -10,6 +10,16 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
+// source_type is a text[] column — a row can legitimately be tagged with
+// more than one source (e.g. in the book AND a past paper). Accepts an
+// already-parsed array (JSON import), a ';'-delimited cell (CSV/Excel
+// import — see admin page's row mapping), or a single scalar string.
+function normalizeSourceTypes(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).map(s => s.trim()).filter(Boolean);
+  if (typeof value === 'string') return value.split(';').map(s => s.trim()).filter(Boolean);
+  return [];
+}
+
 export async function POST(req: NextRequest) {
   const auth = await requireRole(['admin', 'super_admin']);
   if (auth.error) return auth.error;
@@ -29,7 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Only require the fields the DB actually enforces as NOT NULL / no default
-    const required = ['question_text', 'difficulty', 'question_type', 'source_type'];
+    const required = ['question_text', 'difficulty', 'question_type'];
 
     const validationErrors: string[] = [];
     for (const [i, q] of body.entries()) {
@@ -37,6 +47,11 @@ export async function POST(req: NextRequest) {
         if (!q[field]) {
           validationErrors.push(`Row ${i + 1}: missing required field "${field}"`);
         }
+      }
+      // source_type is now an array column — an empty array is falsy-empty
+      // but not `!value`, so it needs its own non-generic check.
+      if (normalizeSourceTypes(q.source_type).length === 0) {
+        validationErrors.push(`Row ${i + 1}: missing required field "source_type"`);
       }
     }
 
@@ -63,7 +78,7 @@ export async function POST(req: NextRequest) {
       topic_id:         q.topic_id           || null,   // null is fine — the DB allows it
       difficulty:       q.difficulty,
       question_type:    q.question_type,
-      source_type:      q.source_type,
+      source_type:      normalizeSourceTypes(q.source_type),
       source_year:      q.source_year        || null,
       answer_text:      q.answer_text        ? sanitizeRichText(q.answer_text) : null,
       answer_text_ur:   q.answer_text_ur     ? sanitizeRichText(q.answer_text_ur) : null,

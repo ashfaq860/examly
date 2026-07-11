@@ -273,7 +273,7 @@ export default function QuestionForm({
     class_id: '', subject_id: '', chapter_id: '', topic_id: '',
     difficulty: 'medium',
     question_type: 'mcq' as QuestionType,
-    source_type: 'book' as 'book' | 'past_paper' | 'model_paper' | 'custom' | 'conceptual',
+    source_type: ['book'] as ('book' | 'past_paper' | 'model_paper' | 'custom' | 'conceptual')[],
     passage_questions_count: 1,
   });
 
@@ -606,7 +606,9 @@ export default function QuestionForm({
       question_type: (question.question_type || 'mcq') as QuestionType,
       answer_text: question.answer_text || '',
       answer_text_ur: question.answer_text_ur || '',
-      source_type: (question.source_type || 'book') as any,
+      source_type: (Array.isArray(question.source_type)
+        ? question.source_type
+        : question.source_type ? [question.source_type] : ['book']) as any,
       source_year: question.source_year ? String(question.source_year) : '',
       passage_text: passageText, passage_text_ur: passageTextUr,
       idiom_phrase: idiomPhrase, idiom_phrase_explanation: question.answer_text || '',
@@ -852,6 +854,22 @@ export default function QuestionForm({
 
   const handleEditorChange = useCallback((content: string, fieldName: string) => {
     setFormData(prev => ({ ...prev, [fieldName]: content }));
+  }, []);
+
+  // A question can legitimately come from more than one source at once
+  // (e.g. it's in the textbook AND also appeared in a past paper) — toggles
+  // membership in formData.source_type rather than replacing it like a
+  // single-select would.
+  const toggleSourceType = useCallback((value: string) => {
+    setFormData(prev => {
+      const has = prev.source_type.includes(value as any);
+      const next = has
+        ? prev.source_type.filter(s => s !== value)
+        : [...prev.source_type, value as any];
+      // At least one source must stay selected — dropping the last one
+      // would leave the question with no source at all.
+      return next.length > 0 ? { ...prev, source_type: next } : prev;
+    });
   }, []);
 
   const getAvailableQuestionTypes = useCallback(() => {
@@ -1112,17 +1130,32 @@ export default function QuestionForm({
           </div>
 
           <div className="col-md-6">
-            <label className="qfm-label">Source Type *</label>
-            <select className="form-select" name="source_type" value={formData.source_type} onChange={handleChange} required>
-              <option value="book">Book</option>
-              <option value="past_paper">Past Paper</option>
-              <option value="model_paper">Model Paper</option>
-              <option value="custom">Custom</option>
-              <option value="conceptual">Conceptual</option>
-            </select>
+            <label className="qfm-label">Source Type * <span className="text-muted fw-normal">(select all that apply)</span></label>
+            <div className="d-flex flex-wrap gap-3">
+              {[
+                { value: 'book', label: 'Book' },
+                { value: 'past_paper', label: 'Past Paper' },
+                { value: 'model_paper', label: 'Model Paper' },
+                { value: 'custom', label: 'Custom' },
+                { value: 'conceptual', label: 'Conceptual' },
+              ].map(opt => (
+                <div className="form-check" key={opt.value}>
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    id={`source_type_${opt.value}`}
+                    checked={formData.source_type.includes(opt.value as any)}
+                    onChange={() => toggleSourceType(opt.value)}
+                  />
+                  <label className="form-check-label" htmlFor={`source_type_${opt.value}`}>
+                    {opt.label}
+                  </label>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {['past_paper', 'model_paper'].includes(formData.source_type) && (
+          {formData.source_type.some(s => ['past_paper', 'model_paper'].includes(s)) && (
             <div className="col-md-6">
               <label className="qfm-label">Year</label>
               <input type="number" className="form-control" name="source_year" value={formData.source_year} onChange={handleChange} min="1900" max={new Date().getFullYear()} />

@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
     // Direct question-level filters
     if (difficulty)           query = query.eq('difficulty', difficulty);
     if (question_type)        query = query.eq('question_type', question_type);
-    if (source_type)          query = query.eq('source_type', source_type);
+    if (source_type)          query = query.overlaps('source_type', [source_type]);
     if (topic_id)              query = query.eq('topic_id', topic_id);
     if (question_category_id) query = query.eq('question_category_id', question_category_id);
 

@@ -11,7 +11,12 @@ const flattenQuestion = (q: any) => ({
   chapterNo: q.topics?.chapters?.chapterNo || 'N/A',
   chapterName: q.topics?.chapters?.name || 'N/A',
   topicName: q.topics?.name || 'General',
-  source: q.source_type || 'book'
+  // source_type is a text[] — a question can carry more than one source tag
+  // (e.g. it's in the book AND a past paper). `source` stays a single
+  // display string for any consumer expecting one.
+  source: Array.isArray(q.source_type) && q.source_type.length > 0
+    ? q.source_type.join(', ')
+    : (q.source_type || 'book')
 });
 
 // Same sampling `fetchForSource` used to do per chapter via a dedicated
@@ -41,37 +46,55 @@ function pickFairShareByChapter(rows: any[], numChapterBuckets: number, targetCo
 // now computed in memory against one already-fetched pool: every source
 // gets an initial fair share (itself chapter-fair-shared), then any deficit
 // against totalTarget is backfilled from sources that had surplus rows.
+//
+// source_type is a text[] — a row can be tagged with more than one source
+// (e.g. in the book AND a past paper), so a plain Map<sourceName, rows[]>
+// partition no longer works (a row can't live in two disjoint buckets at
+// once). Instead each source draws from a shared pool filtered to "rows
+// tagged with this source that no other source has already claimed" — a
+// row is eligible under any of its tags but is only ever picked once,
+// tracked via `used`. Source processing order is randomized per call so
+// repeated generations don't always let the same source have first pick of
+// shared rows.
 function distributeAcrossSourcesAndChapters(
   rows: any[],
   sourcesToQuery: string[],
   numChapterBuckets: number,
   totalTarget: number,
 ): any[] {
-  const bySource = new Map<string, any[]>();
-  for (const source of sourcesToQuery) bySource.set(source, []);
-  for (const row of rows) {
-    const bucket = bySource.get(row.source_type);
-    if (bucket) bucket.push(row);
-  }
+  const used = new Set<string>();
+  const poolFor = (source: string) =>
+    rows.filter(r => !used.has(String(r.id)) && Array.isArray(r.source_type) && r.source_type.includes(source));
 
   const initialPerSource = Math.ceil(totalTarget / sourcesToQuery.length);
+  const orderedSources = [...sourcesToQuery].sort(() => Math.random() - 0.5);
   const picked = new Map<string, any[]>();
-  for (const source of sourcesToQuery) {
-    picked.set(source, pickFairShareByChapter(bySource.get(source) || [], numChapterBuckets, initialPerSource));
+
+  for (const source of orderedSources) {
+    const selected = pickFairShareByChapter(poolFor(source), numChapterBuckets, initialPerSource);
+    selected.forEach(r => used.add(String(r.id)));
+    picked.set(source, selected);
   }
 
   const totalFetched = Array.from(picked.values()).reduce((sum, r) => sum + r.length, 0);
   const deficit = totalTarget - totalFetched;
 
   if (deficit > 0) {
-    const sourcesWithSurplus = sourcesToQuery.filter(
-      s => (bySource.get(s)?.length || 0) >= initialPerSource
+    const sourcesWithSurplus = orderedSources.filter(
+      s => (picked.get(s)?.length || 0) >= initialPerSource
     );
     if (sourcesWithSurplus.length > 0) {
       const extraPerSource = Math.ceil(deficit / sourcesWithSurplus.length);
       const newLimit = initialPerSource + extraPerSource;
       for (const source of sourcesWithSurplus) {
-        picked.set(source, pickFairShareByChapter(bySource.get(source) || [], numChapterBuckets, newLimit));
+        // Release this source's own prior picks back into its pool before
+        // re-selecting at the larger target, so they're still eligible
+        // alongside anything freed up by other sources not needing them.
+        const prior = picked.get(source) || [];
+        prior.forEach(r => used.delete(String(r.id)));
+        const reselected = pickFairShareByChapter(poolFor(source), numChapterBuckets, newLimit);
+        reselected.forEach(r => used.add(String(r.id)));
+        picked.set(source, reselected);
       }
     }
   }
@@ -128,7 +151,7 @@ const fetchRawPool = async (
       )
     `)
     .eq('question_type', questionType)
-    .in('source_type', sourcesToQuery);
+    .overlaps('source_type', sourcesToQuery);
 
   if (isTopicBased) {
     q = q.in('topic_id', requestedTopicIds);
