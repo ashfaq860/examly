@@ -6,6 +6,21 @@ import { Subject, Chapter, Question } from '@/types/types';
 const apiCache = new Map<string, { data: any; timestamp: number }>();
 export const CACHE_DURATION = 5 * 60 * 1000;
 
+// A stable, shared empty-array reference for `watch('someField') || []`-style
+// fallbacks. Using a fresh `[]` literal as the fallback creates a NEW array
+// on every single render whenever the watched field is unset — and since
+// that array is passed down as a prop into ManualQuestionSelection, whose
+// question-fetch effect depends on it by reference, every unrelated
+// re-render of an ancestor (typing in an unrelated field, any setValue call
+// anywhere in the wizard) was seen as "selectedChapters changed", aborting
+// the in-flight /api/questions request and firing a new one. Under load this
+// produced the intermittent "sometimes it shows, sometimes it doesn't"
+// behavior reported for non-mcq manual question types (small/slower result
+// sets were more likely to lose the abort race than big ones like mcq).
+// Reusing the SAME array reference across renders removes that false
+// "changed" signal.
+export const EMPTY_STRING_ARRAY: string[] = [];
+
 export const cachedGet = async (url: string) => {
   const cached = apiCache.get(url);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {

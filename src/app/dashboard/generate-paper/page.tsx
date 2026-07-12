@@ -10,6 +10,7 @@ import { PaperBuilderApp } from './components/PaperBuilderApp';
 import Loading from '@/app/dashboard/generate-paper/loading';
 // custom hook containing business logic
 import { useGeneratePaper } from './hooks/useGeneratePaper';
+import { EMPTY_STRING_ARRAY } from './utils';
 
 const GeneratePaperPage = () => {
   const {
@@ -273,7 +274,7 @@ const GeneratePaperPage = () => {
                 chapters={chapters}
                 watchedSubjectId={watchedSubjectId}
                 watchedChapterOption={watchedChapterOption}
-                selectedChapters={watch('selectedChapters') || []}
+                selectedChapters={watch('selectedChapters') || EMPTY_STRING_ARRAY}
                 subjects={subjects}
                 classes={classes}
                 watchedClassId={watchedClassId}
@@ -299,7 +300,7 @@ const GeneratePaperPage = () => {
                 watchedClassId={watchedClassId}
                 watchedSubjectId={watchedSubjectId}
                 watchedChapterOption={watchedChapterOption}
-                selectedChapters={watch('selectedChapters') || []}
+                selectedChapters={watch('selectedChapters') || EMPTY_STRING_ARRAY}
                 setStep={setStep}
                 setSelectedQuestions={setSelectedQuestions}
                 setPreviewQuestions={setPreviewQuestions}

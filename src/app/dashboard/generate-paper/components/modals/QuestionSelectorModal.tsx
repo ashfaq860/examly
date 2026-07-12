@@ -10,6 +10,7 @@ import { ManualQuestionSelection } from '../ManualQuestionSelection';
 import { toast } from 'react-hot-toast';
 import Loading from '../../loading';
 import { getBucket } from '@/lib/paperQuestionBuckets';
+import { EMPTY_STRING_ARRAY } from '../../utils';
 
 export const QuestionSelectorModal: React.FC<any> = ({
   isOpen, onClose, onAddQuestions, subjectId, classId, chapterOption,
@@ -186,7 +187,7 @@ export const QuestionSelectorModal: React.FC<any> = ({
     setAutoSelectSeed(Date.now());
   };
 
-  const selectedTopics = watch('selectedTopics') || [];
+  const selectedTopics = watch('selectedTopics') || EMPTY_STRING_ARRAY;
   useEffect(() => {
     if (!selectedType || totalQuestions === 0 || useManualSelection || autoSelectSeed === 0) return;
 

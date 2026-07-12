@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { UseFormSetValue } from 'react-hook-form';
 import { motion, AnimatePresence } from 'framer-motion';
+import { EMPTY_STRING_ARRAY } from '../../utils';
 
 interface ChapterSelectionStepProps {
   chapters: (Chapter & { topics?: Topic[] })[];
@@ -39,7 +40,7 @@ export const ChapterSelectionStep: React.FC<ChapterSelectionStepProps> = ({
   
   // 1. PERFORMANCE: watch('selectedTopics') triggers re-renders. 
   // Convert to a Set immediately for O(1) lookups in the UI.
-  const watchedTopicsArr: string[] = watch('selectedTopics') || [];
+  const watchedTopicsArr: string[] = watch('selectedTopics') || EMPTY_STRING_ARRAY;
   const watchedTopicsSet = useMemo(() => new Set(watchedTopicsArr), [watchedTopicsArr]);
 
   const currentSubject = useMemo(() =>

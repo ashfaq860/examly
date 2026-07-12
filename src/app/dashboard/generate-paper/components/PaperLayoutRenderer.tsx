@@ -809,7 +809,27 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
     const isTitleChoiceSection =
       (sectionType.includes('nasarkhulasa') || sectionType.includes('markzikhyal')) &&
       !hasSubgroups && questions.length > 1;
-    const hideHeader = isPairedLong || isAlternativeGroup || isTitleChoiceSection || (hasSubgroups&&isStanzaPunctuationPairWords)  ||
+    // These types have no entry in SectionHeader's defaultInstructions map
+    // (see SectionHeader.tsx), so a standalone one-question section of any
+    // of them falls through to the generic catch-all "مندرجہ ذیل سوال حل
+    // کریں" — meaningless filler above a question that already says what
+    // it wants (e.g. "بیماری کی درخواست لکھیں"). Deliberately NOT a blanket
+    // "any single-question section" rule: types with a real, specific
+    // default instruction (translate_urdu, passage, short, long, ...) keep
+    // using it even when they only have one question.
+    const SINGLE_QUESTION_NO_DEFAULT_TYPES = ['application', 'letter', 'story', 'mokalma', 'nasarkhulasa', 'markzikhyal'];
+    // A section with exactly one question and no other special handling
+    // (not MCQ, not poetry/gazal, not part of any pairing/alternative/
+    // subgroup mechanism) doesn't need its own "(الف)" sub-label either —
+    // the question's own text becomes the heading itself:
+    // "Q.N [question text] [marks]" on one line.
+    const isSingleQuestionSection =
+      questions.length === 1 &&
+      SINGLE_QUESTION_NO_DEFAULT_TYPES.some(t => sectionType.includes(t)) &&
+      !isPoetry && !isGazal &&
+      !hasSubgroups && !isPairedLong && !isAlternativeGroup && !isTitleChoiceSection &&
+      !isFirstPartOfPair && !isSecondPartOfPair;
+    const hideHeader = isPairedLong || isAlternativeGroup || isTitleChoiceSection || isSingleQuestionSection || (hasSubgroups&&isStanzaPunctuationPairWords)  ||
       (isUrduOrEnglish && isSingleAttemptLong && !isPoetry && !isGazal && !isCorrection && isCompletion);
 
     const sharedAttemptNote: string | null  = (section as any).sharedAttemptNote  || null;
@@ -1167,6 +1187,101 @@ const isStanzaPunctuationPairWords  =  sectionType.includes('stanza_explanation'
               ))}
                 <span style={{ display: 'inline-block', width: '10px' }} />
                 <span style={{ fontWeight: 700 }}>{marksValue}</span>
+            </div>
+          </div>
+          <AnswerLines />
+        </div>
+      );
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // renderSingleQuestionSection — one question, no other questions to
+    // distinguish it from, so no "(الف)" label and no generic type-based
+    // instruction line; the question's own text IS the heading.
+    // ─────────────────────────────────────────────────────────────
+    const renderSingleQuestionSection = () => {
+      const isUrduLang = paperLanguage === 'urdu';
+      const q = questions[0];
+      const urLabelText = `Q.${startNum}`;
+      const enLabelText = `Q.${startNum}`;
+      const qNoFontPx = settings.headingFontSize + 2;
+      const estimateLabelWidth = (text: string, fontPx: number) =>
+        Math.ceil(text.length * fontPx * 0.62);
+      const qNoColWidthUr = `${estimateLabelWidth(urLabelText, qNoFontPx) + 6}px`;
+      const qNoColWidthEn = `${estimateLabelWidth(enLabelText, qNoFontPx) + 6}px`;
+      const marksValue = q.marks || section.marksEach;
+
+      const AnswerLines = () => (
+        answerLinesAllowed ? (
+          <div aria-hidden="true" style={{ marginTop: '2mm' }}>
+            {Array.from({ length: isLongType ? (settings.answerLinesLong ?? 5) : (settings.answerLinesShort ?? 4) }).map((_, i) => (
+              <div key={i} style={{ height: `${settings.answerLineGapMm ?? 6}mm`, borderBottom: '0.3mm solid #94a3b8' }} />
+            ))}
+          </div>
+        ) : null
+      );
+
+      if (isUrduLang) {
+        return (
+          <div className="single-question-block">
+            <div style={{ display: 'flex', width: '100%', alignItems: 'flex-start' }}>
+              <div style={{ flexShrink: 0, width: qNoColWidthUr, textAlign: 'right' }}>
+                <span className="fw-bold" dir="rtl" style={{
+                  fontSize: `${qNoFontPx}px`, fontFamily: URDU_FONT, lineHeight: 1.3,
+                  display: 'block', textAlign: 'right', direction: 'rtl', unicodeBidi: 'embed' as any,
+                }}>
+                  {urLabelText}
+                </span>
+              </div>
+              <div
+                dir="rtl" lang="ur"
+                className="alt-question-inline"
+                style={{
+                  flex: 1, minWidth: 0, direction: 'rtl', textAlign: 'right',
+                  fontFamily: URDU_FONT, fontWeight: 600,
+                  fontSize: `${settings.fontSize + 2}px`, lineHeight: settings.lineHeight,
+                  unicodeBidi: 'embed' as any,
+                }}
+              >
+                {isEditMode ? (
+                  <EditableText
+                    value={q.question_text_ur || q.question_text || ''}
+                    onChange={(v: string) => onTextChange(section.id, q.id, 'question_text_ur', v)}
+                  />
+                ) : (
+                  <RichText html={q.question_text_ur || q.question_text || ''} />
+                )}
+                <span style={{ display: 'inline-block', width: '10px' }} />
+                <span style={{ fontWeight: 700, direction: 'ltr', unicodeBidi: 'embed' as any, fontSize: `${settings.fontSize}px` }}>
+                  {marksValue}
+                </span>
+              </div>
+            </div>
+            <AnswerLines />
+          </div>
+        );
+      }
+
+      // Bilingual / English-only fallback — same idea, LTR-safe.
+      return (
+        <div className="single-question-block">
+          <div style={{ display: 'flex', width: '100%', alignItems: 'flex-start' }}>
+            <div style={{ flexShrink: 0, width: qNoColWidthEn }}>
+              <span className="fw-bold" style={{ fontSize: `${qNoFontPx}px`, fontFamily: settings.headingFontFamily, lineHeight: 1.3, display: 'block' }}>
+                {enLabelText}
+              </span>
+            </div>
+            <div className="alt-question-inline" style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: `${settings.fontSize}px`, fontFamily: settings.fontFamily, lineHeight: settings.lineHeight }}>
+              {isEditMode ? (
+                <EditableText
+                  value={q.question_text || q.question_text_ur || ''}
+                  onChange={(v: string) => onTextChange(section.id, q.id, 'question_text', v)}
+                />
+              ) : (
+                <RichText html={q.question_text || q.question_text_ur || ''} />
+              )}
+              <span style={{ display: 'inline-block', width: '10px' }} />
+              <span style={{ fontWeight: 700 }}>{marksValue}</span>
             </div>
           </div>
           <AnswerLines />
@@ -1755,6 +1870,15 @@ const renderPairedQuestions = () => {
                   isLast={baseOffset + qIdx === questions.length - 1}
                   headingFontSize={settings.headingFontSize}
                   suppressNumbering={suppressNum}
+                  // Urdu sub-item numbering: roman (i)/(ii) for an actual
+                  // enumerated list, but abjad (الف)/(ب) for the narrower
+                  // "pick ONE of exactly two alternatives" shape — matching
+                  // how (الف)/(ب) already reads as a binary either/or in
+                  // Urdu exam convention. isFirstPartOfPair/isSecondPartOfPair
+                  // (adjacent poetry+gazal or correction+completion sections,
+                  // manually added back-to-back) are always a merged list,
+                  // never a binary choice, so they always get roman too.
+                  hasSubGroups={isFirstPartOfPair || isSecondPartOfPair || questions.length !== 2}
                   shouldShowOr={
                     isLongType && isUrduOrEnglish &&
                     section.totalQuestions === 2 && section.attemptCount === 1
@@ -1891,6 +2015,8 @@ const renderPairedQuestions = () => {
           renderAlternativeGroup()
         ) : isTitleChoiceSection ? (
           renderTitleChoiceSection()
+        ) : isSingleQuestionSection ? (
+          renderSingleQuestionSection()
         ) : hasSubgroups ? (
   (() => {
     let offset = 0;
