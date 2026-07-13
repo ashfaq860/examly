@@ -21,7 +21,6 @@ import {
   deleteQuestion,
   bulkDeleteQuestions,
   importQuestions,
-  exportQuestions,
 } from '@/lib/questionsApi';
 
 /* ═══════════════════════════ helpers ═══════════════════════════════════════*/
@@ -421,21 +420,16 @@ export default function QuestionBank() {
     }
   };
 
-  /* ── export ── */
+  /* ── export ──
+     Exports exactly the rows currently rendered in the table (the current
+     page, after the activeTab quick-filter) instead of issuing a separate,
+     broader server query — that older approach ignored pagination and came
+     back with up to Supabase's default 1000-row cap regardless of which
+     page/filters were actually showing on screen. */
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const { data } = await exportQuestions({
-        difficulty:    filters.difficulty,
-        question_type: filters.question_type,
-        source_type:   filters.source_type,
-        topic_id:      filters.topic,
-        chapter_id:    filters.chapter,
-        subject_id:    filters.subject,
-        class_id:      filters.class,
-        search:        searchTerm || undefined,
-        question_category_id: filters.question_category_id,
-      });
+      const data = displayedQs;
 
       if (!data?.length) {
         toast.error('No questions to export with current filters');

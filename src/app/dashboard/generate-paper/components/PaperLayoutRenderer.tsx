@@ -2336,8 +2336,17 @@ const indent = labelText && (isStanzaPunctuationPairWords || isPoetryOrGazalSg) 
         style={{ [paddingSide]: indent }}
           >
             {sgQuestions.map((q: any, qIdx: number) => {
-              // Suppress index ONLY if it's a single question AND NOT an MCQ
-              const suppressIndex = isNotMCQ && sgQuestions.length === 1;
+              // Suppress the "(i)" index for a lone question ONLY when this
+              // subgroup already prints its own label heading above it
+              // (labelText) — the label alone identifies it, so a redundant
+              // "(i)" was noise there. When the subgroup has NO label (e.g.
+              // a merged "short" group where each rule just contributes
+              // more items to one continuous numbered list), a 1-question
+              // subgroup still needs its number — it's the (ix) that
+              // continues the sequence after the other subgroups' items,
+              // not a standalone single question. Suppressing it left the
+              // last item in the list with no number at all.
+              const suppressIndex = isNotMCQ && sgQuestions.length === 1 && Boolean(labelText);
 
               const finalIndex = isLongType
                 ? (paperLanguage === 'urdu' ? startNum : startNum + thisOffset + qIdx)

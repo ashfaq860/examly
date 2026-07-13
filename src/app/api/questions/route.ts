@@ -76,30 +76,55 @@ function distributeAcrossSourcesAndChapters(
     picked.set(source, selected);
   }
 
-  const totalFetched = Array.from(picked.values()).reduce((sum, r) => sum + r.length, 0);
-  const deficit = totalTarget - totalFetched;
+  // Backfill any deficit against totalTarget, repeatedly — a SINGLE pass
+  // silently under-delivered whenever a "surplus" source (one that already
+  // hit its initial quota) is itself capped below the grown quota by
+  // pickFairShareByChapter's per-chapter ceiling. Concretely: a source
+  // whose rows only exist in 2 of N chapter buckets can never contribute
+  // more than 2 x its per-chapter cap, no matter how high newLimit goes —
+  // one pass asked it to grow, it silently couldn't, and the stranded
+  // deficit was never handed to a DIFFERENT source that actually had rows
+  // in every chapter and could have covered it. Looping re-checks the
+  // real deficit after each attempt and keeps redistributing it among
+  // whichever sources still have room to grow, stopping only once the
+  // target is met or a full round produces no growth anywhere (a genuine
+  // data shortage, not an algorithm shortfall). Bounded by
+  // sourcesToQuery.length rounds — each round either closes the gap or
+  // proves nothing can grow further, so it can't run meaningfully longer.
+  for (let round = 0; round < sourcesToQuery.length; round++) {
+    const totalFetched = Array.from(picked.values()).reduce((sum, r) => sum + r.length, 0);
+    const deficit = totalTarget - totalFetched;
+    if (deficit <= 0) break;
 
-  if (deficit > 0) {
     const sourcesWithSurplus = orderedSources.filter(
       s => (picked.get(s)?.length || 0) >= initialPerSource
     );
-    if (sourcesWithSurplus.length > 0) {
-      const extraPerSource = Math.ceil(deficit / sourcesWithSurplus.length);
-      const newLimit = initialPerSource + extraPerSource;
-      for (const source of sourcesWithSurplus) {
-        // Release this source's own prior picks back into its pool before
-        // re-selecting at the larger target, so they're still eligible
-        // alongside anything freed up by other sources not needing them.
-        const prior = picked.get(source) || [];
-        prior.forEach(r => used.delete(String(r.id)));
-        const reselected = pickFairShareByChapter(poolFor(source), numChapterBuckets, newLimit);
-        reselected.forEach(r => used.add(String(r.id)));
-        picked.set(source, reselected);
-      }
+    if (sourcesWithSurplus.length === 0) break;
+
+    const extraPerSource = Math.ceil(deficit / sourcesWithSurplus.length);
+    let anyGrew = false;
+    for (const source of sourcesWithSurplus) {
+      // Release this source's own prior picks back into its pool before
+      // re-selecting at the larger target, so they're still eligible
+      // alongside anything freed up by other sources not needing them.
+      const prior = picked.get(source) || [];
+      const newLimit = prior.length + extraPerSource;
+      prior.forEach(r => used.delete(String(r.id)));
+      const reselected = pickFairShareByChapter(poolFor(source), numChapterBuckets, newLimit);
+      if (reselected.length > prior.length) anyGrew = true;
+      reselected.forEach(r => used.add(String(r.id)));
+      picked.set(source, reselected);
     }
+    if (!anyGrew) break; // no source could grow this round — remaining deficit is a genuine data shortage
   }
 
-  return Array.from(picked.values()).flat();
+  const combined = Array.from(picked.values()).flat();
+  // A round can overshoot totalTarget when multiple sources grow in the
+  // same pass — trim back down (shuffled first, so no source is
+  // systematically favored by the trim).
+  return combined.length > totalTarget
+    ? [...combined].sort(() => Math.random() - 0.5).slice(0, totalTarget)
+    : combined;
 }
 
 // Flat cap for the raw pool fetch, independent of any one caller's

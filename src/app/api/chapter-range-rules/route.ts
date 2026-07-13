@@ -200,10 +200,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // In "per_chapter" mode, min_questions is PER chapter — the actual pool
+    // size across the whole range is min_questions x number of chapters in
+    // [chapter_start, chapter_end] (matches fetchQuestionsForRule's own
+    // limit calculation in PaperBuilderApp.tsx, and the identical fix
+    // already applied to this same check in the admin page's client-side
+    // validation). Comparing attempt_count against the raw per-chapter
+    // min_questions here rejected valid values like "2 per chapter across
+    // 4 chapters (8 total), attempt 6".
+    const numChaptersInRange = Number(chapter_end) - Number(chapter_start) + 1;
+    const effectiveMinForAttempt = rule_mode === 'per_chapter'
+      ? Number(min_questions) * numChaptersInRange
+      : Number(min_questions);
+
     const attemptCountNormalized = normalizeNullableInt(attempt_count);
-    if (attemptCountNormalized != null && attemptCountNormalized > Number(min_questions)) {
+    if (attemptCountNormalized != null && attemptCountNormalized > effectiveMinForAttempt) {
       return NextResponse.json(
-        { error: 'attempt_count must be <= min_questions' },
+        { error: `attempt_count must be <= ${effectiveMinForAttempt}${rule_mode === 'per_chapter' ? ` (${min_questions} per chapter x ${numChaptersInRange} chapters)` : ''}` },
         { status: 400 }
       );
     }
@@ -318,10 +331,18 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // See the identical comment in POST above: min_questions is PER
+    // chapter in "per_chapter" mode, so the attempt-count ceiling must be
+    // scaled by the number of chapters in range too.
+    const numChaptersInRange = Number(chapter_end) - Number(chapter_start) + 1;
+    const effectiveMinForAttempt = rule_mode === 'per_chapter'
+      ? Number(min_questions) * numChaptersInRange
+      : Number(min_questions);
+
     const attemptCountNormalized = normalizeNullableInt(attempt_count);
-    if (attemptCountNormalized != null && attemptCountNormalized > Number(min_questions)) {
+    if (attemptCountNormalized != null && attemptCountNormalized > effectiveMinForAttempt) {
       return NextResponse.json(
-        { error: 'attempt_count must be <= min_questions' },
+        { error: `attempt_count must be <= ${effectiveMinForAttempt}${rule_mode === 'per_chapter' ? ` (${min_questions} per chapter x ${numChaptersInRange} chapters)` : ''}` },
         { status: 400 }
       );
     }
