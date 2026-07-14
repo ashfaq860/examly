@@ -22,6 +22,7 @@ import {
   bulkDeleteQuestions,
   importQuestions,
 } from '@/lib/questionsApi';
+import { DiagramView } from '@/components/DiagramView';
 
 /* ═══════════════════════════ helpers ═══════════════════════════════════════*/
 declare global { interface Window { MathJax: any; } }
@@ -210,6 +211,7 @@ export default function QuestionBank() {
   const [selectedIds,   setSelectedIds]   = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
+  const [viewingDiagram, setViewingDiagram] = useState<string | null>(null);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
   const router = useRouter();
@@ -905,7 +907,10 @@ export default function QuestionBank() {
         .qb-meta { display:flex; flex-direction:column; gap:2px; }
         .qb-meta-main { font-size:.82rem; color:var(--qb-text); white-space:nowrap; }
         .qb-meta-sub  { font-size:.73rem; color:var(--qb-muted); white-space:nowrap; }
-        .qb-diagram-thumb { max-width:60px; max-height:40px; border-radius:5px; cursor:pointer; border:1px solid var(--qb-border); margin-top:6px; display:block; }
+        .qb-diagram-thumb { max-width:60px; max-height:40px; border-radius:5px; cursor:pointer; border:1px solid var(--qb-border); margin-top:6px; display:block; overflow:hidden; }
+        /* Raw inline SVG diagrams carry their own fixed width/height
+           attributes, which would otherwise overflow this tiny thumbnail. */
+        .qb-diagram-thumb svg { max-width:100%; max-height:100%; width:100%; height:auto; display:block; }
 
         /* ── Mobile filter drawer ── */
         .qb-filter-drawer-overlay {
@@ -1150,11 +1155,11 @@ export default function QuestionBank() {
                           <td>
                             <QuestionCell en={q?.question_text} ur={q?.question_text_ur} />
                             {q?.diagram && (
-                              <img
-                                src={q.diagram}
+                              <DiagramView
+                                diagram={q.diagram}
                                 alt="Question diagram"
                                 className="qb-diagram-thumb"
-                                onClick={() => window.open(q.diagram!, '_blank')}
+                                onClick={() => setViewingDiagram(q.diagram!)}
                                 title="Click to view full diagram"
                               />
                             )}
@@ -1247,11 +1252,11 @@ export default function QuestionBank() {
 
                     <QuestionCell en={q?.question_text} ur={q?.question_text_ur} />
                     {q?.diagram && (
-                      <img
-                        src={q.diagram}
+                      <DiagramView
+                        diagram={q.diagram}
                         alt="Question diagram"
                         className="qb-diagram-thumb"
-                        onClick={() => window.open(q.diagram!, '_blank')}
+                        onClick={() => setViewingDiagram(q.diagram!)}
                         title="Click to view full diagram"
                       />
                     )}
@@ -1323,6 +1328,26 @@ export default function QuestionBank() {
                 onClose={() => { setShowModal(false); loadQuestions(currentPage, undefined, false); }}
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Enlarged diagram viewer ── */}
+      {viewingDiagram && (
+        <div className="qb-mo" onClick={() => setViewingDiagram(null)}>
+          <div
+            className="qb-md"
+            style={{ maxWidth: '80vw', padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              className="qb-xcl"
+              style={{ position: 'absolute', top: 12, right: 12 }}
+              onClick={() => setViewingDiagram(null)}
+            >
+              <FiX size={14} />
+            </button>
+            <DiagramView diagram={viewingDiagram} style={{ maxWidth: '76vw', maxHeight: '80vh' }} />
           </div>
         </div>
       )}

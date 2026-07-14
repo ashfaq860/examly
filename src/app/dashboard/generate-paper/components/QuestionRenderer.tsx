@@ -6,6 +6,7 @@ import { EditableText } from './EditableText';
 // @ts-ignore — CSS handled by Next.js bundler
 import 'katex/dist/katex.min.css';
 import { renderHtmlWithMath } from '@/lib/renderHtmlWithMath';
+import { DiagramView } from '@/components/DiagramView';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -134,6 +135,11 @@ const PRINT_CSS = `
      edit mode was on. Explicitly allowing the same gestures as the paper's
      scroll container here restores panning over editable text too. */
   [contenteditable] { touch-action: pan-x pan-y pinch-zoom; }
+
+  /* Diagram SVGs carry their own fixed width/height attributes — scale
+     them to the wrapper instead of overflowing it. */
+  .question-diagram svg { max-width: 100%; height: auto; display: block; }
+  .question-diagram img { max-width: 100%; height: auto; display: block; }
 
   @media print {
     .question-wrapper, .question-wrapper *,
@@ -662,6 +668,14 @@ const MCQRenderer: React.FC<MCQRendererProps> = ({
         />
       </div>
 
+      {question.diagram && (
+        <DiagramView
+          diagram={question.diagram}
+          className="question-diagram"
+          style={{ maxWidth: '260px', maxHeight: '200px', display: 'block', margin: '2px 0 6px' }}
+        />
+      )}
+
       {/* Options */}
       {/* Adjusted padding wrapper to allow flexible alignment structure inside options */}
       <div className={`row g-1 mx-0 ${isUrdu ? 'pe-2' : 'ps-2'}`}>
@@ -764,6 +778,13 @@ const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
     marks={marks}
     marksFontSize={marksFontSize}
   />
+  {question.diagram && (
+    <DiagramView
+      diagram={question.diagram}
+      className="question-diagram"
+      style={{ maxWidth: '280px', maxHeight: '220px', display: 'block', margin: '4px 0' }}
+    />
+  )}
   {!!answerLines && answerLines > 0 && (
     <div className="answer-lines" aria-hidden="true" style={{ marginTop: '2mm' }}>
       {Array.from({ length: answerLines }).map((_, i) => (

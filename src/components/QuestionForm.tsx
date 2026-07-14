@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { createQuestion, updateQuestion, fetchLookups, fetchTopicsByChapter } from '@/lib/questionsApi';
 import toast from 'react-hot-toast';
 import { Editor } from '@tinymce/tinymce-react';
+import { DiagramView } from './DiagramView';
 
 /*
  * ── KaTeX Integration Notes ────────────────────────────────────────────────
@@ -1015,6 +1016,9 @@ export default function QuestionForm({
           max-width: 200px; max-height: 150px; border-radius: 10px;
           border: 1px solid var(--qfm-border); margin-top: 9px;
         }
+        /* Raw inline SVG diagrams carry their own fixed width/height
+           attributes, which would otherwise overflow this thumbnail box. */
+        .qfm-diagram-preview svg { max-width: 100%; height: auto; display: block; }
 
         /* form control overrides */
         .qfm-form .form-select, .qfm-form .form-control {
@@ -1163,22 +1167,17 @@ export default function QuestionForm({
           )}
 
           <div className="col-md-12">
-            <label className="qfm-label">Diagram URL</label>
-            <input
-              type="url"
+            <label className="qfm-label">Diagram <span className="text-muted small">(image URL or pasted SVG markup)</span></label>
+            <textarea
               className="form-control"
+              rows={formData.diagram.trim().startsWith('<svg') ? 4 : 1}
               name="diagram"
               value={formData.diagram}
               onChange={handleChange}
-              placeholder="https://example.com/diagram.png"
+              placeholder="https://example.com/diagram.png  —  or paste <svg>...</svg> markup directly"
             />
             {formData.diagram && (
-              <img
-                src={formData.diagram}
-                alt="Diagram preview"
-                className="qfm-diagram-preview"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
+              <DiagramView diagram={formData.diagram} alt="Diagram preview" className="qfm-diagram-preview" />
             )}
           </div>
         </div>
