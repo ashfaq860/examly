@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import axios from 'axios';
 import { Subject, Chapter, Question } from '@/types/types';
 import Loading from '../loading';
+import { DiagramView } from '@/components/DiagramView';
 
 interface ManualQuestionSelectionProps {
   subjectId: string;
@@ -417,6 +418,10 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
                         <HtmlContent content={q.question_text} className="eng-text full-width" dir="ltr" />
                       )}
 
+                      {(q as any).diagram && (
+                        <DiagramView diagram={(q as any).diagram} className="q-diagram-thumb" alt="Question diagram" />
+                      )}
+
                       {isMcq && (
                         <>
                           {isBilingual ? (
@@ -624,6 +629,14 @@ export const ManualQuestionSelection: React.FC<ManualQuestionSelectionProps> = (
           direction: rtl;
         }
         .full-width { width: 100%; }
+
+        .q-diagram-thumb {
+          max-width: 220px; max-height: 160px; border-radius: 8px;
+          border: 1px solid #e2e8f0; margin: 2px 0;
+        }
+        /* Raw inline SVG diagrams carry their own fixed width/height
+           attributes, which would otherwise overflow this thumbnail box. */
+        .q-diagram-thumb svg { max-width: 100%; height: auto; display: block; }
 
         .q-bilingual-block {
           display: flex;

@@ -137,9 +137,13 @@ const PRINT_CSS = `
   [contenteditable] { touch-action: pan-x pan-y pinch-zoom; }
 
   /* Diagram SVGs carry their own fixed width/height attributes — scale
-     them to the wrapper instead of overflowing it. */
-  .question-diagram svg { max-width: 100%; height: auto; display: block; }
-  .question-diagram img { max-width: 100%; height: auto; display: block; }
+     them to the wrapper instead of overflowing it, with no extra
+     whitespace around the element itself. (Wrapper margin is left to the
+     inline style, not forced here with !important, since bilingual papers
+     need margin:'0 auto' to center the diagram instead of margin:0.) */
+  .question-diagram { padding: 0 !important; }
+  .question-diagram svg { max-width: 100%; height: auto; display: block; margin: 0; padding: 0; }
+  .question-diagram img { max-width: 100%; height: auto; display: block; margin: 0; padding: 0; }
 
   @media print {
     .question-wrapper, .question-wrapper *,
@@ -229,6 +233,25 @@ const toUrduAbjad = (n: number): string => URDU_ABJAD[n - 1] || String(n);
 
 const resolveLH = (val: number | undefined, fallback: number): number =>
   typeof val === 'number' && val > 0 ? val : fallback;
+
+// Scales a diagram's on-page size with the question's own font size, so
+// shrinking/growing text in the Settings panel shrinks/grows its diagrams
+// too instead of leaving them fixed at one pixel size regardless of how
+// dense the rest of the paper is set to be. Clamped to a 0.6x–1.8x range
+// so an extreme font size setting can't make a diagram vanish or blow past
+// the page — those are still real bounds, just no longer a single fixed one.
+const scaleDiagramSize = (
+  fontSize: number,
+  baseWidth: number,
+  baseHeight: number,
+  baseFontSize = 12,
+): React.CSSProperties => {
+  const scale = Math.min(Math.max(fontSize / baseFontSize, 0.6), 1.8);
+  return {
+    maxWidth: `${Math.round(baseWidth * scale)}px`,
+    maxHeight: `${Math.round(baseHeight * scale)}px`,
+  };
+};
 
 const lhScope = (lh: number): React.CSSProperties =>
   ({ lineHeight: lh, '--q-lh': lh } as React.CSSProperties);
@@ -672,7 +695,16 @@ const MCQRenderer: React.FC<MCQRendererProps> = ({
         <DiagramView
           diagram={question.diagram}
           className="question-diagram"
-          style={{ maxWidth: '260px', maxHeight: '200px', display: 'block', margin: '2px 0 6px' }}
+          style={{
+            ...scaleDiagramSize(fontSize, 260, 200),
+            display: 'block',
+            // Bilingual papers lay English/Urdu out as LTR-anchored side-by-side
+            // columns — a plain block-level diagram defaults flush-left, which
+            // visually reads as "belonging" only to the English column. Centering
+            // it makes clear it's shared by both language columns.
+            margin: isUrdu && isEnglish ? '0 auto' : 0,
+            padding: 0,
+          }}
         />
       )}
 
@@ -782,7 +814,16 @@ const SubjectiveRenderer: React.FC<SubjectiveRendererProps> = ({
     <DiagramView
       diagram={question.diagram}
       className="question-diagram"
-      style={{ maxWidth: '280px', maxHeight: '220px', display: 'block', margin: '4px 0' }}
+      style={{
+        ...scaleDiagramSize(fontSize, 280, 220),
+        display: 'block',
+        // Same fix as MCQRenderer: a bilingual row is LTR-anchored with
+        // English/Urdu side by side, so a plain block-level diagram defaults
+        // flush-left under the English column only. Centering makes it read
+        // as shared by both.
+        margin: isUrdu && isEnglish ? '0 auto' : 0,
+        padding: 0,
+      }}
     />
   )}
   {!!answerLines && answerLines > 0 && (
