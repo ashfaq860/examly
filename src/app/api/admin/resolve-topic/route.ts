@@ -27,43 +27,53 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({});
     }
 
-    // Get unique chapter names to query
-    const chapterNames = [...new Set(pairs.map(p => p.chapter.trim()).filter(Boolean))];
-    const topicNames   = [...new Set(pairs.map(p => p.topic.trim()).filter(Boolean))];
+    const norm = (s: string) => s.trim().toLowerCase();
 
-    if (chapterNames.length === 0 || topicNames.length === 0) {
+    // Get unique chapter/topic names to match against
+    const chapterNamesNorm = new Set(pairs.map(p => norm(p.chapter)).filter(Boolean));
+    const topicNamesNorm   = new Set(pairs.map(p => norm(p.topic)).filter(Boolean));
+
+    if (chapterNamesNorm.size === 0 || topicNamesNorm.size === 0) {
       return NextResponse.json({});
     }
 
-    // Fetch matching chapters by name
+    // Chapter/topic names in the DB sometimes carry stray leading/trailing
+    // whitespace from manual data entry (confirmed: several dozen rows across
+    // the tables). An exact `.in()` match against the raw column would
+    // silently miss those — e.g. a chapter stored as "Laboratory and
+    // Practical skills " (trailing space) would never match the trimmed
+    // name from an import file, failing every row under it. Both tables are
+    // small, so fetch and compare trimmed/lowercased names in JS instead.
     const { data: chapters, error: chapErr } = await supabase
       .from('chapters')
-      .select('id, name')
-      .in('name', chapterNames);
+      .select('id, name');
 
     if (chapErr) throw chapErr;
     if (!chapters?.length) return NextResponse.json({});
 
-    const chapterIds = chapters.map(c => c.id);
+    const matchedChapters = chapters.filter(c => chapterNamesNorm.has(norm(c.name)));
+    if (!matchedChapters.length) return NextResponse.json({});
 
-    // Fetch matching topics that belong to those chapters
+    const chapterIds = matchedChapters.map(c => c.id);
+
+    // Fetch topics belonging to those chapters, then filter by normalized name
     const { data: topics, error: topErr } = await supabase
       .from('topics')
       .select('id, name, chapter_id')
-      .in('chapter_id', chapterIds)
-      .in('name', topicNames);
+      .in('chapter_id', chapterIds);
 
     if (topErr) throw topErr;
     if (!topics?.length) return NextResponse.json({});
 
     // Build result map: "chapter_name_lower||topic_name_lower" → topic_id
-    const chapterMap = new Map(chapters.map(c => [c.id, c.name.trim().toLowerCase()]));
+    const chapterMap = new Map(matchedChapters.map(c => [c.id, norm(c.name)]));
     const result: Record<string, string> = {};
 
     for (const topic of topics) {
+      if (!topicNamesNorm.has(norm(topic.name))) continue;
       const chapterName = chapterMap.get(topic.chapter_id);
       if (!chapterName) continue;
-      const key = `${chapterName}||${topic.name.trim().toLowerCase()}`;
+      const key = `${chapterName}||${norm(topic.name)}`;
       result[key] = topic.id;
     }
 
