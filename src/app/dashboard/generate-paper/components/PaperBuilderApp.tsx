@@ -1201,6 +1201,22 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
   });
 
   const handlePrint = async () => {
+    // PaginatedPaperGroup's page-break plan is computed from measured DOM
+    // heights, then RE-measured once document.fonts.ready resolves (Urdu/
+    // Nastaliq text renders taller once the real webfont swaps in for the
+    // fallback serif — see that component's fontsReady effect). Printing
+    // immediately can race that: if the user hits Print/Download before the
+    // post-swap re-measure has committed and painted, window.print() snapshots
+    // the STALE, pre-swap plan — a page that plan assumed had room for one
+    // more question (measured with the shorter fallback font) prints with
+    // that question actually overflowing, so it spills to a fresh page,
+    // leaving the previous one mostly blank. Waiting for fonts, then two
+    // animation frames for React to commit + the browser to paint the
+    // corrected plan, closes that race at the print trigger itself.
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      await document.fonts.ready;
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    }
     window.print();
     try {
       const response = await fetch('/api/profile/increment-count', { method: 'POST', headers: { 'Content-Type': 'application/json' } });

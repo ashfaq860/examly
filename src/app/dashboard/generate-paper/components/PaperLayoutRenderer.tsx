@@ -72,10 +72,14 @@ const OMRAnswerGrid = ({ questionCount }: { questionCount: number }) => {
   const questionNumbers = Array.from({ length: questionCount }, (_, i) => i + 1);
 
   return (
-    <div style={{ marginTop: '2mm', marginBottom: '3mm', breakInside: 'avoid' }}>
+    <div style={{
+      marginTop: '2mm', marginBottom: '4mm', breakInside: 'avoid',
+      border: '0.4mm solid #000', borderRadius: '1.5mm', padding: '2.5mm 3mm 3mm',
+    }}>
       <div style={{
-        fontWeight: 700, fontSize: '10px', textAlign: 'center',
-        borderBottom: '0.3mm solid #000', paddingBottom: '1mm', marginBottom: '2mm',
+        fontWeight: 800, fontSize: '10.5px', textAlign: 'center', letterSpacing: '0.3px',
+        textTransform: 'uppercase', borderBottom: '0.5mm solid #000',
+        paddingBottom: '1.2mm', marginBottom: '2.5mm',
       }}>
         MCQ Answer Sheet
       </div>
@@ -85,22 +89,23 @@ const OMRAnswerGrid = ({ questionCount }: { questionCount: number }) => {
             key={qNum}
             style={{
               display: 'flex', alignItems: 'center', gap: '2mm',
-              breakInside: 'avoid', marginBottom: '1.5mm',
+              breakInside: 'avoid', marginBottom: '2mm',
             }}
           >
-            <span style={{ fontWeight: 700, fontSize: '9px', minWidth: '7mm' }}>{qNum}.</span>
+            <span style={{ fontWeight: 800, fontSize: '9.5px', minWidth: '7mm' }}>{qNum}.</span>
             {OMR_OPTIONS.map(opt => (
-              <span key={opt} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5mm' }}>
-                <span style={{ fontSize: '7px' }}>{opt}</span>
+              <span key={opt} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6mm' }}>
+                <span style={{ fontWeight: 700, fontSize: '7.5px' }}>{opt}</span>
                 <span style={{
-                  display: 'inline-block', width: '3.5mm', height: '3.5mm',
-                  borderRadius: '50%', border: '0.25mm solid #333',
+                  display: 'inline-block', width: '3.8mm', height: '3.8mm',
+                  borderRadius: '50%', border: '0.35mm solid #000',
                 }} />
               </span>
             ))}
           </div>
         ))}
       </div>
+      <div style={{ borderTop: '0.35mm solid #000', marginTop: '2.5mm' }} />
     </div>
   );
 };
@@ -159,10 +164,10 @@ const sectionHasGridFlowQuestion = (section: PaperSection, subject: string): boo
   const t = (section.type || '').toLowerCase();
   if (FULL_WIDTH_SECTION_TYPES.has(t)) return false;
   if (t.includes('darkhwast_khat') || t.includes('kahani_makalma')) return false;
-  if (t === 'short') {
-    if (subject.toLowerCase() !== 'urdu') return false;
-    return Array.isArray(section.questions) && section.questions.length > 0; // short+urdu is always col-6
-  }
+  // short+urdu is handled separately below (getGridColumnsPerRow) — it has a
+  // FIXED, known column count, so it can be measured/split per row instead
+  // of needing full atomicity.
+  if (t === 'short') return false;
   const questions = Array.isArray(section.questions) ? section.questions : [];
   return questions.some((q: any) => {
     const engText = q?.question_text || q?.question || '';
@@ -171,12 +176,53 @@ const sectionHasGridFlowQuestion = (section: PaperSection, subject: string): boo
     return len < 120; // matches getDynamicColClass: col-3/col-4/col-6, i.e. not full width
   });
 };
+// Sections whose questions render in a FIXED N-per-row grid (short+urdu is
+// always col-6, i.e. exactly 2 per row — see getDynamicColClass) don't need
+// to be treated as one unsplittable block: unlike the variable-column grid
+// case above (col-3/4/6 chosen per-question by text length, where rows can
+// have a different item count from one another), a fixed column count means
+// row boundaries are known in advance, so the packer can measure per
+// question (same as any non-atomic section) and slice at row boundaries —
+// never splitting a row's questions across two pages, but otherwise
+// behaving like a normal splittable section. This is what actually fixes
+// sections tall enough to exceed a single page on their own: a genuinely
+// atomic block that's taller than one page can only ever overflow it
+// (wasting the rest of whatever page its tail lands on, since the next,
+// separate section is always forced onto a fresh page after it) — see the
+// isAtomicSection usage below.
+const getGridColumnsPerRow = (section: PaperSection, subject: string): number | null => {
+  const t = (section.type || '').toLowerCase();
+  if (t === 'short' && subject.toLowerCase() === 'urdu' &&
+      Array.isArray(section.questions) && section.questions.length > 0) return 2;
+  return null;
+};
 const isAtomicSection = (section: PaperSection, subject: string): boolean => {
-  const subgroups = (section as any).subgroups;
-  return Boolean((section as any).isPairedLong) ||
-    Boolean((section as any).isAlternativeGroup) ||
-    (Array.isArray(subgroups) && subgroups.length > 1) ||
-    sectionHasGridFlowQuestion(section, subject);
+  // A paired-long pair or OR-alternative group needs to stay atomic — those
+  // have their own dedicated (non-sliceable) render paths that exist to
+  // keep two/three items reading as a single semantic unit. A merged
+  // multi-subgroup section (multiple chapter rules combined under one
+  // Q-number, e.g. "subgroups.length > 1") does NOT need to be atomic
+  // anymore: its render path (the hasSubgroups branch further down)
+  // understands questionSlice and splits at question boundaries across
+  // subgroups while keeping numbering/labels correct — each subgroup's own
+  // label is only shown on the page where it first appears. That's what
+  // actually fixes a merged group whose combined content is taller than one
+  // page: forcing it atomic just meant it could only ever overflow (wasting
+  // the rest of whatever page its tail spilled onto, since the next,
+  // separate section is always forced onto a fresh page after it).
+  if (Boolean((section as any).isPairedLong) ||
+      Boolean((section as any).isAlternativeGroup)) return true;
+  // A merged multi-subgroup MCQ section (multiple chapter rules under one
+  // Q-number) is now safe to split too — both MCQ render paths (the boxed/
+  // bordered-table layout and the plain-list layout, see isMcqBoxedSection
+  // further down) understand questionSlice/onQuestionRef. Forcing it atomic
+  // meant an MCQ section taller than one page had no choice but to overflow
+  // — with print now clipping instead of letting content spill (see
+  // sheetBaseStyle/print <style> block), that overflow silently lost
+  // questions instead of just wasting space, which splitting avoids
+  // entirely.
+  if (getGridColumnsPerRow(section, subject) !== null) return false; // row-splittable instead
+  return sectionHasGridFlowQuestion(section, subject);
 };
 
 type PageEntry =
@@ -185,17 +231,15 @@ type PageEntry =
 
 const MM_TO_PX = 96 / 25.4;
 const PAGE_FOOTER_RESERVE_MM = 8;
-// Tiny safety cushion on every measured height, for residual sub-pixel
-// rounding between the hidden measurement pass and the final render — kept
-// small deliberately. A page that's ever a hair too full now just spills its
-// last sliver onto an extra physical page instead of clipping (see the
-// paper-sheet--flow print rule below), so this no longer needs to be a large
-// margin bought at the cost of packing accuracy. A big cushion here was
-// actively counterproductive: it made the packer believe a page was full
-// well before it visually was, which is why a section ending mid-page (e.g.
-// Q.2's last sub-question) wasn't letting the next section (Q.3) start in
-// the real leftover space and instead pushed it to a fresh page.
-const MEASURED_HEIGHT_SAFETY_FACTOR = 1.01;
+// Safety cushion on every measured height, for residual rounding/font drift
+// between the hidden measurement pass and the final render. Every sheet is
+// now hard-capped to one physical page with overflow clipped in print (see
+// the paper-sheet--flow print rule below) — real, uncontrolled fragmentation
+// bugs proved far more damaging than a tight pack, so a page running a hair
+// too full is no longer harmlessly absorbed by an extra physical page; it
+// silently clips instead. A few percent of headroom here trades a little
+// packing density for meaningfully lowering that risk.
+const MEASURED_HEIGHT_SAFETY_FACTOR = 1.05;
 
 interface PaginatedPaperGroupProps {
   group: PaperSection[];
@@ -259,6 +303,55 @@ const PaginatedPaperGroup: React.FC<PaginatedPaperGroupProps> = ({
     document.fonts.ready.then(() => { if (!cancelled) setFontsReady(true); });
     return () => { cancelled = true; };
   }, []);
+
+  // TEMPORARY DIAGNOSTIC — remove alongside the other [PAGINATION-DEBUG]
+  // logging once root-caused. Measures the ACTUAL rendered .paper-sheet
+  // divs' heights at the exact moment print starts (when @media print CSS
+  // is active) and compares against the budget the plan assumed — this
+  // tells us directly whether print-time rendering comes out taller than
+  // what the (screen-context) measurement pass predicted.
+  useEffect(() => {
+    const onBeforePrint = () => {
+      const sheets = document.querySelectorAll(`[data-pagination-debug-sheet^="${keyPrefix}-"]`);
+      // eslint-disable-next-line no-console
+      console.log(`[PAGINATION-DEBUG] beforeprint: keyPrefix=${keyPrefix} pageSize=A4-or-legal(see earlier log) @page-should-be=${pageContentHeightMm.toFixed(1)}mm content`);
+      sheets.forEach(el => {
+        const rect = (el as HTMLElement).getBoundingClientRect();
+        // eslint-disable-next-line no-console
+        console.log(`[PAGINATION-DEBUG] beforeprint:   ${el.getAttribute('data-pagination-debug-sheet')} actualHeightPx=${rect.height.toFixed(1)} actualHeightMm=${(rect.height / (96 / 25.4)).toFixed(1)}`);
+      });
+    };
+    window.addEventListener('beforeprint', onBeforePrint);
+    return () => window.removeEventListener('beforeprint', onBeforePrint);
+  }, [keyPrefix, pageContentHeightMm]);
+
+  // TEMPORARY DIAGNOSTIC — compares the ACTUAL computed style (not just
+  // height) of the first MCQ row in normal screen state vs. the moment
+  // print activates, to find exactly which CSS property (line-height,
+  // padding, font-size) differs between the two and is inflating row
+  // spacing in print relative to what's shown on screen.
+  useEffect(() => {
+    const logRowStyle = (label: string) => {
+      const row = document.querySelector(`[data-pagination-debug-sheet^="${keyPrefix}-"] tr`);
+      if (!row) return;
+      const rowCs = window.getComputedStyle(row as Element);
+      const td = row.querySelector('td:last-child');
+      const tdCs = td ? window.getComputedStyle(td) : null;
+      const inner = td?.querySelector('.question-lh-scope, .mcq-item');
+      const innerCs = inner ? window.getComputedStyle(inner) : null;
+      // eslint-disable-next-line no-console
+      console.log(
+        `[PAGINATION-DEBUG] rowStyle(${label}) keyPrefix=${keyPrefix} ` +
+        `tr: height=${(row as HTMLElement).getBoundingClientRect().height.toFixed(1)}px lineHeight=${rowCs.lineHeight} fontSize=${rowCs.fontSize} ` +
+        (tdCs ? `| td: padding=${tdCs.padding} lineHeight=${tdCs.lineHeight} fontSize=${tdCs.fontSize} ` : '') +
+        (innerCs ? `| inner(${inner!.className}): lineHeight=${innerCs.lineHeight} fontSize=${innerCs.fontSize} margin=${innerCs.margin} padding=${innerCs.padding}` : '')
+      );
+    };
+    const onBeforePrint = () => logRowStyle('beforeprint');
+    window.addEventListener('beforeprint', onBeforePrint);
+    const t = setTimeout(() => logRowStyle('normal-screen'), 800);
+    return () => { window.removeEventListener('beforeprint', onBeforePrint); clearTimeout(t); };
+  }, [keyPrefix]);
 
   // Re-measure whenever anything that could change rendered heights changes —
   // question content/count, or any font/spacing setting.
@@ -345,12 +438,35 @@ const PaginatedPaperGroup: React.FC<PaginatedPaperGroupProps> = ({
       budget = otherPageBudget;
     };
 
+    // A single block (an atomic section measured whole, or one freakishly
+    // tall question) can be taller than an entire page's budget — it can't
+    // be split further, so its own CSS overflow (paper-sheet--flow doesn't
+    // clip) spills across as many EXTRA physical pages as it needs. If our
+    // own pageIdx/used bookkeeping doesn't advance to match, `used` is left
+    // far over `budget` for a page we still think is "current" — so the
+    // NEXT section's fit-check always forces newPage(), stranding it on a
+    // brand new physical page even though the overflow already left room on
+    // the LAST physical page it spilled onto. Carrying the remainder
+    // forward (instead of resetting to 0, like newPage() does) lets the
+    // next section share that leftover space instead of wasting it.
+    const advancePastOverflow = () => {
+      while (used > budget) {
+        used -= budget;
+        pageIdx += 1;
+        plan.push([]);
+        budget = otherPageBudget;
+      }
+    };
+
     for (const section of group) {
+      // eslint-disable-next-line no-console
+      console.log(`[PAGINATION-DEBUG] section=${section.id} type=${section.type} subject=${subject} subgroupsLen=${(section as any).subgroups?.length ?? 'n/a'} isPairedLong=${Boolean((section as any).isPairedLong)} isAlternativeGroup=${Boolean((section as any).isAlternativeGroup)} columnsPerRow=${getGridColumnsPerRow(section, subject)} => atomic=${isAtomicSection(section, subject)}`);
       if (isAtomicSection(section, subject)) {
         const h = sectionBlockHeights[section.id] ?? 0;
         if (used > 0 && used + h > budget) newPage();
         plan[pageIdx].push({ section, atomic: true });
         used += h;
+        advancePastOverflow();
         continue;
       }
 
@@ -358,6 +474,7 @@ const PaginatedPaperGroup: React.FC<PaginatedPaperGroupProps> = ({
       const totalQuestions = section.questions?.length || 0;
       if (!qHeights || totalQuestions === 0) continue;
       const headerH = sectionHeaderHeights[section.id] ?? 0;
+      const columnsPerRow = getGridColumnsPerRow(section, subject);
 
       let qStart = 0;
       let firstSlice = true;
@@ -372,27 +489,123 @@ const PaginatedPaperGroup: React.FC<PaginatedPaperGroupProps> = ({
 
         let qEnd = qStart;
         let consumed = 0;
-        while (qEnd < totalQuestions) {
-          const qH = qHeights[qEnd] ?? 0;
-          if (qEnd > qStart && consumed + qH > remaining) break;
-          consumed += qH;
-          qEnd += 1;
+        if (columnsPerRow) {
+          // Fixed-column grid (e.g. short+urdu, always 2-per-row): pack
+          // whole rows at a time — a row's height is its tallest question,
+          // and a row is never split across two pages. Each slice starts
+          // its own fresh grid-row wrapper when rendered, so rows are
+          // counted relative to qStart, not the section's absolute index 0.
+          let rowStart = qStart;
+          let firstRow = true;
+          while (rowStart < totalQuestions) {
+            const rowEnd = Math.min(rowStart + columnsPerRow, totalQuestions);
+            let rowHeight = 0;
+            for (let i = rowStart; i < rowEnd; i++) rowHeight = Math.max(rowHeight, qHeights[i] ?? 0);
+            if (!firstRow && consumed + rowHeight > remaining) break;
+            consumed += rowHeight;
+            qEnd = rowEnd;
+            rowStart = rowEnd;
+            firstRow = false;
+          }
+        } else {
+          while (qEnd < totalQuestions) {
+            const qH = qHeights[qEnd] ?? 0;
+            if (qEnd > qStart && consumed + qH > remaining) break;
+            consumed += qH;
+            qEnd += 1;
+          }
         }
         if (qEnd === qStart) {
           if (used > 0) { newPage(); continue; }
-          // Not even one question fits a *fresh* page — place it alone rather
-          // than looping forever; it may overflow (an unusually huge question).
-          qEnd = qStart + 1;
+          // Not even one question (or row) fits a *fresh* page — place it
+          // alone rather than looping forever; it may overflow (an
+          // unusually huge question/row).
+          qEnd = columnsPerRow ? Math.min(qStart + columnsPerRow, totalQuestions) : qStart + 1;
         }
 
         plan[pageIdx].push({ section, atomic: false, start: qStart, end: qEnd, suppressHeader: !firstSlice });
         used += consumed + reserve;
+        // A single unusually tall question (qEnd === qStart + 1 forced above)
+        // can itself overflow past one page — carry the remainder forward
+        // the same way the atomic branch does, instead of letting the next
+        // iteration's plain newPage() reset used to 0 and lose track of how
+        // much of the LAST overflow page is already spoken for.
+        advancePastOverflow();
         firstSlice = false;
         qStart = qEnd;
       }
     }
 
-    setPages(plan);
+    // Coalesce adjacent same-section slices that ended up on the SAME page
+    // back into one continuous range. The packing loop above can split a
+    // section into multiple slices for reasons that don't always mean "these
+    // belong on different pages" — e.g. the last item of a run not quite
+    // fitting `remaining` still gets placed on the same page via
+    // advancePastOverflow's leftover-space carry-forward, as two separate
+    // slices. Each slice renders through its own call to the section's
+    // render function, and for table-based layouts (the MCQ boxed/bordered
+    // style) that means a fresh <table> per slice — two slices on the same
+    // page rendered as two visually separate tables even though there was no
+    // real page break between them. Merging contiguous same-section slices
+    // within a page fixes that without changing anything about which page
+    // content actually lands on.
+    for (const entries of plan) {
+      for (let i = entries.length - 1; i > 0; i--) {
+        const cur = entries[i];
+        const prev = entries[i - 1];
+        if (!cur.atomic && !prev.atomic &&
+            cur.section.id === prev.section.id &&
+            cur.start === prev.end) {
+          prev.end = cur.end;
+          entries.splice(i, 1);
+        }
+      }
+    }
+
+    // TEMPORARY DIAGNOSTIC — remove once the blank-page pagination bug is
+    // root-caused. Open DevTools Console (F12) before generating/printing
+    // the paper and copy everything logged under this tag. Logged as flat
+    // JSON strings (not raw objects) so it copies fully as text without
+    // needing to manually expand anything in the console first.
+    // eslint-disable-next-line no-console
+    console.log(`[PAGINATION-DEBUG] keyPrefix=${keyPrefix} pageSizeMm=${pageContentHeightMm.toFixed(1)}(content)+${PAGE_FOOTER_RESERVE_MM}(footer) firstPageBudget=${firstPageBudget.toFixed(1)}px otherPageBudget=${otherPageBudget.toFixed(1)}px headerHeightPx=${headerHeightPx.toFixed(1)} devicePixelRatio=${typeof window !== 'undefined' ? window.devicePixelRatio : 'n/a'} innerWidth=${typeof window !== 'undefined' ? window.innerWidth : 'n/a'}`);
+    // eslint-disable-next-line no-console
+    console.log('[PAGINATION-DEBUG] sectionBlockHeights=' + JSON.stringify(sectionBlockHeights));
+    // eslint-disable-next-line no-console
+    console.log('[PAGINATION-DEBUG] sectionHeaderHeights=' + JSON.stringify(sectionHeaderHeights));
+    Object.entries(questionHeights).forEach(([secId, heights]) => {
+      const entries2 = Object.entries(heights as Record<string, number>)
+        .sort((a, b) => Number(a[0]) - Number(b[0]));
+      let running = 0;
+      const rows = entries2.map(([idx, h]) => {
+        running += h;
+        return `idx${idx}=${h.toFixed(1)}px(sum=${running.toFixed(1)})`;
+      });
+      // eslint-disable-next-line no-console
+      console.log(`[PAGINATION-DEBUG] questionHeights[${secId}]: ${rows.join(' ')}`);
+    });
+    // eslint-disable-next-line no-console
+    console.log(`[PAGINATION-DEBUG] plan has ${plan.length} page(s):`);
+    plan.forEach((entries, i) => {
+      if (entries.length === 0) {
+        // eslint-disable-next-line no-console
+        console.log(`[PAGINATION-DEBUG]   page ${i + 1}: EMPTY (0 entries) <-- this would render as a blank sheet`);
+        return;
+      }
+      entries.forEach(e => {
+        // eslint-disable-next-line no-console
+        console.log(`[PAGINATION-DEBUG]   page ${i + 1}: section=${e.section.id} type=${e.section.type} atomic=${e.atomic}${e.atomic ? '' : ` start=${e.start} end=${e.end} suppressHeader=${e.suppressHeader}`}`);
+      });
+    });
+
+    // advancePastOverflow() pre-emptively opens a new page slot the moment a
+    // section's content overflows past the current page's budget, so a
+    // section placed right after it can share the leftover space. When the
+    // overflowing section is the LAST one in the group, nothing ever fills
+    // that slot — it stays a genuinely empty page entry, which would
+    // otherwise render as a blank .paper-sheet with nothing on it. An empty
+    // page carries no content, so dropping it here is always safe.
+    setPages(plan.filter(entries => entries.length > 0));
   // `mounted` must be a dependency: on the very first render the hidden
   // measurement container hasn't been portaled into the DOM yet, so this
   // effect bails out via the `!container` guard — it needs to retry once
@@ -481,6 +694,7 @@ const PaginatedPaperGroup: React.FC<PaginatedPaperGroupProps> = ({
       {pages && pages.map((entries, pageIdx) => (
         <div
           key={`${keyPrefix}-page-${pageIdx}`}
+          data-pagination-debug-sheet={`${keyPrefix}-${pageIdx}`}
           className="paper-sheet paper-sheet--flow border shadow-sm print-break"
           style={sheetBaseStyle}
         >
@@ -641,19 +855,21 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
 
   const sheetBaseStyle: React.CSSProperties = {
     width: `${pageSize.widthMm}mm`,
-    // minHeight (not a fixed height) for single-paper layouts: the paginator
-    // fits content to the page via measurement, but if that's ever even
-    // slightly off (or one unsplittable atomic block genuinely doesn't fit),
-    // a FIXED height + visible overflow would let the excess spill exactly
-    // onto the next sheet, which sits at a fixed +pageHeight offset regardless
-    // of the overflow — i.e. visible overlap. minHeight lets the sheet itself
-    // grow to absorb the discrepancy instead of overlapping its neighbour.
-    ...(isSinglePaperLayout
-      ? { minHeight: `${pageSize.heightMm}mm` }
-      : { height: `${pageSize.heightMm}mm` }),
+    // Fixed height + clipped overflow for EVERY layout, single-paper flow
+    // sheets included. This used to be minHeight + overflow:visible for
+    // single-paper layouts specifically, so a sheet whose measured content
+    // came out a hair off could grow on screen to absorb the discrepancy —
+    // but the print stylesheet caps paper-sheet--flow to a hard one-page
+    // height with overflow:hidden (see the print <style> block below), so
+    // that mismatch meant screen could show content that print would then
+    // silently clip. Matching screen to print exactly here means what you
+    // see while editing is what actually prints — including surfacing any
+    // packing overflow immediately, on screen, instead of only discovering
+    // it later in the PDF.
+    height: `${pageSize.heightMm}mm`,
     padding: '4mm',
     backgroundColor: 'white', margin: '0 auto',
-    position: 'relative', overflow: isSinglePaperLayout ? 'visible' : 'hidden',
+    position: 'relative', overflow: 'hidden',
     display: 'flex', flexDirection: 'column',
     color: 'black', fontFamily: settings.fontFamily,
     boxSizing: 'border-box', border: 'none', outline: 'none', boxShadow: 'none',
@@ -2044,12 +2260,24 @@ const renderPairedQuestions = () => {
               offset += sgQuestions.length;
               if (sgQuestions.length === 0) return null;
 
+              // Slice awareness — mirrors the non-MCQ-boxed subgroups branch
+              // above: a page's slice can land partway through the merged
+              // list now that MCQ sections with multiple subgroups are no
+              // longer forced fully atomic. Skip a subgroup entirely outside
+              // this slice, and don't repeat its label row if it already
+              // appeared on an earlier page.
+              const sgEndGlobal = thisOffset + sgQuestions.length;
+              if (questionSlice && (sgEndGlobal <= questionSlice.start || thisOffset >= questionSlice.end)) {
+                return null;
+              }
+              const sgLabelAlreadyShown = Boolean(questionSlice) && thisOffset < questionSlice!.start;
+
               const labelText = sg.qLabel || sg.categoryLabel || '';
               const urLabel   = sg.qLabelUr || sg.categoryLabelUr || '';
 
               return (
                 <React.Fragment key={`subgroup-${section.id}-${sgIdx}`}>
-                  {labelText && (
+                  {labelText && !sgLabelAlreadyShown && (
                     <tr>
                       <td
                         colSpan={2}
@@ -2075,9 +2303,13 @@ const renderPairedQuestions = () => {
                     </tr>
                   )}
                   {sgQuestions.map((q: any, qIdx: number) => {
-                    const finalIndex = getQuestionDisplayIndex(thisOffset + qIdx);
+                    const globalIdx = thisOffset + qIdx;
+                    if (questionSlice && (globalIdx < questionSlice.start || globalIdx >= questionSlice.end)) {
+                      return null;
+                    }
+                    const finalIndex = getQuestionDisplayIndex(globalIdx);
                     return (
-                      <tr key={`${q.id}-${thisOffset}-${qIdx}`}>
+                      <tr key={`${q.id}-${thisOffset}-${qIdx}`} ref={el => onQuestionRef?.(q.id, globalIdx, el as unknown as HTMLDivElement)}>
                         <td style={{ border: mcqCellBorder, width: '32px', verticalAlign: 'top', padding: '3px 6px' }}>
                           {renderMcqNumberCell(finalIndex)}
                         </td>
@@ -2169,6 +2401,19 @@ const renderPairedQuestions = () => {
       offset += sgQuestions.length;
       if (sgQuestions.length === 0) return null;
 
+      // Slice awareness — this section is no longer forced atomic when it
+      // has multiple subgroups (see isAtomicSection), so a page's slice can
+      // land partway through the merged list. Skip a subgroup entirely if
+      // none of its questions fall in this slice, and if a slice picks up
+      // partway through an ALREADY-STARTED subgroup (its first question was
+      // on an earlier page), that subgroup's label must not repeat here —
+      // it was already shown once, on the page where this subgroup began.
+      const sgEndGlobal = thisOffset + sgQuestions.length;
+      if (questionSlice && (sgEndGlobal <= questionSlice.start || thisOffset >= questionSlice.end)) {
+        return null;
+      }
+      const sgLabelAlreadyShown = Boolean(questionSlice) && thisOffset < questionSlice!.start;
+
       /*const labelText = sg.qLabel || sg.categoryLabel || '';
       const sgMarks   = sg.marksEach != null ? sg.marksEach : 0;
       const sgAttempt = sg.attemptCount != null ? sg.attemptCount : sgQuestions.length;
@@ -2216,7 +2461,7 @@ const indent = labelText && (isStanzaPunctuationPairWords || isPoetryOrGazalSg) 
       return (
         <div key={`subgroup-${section.id}-${sgIdx}`} className="subgroup-block" style={{ marginTop: sgIdx > 0 ? '6px' : '0px' }}>
           {/* ── Subgroup label row ── */}
-         {labelText && (
+         {labelText && !sgLabelAlreadyShown && (
   (() => {
     const isBilingual = paperLanguage === 'bilingual';
     const isUrduLang  = paperLanguage === 'urdu';
@@ -2336,6 +2581,11 @@ const indent = labelText && (isStanzaPunctuationPairWords || isPoetryOrGazalSg) 
         style={{ [paddingSide]: indent }}
           >
             {sgQuestions.map((q: any, qIdx: number) => {
+              const globalIdx = thisOffset + qIdx;
+              if (questionSlice && (globalIdx < questionSlice.start || globalIdx >= questionSlice.end)) {
+                return null;
+              }
+
               // Suppress the "(i)" index for a lone question ONLY when this
               // subgroup already prints its own label heading above it
               // (labelText) — the label alone identifies it, so a redundant
@@ -2353,7 +2603,11 @@ const indent = labelText && (isStanzaPunctuationPairWords || isPoetryOrGazalSg) 
                 : getQuestionDisplayIndex(thisOffset + qIdx);
 
               return (
-                <div key={`${q.id}-${thisOffset}-${qIdx}`} className={`${getDynamicColClass(q)} ${isLongType ? 'ps-0 pe-2' : 'px-2'} mt-1`}>
+                <div
+                  key={`${q.id}-${thisOffset}-${qIdx}`}
+                  ref={el => onQuestionRef?.(q.id, globalIdx, el)}
+                  className={`${getDynamicColClass(q)} ${isLongType ? 'ps-0 pe-2' : 'px-2'} mt-1`}
+                >
                   <QuestionRenderer
                     question={q}
                     index={suppressIndex ? -1 : finalIndex}  // Falls back to normal index tracking if it's an MCQ
@@ -2652,9 +2906,20 @@ const indent = labelText && (isStanzaPunctuationPairWords || isPoetryOrGazalSg) 
           .paper-builder-renderer { padding: 0 !important; background: white !important; }
 
           /* ── Paper sheet: shared chrome-stripping for every sheet, plus
-             separate sizing rules for the two families of layout below. ── */
+             separate sizing rules for the two families of layout below.
+             display is deliberately left alone here — sheetBaseStyle already
+             sets display:flex/flexDirection:column inline, and that must
+             carry through into print unchanged. Forcing display:block used
+             to live here, but it silently broke every child that relies on
+             the sheet being a flex container (e.g. the flex:1/minHeight:0
+             content wrapper each PaginatedPaperGroup page uses to fill the
+             page, and the flex-shrink sizing of the fixed-height PaperSlot
+             mini-slots in the two/three/four-papers-per-page layouts) —
+             those children would size/shrink correctly on screen but not in
+             print, producing exactly the kind of spacing mismatch this file
+             exists to prevent. overflow:hidden clips a flex column just as
+             reliably as a block one, so there's no upside to overriding it. ── */
           .paper-sheet {
-            display: block !important;
             margin: 0 !important; border: 0 !important;
             box-shadow: none !important; outline: 0 !important;
             page-break-after: always !important; break-after: page !important;
@@ -2662,45 +2927,41 @@ const indent = labelText && (isStanzaPunctuationPairWords || isPoetryOrGazalSg) 
             print-color-adjust: exact !important;
           }
 
-          /* Fixed multi-slot layouts (two/three/four-papers-per-page) and the
-             MCQ answer-key page: these already use a hard inline height +
-             clipped mini-slots on screen too (no JS-measured pagination
-             involved), so capping them again here is just belt-and-suspenders
-             — never a source of drift between screen and print. */
-          .paper-sheet:not(.paper-sheet--flow) {
+          /* Every sheet — including paper-sheet--flow (separate/same_page/
+             same/combined) — is hard-capped to exactly one physical page in
+             print, full stop. This used to exempt paper-sheet--flow sheets,
+             deliberately leaving them uncapped so a page whose real content
+             came out a hair taller than the hidden measurement pass
+             estimated could spill onto an extra physical page instead of
+             clipping. That assumption doesn't hold in practice: letting a
+             flow sheet's content flow/fragment naturally across pages has
+             turned out to be wildly unpredictable across real browser/OS
+             print configurations — the same JS plan that renders as one
+             clean page on one machine has fragmented into a dozen
+             near-empty ones on another, with individual questions stranded
+             pages apart from their own section. The JS-measured plan is by
+             far the more trustworthy source of truth than the print
+             engine's own fragmentation of an unbounded flex column, so it's
+             now authoritative: each sheet gets exactly the one physical page
+             its plan slot represents, with overflow clipped rather than left
+             to the browser to fragment. The compound selector below
+             (.paper-sheet.paper-sheet--flow) is used so this reliably
+             outweighs PaperBuilderApp's own plain .paper-sheet print rule
+             (height:auto !important) regardless of which stylesheet happens
+             to be later in the cascade. A residual measurement/print drift
+             now shows as a rare, minor clipped line at the very bottom of a
+             page rather than dozens of blank ones — an acceptable trade
+             given how severe and unpredictable the alternative has proven
+             to be. */
+          .paper-sheet.paper-sheet--flow {
             height: ${pageSize.heightMm}mm !important;
             max-height: ${pageSize.heightMm}mm !important;
             overflow: hidden !important;
           }
-
-          /* Paginated single-sheet layouts (separate/same_page/same/combined):
-             deliberately NOT capped here. On screen these rely on inline
-             minHeight + overflow:visible (see sheetBaseStyle) so a page whose
-             real content comes out a hair taller than the hidden measurement
-             pass estimated (font metrics / sub-pixel rounding between the two
-             render passes are never bit-identical) just grows instead of
-             clipping. Forcing a hard height + overflow:hidden here in print
-             only guaranteed screen and print would draw DIFFERENT things
-             whenever that drift occurred: print would silently clip the
-             overflow — a real question's answer lines quietly vanishing off
-             the bottom of the page — while screen showed the same content
-             intact, just slightly overflowing. Leaving print unclipped means
-             any such drift instead spills onto an extra physical page: the
-             content is still complete, and print now matches the screen
-             preview exactly instead of silently losing questions in the gap
-             between "what the JS plan assumed" and "what actually rendered".
-
-             When that spillover happens, box-decoration-break:clone tells
-             the print engine to re-apply this sheet's own padding at BOTH
-             sides of the fragment boundary — a bottom margin on the physical
-             page the overflow starts on, and (crucially) a top margin on the
-             physical page it continues onto — instead of the default
-             "slice" behaviour, which only pads the very first and very last
-             fragment and leaves every page in between flush against the
-             paper edge with no breathing room. */
-          .paper-sheet--flow {
-            -webkit-box-decoration-break: clone;
-            box-decoration-break: clone;
+          .paper-sheet:not(.paper-sheet--flow) {
+            height: ${pageSize.heightMm}mm !important;
+            max-height: ${pageSize.heightMm}mm !important;
+            overflow: hidden !important;
           }
 
           .print-container > .paper-sheet:last-child {
