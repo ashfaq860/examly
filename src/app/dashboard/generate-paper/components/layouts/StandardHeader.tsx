@@ -45,6 +45,16 @@ const StandardHeader: React.FC<StandardHeaderProps> = ({
     marginBottom: '5px',
     boxSizing: 'border-box',
     width: '100%',
+    // Fixed to ltr regardless of paperLanguage: the printable-paper ancestor
+    // sets direction:rtl for Urdu papers (see PaperBuilderApp's
+    // languageConfigs.urdu.direction), and the .bise-row flex rows below
+    // never set their own direction, so they inherited it — flipping the
+    // whole row's left-to-right visual order for Urdu instead of just the
+    // individual Urdu text spans (which already handle their own
+    // right-to-left rendering via the .bise-urdu class). Pinning this
+    // container to ltr keeps the header's layout identical across all three
+    // paper languages.
+    direction: 'ltr',
   };
 const getClassNameUrdu = (className: string | number) => {
   const classMap: Record<string, string> = {

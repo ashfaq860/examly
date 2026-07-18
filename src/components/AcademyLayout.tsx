@@ -7,6 +7,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   LayoutDashboard, FilePlus, Archive, Gem, UserCircle,
   Settings, Sun, Moon, GraduationCap, Zap, X, LogOut, ChevronRight,
+  ClipboardCheck,
 } from "lucide-react";
 import Header from "@/components/academy/Header";
 import { useUser } from "@/app/context/userContext";
@@ -60,6 +61,7 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
     { path: "/dashboard",                icon: LayoutDashboard, label: "Dashboard" },
     { path: "/dashboard/generate-paper", icon: FilePlus,        label: "Generate Paper" },
     { path: "/dashboard/saved-papers",   icon: Archive,         label: "Saved Papers" },
+    { path: "/dashboard/checker",        icon: ClipboardCheck,  label: "Paper Checker" },
     { path: "/dashboard/packages",       icon: Gem,             label: "Premium Plans" },
     { path: "/dashboard/profile",        icon: UserCircle,      label: "Profile" },
     { path: "/dashboard/settings",       icon: Settings,        label: "Settings" },

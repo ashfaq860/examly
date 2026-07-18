@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // sharp (used by the /api/checker/grade-mcq OMR pipeline) ships native
+  // binaries — keep it external to the server bundle instead of letting
+  // webpack try to bundle it.
+  serverExternalPackages: ['sharp'],
   // 🚀 Performance optimizations
   images: {
     formats: ['image/avif', 'image/webp'],

@@ -11,7 +11,7 @@ import { QuestionSelectorModal } from './modals/QuestionSelectorModal';
 import { AppHeader } from './AppHeader';
 import { SettingsPanel } from './SettingsPanel';
 import { BoardPatternService, LongQuestionGroup } from '@/services/boardPatternService';
-import { PaperLayoutRenderer } from '@/app/dashboard/generate-paper/components/PaperLayoutRenderer';
+import { PaperLayoutRenderer, PaperLayoutRendererHandle } from '@/app/dashboard/generate-paper/components/PaperLayoutRenderer';
 import Loading from '@/app/dashboard/generate-paper/loading';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { getPageSize } from '@/lib/paperPageSize';
@@ -159,6 +159,10 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
   const supabase = createSupabaseBrowserClient();
   const [currentPaperId, setCurrentPaperId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // Imperative handle for capturing the MCQ bubble-sheet layout map from the
+  // rendered DOM right at save time (see handleSaveToSupabase) — before the
+  // post-save state wipe blanks the builder back to an empty paper.
+  const paperLayoutRendererRef = useRef<PaperLayoutRendererHandle>(null);
 
   // Track mount for portal
   useEffect(() => { setIsMounted(true); }, []);
@@ -192,6 +196,41 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
 
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Failed to save");
+
+      // Capture the MCQ bubble-sheet layout map from the currently-rendered
+      // DOM — still showing this exact paper — and persist it BEFORE the
+      // state wipe below blanks the builder back to empty. /api/checker/
+      // grade-mcq needs this layout map to grade scanned submissions of
+      // this paper. Fire-and-forget: a layout-map failure shouldn't block
+      // the paper-save success the user already relies on.
+      const mcqLayoutMap = paperLayoutRendererRef.current?.captureMcqLayoutMap();
+      if (mcqLayoutMap && result.id) {
+        fetch(`/api/papers/${result.id}/layout-map`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify(mcqLayoutMap),
+        }).then(async res => {
+          // fetch() only rejects on network failure — a 4xx/5xx response
+          // resolves normally, so without this check a server-side
+          // rejection (bad payload, auth, etc.) failed completely
+          // silently: no console output, no toast, nothing. That made a
+          // real layout-map save/format bug indistinguishable from just
+          // "MCQ Bubble Sheet was off" when the checker page later showed
+          // no layout map — this makes the actual failure visible.
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            console.error(`[LAYOUT-MAP-DEBUG] /api/papers/${result.id}/layout-map returned ${res.status}: ${body.error || '(no error message)'}`);
+          } else {
+            console.log('[LAYOUT-MAP-DEBUG] layout map saved successfully');
+          }
+        }).catch(err => console.error('[LAYOUT-MAP-DEBUG] Failed to reach layout-map endpoint (network error)', err));
+      } else if (!mcqLayoutMap) {
+        console.warn('[LAYOUT-MAP-DEBUG] captureMcqLayoutMap() returned null/undefined — see PaperLayoutRenderer console output above for why, or check the MCQ Bubble Sheet setting/layout type.');
+      }
+
       // The paper is now safely persisted in Supabase, so the local
       // autosave draft is no longer needed to recover it — clear it so a
       // stale/already-saved draft doesn't get reloaded next time the builder
@@ -1353,6 +1392,7 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
               </div>
             ) : (
               <PaperLayoutRenderer
+                ref={paperLayoutRendererRef}
                 paperSections={paperSections}
                 settings={settings}
                 paperLanguage={paperLanguage}

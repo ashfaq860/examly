@@ -1,6 +1,6 @@
 //dashboard/generate-paper/components/PaperLayoutRenderer.tsx
 'use client';
-import React, { useMemo, useEffect, useState, useRef, useLayoutEffect } from 'react';
+import React, { useMemo, useEffect, useState, useRef, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { Pencil, Trash2 } from 'lucide-react';
 import { PaperSection, PaperSettings, LanguageConfig } from '@/types/paper-builder';
@@ -11,6 +11,7 @@ import { EditableText } from './EditableText';
 import { toast } from 'react-hot-toast';
 import { getBucket, FOUR_PAPERS_SHORT_CAP, FOUR_PAPERS_LONG_CAP } from '@/lib/paperQuestionBuckets';
 import { getPageSize } from '@/lib/paperPageSize';
+import { McqLayoutMapPayload, McqBubbleEntry, BubbleOption, LAYOUT_MAP_FRAME_V2 } from '@/types/checker';
 
 interface Props {
   paperSections: PaperSection[];
@@ -65,47 +66,101 @@ const Watermark = ({
 // not tied to individual question content (just needs the count). Flows
 // into a 4-column layout so it stays compact regardless of question count.
 // ─────────────────────────────────────────────────────────────────────────
-const OMR_OPTIONS = ['A', 'B', 'C', 'D'];
+const OMR_OPTIONS: BubbleOption[] = ['A', 'B', 'C', 'D'];
 
-const OMRAnswerGrid = ({ questionCount }: { questionCount: number }) => {
-  if (questionCount <= 0) return null;
-  const questionNumbers = Array.from({ length: questionCount }, (_, i) => i + 1);
+const OMR_GRID_COLUMNS = 4;
+
+const OMRAnswerGrid = ({ questions }: { questions: { id: string }[] }) => {
+  if (!questions || questions.length === 0) return null;
+
+  // Split into columns with a fixed JS partition (NOT CSS `column-count`,
+  // which used to be here). Browser column-balancing decides how many items
+  // fit per column from an estimated available column height — that
+  // estimate can come out differently between the on-screen preview (where
+  // captureMcqLayoutMap() measures every bubble's position) and the actual
+  // @media print render (where the physical sheet the student fills out
+  // gets printed). Any difference in the split point means bubbles after it
+  // land in a different physical row/column on paper than what was
+  // captured — a layout-level misalignment no amount of homography or
+  // darkness-threshold tuning can fix, since it's sampling the wrong bubble
+  // entirely. A JS-computed split is deterministic: the same question
+  // always lands in the same column/row regardless of fonts, viewport, or
+  // print vs. screen rendering context.
+  const perColumn = Math.ceil(questions.length / OMR_GRID_COLUMNS);
+  const columns = Array.from({ length: OMR_GRID_COLUMNS }, (_, c) =>
+    questions.slice(c * perColumn, (c + 1) * perColumn)
+  ).filter(col => col.length > 0);
 
   return (
-    <div style={{
-      marginTop: '2mm', marginBottom: '4mm', breakInside: 'avoid',
-      border: '0.4mm solid #000', borderRadius: '1.5mm', padding: '2.5mm 3mm 3mm',
-    }}>
-      <div style={{
-        fontWeight: 800, fontSize: '10.5px', textAlign: 'center', letterSpacing: '0.3px',
-        textTransform: 'uppercase', borderBottom: '0.5mm solid #000',
-        paddingBottom: '1.2mm', marginBottom: '2.5mm',
-      }}>
-        MCQ Answer Sheet
+    <div
+      data-omr-sheet="true"
+      style={{
+        marginTop: '2mm', marginBottom: '4mm', breakInside: 'avoid',
+        position: 'relative', padding: '5mm',
+      }}
+    >
+      {/* Registration squares — solid black ~4mm marks, positioned in this
+          OUTER 5mm gutter, deliberately NOT touching the bordered box below
+          (which starts at the 5mm padding edge). They used to straddle the
+          box's own border line directly (top/left: -0.5mm against a 0.4mm
+          border) — which meant that in a scanned/photographed image, each
+          square was pixel-connected to the continuous border outline via
+          flood-fill, merging all 4 squares + the entire border into one or
+          two giant blobs instead of 4 separate, uniquely identifiable
+          square shapes. That's why grade-mcq's blob detector could never
+          find them as distinct candidates at any size. A 0.5mm gap here
+          (square spans 0.5mm-4.5mm, box border starts at 5mm) keeps them
+          fully isolated, the same way real OMR registration marks always
+          need clear surrounding whitespace to be reliably detectable. */}
+      <span data-omr-reg-square="tl" style={{ position: 'absolute', top: '0.5mm', left: '0.5mm', width: '4mm', height: '4mm', background: '#000' }} />
+      <span data-omr-reg-square="tr" style={{ position: 'absolute', top: '0.5mm', right: '0.5mm', width: '4mm', height: '4mm', background: '#000' }} />
+      <span data-omr-reg-square="bl" style={{ position: 'absolute', bottom: '0.5mm', left: '0.5mm', width: '4mm', height: '4mm', background: '#000' }} />
+      <span data-omr-reg-square="br" style={{ position: 'absolute', bottom: '0.5mm', right: '0.5mm', width: '4mm', height: '4mm', background: '#000' }} />
+
+      <div style={{ border: '0.4mm solid #000', borderRadius: '1.5mm', padding: '2.5mm 3mm 3mm' }}>
+        <div style={{
+          fontWeight: 800, fontSize: '10.5px', textAlign: 'center', letterSpacing: '0.3px',
+          textTransform: 'uppercase', borderBottom: '0.5mm solid #000',
+          paddingBottom: '1.2mm', marginBottom: '2.5mm',
+        }}>
+          MCQ Answer Sheet
+        </div>
+        <div style={{ display: 'flex', gap: '4mm', alignItems: 'flex-start' }}>
+          {columns.map((col, colIdx) => (
+            <div key={colIdx} style={{ flex: 1, minWidth: 0 }}>
+              {col.map((q, rowIdx) => {
+                const qNum = colIdx * perColumn + rowIdx + 1;
+                return (
+                  <div
+                    key={`${q.id || 'q'}-${qNum}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '2mm',
+                      breakInside: 'avoid', marginBottom: '2mm',
+                    }}
+                  >
+                    <span style={{ fontWeight: 800, fontSize: '9.5px', minWidth: '7mm' }}>{qNum}.</span>
+                    {OMR_OPTIONS.map(opt => (
+                      <span key={opt} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6mm' }}>
+                        <span style={{ fontWeight: 700, fontSize: '7.5px' }}>{opt}</span>
+                        <span
+                          data-omr-question-id={q.id}
+                          data-omr-question-number={qNum}
+                          data-omr-option={opt}
+                          style={{
+                            display: 'inline-block', width: '3.8mm', height: '3.8mm',
+                            borderRadius: '50%', border: '0.35mm solid #000',
+                          }}
+                        />
+                      </span>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+        <div style={{ borderTop: '0.35mm solid #000', marginTop: '2.5mm' }} />
       </div>
-      <div style={{ columnCount: 4, columnGap: '4mm' }}>
-        {questionNumbers.map(qNum => (
-          <div
-            key={qNum}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '2mm',
-              breakInside: 'avoid', marginBottom: '2mm',
-            }}
-          >
-            <span style={{ fontWeight: 800, fontSize: '9.5px', minWidth: '7mm' }}>{qNum}.</span>
-            {OMR_OPTIONS.map(opt => (
-              <span key={opt} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6mm' }}>
-                <span style={{ fontWeight: 700, fontSize: '7.5px' }}>{opt}</span>
-                <span style={{
-                  display: 'inline-block', width: '3.8mm', height: '3.8mm',
-                  borderRadius: '50%', border: '0.35mm solid #000',
-                }} />
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
-      <div style={{ borderTop: '0.35mm solid #000', marginTop: '2.5mm' }} />
     </div>
   );
 };
@@ -375,9 +430,10 @@ const PaginatedPaperGroup: React.FC<PaginatedPaperGroupProps> = ({
   // Only sheets that actually contain MCQs get the bubble sheet — a
   // subjective-only sheet (the 'separate' layout's second page group) has no
   // MCQ question numbers to list.
-  const mcqQuestionCount = group
+  const mcqQuestionsOrdered = group
     .filter(s => s.type === 'mcq')
-    .reduce((sum, s) => sum + (s.questions?.length || 0), 0);
+    .flatMap(s => s.questions || []);
+  const mcqQuestionCount = mcqQuestionsOrdered.length;
   const showBubbles = Boolean(settings.showMcqBubbleSheet) &&
     (part === 'mcq' || part === 'combined') && mcqQuestionCount > 0;
 
@@ -628,7 +684,7 @@ const PaginatedPaperGroup: React.FC<PaginatedPaperGroupProps> = ({
     />
   );
 
-  const bubbleNode = showBubbles ? <OMRAnswerGrid questionCount={mcqQuestionCount} /> : null;
+  const bubbleNode = showBubbles ? <OMRAnswerGrid questions={mcqQuestionsOrdered} /> : null;
 
   // Hidden measurement render (unpaginated, full content) — ALWAYS present
   // (portaled straight into document.body, immune to the mobile preview's
@@ -723,7 +779,14 @@ const PaginatedPaperGroup: React.FC<PaginatedPaperGroupProps> = ({
   );
 };
 
-export const PaperLayoutRenderer: React.FC<Props> = ({
+export interface PaperLayoutRendererHandle {
+  /** Reads the currently-rendered MCQ bubble sheet's DOM and returns a
+   *  layout map ready to POST to /api/papers/[id]/layout-map, or null if no
+   *  bubble sheet is currently rendered (disabled setting / no MCQs). */
+  captureMcqLayoutMap: () => McqLayoutMapPayload | null;
+}
+
+export const PaperLayoutRenderer = forwardRef<PaperLayoutRendererHandle, Props>(({
   paperSections = [],
   settings,
   paperLanguage,
@@ -739,7 +802,7 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
   subjectUrduName,
   onEditSection,
   onDeleteSection,
-}) => {
+}, ref) => {
   const subject = useMemo(() => paperSections[0]?.subject || '', [paperSections]);
 
   const globalNumbering = useMemo(() => {
@@ -832,6 +895,114 @@ export const PaperLayoutRenderer: React.FC<Props> = ({
     if (shortOverflow) toast.error(`4-papers layout allows max ${FOUR_PAPERS_SHORT_CAP} short-type questions — extra questions were hidden.`);
     if (longOverflow)  toast.error(`4-papers layout allows max ${FOUR_PAPERS_LONG_CAP} long-type questions — extra questions were hidden.`);
   }, [currentLayout, shortOverflow, longOverflow]);
+
+  // Reads the CURRENTLY RENDERED MCQ bubble sheet's real DOM positions
+  // (registration squares + every option bubble) and converts them into the
+  // layout map PaperBuilderApp posts to /api/papers/[id]/layout-map right
+  // after a successful save.
+  //
+  // v2 frame: every bubble's center is expressed as a FRACTION of the
+  // rectangle spanned by the 4 registration squares' own centers (not a
+  // fraction of the whole physical page, and not physical units at all) —
+  // see LAYOUT_MAP_FRAME_V2's doc comment in types/checker.ts for why. This
+  // still needs a page-level container purely to get PIXEL positions to
+  // measure in (getBoundingClientRect), and is still immune to the mobile
+  // preview's `transform: scale()` for the same reason as before — every
+  // measurement here is a ratio between two elements measured in the same
+  // pixel space, so a uniform scale factor cancels out of every ratio.
+  const captureMcqLayoutMap = (): McqLayoutMapPayload | null => {
+    // TEMPORARY DIAGNOSTIC — remove once "layout map capture returns null"
+    // is root-caused. There are several early-return points below; this
+    // logs exactly which one fires instead of leaving it a silent null.
+    const bail = (reason: string): null => {
+      // eslint-disable-next-line no-console
+      console.warn(`[LAYOUT-MAP-DEBUG] captureMcqLayoutMap bailed: ${reason}`);
+      return null;
+    };
+
+    if (typeof document === 'undefined' || !settings) return bail('no document or no settings');
+
+    const sheetRoot = document.querySelector('[data-omr-sheet="true"]');
+    if (!sheetRoot) return bail('no [data-omr-sheet="true"] element found — MCQ Bubble Sheet setting is likely off, or layout is not Separate/Same Page/Combined');
+    const container = sheetRoot.closest('.paper-sheet') as HTMLElement | null;
+    if (!container) return bail('found the OMR sheet but it has no .paper-sheet ancestor');
+
+    const containerRect = container.getBoundingClientRect();
+    if (containerRect.width === 0 || containerRect.height === 0) return bail(`.paper-sheet rect is zero-sized (${containerRect.width}x${containerRect.height})`);
+
+    // Center of `el`, in pixels relative to `containerRect`'s own top-left —
+    // deliberately NOT converted to physical units (mm/pt): the v2 frame
+    // only ever cares about the RATIO between a bubble's offset and the
+    // registration-square span, and pixels-relative-to-container preserves
+    // that ratio exactly as well as any other consistent unit would.
+    const centerPx = (el: Element) => {
+      const rect = el.getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2 - containerRect.left,
+        y: rect.top + rect.height / 2 - containerRect.top,
+        r: rect.width / 2,
+      };
+    };
+
+    const regEl = (corner: 'tl' | 'tr' | 'bl' | 'br') => sheetRoot.querySelector(`[data-omr-reg-square="${corner}"]`);
+    const tlEl = regEl('tl'), trEl = regEl('tr'), blEl = regEl('bl'), brEl = regEl('br');
+    if (!tlEl || !trEl || !blEl || !brEl) {
+      return bail(`missing registration square element(s): tl=${!!tlEl} tr=${!!trEl} bl=${!!blEl} br=${!!brEl}`);
+    }
+
+    const tl = centerPx(tlEl);
+    const tr = centerPx(trEl);
+    const bl = centerPx(blEl);
+    // br isn't needed for the frame itself (tl->tr defines width, tl->bl
+    // defines height) — the DOM render is a perfect, unrotated rectangle,
+    // so br is redundant with tl/tr/bl. Any skew only ever appears later,
+    // in a photographed scan, which is exactly what grade-mcq's homography
+    // exists to undo.
+
+    const frameOriginX = tl.x;
+    const frameOriginY = tl.y;
+    const frameWidth = tr.x - tl.x;
+    const frameHeight = bl.y - tl.y;
+    if (frameWidth <= 0 || frameHeight <= 0) {
+      return bail(`degenerate frame: tl=(${tl.x.toFixed(1)},${tl.y.toFixed(1)}) tr=(${tr.x.toFixed(1)},${tr.y.toFixed(1)}) bl=(${bl.x.toFixed(1)},${bl.y.toFixed(1)}) frameWidth=${frameWidth.toFixed(1)} frameHeight=${frameHeight.toFixed(1)}`);
+    }
+
+    const toFrac = (p: { x: number; y: number; r: number }) => ({
+      xFrac: (p.x - frameOriginX) / frameWidth,
+      yFrac: (p.y - frameOriginY) / frameHeight,
+      rFrac: p.r / frameWidth,
+    });
+
+    const bubblesByQuestion = new Map<string, McqBubbleEntry>();
+    sheetRoot.querySelectorAll('[data-omr-question-id]').forEach(el => {
+      const questionId = el.getAttribute('data-omr-question-id');
+      const questionNumber = Number(el.getAttribute('data-omr-question-number'));
+      const option = el.getAttribute('data-omr-option') as BubbleOption | null;
+      if (!questionId || !option) return;
+      const frac = toFrac(centerPx(el));
+      let entry = bubblesByQuestion.get(questionId);
+      if (!entry) {
+        entry = { question_number: questionNumber, question_id: questionId, options: {} as McqBubbleEntry['options'] };
+        bubblesByQuestion.set(questionId, entry);
+      }
+      entry.options[option] = frac;
+    });
+
+    const mcq_bubbles = Array.from(bubblesByQuestion.values())
+      .filter(e => e.options.A && e.options.B && e.options.C && e.options.D)
+      .sort((a, b) => a.question_number - b.question_number);
+
+    if (mcq_bubbles.length === 0) {
+      return bail(`found registration squares but zero complete (A+B+C+D) question bubbles — found ${bubblesByQuestion.size} partial entries`);
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(`[LAYOUT-MAP-DEBUG] captureMcqLayoutMap succeeded: ${mcq_bubbles.length} questions, frame width=${frameWidth.toFixed(1)}px height=${frameHeight.toFixed(1)}px`);
+    const pageDims = getPageSize(settings.pageSize);
+    return { frame: LAYOUT_MAP_FRAME_V2, page_size: pageDims.cssName, mcq_bubbles };
+  };
+
+  useImperativeHandle(ref, () => ({ captureMcqLayoutMap }));
 
   if (!settings) return <div className="p-5 text-center">Loading settings...</div>;
 
@@ -2973,4 +3144,6 @@ const indent = labelText && (isStanzaPunctuationPairWords || isPoetryOrGazalSg) 
       {renderContent()}
     </div>
   );
-};
+});
+
+PaperLayoutRenderer.displayName = 'PaperLayoutRenderer';
