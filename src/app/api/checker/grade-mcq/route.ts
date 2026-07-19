@@ -139,37 +139,38 @@ export async function POST(req: NextRequest) {
     const { user } = auth;
     mark('auth');
 
-    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
-    if (gate) return gate;
-    mark('featureGate');
-
     const debugMode = new URL(req.url).searchParams.get('debug') === '1';
-
     const body = await req.json();
     const submissionId: string | undefined = body?.submission_id;
     if (!submissionId) {
       return NextResponse.json({ error: 'Missing submission_id' }, { status: 400 });
     }
 
-    const { data: submission, error: subErr } = await supabaseAdmin
-      .from('submissions')
-      .select('*')
-      .eq('id', submissionId)
-      .maybeSingle();
+    // The feature gate only needs user.id and the submission fetch only
+    // needs submissionId — neither depends on the other's result, so run
+    // them together instead of paying for two round-trips in series.
+    const [gate, submissionResult] = await Promise.all([
+      requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker'),
+      supabaseAdmin.from('submissions').select('*').eq('id', submissionId).maybeSingle(),
+    ]);
+    if (gate) return gate;
+    const { data: submission, error: subErr } = submissionResult;
     if (subErr || !submission) {
       return NextResponse.json({ error: subErr?.message || 'Submission not found' }, { status: 404 });
     }
-    mark('submissionFetch');
+    mark('featureGateAndSubmissionFetch');
 
-    const { data: paper, error: paperErr } = await supabaseAdmin
-      .from('papers')
-      .select('id, content, created_by')
-      .eq('id', submission.paper_id)
-      .maybeSingle();
+    // Same reasoning: the paper and the layout map are both looked up by
+    // submission.paper_id alone, independently of each other.
+    const [paperResult, layoutMapResult] = await Promise.all([
+      supabaseAdmin.from('papers').select('id, content, created_by').eq('id', submission.paper_id).maybeSingle(),
+      supabaseAdmin.from('paper_layout_maps').select('*').eq('paper_id', submission.paper_id).order('version', { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    const { data: paper, error: paperErr } = paperResult;
     if (paperErr || !paper) {
       return NextResponse.json({ error: paperErr?.message || 'Paper not found' }, { status: 404 });
     }
-    mark('paperFetch');
+    mark('paperAndLayoutMapFetch');
 
     // Authorization: the person who uploaded the scan, the paper's owner,
     // that paper creator's academy owner (full parity with self-ownership
@@ -197,20 +198,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Submission has no scan images' }, { status: 400 });
     }
 
-    const { data: layoutMapRow, error: layoutErr } = await supabaseAdmin
-      .from('paper_layout_maps')
-      .select('*')
-      .eq('paper_id', submission.paper_id)
-      .order('version', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
+    const { data: layoutMapRow, error: layoutErr } = layoutMapResult;
     if (layoutErr || !layoutMapRow) {
       const message = 'No MCQ layout map has been generated for this paper yet';
       await markFailed(submissionId, message);
       return NextResponse.json({ error: message }, { status: 400 });
     }
-    mark('layoutMapFetch');
 
     const layoutMap = layoutMapRow as McqLayoutMapPayload;
     if (layoutMap.frame !== LAYOUT_MAP_FRAME_V2) {

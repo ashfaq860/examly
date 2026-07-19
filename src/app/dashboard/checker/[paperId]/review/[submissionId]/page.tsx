@@ -9,12 +9,13 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
-import { ArrowLeft, Lock } from 'lucide-react';
+import { ArrowLeft, Lock, MessageCircle } from 'lucide-react';
 import { useCheckerAuthGuard } from '../../../hooks/useCheckerAuthGuard';
 import { SubmissionStatusBadge } from '../../../components/StatusBadge';
 import { ScanViewer } from './components/ScanViewer';
 import { AnswerGrid } from './components/AnswerGrid';
 import { SubmissionAnswerRow } from '@/types/checker';
+import { buildWhatsappLink } from '@/lib/checker/whatsapp';
 import Loading from '@/app/dashboard/generate-paper/loading';
 
 export default function ReviewPage() {
@@ -31,6 +32,8 @@ export default function ReviewPage() {
   const [pageIndex, setPageIndex] = useState(0);
   const [overridingId, setOverridingId] = useState<string | null>(null);
   const [finalizing, setFinalizing] = useState(false);
+  const [paperTitle, setPaperTitle] = useState<string | null>(null);
+  const [studentWhatsapp, setStudentWhatsapp] = useState<string | null>(null);
 
   const fetchDetail = useCallback(async () => {
     const res = await fetch(`/api/checker/submissions?submissionId=${submissionId}`);
@@ -43,6 +46,8 @@ export default function ReviewPage() {
     setAnswers(data.answers || []);
     setSignedScanUrls(data.signedScanUrls || []);
     setPageIndex(typeof data.submission.graded_scan_index === 'number' ? data.submission.graded_scan_index : 0);
+    setPaperTitle(data.paperTitle ?? null);
+    setStudentWhatsapp(data.studentWhatsapp ?? null);
   }, [submissionId]);
 
   useEffect(() => {
@@ -104,6 +109,14 @@ export default function ReviewPage() {
   const gradedIndex = typeof submission.graded_scan_index === 'number' ? submission.graded_scan_index : 0;
   const currentUrl = signedScanUrls[pageIndex];
 
+  const resultMessage = [
+    `Result for ${submission.student_name_raw || 'your child'}`,
+    submission.roll_no_raw ? ` (Roll ${submission.roll_no_raw})` : '',
+    paperTitle ? ` — ${paperTitle}` : '',
+    `: ${submission.mcq_score ?? 0}/${submission.max_score ?? 0}.`,
+  ].join('');
+  const whatsappHref = studentWhatsapp ? buildWhatsappLink(studentWhatsapp, resultMessage) : null;
+
   return (
     <div className="chk-root chk-review">
       <Link href={`/dashboard/checker/${paperId}`} className="chk-back"><ArrowLeft size={14} /> Submissions</Link>
@@ -147,12 +160,23 @@ export default function ReviewPage() {
       </div>
 
       <div className="chk-review-footer">
+        {submission.student_id && (
+          whatsappHref ? (
+            <a href={whatsappHref} target="_blank" rel="noreferrer" className="chk-btn chk-btn-ghost">
+              <MessageCircle size={15} /> Send result on WhatsApp
+            </a>
+          ) : (
+            <span className="chk-review-wa-hint" title="Add a WhatsApp number for this student from Manage students">
+              <MessageCircle size={13} /> No WhatsApp number on file
+            </span>
+          )
+        )}
         {finalized ? (
           <span className="chk-review-locked"><Lock size={14} /> Finalized — no further changes</span>
         ) : (
           <button
             type="button"
-            className="chk-btn chk-btn-primary"
+            className="chk-btn chk-btn-primary chk-review-finalize-btn"
             onClick={handleFinalize}
             disabled={anyNeedsReview || finalizing}
             title={anyNeedsReview ? 'Resolve all needs-review answers first' : undefined}
@@ -198,8 +222,10 @@ export default function ReviewPage() {
           padding: 2.5rem 1rem; text-align: center; color: var(--chk-muted);
         }
 
-        .chk-review-footer { display: flex; justify-content: flex-end; }
-        .chk-review-locked { display: inline-flex; align-items: center; gap: 6px; color: var(--chk-muted); font-size: 0.85rem; font-weight: 600; }
+        .chk-review-footer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .chk-review-locked { display: inline-flex; align-items: center; gap: 6px; color: var(--chk-muted); font-size: 0.85rem; font-weight: 600; margin-left: auto; }
+        .chk-review-finalize-btn { margin-left: auto; }
+        .chk-review-wa-hint { display: inline-flex; align-items: center; gap: 6px; color: var(--chk-muted); font-size: 0.78rem; }
 
         .chk-btn {
           display: inline-flex; align-items: center; gap: 6px; padding: 0.65rem 1.3rem; border-radius: var(--chk-radius-md);

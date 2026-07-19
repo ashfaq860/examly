@@ -128,11 +128,16 @@ export async function GET(req: NextRequest) {
       if (!ownership.authorized) return NextResponse.json({ error: ownership.message }, { status: ownership.status });
       const submission = ownership.submission;
 
-      const { data: answers, error: answersErr } = await supabaseAdmin
-        .from('submission_answers')
-        .select('*')
-        .eq('submission_id', submissionId)
-        .order('q_number', { ascending: true });
+      const [{ data: answers, error: answersErr }, { data: paper }, { data: linkedStudent }] = await Promise.all([
+        supabaseAdmin.from('submission_answers').select('*').eq('submission_id', submissionId).order('q_number', { ascending: true }),
+        supabaseAdmin.from('papers').select('title').eq('id', submission.paper_id).maybeSingle(),
+        // Only submissions created via the roster dropdown (not free-typed
+        // name/roll) have a student_id — that's the only case a WhatsApp
+        // number is available for the "send result" action below.
+        submission.student_id
+          ? supabaseAdmin.from('students').select('whatsapp_number').eq('id', submission.student_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
       if (answersErr) return NextResponse.json({ error: answersErr.message }, { status: 500 });
 
       const scanUrls: string[] = Array.isArray(submission.scan_urls) ? submission.scan_urls : [];
@@ -140,7 +145,13 @@ export async function GET(req: NextRequest) {
         scanUrls.map(url => getSignedScanUrl(url).catch(() => null))
       );
 
-      return NextResponse.json({ submission, answers: answers || [], signedScanUrls });
+      return NextResponse.json({
+        submission,
+        answers: answers || [],
+        signedScanUrls,
+        paperTitle: paper?.title ?? null,
+        studentWhatsapp: linkedStudent?.whatsapp_number ?? null,
+      });
     }
 
     if (paperId) {

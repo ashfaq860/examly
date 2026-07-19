@@ -8,7 +8,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { ClipboardCheck, RefreshCw, ScanLine, User } from 'lucide-react';
+import { ClipboardCheck, RefreshCw, ScanLine, User, Users } from 'lucide-react';
 import { useCheckerAuthGuard } from './hooks/useCheckerAuthGuard';
 import { BilingualLabel } from './components/BilingualLabel';
 import { StatusBadge } from './components/StatusBadge';
@@ -78,6 +78,9 @@ export default function CheckerLandingPage() {
             {papers.length} paper{papers.length === 1 ? '' : 's'} available for MCQ checking
           </p>
         </div>
+        <Link href="/dashboard/checker/students" className="chk-btn chk-btn-ghost chk-students-link">
+          <Users size={15} /> Students
+        </Link>
         {scansRemaining !== null && (
           <span className="chk-scans-pill">
             <ScanLine size={13} />
@@ -130,8 +133,9 @@ export default function CheckerLandingPage() {
       <style jsx>{`
         .chk-landing { padding-bottom: 2rem; }
         .chk-hd { display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+        .chk-students-link { margin-left: auto; }
         .chk-scans-pill {
-          display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
+          display: inline-flex; align-items: center; gap: 6px;
           background: var(--chk-accent-soft); color: var(--chk-accent);
           font-size: 0.78rem; font-weight: 700; padding: 5px 12px; border-radius: 999px;
         }

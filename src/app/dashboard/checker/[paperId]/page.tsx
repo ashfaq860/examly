@@ -6,7 +6,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Download, RefreshCw, ScanLine, User } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, ScanLine, User, Users } from 'lucide-react';
 import { useCheckerAuthGuard } from '../hooks/useCheckerAuthGuard';
 import { BilingualLabel } from '../components/BilingualLabel';
 import { AddSubmissionForm, RosterStudent } from './components/AddSubmissionForm';
@@ -42,6 +42,23 @@ export default function SubmissionsManagerPage() {
       setSubmissions(data.submissions || []);
     }
   }, [paperId]);
+
+  // Roster-only refresh (no full-page loading state) — the roster already
+  // excludes already-checked and wrong-class students server-side, but that
+  // exclusion is only as fresh as the last fetch. Re-running it after every
+  // queued submission is what makes the "Add submission" picker drop a
+  // just-checked student immediately instead of only after a page reload.
+  const fetchRoster = useCallback(async () => {
+    const res = await fetch(`/api/checker/papers?paperId=${paperId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setRoster(data.roster || []);
+    }
+  }, [paperId]);
+
+  const refreshAfterSubmission = useCallback(async () => {
+    await Promise.all([fetchSubmissions(), fetchRoster()]);
+  }, [fetchSubmissions, fetchRoster]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -83,6 +100,9 @@ export default function SubmissionsManagerPage() {
           </p>
         </div>
         <div className="chk-hd-actions">
+          <Link href="/dashboard/checker/students" className="chk-btn chk-btn-ghost">
+            <Users size={15} /> Students
+          </Link>
           {scansRemaining !== null && (
             <span className="chk-scans-pill">
               <ScanLine size={13} />
@@ -107,7 +127,7 @@ export default function SubmissionsManagerPage() {
         <>
           <section className="chk-panel">
             <h2 className="chk-h2"><BilingualLabel en="Add submission" ur="جمع کرائی گئی کاپی شامل کریں" /></h2>
-            <AddSubmissionForm paperId={paperId} roster={roster} onSubmissionGraded={fetchSubmissions} />
+            <AddSubmissionForm paperId={paperId} roster={roster} onSubmissionGraded={refreshAfterSubmission} />
           </section>
 
           <section className="chk-panel">

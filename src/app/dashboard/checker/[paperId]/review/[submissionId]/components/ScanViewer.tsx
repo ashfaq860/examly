@@ -169,17 +169,29 @@ function OverlayForAnswer({ answer }: { answer: SubmissionAnswerRow }) {
         const rect = overlay[opt];
         if (!rect) return null;
         const color = colorFor(opt);
-        return (
-          <div
-            key={opt}
-            className={`chk-ov-dot chk-ov-${color}`}
-            style={{
-              left: `${rect.xFrac * 100}%`,
-              top: `${rect.yFrac * 100}%`,
-              width: `${rect.rFrac * 2 * 100}%`,
-            }}
-          />
-        );
+        const pos = { left: `${rect.xFrac * 100}%`, top: `${rect.yFrac * 100}%`, width: `${rect.rFrac * 2 * 100}%` };
+
+        // The effective pick (right or wrong) gets a tick/cross badge instead
+        // of a plain ring — it's the one answer the teacher needs to judge at
+        // a glance, so it should read as a verdict, not just a highlight.
+        if (color === 'green' || color === 'red') {
+          return (
+            <div key={opt} className={`chk-ov-badge chk-ov-badge-${color}`} style={pos}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                {color === 'green' ? (
+                  <polyline points="4 13 9 18 20 5" />
+                ) : (
+                  <>
+                    <line x1="5" y1="5" x2="19" y2="19" />
+                    <line x1="19" y1="5" x2="5" y2="19" />
+                  </>
+                )}
+              </svg>
+            </div>
+          );
+        }
+
+        return <div key={opt} className={`chk-ov-dot chk-ov-${color}`} style={pos} />;
       })}
       <style jsx>{`
         .chk-ov-dot {
@@ -188,9 +200,17 @@ function OverlayForAnswer({ answer }: { answer: SubmissionAnswerRow }) {
         }
         .chk-ov-gray { border: 2px solid rgba(255, 255, 255, 0.35); }
         .chk-ov-gray-outline { border: 2px dashed var(--chk-green); }
-        .chk-ov-green { border: 3px solid var(--chk-green); background: rgba(31, 157, 85, 0.28); }
-        .chk-ov-red { border: 3px solid var(--chk-danger); background: rgba(200, 71, 58, 0.28); }
         .chk-ov-amber { border: 3px solid var(--chk-amber); background: rgba(183, 121, 31, 0.3); }
+
+        .chk-ov-badge {
+          position: absolute; transform: translate(-50%, -50%); aspect-ratio: 1 / 1;
+          border-radius: 50%; pointer-events: none; box-sizing: border-box;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.95), 0 1px 4px rgba(0, 0, 0, 0.5);
+        }
+        .chk-ov-badge-green { background: var(--chk-green); }
+        .chk-ov-badge-red { background: var(--chk-danger); }
+        .chk-ov-badge svg { width: 62%; height: 62%; color: #fff; }
       `}</style>
     </>
   );

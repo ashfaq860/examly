@@ -43,22 +43,45 @@ export async function GET(req: NextRequest) {
       const ownership = await verifyPaperOwnership(paperId, user.id);
       if (!ownership.authorized) return NextResponse.json({ error: ownership.message }, { status: ownership.status });
 
-      const [{ data: layoutMap }, { data: roster }, { data: creatorProfile }] = await Promise.all([
+      const [{ data: layoutMap }, { data: roster }, { data: creatorProfile }, { data: checkedSubs }] = await Promise.all([
         supabaseAdmin.from('paper_layout_maps').select('id').eq('paper_id', paperId).limit(1).maybeSingle(),
         // The roster belongs to whoever actually created this paper, not
         // necessarily the caller — an academy owner viewing a member's
         // paper (or an admin viewing anyone's) must see THAT teacher's
-        // class roster, not their own.
-        supabaseAdmin.from('students').select('id, full_name, roll_no').eq('owner_id', ownership.paper.created_by).eq('is_active', true).order('full_name'),
+        // class roster, not their own. class_name is selected too (but
+        // stripped before the response below) purely to filter by the
+        // paper's own class next.
+        supabaseAdmin.from('students').select('id, full_name, roll_no, class_name').eq('owner_id', ownership.paper.created_by).eq('is_active', true).order('full_name'),
         ownership.paper.created_by === user.id
           ? Promise.resolve({ data: null })
           : supabaseAdmin.from('profiles').select('full_name').eq('id', ownership.paper.created_by).maybeSingle(),
+        // Students who already have a submission for THIS paper are dropped
+        // from the roster below — once checked, they shouldn't keep showing
+        // up in the "Add submission" picker for the same paper.
+        supabaseAdmin.from('submissions').select('student_id').eq('paper_id', paperId).not('student_id', 'is', null),
       ]);
+
+      const alreadyCheckedIds = new Set((checkedSubs || []).map((s: any) => s.student_id));
+      // Both papers.class_name and students.class_name store the same bare
+      // classes.name value (e.g. "9") with no formatting — see
+      // PaperBuilderApp.tsx's save payload and the students class <select>
+      // — so a plain trimmed comparison is enough, no normalization needed.
+      // A student in Class 10 must never show up as pickable on a Class 9
+      // paper's roster. If the paper has no usable class_name (blank, or
+      // the "Unknown Class" fallback), class can't be used to filter, so
+      // every student is left in rather than hiding the whole roster.
+      const paperClass = (ownership.paper.class_name || '').trim();
+      const classScoped = (paperClass && paperClass !== 'Unknown Class')
+        ? (roster || []).filter(s => (s.class_name || '').trim() === paperClass)
+        : (roster || []);
+      const availableRoster = classScoped
+        .filter(s => !alreadyCheckedIds.has(s.id))
+        .map(({ id, full_name, roll_no }) => ({ id, full_name, roll_no }));
 
       return NextResponse.json({
         paper: ownership.paper,
         hasLayoutMap: Boolean(layoutMap),
-        roster: roster || [],
+        roster: availableRoster,
         createdByName: creatorProfile?.full_name ?? null,
       });
     }
