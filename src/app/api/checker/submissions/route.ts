@@ -10,11 +10,16 @@
 // submissions (with a needs_review answer count per submission);
 // ?submissionId= returns one submission's full detail (answers + signed
 // scan URLs) for the review screen.
+//
+// Both handlers require the 'paper_checker' feature (admin/super_admin
+// bypass) — this is part of the paid Paper Checker product, gated the
+// same way as every other route under /api/checker/*.
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { getSessionFromRequest } from '@/lib/api-auth';
+import { requireFeatureOrAdmin } from '@/lib/entitlements';
 import { verifyPaperOwnership, verifySubmissionOwnership } from '@/lib/checker/ownership';
 import { getSignedScanUrl } from '@/lib/checker/scanStorage';
 
@@ -25,6 +30,9 @@ export async function POST(req: NextRequest) {
     const auth = await getSessionFromRequest();
     if (auth.error) return auth.error;
     const { user } = auth;
+
+    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
+    if (gate) return gate;
 
     const formData = await req.formData();
     const paperId = formData.get('paperId') as string | null;
@@ -107,6 +115,9 @@ export async function GET(req: NextRequest) {
     const auth = await getSessionFromRequest();
     if (auth.error) return auth.error;
     const { user } = auth;
+
+    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
+    if (gate) return gate;
 
     const { searchParams } = new URL(req.url);
     const paperId = searchParams.get('paperId');

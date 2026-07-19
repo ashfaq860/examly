@@ -2,37 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireRole } from "@/lib/api-auth";
 
-export async function GET() {
+// Updates a package. Same whitelist-every-column approach as POST — a
+// partial `.update()` with a field silently missing from this list would
+// otherwise leave stale/wrong data on the row (e.g. an edited "seats"
+// value not actually saving) while the request still returns 200.
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole(["admin", "super_admin"]);
   if (auth.error) return auth.error;
 
-  const { data, error } = await supabaseAdmin
-    .from("packages")
-    .select("*")
-    .order("price");
-
-  if (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
-  }
-
-  return new Response(JSON.stringify(data), { status: 200 });
-}
-
-// Creates a package. Explicitly whitelists every column (including the
-// new features/seats/scan_quantity trio) into the insert payload — the
-// classic bug in this codebase's admin write routes is a field silently
-// missing from the insert/select list while the form still "succeeds",
-// so every field the form collects is named here rather than spreading
-// the raw request body into the insert.
-export async function POST(req: NextRequest) {
-  const auth = await requireRole(["admin", "super_admin"]);
-  if (auth.error) return auth.error;
-
+  const { id } = await params;
   const body = await req.json().catch(() => ({}));
-
-  if (!body?.name || typeof body.price !== "number") {
-    return NextResponse.json({ error: "name and price are required" }, { status: 400 });
-  }
 
   const features: string[] = Array.isArray(body.features) && body.features.includes("paper_checker")
     ? ["paper_generation", "paper_checker"]
@@ -59,7 +38,8 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabaseAdmin
     .from("packages")
-    .insert(payload)
+    .update(payload)
+    .eq("id", id)
     .select("*")
     .single();
 
@@ -67,5 +47,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json(data, { status: 200 });
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireRole(["admin", "super_admin"]);
+  if (auth.error) return auth.error;
+
+  const { id } = await params;
+
+  const { error } = await supabaseAdmin.from("packages").delete().eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true }, { status: 200 });
 }

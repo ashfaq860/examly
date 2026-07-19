@@ -18,6 +18,10 @@
 // returned as a signed URL — a permanent diagnostic feature for verifying
 // alignment visually instead of guessing from detection results alone.
 //
+// Requires the 'paper_checker' feature (admin/super_admin bypass), and
+// consumes one scan off the caller's pooled quota (consume_scan RPC)
+// right before processing starts — 403 scan_quota_exhausted if none left.
+//
 // Needs Node (sharp uses native bindings) — not the Edge runtime.
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -25,6 +29,8 @@ export const maxDuration = 60;
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { getSessionFromRequest } from '@/lib/api-auth';
+import { requireFeatureOrAdmin, consumeScan } from '@/lib/entitlements';
+import { isAcademyOwnerOfCreator } from '@/lib/checker/ownership';
 import { McqLayoutMapPayload, BubbleOption, BubbleOverlay, DetectedOption, LAYOUT_MAP_FRAME_V2 } from '@/types/checker';
 import { recomputeSubmissionTotals, isAnswerCorrect } from '@/lib/checker/answers';
 import { solveHomography, applyHomography, localScale, Point } from '@/lib/checker/geometry';
@@ -133,6 +139,10 @@ export async function POST(req: NextRequest) {
     const { user } = auth;
     mark('auth');
 
+    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
+    if (gate) return gate;
+    mark('featureGate');
+
     const debugMode = new URL(req.url).searchParams.get('debug') === '1';
 
     const body = await req.json();
@@ -161,8 +171,14 @@ export async function POST(req: NextRequest) {
     }
     mark('paperFetch');
 
-    // Authorization: the person who uploaded the scan, the paper's owner, or an admin.
-    if (submission.uploaded_by !== user.id && paper.created_by !== user.id) {
+    // Authorization: the person who uploaded the scan, the paper's owner,
+    // that paper creator's academy owner (full parity with self-ownership
+    // — see lib/checker/ownership.ts), or an admin.
+    if (
+      submission.uploaded_by !== user.id &&
+      paper.created_by !== user.id &&
+      !(await isAcademyOwnerOfCreator(user.id, paper.created_by))
+    ) {
       const { data: profile } = await supabaseAdmin
         .from('profiles')
         .select('role')
@@ -209,6 +225,18 @@ export async function POST(req: NextRequest) {
       await markFailed(submissionId, message);
       return NextResponse.json({ error: message }, { status: 400 });
     }
+
+    // Scan quota is consumed here — right before processing actually
+    // starts, and only once every precondition for a successful grade has
+    // already been checked — so a doomed-to-fail request never burns a
+    // scan. consume_scan resolves the correct pooled user_package
+    // (personal or academy owner's) itself; false means no paper_checker
+    // access or no scans left, and grading must not proceed.
+    const scanOk = await consumeScan(supabaseAdmin, user.id);
+    if (!scanOk) {
+      return NextResponse.json({ error: 'scan_quota_exhausted' }, { status: 403 });
+    }
+    mark('scanQuotaConsumed');
 
     const questionIds = mcqBubbles.map(b => b.question_id);
     // Questions lookup, the "processing" status bump, and downloading every

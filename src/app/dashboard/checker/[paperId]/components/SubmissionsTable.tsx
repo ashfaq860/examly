@@ -6,8 +6,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'react-hot-toast';
 import { RotateCw, AlertTriangle } from 'lucide-react';
 import { SubmissionStatusBadge, StatusBadge } from '../../components/StatusBadge';
+import { UpgradeModal, UpgradeReason } from '@/components/UpgradeModal';
 
 export interface SubmissionListItem {
   id: string;
@@ -32,16 +34,23 @@ export function SubmissionsTable({
 }) {
   const router = useRouter();
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null);
 
   const retry = async (e: React.MouseEvent, submissionId: string) => {
     e.stopPropagation();
     setRetryingId(submissionId);
     try {
-      await fetch('/api/checker/grade-mcq', {
+      const res = await fetch('/api/checker/grade-mcq', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ submission_id: submissionId }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.error === 'scan_quota_exhausted') setUpgradeReason('scan_quota_exhausted');
+        else if (data.error === 'subscription_required') setUpgradeReason('subscription_required');
+        else toast.error(data.error || 'Retry failed');
+      }
     } finally {
       setRetryingId(null);
       onRetried();
@@ -61,6 +70,8 @@ export function SubmissionsTable({
 
   return (
     <div className="chk-subs">
+      <UpgradeModal open={upgradeReason !== null} onClose={() => setUpgradeReason(null)} reason={upgradeReason ?? 'subscription_required'} />
+
       {/* Desktop table */}
       <table className="chk-subs-table">
         <thead>

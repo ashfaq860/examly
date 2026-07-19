@@ -186,9 +186,9 @@ export const useGeneratePaper = () => {
           { user_id: session.user.id }
         );
 
-        if (roleError || roleData !== 'teacher') {
+        if (roleError || (roleData !== 'teacher' && roleData !== 'academy')) {
           if (isMounted) {
-            setAuthError('This page is only available to teachers');
+            setAuthError('This page is only available to teachers and academies');
             setAuthChecked(true);
           }
           return;

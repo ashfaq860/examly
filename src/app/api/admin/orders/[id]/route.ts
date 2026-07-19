@@ -59,8 +59,8 @@ export async function PATCH(
           is_active: true,
           expires_at: expiresAt,
           // If it's a paper package, also set papers_remaining
-          papers_remaining: userPackage.packages.type === 'papers' 
-            ? userPackage.packages.paper_quantity 
+          papers_remaining: userPackage.packages.type === 'papers'
+            ? userPackage.packages.paper_quantity
             : null
         })
         .eq('id', id)
@@ -71,6 +71,26 @@ export async function PATCH(
           { error: 'Failed to approve order' },
           { status: 500 }
         )
+      }
+
+      // Deactivate every other active package this user has. Without this,
+      // approving a new order just stacked another is_active=true row on
+      // top of whatever the user already had — get_active_package then had
+      // several active rows to choose between and picked one arbitrarily
+      // (observed picking the wrong one: a plain "Monthly" package over a
+      // newer "Paper Checker Monthly" the user had actually paid for,
+      // silently denying them a feature they were entitled to). Exactly one
+      // active package per user is the invariant every entitlement RPC
+      // assumes, so approval is where it must be enforced.
+      const { error: deactivateOthersError } = await supabase
+        .from('user_packages')
+        .update({ is_active: false })
+        .eq('user_id', userPackage.user_id)
+        .neq('id', id)
+        .eq('is_active', true)
+
+      if (deactivateOthersError) {
+        console.error('Failed to deactivate other active packages:', deactivateOthersError)
       }
 
       return NextResponse.json({ message: 'Order approved successfully' })

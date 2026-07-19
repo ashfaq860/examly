@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   MapPin, User, Phone, University, Mail, Save, Upload, X, Calendar,
   CheckCircle, AlertCircle, Package, FileText, Clock, Crown, Gift, ShieldCheck, FilePlus,
+  Lock,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
@@ -26,6 +27,7 @@ type Profile = {
   cellno: string | null;
   logo: string | null;
   trial_given: boolean;
+  login_method: string | null;
 };
 
 export default function ProfileSettingsPage() {
@@ -39,6 +41,12 @@ export default function ProfileSettingsPage() {
   const [cellnoStatus, setCellnoStatus] = useState<'valid' | 'invalid' | 'checking' | null>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
 
   const { trialStatus, isLoading: trialLoading, refreshTrialStatus } = useUser();
 
@@ -66,7 +74,7 @@ export default function ProfileSettingsPage() {
           { user_id: session.user.id }
         );
 
-        if (roleError || roleData !== 'teacher') {
+        if (roleError || (roleData !== 'teacher' && roleData !== 'academy')) {
           router.push('/');
           return;
         }
@@ -273,6 +281,56 @@ export default function ProfileSettingsPage() {
       toast.error(err.message || "An error occurred while updating profile");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Password: Google-only accounts have no password yet (create), everyone
+  // else changes their existing one (re-verified via signInWithPassword
+  // first — Supabase has no dedicated "check current password" call, so
+  // re-authenticating with it is the standard way to confirm it before
+  // letting updateUser() overwrite it).
+  const hasPassword = profile?.login_method !== 'google';
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwError(null);
+
+    if (newPassword.length < 6) {
+      setPwError('New password must be at least 6 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('New password and confirmation do not match');
+      return;
+    }
+
+    setPwSaving(true);
+    try {
+      if (hasPassword) {
+        if (!profile?.email) throw new Error('Missing account email');
+        const { error: verifyError } = await supabase.auth.signInWithPassword({
+          email: profile.email,
+          password: currentPassword,
+        });
+        if (verifyError) throw new Error('Current password is incorrect');
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
+
+      if (!hasPassword) {
+        await fetch('/api/profile/mark-password-set', { method: 'POST', credentials: 'include' });
+        setProfile(prev => (prev ? { ...prev, login_method: 'email' } : prev));
+      }
+
+      toast.success(hasPassword ? 'Password updated successfully!' : 'Password created — you can now log in with email and password too.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      setPwError(err.message || 'Failed to update password');
+    } finally {
+      setPwSaving(false);
     }
   };
 
@@ -683,6 +741,94 @@ export default function ProfileSettingsPage() {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Password & Security */}
+        <div style={{
+          gridColumn: '1 / -1',
+          background: '#fff', borderRadius: 'var(--radius-xl)',
+          border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-subtle)',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <Lock size={16} style={{ color: 'var(--brand-primary)' }} />
+            <h2 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>
+              {hasPassword ? 'Change Password' : 'Create a Password'}
+            </h2>
+          </div>
+
+          <div style={{ padding: '1.25rem', maxWidth: 420 }}>
+            {!hasPassword && (
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 0, marginBottom: '1rem' }}>
+                You signed in with Google, so there&apos;s no password on this account yet. Set one below to also be able to log in with your email and password.
+              </p>
+            )}
+
+            <form onSubmit={handlePasswordSubmit}>
+              {hasPassword && (
+                <div style={{ marginBottom: '1.1rem' }}>
+                  <label htmlFor="currentPassword" style={fieldLabelStyle}><Lock size={14} /> Current Password</label>
+                  <input
+                    type="password" id="currentPassword" autoComplete="current-password" required
+                    value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+              )}
+
+              <div style={fieldRowStyle}>
+                <div style={fieldColStyle}>
+                  <label htmlFor="newPassword" style={fieldLabelStyle}><Lock size={14} /> New Password</label>
+                  <input
+                    type="password" id="newPassword" autoComplete="new-password" required minLength={6}
+                    value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={fieldColStyle}>
+                  <label htmlFor="confirmPassword" style={fieldLabelStyle}><Lock size={14} /> Confirm New Password</label>
+                  <input
+                    type="password" id="confirmPassword" autoComplete="new-password" required minLength={6}
+                    value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              {pwError && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b',
+                  borderRadius: 'var(--radius-md)', padding: '0.65rem 0.9rem', marginBottom: '1rem', fontSize: '0.85rem',
+                }}>
+                  <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>{pwError}</span>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="submit"
+                  disabled={pwSaving}
+                  style={{ ...primaryBtnStyle, opacity: pwSaving ? 0.6 : 1, cursor: pwSaving ? 'not-allowed' : 'pointer' }}
+                >
+                  {pwSaving ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm" style={{ width: 14, height: 14 }} />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Lock size={16} />
+                      {hasPassword ? 'Update Password' : 'Create Password'}
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>

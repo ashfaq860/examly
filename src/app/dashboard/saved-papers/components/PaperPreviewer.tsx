@@ -7,6 +7,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { getPageSize } from '@/lib/paperPageSize';
 import { toast } from 'react-hot-toast';
 import { motion } from 'framer-motion';
+import { UpgradeModal, UpgradeReason } from '@/components/UpgradeModal';
 
 const SETTINGS_PANEL_WIDTH = 320; // px — must match SettingsPanel's own width
 
@@ -21,6 +22,7 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
   const [currentSettings, setCurrentSettings] = useState(paper.settings || {});
   const [isSaving, setIsSaving] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null);
 
   // Same page-size source of truth PaperBuilderApp uses — a saved paper made
   // with the Legal size selected must preview at Legal dimensions here too,
@@ -64,10 +66,10 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
   }, [pageSize.widthPx, pageSize.heightMm]);
 
   // ─── Premium check ────────────────────────────────────────────────────────
-  const subStatus = userProfile?.profile?.subscription_status;
-  const isPremium = subStatus === 'active';
-  const hasActivePackage = userProfile?.userPackages?.some((pkg: any) => pkg.is_active === true);
-  const isUserPremium = isPremium || hasActivePackage;
+  // Sourced from getActivePackage (via /api/profile's activePackage field)
+  // instead of profile.subscription_status, which is never kept in sync
+  // with user_packages/order approval — see PaperBuilderApp's identical fix.
+  const isUserPremium = Boolean(userProfile?.activePackage);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
   const handleUpdateDatabase = async () => {
@@ -93,7 +95,12 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
         headers: { 'Content-Type': 'application/json' },
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
+      if (!response.ok) {
+        if (result.error === 'subscription_required' || result.error === 'quota_exhausted') {
+          setUpgradeReason('subscription_required');
+        }
+        throw new Error(result.error);
+      }
       setUserProfile((prev: any) => ({ ...prev, profile: result.profile }));
     } catch (err: any) {
       console.error('Failed to sync paper count:', err.message);
@@ -103,6 +110,8 @@ export const PaperPreviewer = ({ paper, profile, onBack }: any) => {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className={`previewer-root bg-light min-vh-100 ${showSettings ? 'settings-panel-open' : ''}`}>
+
+      <UpgradeModal open={upgradeReason !== null} onClose={() => setUpgradeReason(null)} reason={upgradeReason ?? 'subscription_required'} />
 
       {/* Action Bar */}
       <div className="action-bar-fixed d-print-none">

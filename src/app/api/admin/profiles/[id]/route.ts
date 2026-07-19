@@ -65,6 +65,42 @@ export async function PUT(
     .single();
 
   if (error) return Response.json({ error: error.message }, { status: 400 });
+
+  // Setting role='academy' here only flips the profiles column — it used
+  // to leave the user without any row in `academies`, so every academy-
+  // gated feature (the Members page, seat pooling) would 403 with "not an
+  // academy owner" until someone fixed it by hand in the DB. Auto-provision
+  // an owned academy (best-effort — a failure here shouldn't undo the role
+  // change itself) whenever the new role is 'academy' and they don't
+  // already own one.
+  if (data.role === "academy") {
+    const { data: existingAcademy } = await supabaseAdmin
+      .from("academies")
+      .select("id")
+      .eq("owner_id", id)
+      .maybeSingle();
+
+    if (!existingAcademy) {
+      const academyName = (data.institution as string | null)?.trim() || `${data.full_name || "New"}'s Academy`;
+      const { data: newAcademy, error: academyErr } = await supabaseAdmin
+        .from("academies")
+        .insert({ name: academyName, owner_id: id })
+        .select("id")
+        .single();
+
+      if (academyErr) {
+        console.error("Failed to auto-create academy for new academy-role user:", academyErr.message);
+      } else {
+        const { error: memberErr } = await supabaseAdmin
+          .from("academy_members")
+          .insert({ academy_id: newAcademy.id, user_id: id, member_role: "owner" });
+        if (memberErr) {
+          console.error("Failed to create owner membership for auto-created academy:", memberErr.message);
+        }
+      }
+    }
+  }
+
   return Response.json(data);
 }
 

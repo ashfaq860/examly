@@ -85,7 +85,7 @@ export default function ProfilePage() {
           { user_id: session.user.id }
         );
 
-        if (roleError || roleData !== 'teacher') {
+        if (roleError || (roleData !== 'teacher' && roleData !== 'academy')) {
           router.push('/');
           return;
         }

@@ -105,7 +105,7 @@ export default function AcademyDashboard() {
         if (error || !user) { window.location.href = '/auth/login'; return; }
 
         const { data: role } = await supabase.rpc('get_user_role', { user_id: user.id });
-        if (role !== 'teacher') { router.push('/'); return; }
+        if (role !== 'teacher' && role !== 'academy') { router.push('/'); return; }
 
         setIsAuthorized(true);
 

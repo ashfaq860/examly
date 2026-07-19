@@ -7,10 +7,12 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   LayoutDashboard, FilePlus, Archive, Gem, UserCircle,
   Settings, Sun, Moon, GraduationCap, Zap, X, LogOut, ChevronRight,
-  ClipboardCheck,
+  ClipboardCheck, Lock, Users,
 } from "lucide-react";
 import Header from "@/components/academy/Header";
 import { useUser } from "@/app/context/userContext";
+import { useEntitlements } from "@/hooks/useEntitlements";
+import { UpgradeModal } from "@/components/UpgradeModal";
 import Footer from "@/components/Footer";
 import ReferralSection from "@/components/ReferralSection";
 import BreadcrumbAuto from "@/components/BreadcrumbAuto";
@@ -24,6 +26,8 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<any>(cachedUser);
   const { trialStatus, isLoading } = useUser();
+  const { hasFeature } = useEntitlements();
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const hasFetchedUser = useRef(false);
 
   useEffect(() => {
@@ -57,15 +61,28 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
     window.location.href = "/auth/login";
   };
 
-  const sidebarLinks = useMemo(() => [
-    { path: "/dashboard",                icon: LayoutDashboard, label: "Dashboard" },
-    { path: "/dashboard/generate-paper", icon: FilePlus,        label: "Generate Paper" },
-    { path: "/dashboard/saved-papers",   icon: Archive,         label: "Saved Papers" },
-    { path: "/dashboard/checker",        icon: ClipboardCheck,  label: "Paper Checker" },
-    { path: "/dashboard/packages",       icon: Gem,             label: "Premium Plans" },
-    { path: "/dashboard/profile",        icon: UserCircle,      label: "Profile" },
-    { path: "/dashboard/settings",       icon: Settings,        label: "Settings" },
-  ], []);
+  type SidebarLink = { path: string; icon: typeof LayoutDashboard; label: string; locked?: boolean };
+
+  const sidebarLinks = useMemo<SidebarLink[]>(() => {
+    const links: SidebarLink[] = [
+      { path: "/dashboard",                icon: LayoutDashboard, label: "Dashboard" },
+      { path: "/dashboard/generate-paper", icon: FilePlus,        label: "Generate Paper" },
+      { path: "/dashboard/saved-papers",   icon: Archive,         label: "Saved Papers" },
+      { path: "/dashboard/checker",        icon: ClipboardCheck,  label: "Paper Checker", locked: !hasFeature('paper_checker') },
+    ];
+    // Only academy owners manage seats — role alone doesn't guarantee an
+    // owned academies row, but the link just routes to a page that 403s
+    // gracefully for anyone else, same defense-in-depth as the checker gate.
+    if (trialStatus?.role === 'academy') {
+      links.push({ path: "/dashboard/academy/members", icon: Users, label: "Academy Members" });
+    }
+    links.push(
+      { path: "/dashboard/packages",       icon: Gem,             label: "Premium Plans" },
+      { path: "/dashboard/profile",        icon: UserCircle,      label: "Profile" },
+      { path: "/dashboard/settings",       icon: Settings,        label: "Settings" },
+    );
+    return links;
+  }, [hasFeature, trialStatus?.role]);
 
   const isActive = (path: string) =>
     path === "/dashboard" ? pathname === "/dashboard" : pathname?.startsWith(path);
@@ -185,6 +202,28 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
       {sidebarLinks.map((item) => {
         const Icon = item.icon;
         const active = isActive(item.path);
+
+        if (item.locked) {
+          return (
+            <button
+              key={item.path}
+              type="button"
+              onClick={() => setShowUpgrade(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                padding: '0.6rem 0.85rem', border: 'none',
+                borderRadius: 'var(--radius-md)', background: 'transparent',
+                fontSize: '0.87rem', fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer',
+                color: darkMode ? 'rgba(226,232,240,0.5)' : 'var(--text-faint)',
+              }}
+            >
+              <Icon size={17} style={{ opacity: 0.55, flexShrink: 0 }} />
+              <span>{item.label}</span>
+              <Lock size={13} style={{ marginLeft: 'auto', opacity: 0.6 }} />
+            </button>
+          );
+        }
+
         return (
           <Link
             key={item.path}
@@ -256,6 +295,8 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
       }}
     >
       <ReferralSection referralCode={trialStatus?.referral_code || ""} />
+
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="subscription_required" />
 
       <style jsx global>{`
         .sidebar-slide { transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1); }

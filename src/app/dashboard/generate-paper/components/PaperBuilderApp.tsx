@@ -16,6 +16,7 @@ import Loading from '@/app/dashboard/generate-paper/loading';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { getPageSize } from '@/lib/paperPageSize';
 import { toast } from 'react-hot-toast';
+import { UpgradeModal, UpgradeReason } from '@/components/UpgradeModal';
 
 // Types whose linked question_category name is actually meant to print as a
 // heading (e.g. "Stanza Explanation", "حصہ نظم"). For every other type
@@ -138,6 +139,7 @@ export const PaperBuilderApp: React.FC<PaperBuilderAppProps> = ({
   const [isGeneratingBoardPattern, setIsGeneratingBoardPattern] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null);
 
   const [settings, setSettings] = useState<PaperSettings>({
     fontFamily: "'Times New Roman', serif",
@@ -1260,7 +1262,15 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
     try {
       const response = await fetch('/api/profile/increment-count', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Failed to update count');
+      if (!response.ok) {
+        // The paper was already printed above — this can't un-print it,
+        // it only stops the NEXT attempt by surfacing the upgrade prompt
+        // now instead of letting the quota silently drift out of sync.
+        if (result.error === 'subscription_required' || result.error === 'quota_exhausted') {
+          setUpgradeReason('subscription_required');
+        }
+        throw new Error(result.error || 'Failed to update count');
+      }
       setProfile((prev: any) => ({ ...prev, profile: result.profile }));
     } catch (error: any) {
       console.error("API Update Error:", error.message);
@@ -1295,10 +1305,12 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
   const totalMarks = paperSections.reduce((acc, s) => acc + (s.totalMarks || 0), 0);
   const totalQuestions = paperSections.reduce((acc, s) => acc + (s.totalQuestions || 0), 0);
 
-  const subStatus = profile?.profile?.subscription_status;
-  const isPremium = subStatus === 'active';
-  const hasActivePackage = profile?.userPackages?.some((pkg: any) => pkg.is_active === true);
-  const isUserPremium = isPremium || hasActivePackage;
+  // Sourced from getActivePackage (via /api/profile's activePackage field)
+  // instead of profile.subscription_status, which is never kept in sync
+  // with user_packages/order approval and was already dead for gating.
+  // A resolved active package — personal or inherited via academy — means
+  // premium-tier UI (watermark control, extra page sizes) unlocks.
+  const isUserPremium = Boolean(profile?.activePackage);
   const pageSize = getPageSize(settings.pageSize);
 
   // ─── The settings panel rendered via portal directly into document.body ───
@@ -1321,6 +1333,8 @@ if (pairedBlocksInGroup.length > 0 && pairedBlocksInGroup.length === ps.blocks.l
     // ⚠️ CRITICAL: Remove overflowX: 'hidden' from root — it was clipping the fixed sidebar.
     // Horizontal overflow is handled per-element below instead.
     <div className="min-vh-100 d-flex flex-column bg-light">
+
+      <UpgradeModal open={upgradeReason !== null} onClose={() => setUpgradeReason(null)} reason={upgradeReason ?? 'subscription_required'} />
 
       {/* 1. FIXED HEADER */}
       <div className="d-print-none bg-white border-bottom shadow-sm app-header">

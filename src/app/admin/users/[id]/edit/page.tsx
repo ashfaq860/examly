@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AdminLayout from "@/components/AdminLayout";
+import { SubjectsMultiSelect, SubjectOption, buildSubjectOptions } from "@/components/admin/SubjectsMultiSelect";
 import { isUserAdmin } from "@/lib/auth-utils";
 import { ArrowLeft, Save, Pencil } from "lucide-react";
 import toast from "react-hot-toast";
@@ -13,6 +14,7 @@ export default function EditProfile() {
 
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [subjectOptions, setSubjectOptions] = useState<SubjectOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -47,6 +49,17 @@ export default function EditProfile() {
     }
     if (id && authorized) fetchProfile();
   }, [id, authorized]);
+
+  useEffect(() => {
+    async function fetchSubjects() {
+      const res = await fetch('/api/admin/lookups');
+      if (res.ok) {
+        const data = await res.json();
+        setSubjectOptions(buildSubjectOptions(data.subjects || [], data.classSubjects || []));
+      }
+    }
+    if (authorized) fetchSubjects();
+  }, [authorized]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -162,16 +175,11 @@ export default function EditProfile() {
             </div>
 
             <div className="usr-field usr-field-full">
-              <label>Subjects (comma separated)</label>
-              <input
-                type="text"
-                value={profile.subjects?.join(", ") || ""}
-                onChange={(e) =>
-                  setProfile({
-                    ...profile,
-                    subjects: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
-                  })
-                }
+              <label>Subjects</label>
+              <SubjectsMultiSelect
+                subjects={subjectOptions}
+                value={profile.subjects || []}
+                onChange={(subjects) => setProfile({ ...profile, subjects })}
               />
             </div>
 

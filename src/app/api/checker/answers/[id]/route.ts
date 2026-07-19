@@ -3,12 +3,14 @@
 // corrected option (kept separate from detected_option so the original CV
 // read is never lost), recomputes that row's final_marks, clears
 // needs_review, stamps reviewed_by/reviewed_at, and recomputes the parent
-// submission's totals.
+// submission's totals. Requires the 'paper_checker' feature (admin/
+// super_admin bypass).
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { getSessionFromRequest } from '@/lib/api-auth';
+import { requireFeatureOrAdmin } from '@/lib/entitlements';
 import { verifySubmissionOwnership } from '@/lib/checker/ownership';
 import { isAnswerCorrect, recomputeSubmissionTotals } from '@/lib/checker/answers';
 
@@ -19,6 +21,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const auth = await getSessionFromRequest();
     if (auth.error) return auth.error;
     const { user } = auth;
+
+    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
+    if (gate) return gate;
 
     const { id: answerId } = await params;
     const body = await req.json();

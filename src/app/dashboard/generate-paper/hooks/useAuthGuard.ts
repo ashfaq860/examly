@@ -24,8 +24,8 @@ export const useAuthGuard = () => {
           { user_id: session.user.id }
         );
 
-        if (roleError || roleData !== 'teacher') {
-          setAuthError('This page is only available to teachers');
+        if (roleError || (roleData !== 'teacher' && roleData !== 'academy')) {
+          setAuthError('This page is only available to teachers and academies');
           setAuthChecked(true);
           return;
         }

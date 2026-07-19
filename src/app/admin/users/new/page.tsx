@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/AdminLayout";
+import { SubjectsMultiSelect, SubjectOption, buildSubjectOptions } from "@/components/admin/SubjectsMultiSelect";
 import { ArrowLeft, UserPlus } from "lucide-react";
 import toast from "react-hot-toast";
 import '../users.css';
@@ -9,6 +10,7 @@ import '../users.css';
 export default function NewUserPage() {
   const router = useRouter();
   const [packages, setPackages] = useState<any[]>([]);
+  const [subjectOptions, setSubjectOptions] = useState<SubjectOption[]>([]);
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -17,7 +19,7 @@ export default function NewUserPage() {
     subscription_status: "inactive",
     package_id: "",
     institution: "",
-    subjects: "",
+    subjects: [] as string[],
     cellno: "",
     logo: "",
     trial_ends_at: "",
@@ -25,12 +27,16 @@ export default function NewUserPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    async function fetchPackages() {
-      const res = await fetch("/api/admin/packages");
-      const data = await res.json();
-      setPackages(data);
+    async function fetchLookups() {
+      const [pkgRes, lookupsRes] = await Promise.all([
+        fetch("/api/admin/packages"),
+        fetch("/api/admin/lookups"),
+      ]);
+      setPackages(await pkgRes.json());
+      const lookups = await lookupsRes.json();
+      setSubjectOptions(buildSubjectOptions(lookups.subjects || [], lookups.classSubjects || []));
     }
-    fetchPackages();
+    fetchLookups();
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -43,10 +49,7 @@ export default function NewUserPage() {
     const toastId = toast.loading("Creating user...");
 
     try {
-      const payload = {
-        ...form,
-        subjects: form.subjects ? form.subjects.split(",").map((s) => s.trim()) : [],
-      };
+      const payload = { ...form };
 
       const res = await fetch("/api/admin/profiles", {
         method: "POST",
@@ -134,8 +137,11 @@ export default function NewUserPage() {
 
             <div className="usr-field">
               <label>Subjects</label>
-              <input type="text" name="subjects" value={form.subjects} onChange={handleChange} placeholder="Math, Physics, Chemistry" />
-              <span className="usr-hint">Separate multiple subjects with commas</span>
+              <SubjectsMultiSelect
+                subjects={subjectOptions}
+                value={form.subjects}
+                onChange={(subjects) => setForm({ ...form, subjects })}
+              />
             </div>
 
             <div className="usr-field">

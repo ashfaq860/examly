@@ -17,6 +17,8 @@ interface TrialStatus {
   subscriptionEndDate?: Date | null;
   message?: string | null;
   referral_code?: string | null;
+  role?: string | null;
+  viaAcademy?: string | null;
 }
 
 interface UserContextType {
@@ -96,7 +98,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscriptionType: trialData.subscriptionType,
         referral_code: trialData.referral_code,
         subscriptionEndDate: trialData.subscriptionEndDate ? new Date(trialData.subscriptionEndDate) : null,
-        message: trialData.message || null
+        message: trialData.message || null,
+        role: trialData.role || null,
+        viaAcademy: trialData.viaAcademy || null
       });
     } catch (error) {
       console.error('Error fetching trial status:', error);

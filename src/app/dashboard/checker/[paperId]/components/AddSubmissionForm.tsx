@@ -16,6 +16,7 @@ import { useRef, useState } from 'react';
 import { Camera, FolderOpen, X, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { downscaleImage } from '@/lib/checker/downscaleImage';
 import { CameraCapture } from './CameraCapture';
+import { UpgradeModal, UpgradeReason } from '@/components/UpgradeModal';
 
 export interface RosterStudent {
   id: string;
@@ -42,6 +43,7 @@ export function AddSubmissionForm({
   const [rollNo, setRollNo] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
   const [message, setMessage] = useState<string | null>(null);
+  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null);
 
   const busy = phase === 'downscaling' || phase === 'uploading' || phase === 'grading';
 
@@ -105,7 +107,10 @@ export function AddSubmissionForm({
 
       const createRes = await fetch('/api/checker/submissions', { method: 'POST', body: form });
       const createData = await createRes.json();
-      if (!createRes.ok) throw new Error(createData.error || 'Upload failed');
+      if (!createRes.ok) {
+        if (createData.error === 'subscription_required') { setUpgradeReason('subscription_required'); throw new Error('Paper Checker requires an upgraded plan.'); }
+        throw new Error(createData.error || 'Upload failed');
+      }
 
       setPhase('grading');
       const gradeRes = await fetch('/api/checker/grade-mcq', {
@@ -114,7 +119,11 @@ export function AddSubmissionForm({
         body: JSON.stringify({ submission_id: createData.submission.id }),
       });
       const gradeData = await gradeRes.json();
-      if (!gradeRes.ok) throw new Error(gradeData.error || 'Grading failed');
+      if (!gradeRes.ok) {
+        if (gradeData.error === 'scan_quota_exhausted') { setUpgradeReason('scan_quota_exhausted'); throw new Error("You've used all your scans on this plan."); }
+        if (gradeData.error === 'subscription_required') { setUpgradeReason('subscription_required'); throw new Error('Paper Checker requires an upgraded plan.'); }
+        throw new Error(gradeData.error || 'Grading failed');
+      }
 
       setPhase('done');
       setMessage(`Saved — ${gradeData.mcq_score}/${gradeData.max_mcq_score}${gradeData.needs_review ? ' (some answers need review)' : ''}`);
@@ -128,6 +137,8 @@ export function AddSubmissionForm({
 
   return (
     <div className="chk-add">
+      <UpgradeModal open={upgradeReason !== null} onClose={() => setUpgradeReason(null)} reason={upgradeReason ?? 'subscription_required'} />
+
       {cameraOpen && (
         <CameraCapture
           pageCount={files.length}

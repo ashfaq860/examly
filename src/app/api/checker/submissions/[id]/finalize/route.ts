@@ -2,11 +2,13 @@
 // Locks a submission once the teacher is done reviewing it. Re-checks
 // server-side that no needs_review answers remain — never trusts the
 // client-side button-disabled state alone for a state-changing action.
+// Requires the 'paper_checker' feature (admin/super_admin bypass).
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { getSessionFromRequest } from '@/lib/api-auth';
+import { requireFeatureOrAdmin } from '@/lib/entitlements';
 import { verifySubmissionOwnership } from '@/lib/checker/ownership';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -14,6 +16,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const auth = await getSessionFromRequest();
     if (auth.error) return auth.error;
     const { user } = auth;
+
+    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
+    if (gate) return gate;
 
     const { id: submissionId } = await params;
     const ownership = await verifySubmissionOwnership(submissionId, user.id);

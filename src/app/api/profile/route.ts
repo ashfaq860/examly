@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { getActivePackage } from '@/lib/entitlements';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,9 +76,16 @@ export async function GET(request: NextRequest) {
       console.error('Packages fetch error after retries:', packagesError);
     }
 
+    // Resolves the user's own active package OR the one inherited from
+    // their academy owner — used by callers (e.g. PaperBuilderApp's
+    // "isPremium" check) instead of reading profile.subscription_status,
+    // which is never kept in sync with user_packages/order approval.
+    const activePackage = await getActivePackage(supabaseAdmin, userId);
+
     return NextResponse.json({
       profile,
       userPackages: userPackages || [],
+      activePackage,
     });
   } catch (error) {
     console.error('Server error:', error);

@@ -5,12 +5,14 @@
 // from a route — this establishes that pattern fresh, using the same
 // XLSX.utils.json_to_sheet call (keys become the header row) for
 // consistency with the one existing precedent.
+// Requires the 'paper_checker' feature (admin/super_admin bypass).
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { getSessionFromRequest } from '@/lib/api-auth';
+import { requireFeatureOrAdmin } from '@/lib/entitlements';
 import { verifyPaperOwnership } from '@/lib/checker/ownership';
 import { effectiveOption, isAnswerCorrect } from '@/lib/checker/answers';
 
@@ -19,6 +21,9 @@ export async function GET(req: NextRequest) {
     const auth = await getSessionFromRequest();
     if (auth.error) return auth.error;
     const { user } = auth;
+
+    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
+    if (gate) return gate;
 
     const { searchParams } = new URL(req.url);
     const paperId = searchParams.get('paperId');

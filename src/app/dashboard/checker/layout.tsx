@@ -7,8 +7,22 @@
 // mirroring AdminLayout.tsx's --adm-* values so this feature matches that
 // look exactly, without touching AcademyLayout's own --brand-* theme used
 // by the rest of the teacher dashboard.
+//
+// Also the server-side enforcement point for the 'paper_checker' feature
+// gate: hiding the sidebar link (AcademyLayout) is a UX nicety only, so
+// every page under this segment is additionally checked here — an
+// unentitled user hitting a /dashboard/checker/* URL directly gets the
+// upgrade screen instead of the real page, never just a client-side
+// redirect that a slower connection could momentarily skip past. Signed-
+// out visitors fall through unlocked; the existing per-page
+// useCheckerAuthGuard client hook is what shows their "please log in"
+// message, unchanged.
 import type { ReactNode } from 'react';
 import { Lexend, JetBrains_Mono } from 'next/font/google';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { hasFeature } from '@/lib/entitlements';
+import { UpgradeScreen } from '@/components/UpgradeModal';
 
 const lexend = Lexend({
   subsets: ['latin'],
@@ -24,10 +38,28 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
-export default function CheckerLayout({ children }: { children: ReactNode }) {
+async function isLocked(): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false; // unauthenticated — let the client guard handle it
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (profile && ['admin', 'super_admin'].includes(profile.role)) return false;
+
+  const allowed = await hasFeature(supabaseAdmin, user.id, 'paper_checker');
+  return !allowed;
+}
+
+export default async function CheckerLayout({ children }: { children: ReactNode }) {
+  const locked = await isLocked();
+
   return (
     <div className={`${lexend.variable} ${jetbrainsMono.variable} chk-root`}>
-      {children}
+      {locked ? <UpgradeScreen reason="subscription_required" /> : children}
       {/* Plain style tag (not styled-jsx) — this file has no dynamic values
           to interpolate, and styled-jsx's runtime pulls in 'client-only',
           which errors from a Server Component. A layout has no need to be a

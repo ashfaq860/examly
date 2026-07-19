@@ -8,10 +8,11 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { ClipboardCheck, RefreshCw } from 'lucide-react';
+import { ClipboardCheck, RefreshCw, ScanLine, User } from 'lucide-react';
 import { useCheckerAuthGuard } from './hooks/useCheckerAuthGuard';
 import { BilingualLabel } from './components/BilingualLabel';
 import { StatusBadge } from './components/StatusBadge';
+import { useEntitlements } from '@/hooks/useEntitlements';
 import Loading from '@/app/dashboard/generate-paper/loading';
 
 interface PaperCounts {
@@ -29,10 +30,16 @@ interface PaperRow {
   subject_name: string | null;
   hasLayoutMap: boolean;
   counts: PaperCounts;
+  /** Set only when this paper belongs to an academy member other than the
+   *  caller — academy owners see every member's papers here, so this is
+   *  what tells them whose paper they're looking at. Null for the
+   *  caller's own papers and for plain (non-owner) teachers. */
+  createdByName: string | null;
 }
 
 export default function CheckerLandingPage() {
   const { isAuthenticated, authChecked, authError } = useCheckerAuthGuard();
+  const { scansRemaining } = useEntitlements();
   const [loading, setLoading] = useState(true);
   const [papers, setPapers] = useState<PaperRow[]>([]);
 
@@ -71,6 +78,12 @@ export default function CheckerLandingPage() {
             {papers.length} paper{papers.length === 1 ? '' : 's'} available for MCQ checking
           </p>
         </div>
+        {scansRemaining !== null && (
+          <span className="chk-scans-pill">
+            <ScanLine size={13} />
+            <BilingualLabel en={`Scans left: ${scansRemaining}`} ur={`باقی اسکین: ${scansRemaining}`} />
+          </span>
+        )}
       </div>
 
       {papers.length === 0 ? (
@@ -86,7 +99,12 @@ export default function CheckerLandingPage() {
             <div key={p.id} className={`chk-card ${!p.hasLayoutMap ? 'chk-card-disabled' : ''}`}>
               <div className="chk-card-main">
                 <p className="chk-card-title">{p.title}</p>
-                <p className="chk-card-meta">{p.class_name || '—'} · {p.subject_name || '—'}</p>
+                <p className="chk-card-meta">
+                  {p.class_name || '—'} · {p.subject_name || '—'}
+                  {p.createdByName && (
+                    <span className="chk-card-creator"><User size={11} /> {p.createdByName}</span>
+                  )}
+                </p>
                 {!p.hasLayoutMap ? (
                   <p className="chk-hint"><RefreshCw size={13} /> Regenerate this paper to enable checking</p>
                 ) : (
@@ -111,7 +129,12 @@ export default function CheckerLandingPage() {
 
       <style jsx>{`
         .chk-landing { padding-bottom: 2rem; }
-        .chk-hd { display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem; }
+        .chk-hd { display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+        .chk-scans-pill {
+          display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
+          background: var(--chk-accent-soft); color: var(--chk-accent);
+          font-size: 0.78rem; font-weight: 700; padding: 5px 12px; border-radius: 999px;
+        }
         .chk-hd-icon {
           width: 44px; height: 44px; border-radius: var(--chk-radius-md); flex-shrink: 0;
           background: linear-gradient(135deg, var(--chk-navy) 0%, var(--chk-accent) 100%);
@@ -143,6 +166,11 @@ export default function CheckerLandingPage() {
         .chk-card-main { min-width: 0; flex: 1 1 240px; }
         .chk-card-title { margin: 0; font-weight: 700; color: var(--chk-navy); font-size: 0.98rem; }
         .chk-card-meta { margin: 2px 0 8px; font-size: 0.82rem; color: var(--chk-muted); }
+        .chk-card-creator {
+          display: inline-flex; align-items: center; gap: 3px; margin-left: 8px;
+          background: var(--chk-accent-soft); color: var(--chk-accent);
+          font-size: 0.72rem; font-weight: 700; padding: 1px 8px; border-radius: 999px;
+        }
         .chk-hint { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--chk-muted); margin: 0; }
         .chk-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 
