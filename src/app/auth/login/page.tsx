@@ -161,7 +161,7 @@ export default function LoginPage() {
       console.error('Unexpected login error:', e);
       setErr('An unexpected error occurred. Please try again.');
     } finally {
-      loading && setLoading(false);
+      setLoading(false);
     }
   };
 
