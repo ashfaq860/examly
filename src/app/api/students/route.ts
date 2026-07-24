@@ -1,9 +1,16 @@
-// app/api/checker/students/route.ts
+// app/api/students/route.ts
 // CRUD entry point for the caller's own class roster (the `students`
-// table backing the checker's "Add submission" roster dropdown). RLS on
-// `students` is select-only (owner_id = auth.uid()), so writes go through
-// this service-role route, same convention as every other table in this
-// project — see create_paper_checker_tables.sql's RLS comment.
+// table backing the checker's "Add submission" roster dropdown and the
+// bulk WhatsApp result sender). RLS on `students` is select-only
+// (owner_id = auth.uid()), so writes go through this service-role route,
+// same convention as every other table in this project — see
+// create_paper_checker_tables.sql's RLS comment.
+//
+// Lives at its own top-level API namespace (not /api/checker/students) to
+// match /dashboard/students being its own top-level route — see
+// dashboard/students/layout.tsx. Still gated by the 'paper_checker'
+// feature, same as every checker route; roster management just isn't
+// nested under the checker URL/route tree anymore.
 //
 // GET: every student owned by the caller (active and inactive — the
 // management page needs both to offer reactivation; the roster dropdown
@@ -25,7 +32,7 @@ export async function GET(req: NextRequest) {
     if (auth.error) return auth.error;
     const { user } = auth;
 
-    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
+    const gate = await requireFeatureOrAdmin(auth.supabase, user.id, 'paper_checker');
     if (gate) return gate;
 
     const { data: students, error } = await supabaseAdmin
@@ -48,7 +55,7 @@ export async function POST(req: NextRequest) {
     if (auth.error) return auth.error;
     const { user } = auth;
 
-    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
+    const gate = await requireFeatureOrAdmin(auth.supabase, user.id, 'paper_checker');
     if (gate) return gate;
 
     const body = await req.json();

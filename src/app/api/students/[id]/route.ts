@@ -1,4 +1,4 @@
-// app/api/checker/students/[id]/route.ts
+// app/api/students/[id]/route.ts
 // PATCH-only: edits a student's fields, and doubles as the
 // deactivate/reactivate toggle (is_active is just another field). No hard
 // DELETE — submissions.student_id has a plain FK (no ON DELETE) to
@@ -12,19 +12,9 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { getSessionFromRequest } from '@/lib/api-auth';
 import { requireFeatureOrAdmin } from '@/lib/entitlements';
 import { normalizeWhatsappNumber } from '@/lib/checker/whatsapp';
+import { verifyStudentOwnership } from '@/lib/checker/ownership';
 
 const STUDENT_COLUMNS = 'id, full_name, father_name, roll_no, class_name, section, whatsapp_number, is_active, created_at';
-
-async function verifyStudentOwnership(studentId: string, userId: string) {
-  const { data: student, error } = await supabaseAdmin.from('students').select('*').eq('id', studentId).maybeSingle();
-  if (error || !student) return { authorized: false as const, status: 404, message: error?.message || 'Student not found' };
-  if (student.owner_id === userId) return { authorized: true as const, student };
-
-  const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', userId).maybeSingle();
-  if (profile && ['admin', 'super_admin'].includes(profile.role)) return { authorized: true as const, student };
-
-  return { authorized: false as const, status: 403, message: 'Forbidden' };
-}
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -32,7 +22,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (auth.error) return auth.error;
     const { user } = auth;
 
-    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
+    const gate = await requireFeatureOrAdmin(auth.supabase, user.id, 'paper_checker');
     if (gate) return gate;
 
     const { id } = await params;

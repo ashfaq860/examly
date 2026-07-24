@@ -69,7 +69,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const response = await fetch(`/api/user/trial-status?userId=${session.user.id}`);
+      const response = await fetch('/api/user/trial-status');
       
       if (!response.ok) {
         console.warn('Trial status unavailable:', response.status);

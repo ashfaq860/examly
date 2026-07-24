@@ -1,12 +1,13 @@
 // utils/logout.js
 "use client";
 
-import { supabase } from "@/lib/supabaseClient";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
 
 export default function useLogout() {
   const logout = async () => {
     try {
+      const supabase = createSupabaseBrowserClient();
       const { error } = await supabase.auth.signOut();
         localStorage.removeItem('user');
         Cookies.remove('role');

@@ -1,13 +1,18 @@
 // Browser-only: downscales a phone-camera photo before upload. Phone
-// cameras routinely produce 12MP+ JPEGs — far more resolution than OMR
-// bubble detection needs (grade-mcq itself works off a ~1600px working
-// copy) — so shrinking client-side keeps uploads fast on slower mobile
-// networks. Import this only from client components.
+// cameras routinely produce 12MP+ JPEGs — far more resolution than either
+// OMR bubble detection (grade-mcq works off a ~1600px working copy) or
+// Claude's vision input needs (Anthropic downscales images beyond ~1568px
+// on its own long edge before the model ever sees them, so uploading
+// anything larger just spends bandwidth encoding pixels that get thrown
+// away server-side) — so shrinking client-side to that same ceiling keeps
+// uploads fast on slower mobile networks without losing anything the model
+// would have used. Import this only from client components.
 
 export interface DownscaleOptions {
-  /** Cap on the longer edge, in pixels. Defaults to 2000. */
+  /** Cap on the longer edge, in pixels. Defaults to 1568 — Anthropic's own
+   *  long-edge downscale threshold, so nothing larger is wasted upload. */
   maxDimension?: number;
-  /** JPEG quality, 0-1. Defaults to 0.85. */
+  /** JPEG quality, 0-1. Defaults to 0.8. */
   quality?: number;
 }
 
@@ -51,8 +56,8 @@ async function decodeImage(file: File): Promise<{ draw: (ctx: CanvasRenderingCon
  *  re-encodes as JPEG at `quality`. Returns the original file unchanged if
  *  it's already smaller than the cap. */
 export async function downscaleImage(file: File, opts: DownscaleOptions = {}): Promise<File> {
-  const maxDimension = opts.maxDimension ?? 2000;
-  const quality = opts.quality ?? 0.85;
+  const maxDimension = opts.maxDimension ?? 1568;
+  const quality = opts.quality ?? 0.8;
 
   const decoded = await decodeImage(file);
   try {

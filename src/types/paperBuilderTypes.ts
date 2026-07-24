@@ -60,6 +60,14 @@ export interface PaperSettings {
    *  saved papers that stored it keep rendering the same way; the UI no
    *  longer exposes it. Defaults to 'simple' when unset. */
   mcqLayoutStyle?: 'bordered' | 'table' | 'simple';
+  /** Paper-checker attempt-count enforcement policy for choice sections
+   *  ("attempt any N of M") — see src/lib/checker/gradeSubjective.ts.
+   *  'first_n' (default): only the first N attempted answers are graded/
+   *  counted, cheaper (fewer Claude calls). 'grade_all_best_n': every
+   *  attempted answer is graded, the N highest-scoring ones count — costs
+   *  more (grades everything) but never under-credits a strong answer
+   *  written later on the page. Unset defaults to 'first_n'. */
+  excessAttemptPolicy?: 'first_n' | 'grade_all_best_n';
 }
 
 export interface LanguageConfig {

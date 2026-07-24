@@ -36,8 +36,8 @@ async function buildServerClient(): Promise<SupabaseClient> {
   );
 }
 
-type AuthSuccess = { user: User; error: null };
-type AuthError   = { user: null; error: NextResponse };
+type AuthSuccess = { user: User; supabase: SupabaseClient; error: null };
+type AuthError   = { user: null; supabase: null; error: NextResponse };
 
 type RoleSuccess = { user: User; role: string; supabase: SupabaseClient; error: null };
 type RoleError   = { user: null; role: null; supabase: null; error: NextResponse };
@@ -55,11 +55,12 @@ export async function getSessionFromRequest(): Promise<AuthSuccess | AuthError> 
   if (error || !user) {
     return {
       user: null,
+      supabase: null,
       error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
     };
   }
 
-  return { user, error: null };
+  return { user, supabase, error: null };
 }
 
 // ---------------------------------------------------------------------------

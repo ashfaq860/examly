@@ -146,10 +146,19 @@ const PRINT_CSS = `
   .question-diagram img { max-width: 100%; height: auto; display: block; margin: 0; padding: 0; }
 
   @media print {
+    /* Scoped to question/MCQ content on purpose — this used to also list
+       bare "span, div" here, which (since this stylesheet is injected once
+       globally into <head>, not scoped to this component's own subtree)
+       forced background:transparent on literally every span/div on the
+       printed page, including totally unrelated ones: it was silently
+       erasing the MCQ answer sheet's OMR registration squares
+       (PaperLayoutRenderer.tsx's <span data-omr-reg-square>, filled black
+       via an inline background style), which need to actually print for
+       grade-mcq to detect them at all. */
     .question-wrapper, .question-wrapper *,
     .mcq-item, .mcq-item *,
     .urdu-text, .english-text,
-    .d-flex, span, div {
+    .d-flex {
       background-color: transparent !important;
       background: transparent !important;
       -webkit-print-color-adjust: exact !important;

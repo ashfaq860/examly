@@ -12,14 +12,14 @@ export async function GET() {
     }
 
     const { data: roleData, error: rpcError } = await supabase
-      .rpc('get_user_role', { user_id: session.user.id });
+      .rpc('get_user_role');
 
     if (rpcError || (roleData !== 'admin' && roleData !== 'super_admin')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const [visits, revenue, subscriptions, referrals] = await Promise.all([
-      getVisitStats(supabase),
+      getVisitStats(),
       getRevenueStats(),
       getSubscriptionStats(),
       getReferralStats(),
@@ -32,12 +32,12 @@ export async function GET() {
   }
 }
 
-// Runs through the session-scoped client (not supabaseAdmin) because
-// get_visit_stats() checks auth.uid() internally — a service-role call
-// would carry no user id and would be rejected by its own admin guard.
-async function getVisitStats(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
+// get_visit_stats() has EXECUTE revoked from `authenticated`/anon — it's
+// server-only now, so it must run through supabaseAdmin (service role).
+// The admin-role check above already gates this route before we get here.
+async function getVisitStats() {
   try {
-    const { data, error } = await supabase.rpc('get_visit_stats', { days_back: 30 });
+    const { data, error } = await supabaseAdmin.rpc('get_visit_stats', { days_back: 30 });
     if (error) throw error;
     return data;
   } catch (error) {

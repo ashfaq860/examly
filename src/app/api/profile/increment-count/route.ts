@@ -40,10 +40,10 @@ export async function POST() {
     const isTrial = Boolean(currentProfile.cellno) && !!trialEndsAt && trialEndsAt > now && currentProfile.trial_given;
 
     if (!isTrial) {
-      const gate = await requireFeatureOrAdmin(supabaseAdmin, userId, 'paper_generation');
+      const gate = await requireFeatureOrAdmin(supabase, userId, 'paper_generation');
       if (gate) return gate;
 
-      const consumeResult = await consumePaperGeneration(supabaseAdmin, userId);
+      const consumeResult = await consumePaperGeneration(supabase);
       if (!consumeResult.ok) {
         return NextResponse.json(
           { error: consumeResult.reason === 'quota_exhausted' ? 'quota_exhausted' : 'subscription_required' },

@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     // their academy owner — used by callers (e.g. PaperBuilderApp's
     // "isPremium" check) instead of reading profile.subscription_status,
     // which is never kept in sync with user_packages/order approval.
-    const activePackage = await getActivePackage(supabaseAdmin, userId);
+    const activePackage = await getActivePackage(supabase);
 
     return NextResponse.json({
       profile,

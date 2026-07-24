@@ -2,9 +2,10 @@
 'use client';
 import { useState, useEffect } from 'react';
 import AuthLayout from '@/components/AuthLayout';
-import { supabase } from '@/lib/supabaseClient';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export default function ResetPassword() {
+  const supabase = createSupabaseBrowserClient();
   const [password, setPassword] = useState('');
   const [ready, setReady] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);

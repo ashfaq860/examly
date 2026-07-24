@@ -78,7 +78,7 @@ export default function CheckerLandingPage() {
             {papers.length} paper{papers.length === 1 ? '' : 's'} available for MCQ checking
           </p>
         </div>
-        <Link href="/dashboard/checker/students" className="chk-btn chk-btn-ghost chk-students-link">
+        <Link href="/dashboard/students" className="chk-btn chk-btn-ghost chk-students-link">
           <Users size={15} /> Students
         </Link>
         {scansRemaining !== null && (

@@ -11,7 +11,8 @@ import { EditableText } from './EditableText';
 import { toast } from 'react-hot-toast';
 import { getBucket, FOUR_PAPERS_SHORT_CAP, FOUR_PAPERS_LONG_CAP } from '@/lib/paperQuestionBuckets';
 import { getPageSize } from '@/lib/paperPageSize';
-import { McqLayoutMapPayload, McqBubbleEntry, BubbleOption, LAYOUT_MAP_FRAME_V2 } from '@/types/checker';
+import { BubbleLayoutV3, TemplateBubble, TemplatePoint, BubbleOption, LAYOUT_MAP_FRAME_V3 } from '@/types/checker';
+import { mmToPt, pxToPt } from '@/lib/checker/omr/units';
 
 interface Props {
   paperSections: PaperSection[];
@@ -111,11 +112,22 @@ const OMRAnswerGrid = ({ questions }: { questions: { id: string }[] }) => {
           find them as distinct candidates at any size. A 0.5mm gap here
           (square spans 0.5mm-4.5mm, box border starts at 5mm) keeps them
           fully isolated, the same way real OMR registration marks always
-          need clear surrounding whitespace to be reliably detectable. */}
-      <span data-omr-reg-square="tl" style={{ position: 'absolute', top: '0.5mm', left: '0.5mm', width: '4mm', height: '4mm', background: '#000' }} />
-      <span data-omr-reg-square="tr" style={{ position: 'absolute', top: '0.5mm', right: '0.5mm', width: '4mm', height: '4mm', background: '#000' }} />
-      <span data-omr-reg-square="bl" style={{ position: 'absolute', bottom: '0.5mm', left: '0.5mm', width: '4mm', height: '4mm', background: '#000' }} />
-      <span data-omr-reg-square="br" style={{ position: 'absolute', bottom: '0.5mm', right: '0.5mm', width: '4mm', height: '4mm', background: '#000' }} />
+          need clear surrounding whitespace to be reliably detectable.
+
+          Every other black mark in this component (the box border, the
+          bubble circles) is drawn with `border`, which prints regardless of
+          a browser's "print backgrounds" setting. These squares are the
+          only shapes filled via `background`, so — same as every header
+          layout's colored elements elsewhere in this app — they need their
+          own explicit print-color-adjust, not just the inherited one from
+          .paper-sheet's @media print rule: a `background` on a plain inline
+          style is exactly what gets silently dropped when that setting is
+          off, and grade-mcq's blob detector has nothing to find without
+          them. */}
+      <span data-omr-reg-square="tl" style={{ position: 'absolute', top: '0.5mm', left: '0.5mm', width: '4mm', height: '4mm', background: '#000', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />
+      <span data-omr-reg-square="tr" style={{ position: 'absolute', top: '0.5mm', right: '0.5mm', width: '4mm', height: '4mm', background: '#000', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />
+      <span data-omr-reg-square="bl" style={{ position: 'absolute', bottom: '0.5mm', left: '0.5mm', width: '4mm', height: '4mm', background: '#000', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />
+      <span data-omr-reg-square="br" style={{ position: 'absolute', bottom: '0.5mm', right: '0.5mm', width: '4mm', height: '4mm', background: '#000', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />
 
       <div style={{ border: '0.4mm solid #000', borderRadius: '1.5mm', padding: '2.5mm 3mm 3mm' }}>
         <div style={{
@@ -783,7 +795,7 @@ export interface PaperLayoutRendererHandle {
   /** Reads the currently-rendered MCQ bubble sheet's DOM and returns a
    *  layout map ready to POST to /api/papers/[id]/layout-map, or null if no
    *  bubble sheet is currently rendered (disabled setting / no MCQs). */
-  captureMcqLayoutMap: () => McqLayoutMapPayload | null;
+  captureMcqLayoutMap: () => BubbleLayoutV3 | null;
 }
 
 export const PaperLayoutRenderer = forwardRef<PaperLayoutRendererHandle, Props>(({
@@ -901,16 +913,19 @@ export const PaperLayoutRenderer = forwardRef<PaperLayoutRendererHandle, Props>(
   // layout map PaperBuilderApp posts to /api/papers/[id]/layout-map right
   // after a successful save.
   //
-  // v2 frame: every bubble's center is expressed as a FRACTION of the
-  // rectangle spanned by the 4 registration squares' own centers (not a
-  // fraction of the whole physical page, and not physical units at all) —
-  // see LAYOUT_MAP_FRAME_V2's doc comment in types/checker.ts for why. This
-  // still needs a page-level container purely to get PIXEL positions to
-  // measure in (getBoundingClientRect), and is still immune to the mobile
-  // preview's `transform: scale()` for the same reason as before — every
-  // measurement here is a ratio between two elements measured in the same
-  // pixel space, so a uniform scale factor cancels out of every ratio.
-  const captureMcqLayoutMap = (): McqLayoutMapPayload | null => {
+  // v3 frame: every fiducial/bubble position is converted to absolute PDF
+  // points (72pt/inch), origin at the page's own top-left — NOT a fraction
+  // of the registration-square frame (v2). This gives fiducial detection on
+  // a scanned photo a real template shape to validate candidates against
+  // (does this candidate arrangement match the template's own known
+  // fiducial rectangle, not just "are these 4 blobs similarly sized") — see
+  // LAYOUT_MAP_FRAME_V3's doc comment in types/checker.ts. The px->pt
+  // conversion (src/lib/checker/omr/units.ts's pxToPt) works the same way
+  // the old fraction-based measurement did: both `px` and the container's
+  // own rendered pixel WIDTH are measured in the same CSS-pixel space, so
+  // their ratio is exactly the page's physical scale regardless of the
+  // mobile preview's `transform: scale()` or any browser zoom/DPR.
+  const captureMcqLayoutMap = (): BubbleLayoutV3 | null => {
     // TEMPORARY DIAGNOSTIC — remove once "layout map capture returns null"
     // is root-caused. There are several early-return points below; this
     // logs exactly which one fires instead of leaving it a silent null.
@@ -930,17 +945,21 @@ export const PaperLayoutRenderer = forwardRef<PaperLayoutRendererHandle, Props>(
     const containerRect = container.getBoundingClientRect();
     if (containerRect.width === 0 || containerRect.height === 0) return bail(`.paper-sheet rect is zero-sized (${containerRect.width}x${containerRect.height})`);
 
-    // Center of `el`, in pixels relative to `containerRect`'s own top-left —
-    // deliberately NOT converted to physical units (mm/pt): the v2 frame
-    // only ever cares about the RATIO between a bubble's offset and the
-    // registration-square span, and pixels-relative-to-container preserves
-    // that ratio exactly as well as any other consistent unit would.
-    const centerPx = (el: Element) => {
+    const pageDims = getPageSize(settings.pageSize);
+    const pageWidthPt = mmToPt(pageDims.widthMm);
+    const pageHeightPt = mmToPt(pageDims.heightMm);
+
+    // Center of `el`, converted from CSS pixels (relative to the page
+    // container's own top-left) into PDF points using the container's
+    // known physical size.
+    const centerPt = (el: Element) => {
       const rect = el.getBoundingClientRect();
+      const xPx = rect.left + rect.width / 2 - containerRect.left;
+      const yPx = rect.top + rect.height / 2 - containerRect.top;
       return {
-        x: rect.left + rect.width / 2 - containerRect.left,
-        y: rect.top + rect.height / 2 - containerRect.top,
-        r: rect.width / 2,
+        x: pxToPt(xPx, containerRect.width, pageWidthPt),
+        y: pxToPt(yPx, containerRect.height, pageHeightPt),
+        r: pxToPt(rect.width / 2, containerRect.width, pageWidthPt),
       };
     };
 
@@ -950,56 +969,57 @@ export const PaperLayoutRenderer = forwardRef<PaperLayoutRendererHandle, Props>(
       return bail(`missing registration square element(s): tl=${!!tlEl} tr=${!!trEl} bl=${!!blEl} br=${!!brEl}`);
     }
 
-    const tl = centerPx(tlEl);
-    const tr = centerPx(trEl);
-    const bl = centerPx(blEl);
-    // br isn't needed for the frame itself (tl->tr defines width, tl->bl
-    // defines height) — the DOM render is a perfect, unrotated rectangle,
-    // so br is redundant with tl/tr/bl. Any skew only ever appears later,
-    // in a photographed scan, which is exactly what grade-mcq's homography
-    // exists to undo.
-
-    const frameOriginX = tl.x;
-    const frameOriginY = tl.y;
-    const frameWidth = tr.x - tl.x;
-    const frameHeight = bl.y - tl.y;
-    if (frameWidth <= 0 || frameHeight <= 0) {
-      return bail(`degenerate frame: tl=(${tl.x.toFixed(1)},${tl.y.toFixed(1)}) tr=(${tr.x.toFixed(1)},${tr.y.toFixed(1)}) bl=(${bl.x.toFixed(1)},${bl.y.toFixed(1)}) frameWidth=${frameWidth.toFixed(1)} frameHeight=${frameHeight.toFixed(1)}`);
+    const tl = centerPt(tlEl);
+    const tr = centerPt(trEl);
+    const bl = centerPt(blEl);
+    const br = centerPt(brEl);
+    const fiducials: [TemplatePoint, TemplatePoint, TemplatePoint, TemplatePoint] = [
+      { x: tl.x, y: tl.y }, { x: tr.x, y: tr.y }, { x: bl.x, y: bl.y }, { x: br.x, y: br.y },
+    ];
+    if (tr.x - tl.x <= 0 || bl.y - tl.y <= 0) {
+      return bail(`degenerate frame: tl=(${tl.x.toFixed(1)},${tl.y.toFixed(1)}) tr=(${tr.x.toFixed(1)},${tr.y.toFixed(1)}) bl=(${bl.x.toFixed(1)},${bl.y.toFixed(1)})`);
     }
 
-    const toFrac = (p: { x: number; y: number; r: number }) => ({
-      xFrac: (p.x - frameOriginX) / frameWidth,
-      yFrac: (p.y - frameOriginY) / frameHeight,
-      rFrac: p.r / frameWidth,
-    });
-
-    const bubblesByQuestion = new Map<string, McqBubbleEntry>();
+    const bubblesByQuestion = new Map<string, { question_number: number; question_id: string; options: Partial<Record<BubbleOption, TemplateBubble>> }>();
     sheetRoot.querySelectorAll('[data-omr-question-id]').forEach(el => {
       const questionId = el.getAttribute('data-omr-question-id');
       const questionNumber = Number(el.getAttribute('data-omr-question-number'));
       const option = el.getAttribute('data-omr-option') as BubbleOption | null;
       if (!questionId || !option) return;
-      const frac = toFrac(centerPx(el));
+      const pt = centerPt(el);
       let entry = bubblesByQuestion.get(questionId);
       if (!entry) {
-        entry = { question_number: questionNumber, question_id: questionId, options: {} as McqBubbleEntry['options'] };
+        entry = { question_number: questionNumber, question_id: questionId, options: {} };
         bubblesByQuestion.set(questionId, entry);
       }
-      entry.options[option] = frac;
+      entry.options[option] = { q: questionNumber, question_id: questionId, option, x: pt.x, y: pt.y, r: pt.r };
     });
 
-    const mcq_bubbles = Array.from(bubblesByQuestion.values())
+    const completeEntries = Array.from(bubblesByQuestion.values())
       .filter(e => e.options.A && e.options.B && e.options.C && e.options.D)
       .sort((a, b) => a.question_number - b.question_number);
 
-    if (mcq_bubbles.length === 0) {
+    if (completeEntries.length === 0) {
       return bail(`found registration squares but zero complete (A+B+C+D) question bubbles — found ${bubblesByQuestion.size} partial entries`);
     }
 
+    const mcq_bubbles: TemplateBubble[] = completeEntries.flatMap(e => [e.options.A!, e.options.B!, e.options.C!, e.options.D!]);
+
     // eslint-disable-next-line no-console
-    console.log(`[LAYOUT-MAP-DEBUG] captureMcqLayoutMap succeeded: ${mcq_bubbles.length} questions, frame width=${frameWidth.toFixed(1)}px height=${frameHeight.toFixed(1)}px`);
-    const pageDims = getPageSize(settings.pageSize);
-    return { frame: LAYOUT_MAP_FRAME_V2, page_size: pageDims.cssName, mcq_bubbles };
+    console.log(`[LAYOUT-MAP-DEBUG] captureMcqLayoutMap succeeded: ${completeEntries.length} questions, template ${pageWidthPt.toFixed(1)}x${pageHeightPt.toFixed(1)}pt`);
+    // Expected printed page count (every rendered .paper-sheet is one
+    // physical page) — used only for the checker's non-blocking "N of M
+    // pages" upload warning (src/lib/checker/gradeSubjective.ts's caller),
+    // never for precise per-page cropping.
+    const page_count = document.querySelectorAll('.paper-sheet').length || undefined;
+    return {
+      frame: LAYOUT_MAP_FRAME_V3,
+      page_size: pageDims.cssName,
+      template: { width: pageWidthPt, height: pageHeightPt },
+      fiducials,
+      mcq_bubbles,
+      page_count,
+    };
   };
 
   useImperativeHandle(ref, () => ({ captureMcqLayoutMap }));

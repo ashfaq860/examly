@@ -14,7 +14,7 @@ export async function GET() {
 
     // Verify user is admin
     const { data: roleData, error: rpcError } = await supabase
-      .rpc('get_user_role', { user_id: session.user.id })
+      .rpc('get_user_role')
     
     if (rpcError || roleData !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

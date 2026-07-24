@@ -19,10 +19,7 @@ export const useAuthGuard = () => {
           return;
         }
 
-        const { data: roleData, error: roleError } = await supabase.rpc(
-          'get_user_role',
-          { user_id: session.user.id }
-        );
+        const { data: roleData, error: roleError } = await supabase.rpc('get_user_role');
 
         if (roleError || (roleData !== 'teacher' && roleData !== 'academy')) {
           setAuthError('This page is only available to teachers and academies');

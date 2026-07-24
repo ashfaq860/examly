@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function QuizScreen({ chapterId, paperId = null, user }) {
+  const supabase = createSupabaseBrowserClient();
   const [questions, setQuestions] = useState<any[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);

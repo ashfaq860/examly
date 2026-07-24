@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     if (auth.error) return auth.error;
     const { user } = auth;
 
-    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
+    const gate = await requireFeatureOrAdmin(auth.supabase, user.id, 'paper_checker');
     if (gate) return gate;
 
     const { searchParams } = new URL(req.url);
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
       if (!ownership.authorized) return NextResponse.json({ error: ownership.message }, { status: ownership.status });
 
       const [{ data: layoutMap }, { data: roster }, { data: creatorProfile }, { data: checkedSubs }] = await Promise.all([
-        supabaseAdmin.from('paper_layout_maps').select('id').eq('paper_id', paperId).limit(1).maybeSingle(),
+        supabaseAdmin.from('paper_layout_maps').select('id, page_count').eq('paper_id', paperId).order('version', { ascending: false }).limit(1).maybeSingle(),
         // The roster belongs to whoever actually created this paper, not
         // necessarily the caller — an academy owner viewing a member's
         // paper (or an admin viewing anyone's) must see THAT teacher's
@@ -52,9 +52,11 @@ export async function GET(req: NextRequest) {
         // stripped before the response below) purely to filter by the
         // paper's own class next.
         supabaseAdmin.from('students').select('id, full_name, roll_no, class_name').eq('owner_id', ownership.paper.created_by).eq('is_active', true).order('full_name'),
-        ownership.paper.created_by === user.id
-          ? Promise.resolve({ data: null })
-          : supabaseAdmin.from('profiles').select('full_name').eq('id', ownership.paper.created_by).maybeSingle(),
+        // Always fetched (not just for a different-viewer academy case) —
+        // `institution` is the WhatsApp result card's school-name source
+        // (see whatsapp.ts's buildResultMessage), needed regardless of who
+        // is viewing this page.
+        supabaseAdmin.from('profiles').select('full_name, institution').eq('id', ownership.paper.created_by).maybeSingle(),
         // Students who already have a submission for THIS paper are dropped
         // from the roster below — once checked, they shouldn't keep showing
         // up in the "Add submission" picker for the same paper.
@@ -81,8 +83,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         paper: ownership.paper,
         hasLayoutMap: Boolean(layoutMap),
+        expectedPageCount: layoutMap?.page_count ?? null,
         roster: availableRoster,
-        createdByName: creatorProfile?.full_name ?? null,
+        createdByName: ownership.paper.created_by === user.id ? null : (creatorProfile?.full_name ?? null),
+        schoolName: creatorProfile?.institution ?? null,
       });
     }
 

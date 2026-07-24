@@ -21,13 +21,15 @@ export interface ActivePackage {
   viaAcademy: string | null;
 }
 
-/** Resolves the user's own active package, or the one inherited from their
- *  academy owner if they're a teacher member. Null if neither exists. */
+/** Resolves the CALLER's own active package (derived from auth.uid() inside
+ *  the RPC — the `supabase` client passed in must be session-authenticated
+ *  as that user, never supabaseAdmin, or auth.uid() resolves to null), or
+ *  the one inherited from their academy owner if they're a teacher member.
+ *  Null if neither exists. */
 export async function getActivePackage(
-  supabase: SupabaseClient,
-  userId: string
+  supabase: SupabaseClient
 ): Promise<ActivePackage | null> {
-  const { data, error } = await supabase.rpc('get_active_package', { p_user_id: userId });
+  const { data, error } = await supabase.rpc('get_active_package');
   if (error) {
     console.error('get_active_package RPC error:', error.message);
     return null;
@@ -47,13 +49,13 @@ export async function getActivePackage(
 
 /** The single source of truth for "can this user use feature X" — true for
  *  'paper_generation' under both package types, 'paper_checker' only for
- *  checker packages (personal or inherited via academy). */
+ *  checker packages (personal or inherited via academy). `supabase` must be
+ *  session-authenticated as the user in question (see getActivePackage). */
 export async function hasFeature(
   supabase: SupabaseClient,
-  userId: string,
   feature: Feature
 ): Promise<boolean> {
-  const { data, error } = await supabase.rpc('has_feature', { p_user_id: userId, p_feature: feature });
+  const { data, error } = await supabase.rpc('has_feature', { p_feature: feature });
   if (error) {
     console.error('has_feature RPC error:', error.message);
     return false;
@@ -63,15 +65,14 @@ export async function hasFeature(
 
 /** Route-handler guard: returns a 403 NextResponse if the feature is
  *  missing, or null when the caller may proceed. Use as:
- *    const gate = await requireFeature(supabaseAdmin, user.id, 'paper_checker');
+ *    const gate = await requireFeature(auth.supabase, 'paper_checker');
  *    if (gate) return gate;
  */
 export async function requireFeature(
   supabase: SupabaseClient,
-  userId: string,
   feature: Feature
 ): Promise<NextResponse | null> {
-  const ok = await hasFeature(supabase, userId, feature);
+  const ok = await hasFeature(supabase, feature);
   if (ok) return null;
   return NextResponse.json({ error: 'subscription_required', feature }, { status: 403 });
 }
@@ -96,7 +97,7 @@ export async function requireFeatureOrAdmin(
   feature: Feature
 ): Promise<NextResponse | null> {
   if (await isAdminUser(supabase, userId)) return null;
-  return requireFeature(supabase, userId, feature);
+  return requireFeature(supabase, feature);
 }
 
 /** Atomically-enough decrements scans_remaining on the correct
@@ -135,10 +136,9 @@ export type ConsumePaperGenerationResult =
  *  read-then-write, same non-atomic pattern already used by
  *  /api/profile/increment-count for papers_generated. */
 export async function consumePaperGeneration(
-  supabase: SupabaseClient,
-  userId: string
+  supabase: SupabaseClient
 ): Promise<ConsumePaperGenerationResult> {
-  const pkg = await getActivePackage(supabase, userId);
+  const pkg = await getActivePackage(supabase);
   if (!pkg || !pkg.features.includes('paper_generation')) {
     return { ok: false, reason: 'no_active_package' };
   }

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import BreadcrumbAuto from "@/components/BreadcrumbAuto";
@@ -33,6 +33,7 @@ export default function SubjectsPage() {
 
   useEffect(() => {
     if (!classId) return;
+    const supabase = createSupabaseBrowserClient();
     const fetch = async () => {
       const { data: classData } = await supabase
         .from("classes").select("id,name").eq("name", classId).single();

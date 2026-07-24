@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import AdminLayout from '@/components/AdminLayout';
 import { toast } from 'react-hot-toast';
 import { FiPlus, FiX, FiEdit, FiTrash2, FiCheck } from 'react-icons/fi';
@@ -24,6 +24,7 @@ interface FlattenedTopic {
 }
 
 export default function TopicsPage() {
+  const supabase = createSupabaseBrowserClient();
   const [loading, setLoading] = useState(true);
   const [topicsLoading, setTopicsLoading] = useState(false);
   const [saving, setSaving] = useState(false);

@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     if (auth.error) return auth.error;
     const { user } = auth;
 
-    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
+    const gate = await requireFeatureOrAdmin(auth.supabase, user.id, 'paper_checker');
     if (gate) return gate;
 
     const { searchParams } = new URL(req.url);
@@ -69,16 +69,31 @@ export async function GET(req: NextRequest) {
       const row: Record<string, string | number> = {
         'Roll No': s.roll_no_raw || '',
         'Name': s.student_name_raw || '',
-        'MCQ Score': s.mcq_score ?? '',
+        // Blank rather than a fabricated 0 when a section failed outright
+        // (mcq_error/subjective_error set — see gradeOrchestrator.ts's
+        // SectionOutcome) — but a real partial score stays visible when the
+        // section DID grade and 'needs_review' just means some rows need a
+        // second look.
+        'MCQ Score': s.mcq_error ? '' : (s.mcq_score ?? ''),
+        'MCQ Status': s.mcq_status || '',
+        'Subjective Score': s.subjective_error ? '' : (s.subjective_score ?? ''),
+        'Subjective Status': s.subjective_status || '',
+        'Total Score': s.total_score ?? '',
         'Max': s.max_score ?? '',
         'Status': s.status,
       };
 
       for (const qNum of sortedQNumbers) {
         const a = byQNumber.get(qNum);
-        row[`Q${qNum} Detected`] = a?.detected_option || '';
-        row[`Q${qNum} Final`] = a ? (effectiveOption(a) || '') : '';
-        if (a) row[`Q${qNum} Correct`] = isAnswerCorrect(a) ? 'Y' : 'N';
+        if (!a) continue;
+        if (a.answer_kind === 'subjective') {
+          row[`Q${qNum} Marks`] = a.final_marks ?? '';
+          row[`Q${qNum} Max`] = a.max_marks ?? '';
+        } else {
+          row[`Q${qNum} Detected`] = a.detected_option || '';
+          row[`Q${qNum} Final`] = effectiveOption(a) || '';
+          row[`Q${qNum} Correct`] = isAnswerCorrect(a) ? 'Y' : 'N';
+        }
       }
 
       return row;

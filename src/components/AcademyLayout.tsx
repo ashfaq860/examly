@@ -7,7 +7,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   LayoutDashboard, FilePlus, Archive, Gem, UserCircle,
   Settings, Sun, Moon, GraduationCap, Zap, X, LogOut, ChevronRight,
-  ClipboardCheck, Lock, Users,
+  ClipboardCheck, Lock, Users, UserPlus,
 } from "lucide-react";
 import Header from "@/components/academy/Header";
 import { useUser } from "@/app/context/userContext";
@@ -16,6 +16,7 @@ import { UpgradeModal } from "@/components/UpgradeModal";
 import Footer from "@/components/Footer";
 import ReferralSection from "@/components/ReferralSection";
 import BreadcrumbAuto from "@/components/BreadcrumbAuto";
+import { BreadcrumbLabelsProvider } from "@/components/BreadcrumbLabels";
 
 const supabase = createSupabaseBrowserClient();
 let cachedUser: any = null;
@@ -69,6 +70,7 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
       { path: "/dashboard/generate-paper", icon: FilePlus,        label: "Generate Paper" },
       { path: "/dashboard/saved-papers",   icon: Archive,         label: "Saved Papers" },
       { path: "/dashboard/checker",        icon: ClipboardCheck,  label: "Paper Checker", locked: !hasFeature('paper_checker') },
+      { path: "/dashboard/students",       icon: UserPlus,        label: "Students",      locked: !hasFeature('paper_checker') },
     ];
     // Only academy owners manage seats — role alone doesn't guarantee an
     // owned academies row, but the link just routes to a page that 403s
@@ -404,8 +406,10 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
         <main className="al-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
           <div className="al-content-pad" style={{ flex: 1, padding: '1.5rem 1.25rem 1.25rem' }}>
             <div className="al-content-inner" style={{ maxWidth: '82rem', margin: '0 auto' }}>
-              <BreadcrumbAuto />
-              {children}
+              <BreadcrumbLabelsProvider>
+                <BreadcrumbAuto />
+                {children}
+              </BreadcrumbLabelsProvider>
             </div>
           </div>
           <div className="al-footer-wrap">

@@ -113,15 +113,24 @@ export async function PUT(request: Request) {
       }
     }
 
+    // cellno is set-once (enforced by the protect_profile_columns trigger
+    // for non-service-role writes, but even here — a service-role write —
+    // it must never be omitted-means-clear: a form submission that simply
+    // doesn't resend cellno (e.g. a disabled field once already set) must
+    // leave the existing value alone, not null it out.
+    const updatePayload: Record<string, unknown> = {
+      full_name,
+      institution,
+      address: body.address || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (cellno) {
+      updatePayload.cellno = cellno.replace(/\D/g, '');
+    }
+
     const { data: updatedProfile, error: updateError } = await supabaseAdmin
       .from('profiles')
-      .update({
-        full_name,
-        institution,
-        cellno: cellno ? cellno.replace(/\D/g, '') : null,
-        address: body.address || null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', user.id)
       .select()
       .single();

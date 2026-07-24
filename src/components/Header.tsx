@@ -32,7 +32,7 @@ export default function Header() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setUser(session.user);
-        const { data: roleData } = await supabase.rpc('get_user_role', { user_id: session.user.id });
+        const { data: roleData } = await supabase.rpc('get_user_role');
         if (roleData) setRole(roleData);
       } else {
         setUser(null);
@@ -44,7 +44,7 @@ export default function Header() {
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(session.user);
-        supabase.rpc('get_user_role', { user_id: session.user.id }).then(({ data }) => {
+        supabase.rpc('get_user_role').then(({ data }) => {
           if (data) setRole(data);
         });
       } else {

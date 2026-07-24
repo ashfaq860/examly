@@ -1,14 +1,18 @@
 // app/api/papers/[id]/layout-map/route.ts
-// Stores the generation-time MCQ bubble-sheet layout map (per-question
-// bubble fractions, relative to the registration-square frame — see
-// LAYOUT_MAP_FRAME_V2 in types/checker.ts) captured by PaperLayoutRenderer.
+// Stores the generation-time MCQ bubble-sheet layout map — the template's
+// own fiducial + bubble positions in absolute PDF points (origin top-left
+// of the page), captured by PaperLayoutRenderer.tsx's captureMcqLayoutMap.
+// See LAYOUT_MAP_FRAME_V3 in types/checker.ts for why point-space replaced
+// the earlier registration-square-relative fractions (v2): it gives
+// fiducial detection a real template shape to validate scanned candidates
+// against, instead of generic size/shape filters alone.
 // Versioned — a new row is inserted with version = max(version)+1 rather
-// than overwritten in place, so /api/checker/grade-mcq (which always reads
-// the latest version) has a stable history to fall back on.
+// than overwritten in place, so grading (which always reads the latest
+// version) has a stable history to fall back on.
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { getSessionFromRequest } from '@/lib/api-auth';
-import { McqLayoutMapPayload, LAYOUT_MAP_FRAME_V2 } from '@/types/checker';
+import { BubbleLayoutV3, LAYOUT_MAP_FRAME_V3 } from '@/types/checker';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -43,14 +47,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
 
-    const body: McqLayoutMapPayload = await req.json();
-    const { frame, page_size, mcq_bubbles, answer_regions } = body || ({} as McqLayoutMapPayload);
+    const body: BubbleLayoutV3 = await req.json();
+    const { frame, page_size, template, fiducials, mcq_bubbles, page_count } = body || ({} as BubbleLayoutV3);
 
-    if (frame !== LAYOUT_MAP_FRAME_V2) {
-      return NextResponse.json({ error: `frame must be '${LAYOUT_MAP_FRAME_V2}'` }, { status: 400 });
+    if (frame !== LAYOUT_MAP_FRAME_V3) {
+      return NextResponse.json({ error: `frame must be '${LAYOUT_MAP_FRAME_V3}'` }, { status: 400 });
     }
     if (!Array.isArray(mcq_bubbles) || mcq_bubbles.length === 0) {
       return NextResponse.json({ error: 'mcq_bubbles is required and must be a non-empty array' }, { status: 400 });
+    }
+    if (!Array.isArray(fiducials) || fiducials.length !== 4) {
+      return NextResponse.json({ error: 'fiducials is required and must contain exactly 4 points (tl, tr, bl, br)' }, { status: 400 });
+    }
+    if (!template || !(template.width > 0) || !(template.height > 0)) {
+      return NextResponse.json({ error: 'template.width/height (PDF points) are required' }, { status: 400 });
+    }
+    // page_size is display-only (never used for grading math — the
+    // homography is fit from the fiducials, not this field), but a silent
+    // default would still mislabel a Legal paper if the client ever
+    // omitted it, so this rejects loudly instead of guessing.
+    if (!page_size) {
+      return NextResponse.json({ error: 'page_size is required' }, { status: 400 });
     }
 
     const { data: existing } = await supabaseAdmin
@@ -68,9 +85,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .insert({
         paper_id: paperId,
         version: nextVersion,
-        page_size: page_size || 'A4',
+        page_size,
         mcq_bubbles,
-        answer_regions: answer_regions ?? null,
+        fiducials,
+        template,
+        page_count: page_count ?? null,
         frame,
       })
       .select()

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import BreadcrumbAuto from "@/components/BreadcrumbAuto";
@@ -26,6 +26,7 @@ export default function QuizHome() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
     supabase.from("classes").select("id,name").then(({ data }) => {
       const sorted = (data || []).sort((a, b) => Number(a.name) - Number(b.name));
       setClasses(sorted);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '@/components/AdminLayout';
-import { supabase } from '@/lib/supabaseClient';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { FiEdit, FiTrash2, FiPlus, FiX, FiCheck } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { isUserAdmin } from "@/lib/auth-utils";
@@ -16,6 +16,7 @@ interface ClassEntity {
 }
 
 export default function ClassManagement() {
+  const supabase = createSupabaseBrowserClient();
   const [classes, setClasses] = useState<ClassEntity[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

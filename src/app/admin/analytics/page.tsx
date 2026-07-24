@@ -7,7 +7,7 @@ import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { Chart, registerables } from 'chart.js';
 import {
   Eye, Users, RefreshCw, AlertCircle, Wallet, CreditCard,
-  Gift, ShieldCheck, Smartphone
+  Gift, ShieldCheck, Smartphone, DollarSign, Database, Zap, FileCheck
 } from 'lucide-react';
 
 Chart.register(...registerables);
@@ -53,10 +53,31 @@ interface AnalyticsData {
   referrals: ReferralStats | null;
 }
 
+interface CheckerCostStats {
+  totals: {
+    totalCalls: number;
+    totalSubmissions: number;
+    totalPapers: number;
+    totalCostUsd: number;
+    avgCostPerSubmissionUsd: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalCacheCreationTokens: number;
+    totalCacheReadTokens: number;
+    cacheHitRate: number;
+  };
+  byModel: { model: string; calls: number; costUsd: number }[];
+  byCallKind: { call_kind: string; calls: number; costUsd: number }[];
+  escalationRatePct: number;
+  daily: { day: string; calls: number; costUsd: number }[];
+  byPaper: { paper_id: string; title: string; classSubject: string; submissions: number; calls: number; costUsd: number; avgCostPerSubmissionUsd: number }[];
+}
+
 const PALETTE = ['#2f4fe0', '#1d8a52', '#c8473a', '#a3650a', '#6c4fd6', '#101935'];
 
 export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [checkerCost, setCheckerCost] = useState<CheckerCostStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +88,7 @@ export default function AnalyticsPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { window.location.href = '/auth/login'; return false; }
-      const { data: role } = await supabase.rpc('get_user_role', { user_id: user.id });
+      const { data: role } = await supabase.rpc('get_user_role');
       const role_ = (role as any)?.role || role;
       if (role_ !== 'admin' && role_ !== 'super_admin') { router.push('/unauthorized'); return false; }
       return true;
@@ -77,10 +98,16 @@ export default function AnalyticsPage() {
   const fetchData = async (isRefresh = false) => {
     try {
       isRefresh ? setRefreshing(true) : setLoading(true);
-      const res = await fetch('/api/admin/analytics', { cache: 'no-store' });
+      const [res, costRes] = await Promise.all([
+        fetch('/api/admin/analytics', { cache: 'no-store' }),
+        fetch('/api/admin/checker-cost', { cache: 'no-store' }),
+      ]);
       if (!res.ok) throw new Error();
       const json = await res.json();
       setData(json);
+      // Checker-cost is a separate, newer endpoint — its own failure
+      // shouldn't blank out the rest of an otherwise-working page.
+      if (costRes.ok) setCheckerCost(await costRes.json());
       setError(null);
     } catch {
       setError('Live connection failed — showing the most recent cached snapshot.');
@@ -140,6 +167,30 @@ export default function AnalyticsPage() {
       backgroundColor: '#2f4fe0',
       borderRadius: 5,
       maxBarThickness: 30,
+    }],
+  };
+
+  const checkerCostLineData = {
+    labels: checkerCost?.daily?.map(d => d.day.slice(5)) || [],
+    datasets: [{
+      label: 'Estimated cost (USD)',
+      data: checkerCost?.daily?.map(d => d.costUsd) || [],
+      borderColor: '#a3650a',
+      backgroundColor: 'rgba(163, 101, 10, 0.08)',
+      fill: true,
+      tension: 0.35,
+      pointRadius: 0,
+      borderWidth: 2,
+    }],
+  };
+
+  const checkerModelDoughnutData = {
+    labels: checkerCost?.byModel?.map(m => m.model) || [],
+    datasets: [{
+      data: checkerCost?.byModel?.map(m => m.calls) || [],
+      backgroundColor: PALETTE,
+      borderWidth: 0,
+      hoverOffset: 8,
     }],
   };
 
@@ -357,6 +408,83 @@ export default function AnalyticsPage() {
               columns={['Name', 'Referrals']}
               rows={(referrals?.topReferrers || []).map(r => [r.name, r.count.toLocaleString()])}
               emptyLabel="No referrals yet"
+            />
+          </div>
+        </section>
+
+        {/* ── Paper checker cost ── */}
+        <section className="an-section">
+          <h2 className="an-section-title">Paper checker cost <span className="an-pill">Last 30 days</span></h2>
+          <div className="an-kpi-grid">
+            <Kpi label="Total cost" value={`$${(checkerCost?.totals.totalCostUsd ?? 0).toFixed(2)}`} icon={<DollarSign size={19} />} accent="amber" />
+            <Kpi label="Avg / submission" value={`$${(checkerCost?.totals.avgCostPerSubmissionUsd ?? 0).toFixed(4)}`} icon={<FileCheck size={19} />} accent="blue" />
+            <Kpi label="Cache hit rate" value={`${checkerCost?.totals.cacheHitRate ?? 0}%`} icon={<Database size={19} />} accent="green" />
+            <Kpi label="Sonnet escalation rate" value={`${checkerCost?.escalationRatePct ?? 0}%`} icon={<Zap size={19} />} accent="violet" />
+          </div>
+
+          <div className="an-grid an-grid-2">
+            <div className="an-card an-card-wide">
+              <div className="an-card-hd"><h3>Daily estimated cost</h3></div>
+              <div className="an-chart-box an-chart-box--line">
+                {checkerCost?.daily?.some(d => d.calls > 0) ? <Line data={checkerCostLineData} options={lineChartOptions} /> : <div className="an-empty-mini">No grading calls yet</div>}
+              </div>
+            </div>
+
+            <div className="an-card">
+              <div className="an-card-hd"><h3>Calls by model</h3></div>
+              <div className="an-chart-box an-chart-box--donut">
+                {checkerCost?.byModel?.length ? <Doughnut data={checkerModelDoughnutData} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '68%' }} /> : <div className="an-empty-mini">No grading calls yet</div>}
+              </div>
+              {!!checkerCost?.byModel?.length && (
+                <div className="an-legend">
+                  {checkerCost.byModel.map((m, i) => (
+                    <div className="an-legend-row" key={m.model}>
+                      <span className="an-legend-dot" style={{ background: PALETTE[i % PALETTE.length] }} />
+                      <span className="an-legend-label">{m.model}</span>
+                      <span className="an-legend-count">{m.calls.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="an-grid an-grid-2">
+            <div className="an-card">
+              <div className="an-card-hd"><h3>Calls by type</h3></div>
+              <StatTable
+                columns={['Call kind', 'Calls', 'Cost']}
+                rows={(checkerCost?.byCallKind || []).map(k => [k.call_kind, k.calls.toLocaleString(), `$${k.costUsd.toFixed(4)}`])}
+                emptyLabel="No grading calls yet"
+              />
+            </div>
+            <div className="an-card">
+              <div className="an-card-hd"><h3>Token usage</h3></div>
+              <StatTable
+                columns={['Category', 'Tokens']}
+                rows={[
+                  ['Input (uncached)', (checkerCost?.totals.totalInputTokens ?? 0).toLocaleString()],
+                  ['Cache read', (checkerCost?.totals.totalCacheReadTokens ?? 0).toLocaleString()],
+                  ['Cache write', (checkerCost?.totals.totalCacheCreationTokens ?? 0).toLocaleString()],
+                  ['Output', (checkerCost?.totals.totalOutputTokens ?? 0).toLocaleString()],
+                ]}
+                emptyLabel="No grading calls yet"
+              />
+            </div>
+          </div>
+
+          <div className="an-card">
+            <div className="an-card-hd">
+              <h3>Cost by paper</h3>
+              <span className="an-pill">Top 20</span>
+            </div>
+            <StatTable
+              columns={['Paper', 'Class / subject', 'Submissions', 'Calls', 'Cost', 'Avg / submission']}
+              rows={(checkerCost?.byPaper || []).map(p => [
+                p.title, p.classSubject || '—', p.submissions.toLocaleString(), p.calls.toLocaleString(),
+                `$${p.costUsd.toFixed(4)}`, `$${p.avgCostPerSubmissionUsd.toFixed(4)}`,
+              ])}
+              emptyLabel="No graded papers yet"
             />
           </div>
         </section>

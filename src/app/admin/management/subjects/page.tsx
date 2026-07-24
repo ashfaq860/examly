@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '@/components/AdminLayout';
-import { supabase } from '@/lib/supabaseClient';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { FiEdit, FiTrash2, FiPlus, FiX, FiCheck, FiBookOpen } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
@@ -31,6 +31,7 @@ interface ClassSubject {
 }
 
 export default function SubjectManagement() {
+  const supabase = createSupabaseBrowserClient();
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [subjects, setSubjects] = useState<ClassSubject[]>([]);

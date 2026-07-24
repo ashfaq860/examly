@@ -1,10 +1,17 @@
-import { supabase } from "@/lib/supabaseClient";
 import { NextResponse } from "next/server";
+import { getSessionFromRequest } from "@/lib/api-auth";
 
+// classes/questions require the `authenticated` role under RLS (no anon
+// policy) — this route must run through the caller's own session client,
+// not a client with no session attached, or every query here silently
+// returns zero rows instead of erroring.
 // ✅ GET /api/quizz — Get all classes
 export async function GET() {
   try {
-    const { data: classes, error } = await supabase
+    const auth = await getSessionFromRequest();
+    if (auth.error) return auth.error;
+
+    const { data: classes, error } = await auth.supabase
       .from("classes")
       .select("*")
       .order("name", { ascending: true });
@@ -21,10 +28,13 @@ export async function GET() {
 // ✅ POST /api/quizz — Generate quiz based on selection
 export async function POST(request) {
   try {
+    const auth = await getSessionFromRequest();
+    if (auth.error) return auth.error;
+
     const body = await request.json();
     const { classId, subjectId, quizType, chapters, questionCount, difficulty } = body;
 
-    let query = supabase
+    let query = auth.supabase
       .from("questions")
       .select(`
         id,

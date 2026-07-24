@@ -1,5 +1,5 @@
 // src/lib/auth-utils.ts
-import { supabase } from './supabaseClient'
+import { createSupabaseBrowserClient } from './supabase/client'
 import { getCurrentSession } from './session'
 
 // Get the current session token securely
@@ -10,6 +10,7 @@ export const getSessionToken = async (): Promise<string> => {
   }
 
   // Fetch fresh access token (secure)
+  const supabase = createSupabaseBrowserClient()
   const { data, error } = await supabase.auth.getSession()
   if (error || !data.session) {
     throw new Error('Authentication required. Please log in.')
@@ -23,8 +24,9 @@ export const isUserAdmin = async (): Promise<boolean> => {
   const user = await getCurrentSession()
   if (!user) return false
 
+  const supabase = createSupabaseBrowserClient()
   const { data: roleData, error } = await supabase
-    .rpc('get_user_role', { user_id: user.id })
+    .rpc('get_user_role')
 
   if (error) {
     console.error('RPC error:', error)

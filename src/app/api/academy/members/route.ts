@@ -83,8 +83,12 @@ export async function GET() {
   // Seats come from the owner's package — get_active_package doesn't
   // return `seats` itself (it's a packages column, not a per-package-
   // instance one), so it's a small follow-up lookup keyed off the
-  // resolved package_id.
-  const activePackage = await getActivePackage(supabaseAdmin, academy.owner_id);
+  // resolved package_id. get_active_package() derives auth.uid()
+  // internally (no arbitrary user id can be passed to it), which is safe
+  // here because this GET handler already 403s unless auth.user.id owns
+  // this exact academy row (getOwnedAcademy above) — the caller IS
+  // academy.owner_id whenever we reach this line.
+  const activePackage = await getActivePackage(auth.supabase);
   let seatsTotal: number | null = null;
   if (activePackage) {
     const { data: pkgRow } = await supabaseAdmin

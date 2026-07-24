@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabaseClient';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import BreadcrumbAuto from '@/components/BreadcrumbAuto';
@@ -52,6 +52,7 @@ export default function PackagesPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
     supabase
       .from('packages')
       .select('*')

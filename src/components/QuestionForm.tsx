@@ -1,7 +1,7 @@
 // components/QuestionForm.tsx
 'use client';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { createQuestion, updateQuestion, fetchLookups, fetchTopicsByChapter } from '@/lib/questionsApi';
 import toast from 'react-hot-toast';
 import { Editor } from '@tinymce/tinymce-react';
@@ -264,6 +264,7 @@ export default function QuestionForm({
   question, classes, subjects, chapters, topics, classSubjects,
   questionCategories = [], onClose,
 }: QuestionFormProps) {
+  const supabase = createSupabaseBrowserClient();
   const toId = useCallback((v: any) => (v === null || v === undefined ? '' : String(v)), []);
 
   const TINYMCE_SCRIPT_SRC = 'https://cdn.jsdelivr.net/npm/tinymce@6.8.3/tinymce.min.js';

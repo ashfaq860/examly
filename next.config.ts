@@ -10,8 +10,12 @@ const nextConfig: NextConfig = {
   },
   // sharp (used by the /api/checker/grade-mcq OMR pipeline) ships native
   // binaries — keep it external to the server bundle instead of letting
-  // webpack try to bundle it.
-  serverExternalPackages: ['sharp'],
+  // webpack try to bundle it. Same reasoning for the PDF rasterizer's
+  // libraries: @hyzyla/pdfium loads its .wasm file from a path relative to
+  // its own __dirname at runtime, and @napi-rs/canvas ships a native
+  // addon — both break if webpack bundles them into a different directory
+  // than where their binary actually lives on disk.
+  serverExternalPackages: ['sharp', '@hyzyla/pdfium', 'pdfjs-dist', '@napi-rs/canvas'],
   // 🚀 Performance optimizations
   images: {
     formats: ['image/avif', 'image/webp'],

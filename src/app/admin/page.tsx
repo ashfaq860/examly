@@ -69,7 +69,7 @@ export default function Overview() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { window.location.href = '/auth/login'; return false; }
-      const { data: role } = await supabase.rpc('get_user_role', { user_id: user.id });
+      const { data: role } = await supabase.rpc('get_user_role');
       const role_ = (role as any)?.role || role;
       if (role_ !== 'admin' && role_ !== 'super_admin') { router.push('/unauthorized'); return false; }
       setUserRole(role_);

@@ -69,7 +69,7 @@ useEffect(() => {
 
       // Fetch role
       const { data: roleData, error: rpcError } = await supabase
-        .rpc('get_user_role', { user_id: session.user.id });
+        .rpc('get_user_role');
 
       if (rpcError) return;
 

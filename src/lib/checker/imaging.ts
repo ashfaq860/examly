@@ -17,7 +17,9 @@ export interface GrayImage {
 export interface SquareBlob {
   cx: number;
   cy: number;
-  size: number;
+  w: number;
+  h: number;
+  size: number; // (w+h)/2 — convenience for simple size comparisons
 }
 
 export const MAX_DIMENSION_PX = 1600;
@@ -161,9 +163,21 @@ function cornerDarkFraction(
 }
 
 /**
- * Finds the 4 solid black registration squares in a scanned image. Returns
- * an empty array if fewer than 4 plausible candidates are found (caller
- * should try the next scan page, or fail the submission).
+ * Finds every dark blob that PLAUSIBLY looks like a registration-square
+ * fiducial (shape filters only: size range, aspect ratio, fill ratio,
+ * corner darkness) — deliberately does NOT pick a final 4 here. Picking
+ * used to happen in this function (largest-4, then a size-similarity
+ * check), but that had no way to know what the REAL fiducial arrangement
+ * was supposed to look like: a false positive elsewhere on the page (a
+ * logo, a heavy glyph) that passed these generic shape filters could still
+ * win a spot among "the 4 largest," silently producing a badly-warped
+ * homography. Final candidate SELECTION now lives in
+ * src/lib/checker/omr/align.ts's detectFiducials, which has the template's
+ * own known fiducial rectangle to validate a candidate arrangement's
+ * SHAPE against — not just size, but the ratio the template itself was
+ * printed at. Capped to the ~20 largest candidates (still generous — real
+ * fiducials are always among the largest plausible blobs even when not
+ * exactly the top 4) so the caller's combination search stays cheap.
  */
 export function detectSquareBlobs(img: GrayImage): SquareBlob[] {
   const { data, width, height } = img;
@@ -216,21 +230,14 @@ export function detectSquareBlobs(img: GrayImage): SquareBlob[] {
     b.cornerDark >= SHAPE_FILTERS.minCornerDarkFraction
   );
 
-  if (candidates.length < 4) return [];
-
-  // Registration squares are deliberately the largest solid black squares on
-  // the sheet — everything else that can pass the shape filters (bubble
-  // rings, option-letter glyphs, anti-aliasing/scan noise specks) is small,
-  // and tiny noise specks vastly outnumber the 4 real squares. That made a
-  // "pick the 4 candidates closest to the median size" heuristic unreliable:
-  // with hundreds of noise-sized candidates and only 4 real squares, the
-  // median itself gets dragged down to noise size, so it picked 4 specks
-  // instead of the actual squares. Picking the 4 LARGEST candidates is
-  // robust instead, since nothing else on the sheet is designed to be this
-  // large a solid square.
-  const ranked = [...candidates].sort((a, b) => (b.w + b.h) - (a.w + a.h));
-
-  return ranked.slice(0, 4).map(b => ({ cx: b.cx, cy: b.cy, size: (b.w + b.h) / 2 }));
+  // Real fiducials are always among the largest plausible candidates, so
+  // capping here (rather than returning every noise-sized candidate that
+  // happened to pass the shape filters) keeps align.ts's downstream
+  // 4-combination search cheap without risking excluding a real one.
+  return candidates
+    .sort((a, b) => (b.w + b.h) - (a.w + a.h))
+    .slice(0, 20)
+    .map(b => ({ cx: b.cx, cy: b.cy, w: b.w, h: b.h, size: (b.w + b.h) / 2 }));
 }
 
 /**

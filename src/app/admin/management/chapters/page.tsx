@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '@/components/AdminLayout';
-import { supabase } from '@/lib/supabaseClient';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { FiEdit, FiTrash2, FiPlus, FiFilter, FiX, FiBook, FiCheck } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { useRouter } from "next/navigation";
@@ -37,6 +37,7 @@ interface Chapter {
 }
 
 export default function ChapterManagement() {
+  const supabase = createSupabaseBrowserClient();
   const [classes, setClasses] = useState<Class[]>([]);
   const [classSubjects, setClassSubjects] = useState<ClassSubject[]>([]);
   const [filteredSubjects, setFilteredSubjects] = useState<ClassSubject[]>([]);

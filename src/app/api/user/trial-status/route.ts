@@ -12,34 +12,26 @@
 // dead weight for gating. profiles.papers_generated remains a pure
 // display counter (see /api/profile/increment-count for where it's
 // bumped) and is not used for any gating decision here or elsewhere.
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { getSessionFromRequest } from '@/lib/api-auth';
 import { getActivePackage } from '@/lib/entitlements';
 
-export async function GET(request: NextRequest) {
+// Always resolves the CALLING user's own trial/package status — the
+// route used to accept a ?userId= query param (with an admin-role
+// escape hatch for cross-user lookups), but nothing in the app ever
+// requested another user's id through it, get_active_package() can no
+// longer answer for an arbitrary user anyway (it derives auth.uid()
+// internally), and a client-suppliable id selecting whose data comes
+// back is exactly the request-body/query-string user-id pattern that
+// caused the breach. Admin "view another teacher's status" tooling, if
+// ever needed, should be its own admin-gated route reading tables
+// directly via supabaseAdmin — not this one.
+export async function GET() {
   try {
     const auth = await getSessionFromRequest();
     if (auth.error) return auth.error;
-
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
-    }
-
-    if (userId !== auth.user.id) {
-      const { data: profile } = await supabaseAdmin
-        .from('profiles')
-        .select('role')
-        .eq('id', auth.user.id)
-        .maybeSingle();
-
-      if (!profile || (profile.role !== 'admin' && profile.role !== 'super_admin')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
+    const userId = auth.user.id;
 
     // Fetch profile with cellno check
     const { data: profile, error: profileError } = await supabaseAdmin
@@ -62,7 +54,7 @@ export async function GET(request: NextRequest) {
     const isTrial = hasCellno && trialEndsAt && trialEndsAt > now && profile.trial_given;
     const daysRemaining = isTrial ? Math.max(0, Math.ceil((trialEndsAt!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
 
-    const activePackage = await getActivePackage(supabaseAdmin, userId);
+    const activePackage = await getActivePackage(auth.supabase);
 
     let hasActiveSubscription = false;
     let papersRemaining: number | 'unlimited' = 0;

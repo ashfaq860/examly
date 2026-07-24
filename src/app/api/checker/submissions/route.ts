@@ -1,19 +1,16 @@
 // app/api/checker/submissions/route.ts
-// POST creates a submission: uploads its scan images (already downscaled
-// client-side) to the private 'submission-scans' bucket via the
-// service-role client (bucket RLS is select-only by design) and inserts
-// the submissions row. Does NOT call grade-mcq itself — the client does
-// that as a separate step so the UI can show distinct upload/grade
-// progress.
-//
 // GET serves two purposes on one route: ?paperId= lists a paper's
 // submissions (with a needs_review answer count per submission);
 // ?submissionId= returns one submission's full detail (answers + signed
-// scan URLs) for the review screen.
+// scan URLs + WhatsApp result-card fields) for the review screen.
 //
-// Both handlers require the 'paper_checker' feature (admin/super_admin
-// bypass) — this is part of the paid Paper Checker product, gated the
-// same way as every other route under /api/checker/*.
+// Submission CREATION lives in init/route.ts + [id]/complete/route.ts now
+// (the client uploads scan bytes directly to Supabase Storage via signed
+// upload URLs instead of proxying them through this route as multipart
+// form data) — this route is read-only.
+//
+// Requires the 'paper_checker' feature (admin/super_admin bypass) — same
+// as every other route under /api/checker/*.
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -22,93 +19,9 @@ import { getSessionFromRequest } from '@/lib/api-auth';
 import { requireFeatureOrAdmin } from '@/lib/entitlements';
 import { verifyPaperOwnership, verifySubmissionOwnership } from '@/lib/checker/ownership';
 import { getSignedScanUrl } from '@/lib/checker/scanStorage';
-
-const SCAN_BUCKET = 'submission-scans';
-
-export async function POST(req: NextRequest) {
-  try {
-    const auth = await getSessionFromRequest();
-    if (auth.error) return auth.error;
-    const { user } = auth;
-
-    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
-    if (gate) return gate;
-
-    const formData = await req.formData();
-    const paperId = formData.get('paperId') as string | null;
-    if (!paperId) return NextResponse.json({ error: 'Missing paperId' }, { status: 400 });
-
-    const ownership = await verifyPaperOwnership(paperId, user.id);
-    if (!ownership.authorized) return NextResponse.json({ error: ownership.message }, { status: ownership.status });
-
-    const files = formData.getAll('files').filter((f): f is File => f instanceof File);
-    if (files.length === 0) return NextResponse.json({ error: 'At least one scan image is required' }, { status: 400 });
-    for (const file of files) {
-      if (!file.type.startsWith('image/')) {
-        return NextResponse.json({ error: `File '${file.name}' is not an image` }, { status: 400 });
-      }
-    }
-
-    const studentId = (formData.get('student_id') as string | null) || null;
-    const studentName = (formData.get('student_name') as string | null)?.trim() || null;
-    const rollNo = (formData.get('roll_no') as string | null)?.trim() || null;
-
-    const { data: created, error: insertErr } = await supabaseAdmin
-      .from('submissions')
-      .insert({
-        paper_id: paperId,
-        student_id: studentId,
-        student_name_raw: studentName,
-        roll_no_raw: rollNo,
-        uploaded_by: user.id,
-        scan_urls: [],
-        status: 'uploaded',
-      })
-      .select()
-      .single();
-
-    if (insertErr || !created) {
-      return NextResponse.json({ error: insertErr?.message || 'Failed to create submission' }, { status: 500 });
-    }
-
-    const uploadedPaths: string[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const path = `${paperId}/${created.id}/${i}.jpg`;
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const { error: uploadErr } = await supabaseAdmin.storage
-        .from(SCAN_BUCKET)
-        .upload(path, buffer, { contentType: file.type || 'image/jpeg', upsert: true });
-
-      if (uploadErr) {
-        // Best-effort cleanup so a failed upload doesn't leave an orphaned
-        // submission row or partial set of scan files behind.
-        if (uploadedPaths.length > 0) {
-          await supabaseAdmin.storage.from(SCAN_BUCKET).remove(uploadedPaths).catch(() => {});
-        }
-        await supabaseAdmin.from('submissions').delete().eq('id', created.id);
-        return NextResponse.json({ error: `Failed to upload '${file.name}': ${uploadErr.message}` }, { status: 500 });
-      }
-      uploadedPaths.push(path);
-    }
-
-    const { data: updated, error: updateErr } = await supabaseAdmin
-      .from('submissions')
-      .update({ scan_urls: uploadedPaths })
-      .eq('id', created.id)
-      .select()
-      .single();
-
-    if (updateErr) {
-      return NextResponse.json({ error: updateErr.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ submission: updated });
-  } catch (error: any) {
-    console.error('Error creating submission:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
-  }
-}
+import { computeMcqScoreAnchorFraction } from '@/lib/checker/annotatePdf';
+import { computeSectionSubtotalAnchors, decideSubjectiveMarksSide, MarksSide } from '@/lib/checker/gradeSubjective';
+import { BubbleLayoutV3 } from '@/types/checker';
 
 export async function GET(req: NextRequest) {
   try {
@@ -116,7 +29,7 @@ export async function GET(req: NextRequest) {
     if (auth.error) return auth.error;
     const { user } = auth;
 
-    const gate = await requireFeatureOrAdmin(supabaseAdmin, user.id, 'paper_checker');
+    const gate = await requireFeatureOrAdmin(auth.supabase, user.id, 'paper_checker');
     if (gate) return gate;
 
     const { searchParams } = new URL(req.url);
@@ -128,29 +41,84 @@ export async function GET(req: NextRequest) {
       if (!ownership.authorized) return NextResponse.json({ error: ownership.message }, { status: ownership.status });
       const submission = ownership.submission;
 
-      const [{ data: answers, error: answersErr }, { data: paper }, { data: linkedStudent }] = await Promise.all([
+      const [{ data: answers, error: answersErr }, { data: paper }, { data: linkedStudent }, { data: layoutMapRow }] = await Promise.all([
         supabaseAdmin.from('submission_answers').select('*').eq('submission_id', submissionId).order('q_number', { ascending: true }),
-        supabaseAdmin.from('papers').select('title').eq('id', submission.paper_id).maybeSingle(),
+        // class_name/subject_name/created_by added for the WhatsApp result
+        // card (school name comes from the creator's profile, joined below);
+        // content added for computeSectionSubtotalAnchors/
+        // decideSubjectiveMarksSide below (the review overlay's own
+        // section-subtotal badges + marks-side fallback).
+        supabaseAdmin.from('papers').select('title, class_name, subject_name, created_by, content').eq('id', submission.paper_id).maybeSingle(),
         // Only submissions created via the roster dropdown (not free-typed
         // name/roll) have a student_id — that's the only case a WhatsApp
         // number is available for the "send result" action below.
         submission.student_id
           ? supabaseAdmin.from('students').select('whatsapp_number').eq('id', submission.student_id).maybeSingle()
           : Promise.resolve({ data: null }),
+        // Needed only for mcqScoreAnchor below — the review overlay's own
+        // small circled MCQ-marks badge, positioned via the SAME anchor
+        // function (computeMcqScoreAnchorFraction) annotatePdf.ts calls for
+        // the PDF's own circle, so the two can never drift apart.
+        supabaseAdmin.from('paper_layout_maps').select('*').eq('paper_id', submission.paper_id).order('version', { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (answersErr) return NextResponse.json({ error: answersErr.message }, { status: 500 });
 
+      const schoolName = paper?.created_by
+        ? (await supabaseAdmin.from('profiles').select('institution').eq('id', paper.created_by).maybeSingle()).data?.institution ?? null
+        : null;
+
       const scanUrls: string[] = Array.isArray(submission.scan_urls) ? submission.scan_urls : [];
-      const signedScanUrls = await Promise.all(
-        scanUrls.map(url => getSignedScanUrl(url).catch(() => null))
-      );
+      const [signedScanUrls, annotatedPdfUrl] = await Promise.all([
+        Promise.all(scanUrls.map(url => getSignedScanUrl(url).catch(() => null))),
+        submission.annotated_pdf_path ? getSignedScanUrl(submission.annotated_pdf_path, 3600).catch(() => null) : Promise.resolve(null),
+      ]);
+
+      const mcqRows = (answers || []).filter((a: any) => a.answer_kind === 'mcq' && a.teacher_note !== 'EXCESS_ATTEMPT');
+      const anchorFrac = mcqRows.length > 0
+        ? computeMcqScoreAnchorFraction(submission.graded_fiducials ?? null, (layoutMapRow as BubbleLayoutV3) ?? null, submission.graded_image_width ?? null, submission.graded_image_height ?? null)
+        : null;
+      const mcqScoreAnchor = anchorFrac ? {
+        ...anchorFrac,
+        awarded: mcqRows.reduce((sum: number, r: any) => sum + (r.final_marks ?? 0), 0),
+        max: mcqRows.reduce((sum: number, r: any) => sum + r.max_marks, 0),
+      } : null;
+
+      // ONE marks-side for the whole paper — prefers the persisted value
+      // (finalizeSubmissionTotals writes it after every grade/regrade/
+      // override), falling back to recomputing from the current rows for a
+      // submission that predates this column. Same function annotatePdf.ts
+      // falls back to, so the PDF and this overlay can never disagree.
+      const subjectiveMarksSide: MarksSide = (submission.subjective_marks_side as MarksSide | null)
+        ?? decideSubjectiveMarksSide(paper?.content ?? null, answers || []);
+
+      // Section-subtotal badges for the review overlay — same anchor
+      // function (pageIndex + topPct) annotatePdf.ts's own circle uses, so
+      // the two positions can never drift apart. Not filtered by page here
+      // — the review page filters by the CURRENTLY DISPLAYED page, same
+      // pattern it already applies to `answers`.
+      const sectionSubtotals = paper?.content
+        ? computeSectionSubtotalAnchors(paper.content, answers || []).map(a => ({
+            heading: a.heading,
+            awarded: a.awarded,
+            max: a.max,
+            pageIndex: a.pageIndex,
+            topPct: a.topPct,
+          }))
+        : [];
 
       return NextResponse.json({
         submission,
         answers: answers || [],
         signedScanUrls,
+        annotatedPdfUrl,
         paperTitle: paper?.title ?? null,
+        className: paper?.class_name ?? null,
+        subjectName: paper?.subject_name ?? null,
+        schoolName,
         studentWhatsapp: linkedStudent?.whatsapp_number ?? null,
+        mcqScoreAnchor,
+        subjectiveMarksSide,
+        sectionSubtotals,
       });
     }
 
@@ -177,7 +145,28 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      const withCounts = (submissions || []).map(s => ({ ...s, needs_review_count: needsReviewCount[s.id] || 0 }));
+      // Only submissions created via the roster dropdown have a student_id
+      // (see the studentWhatsapp comment above) — batched here for the
+      // whole list instead of the submissionId branch's single lookup, so
+      // the bulk WhatsApp sender on this list knows upfront which rows have
+      // a number on file without an extra round trip per row.
+      const studentIds = [...new Set((submissions || []).map(s => s.student_id).filter((id): id is string => Boolean(id)))];
+      const whatsappByStudentId: Record<string, string | null> = {};
+      if (studentIds.length > 0) {
+        const { data: linkedStudents } = await supabaseAdmin
+          .from('students')
+          .select('id, whatsapp_number')
+          .in('id', studentIds);
+        for (const row of linkedStudents || []) {
+          whatsappByStudentId[row.id] = row.whatsapp_number;
+        }
+      }
+
+      const withCounts = (submissions || []).map(s => ({
+        ...s,
+        needs_review_count: needsReviewCount[s.id] || 0,
+        student_whatsapp: s.student_id ? whatsappByStudentId[s.student_id] ?? null : null,
+      }));
       return NextResponse.json({ submissions: withCounts });
     }
 

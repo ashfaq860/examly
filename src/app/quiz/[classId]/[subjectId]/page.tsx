@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import Breadcrumb from "@/components/Breadcrumb";
@@ -19,6 +19,7 @@ export default function ChaptersPage() {
 
   useEffect(() => {
     if (!subjectId || !classId) return;
+    const supabase = createSupabaseBrowserClient();
     const fetch = async () => {
       setLoading(true);
       setError("");

@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { PaperTemplate, PaperTemplateConfig } from '@/types/types';
-import { supabase } from "@/lib/supabaseClient";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface TemplateManagerProps {
   currentConfig: PaperTemplateConfig;
@@ -16,6 +16,7 @@ export default function TemplateManager({
   onTemplateSelect, 
   onClose 
 }: TemplateManagerProps) {
+  const supabase = createSupabaseBrowserClient();
   const [templates, setTemplates] = useState<PaperTemplate[]>([]);
   const [userTemplates, setUserTemplates] = useState<PaperTemplate[]>([]);
   const [publicTemplates, setPublicTemplates] = useState<PaperTemplate[]>([]);

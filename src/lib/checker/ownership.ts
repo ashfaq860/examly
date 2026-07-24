@@ -58,3 +58,18 @@ export async function verifySubmissionOwnership(submissionId: string, userId: st
 
   return { authorized: false, status: 403, message: 'Forbidden' };
 }
+
+export type StudentOwnershipResult =
+  | { authorized: true; student: any }
+  | { authorized: false; status: number; message: string };
+
+export async function verifyStudentOwnership(studentId: string, userId: string): Promise<StudentOwnershipResult> {
+  const { data: student, error } = await supabaseAdmin.from('students').select('*').eq('id', studentId).maybeSingle();
+  if (error || !student) return { authorized: false, status: 404, message: error?.message || 'Student not found' };
+  if (student.owner_id === userId) return { authorized: true, student };
+
+  const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', userId).maybeSingle();
+  if (profile && ['admin', 'super_admin'].includes(profile.role)) return { authorized: true, student };
+
+  return { authorized: false, status: 403, message: 'Forbidden' };
+}
